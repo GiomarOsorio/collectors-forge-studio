@@ -1,0 +1,17 @@
+[Unit]
+Description=Calculator3D Cloudflare Tunnel
+After=calculator3d-frontend.service
+
+[Container]
+ContainerName=calculator3d-tunnel
+Image=docker.io/cloudflare/cloudflared:latest
+Exec=tunnel run
+Network=calculator3d.network
+Environment=TUNNEL_TOKEN=PONER-TU-TOKEN-AQUI
+
+[Service]
+Restart=always
+TimeoutStartSec=30
+
+[Install]
+WantedBy=default.target

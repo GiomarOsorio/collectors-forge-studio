@@ -1,0 +1,24 @@
+[Unit]
+Description=Calculator3D Backend (FastAPI)
+After=network-online.target
+
+[Container]
+ContainerName=calculator3d-backend
+Image=localhost/calculator3d-backend:latest
+PublishPort=8000:8000
+Network=calculator3d.network
+Volume=calculator3d-data.volume:/app/data:Z
+Environment=DATABASE_URL=sqlite+aiosqlite:///./data/calculator3d.db
+Environment=SECRET_KEY=CAMBIAR-ESTA-CLAVE-EN-PRODUCCION
+Environment=ALGORITHM=HS256
+Environment=ACCESS_TOKEN_EXPIRE_MINUTES=1440
+Environment=ADMIN_USERNAME=admin
+Environment=ADMIN_PASSWORD=CAMBIAR-PASSWORD
+Environment=ADMIN_EMAIL=admin@calculator3d.local
+
+[Service]
+Restart=always
+TimeoutStartSec=60
+
+[Install]
+WantedBy=default.target

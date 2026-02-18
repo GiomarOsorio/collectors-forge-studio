@@ -1,0 +1,53 @@
+version: "3"
+
+services:
+  backend:
+    container_name: calculator3d-backend
+    build:
+      context: ./backend
+      dockerfile: Containerfile
+    volumes:
+      - calculator3d-data:/app/data
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./data/calculator3d.db
+      - SECRET_KEY=${SECRET_KEY:-cambiar-esta-clave-en-produccion-xyz789}
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=1440
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@calculator3d.local}
+    restart: unless-stopped
+    networks:
+      - calculator3d
+
+  frontend:
+    container_name: calculator3d-frontend
+    build:
+      context: ./frontend
+      dockerfile: Containerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - calculator3d
+
+  tunnel:
+    container_name: calculator3d-tunnel
+    image: docker.io/cloudflare/cloudflared:latest
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    depends_on:
+      - frontend
+    restart: unless-stopped
+    networks:
+      - calculator3d
+
+networks:
+  calculator3d:
+    driver: bridge
+
+volumes:
+  calculator3d-data:
