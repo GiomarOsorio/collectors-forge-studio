@@ -12,11 +12,18 @@ from pydantic import BaseModel
 
 
 class SupplyCreate(BaseModel):
-    """Esquema para crear un nuevo insumo en el catálogo."""
+    """
+    Esquema para crear un nuevo insumo en el catálogo.
+
+    Si se proporcionan pack_qty y pack_price, el backend calcula
+    price_per_unit = pack_price / pack_qty automáticamente.
+    """
     name: str
     description: Optional[str] = None
     unit: str = "unidad"
-    price_per_unit: float
+    pack_qty: Optional[int] = None
+    pack_price: Optional[float] = None
+    price_per_unit: Optional[float] = None
     notes: Optional[str] = None
 
 
@@ -25,6 +32,8 @@ class SupplyUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     unit: Optional[str] = None
+    pack_qty: Optional[int] = None
+    pack_price: Optional[float] = None
     price_per_unit: Optional[float] = None
     notes: Optional[str] = None
 
@@ -35,6 +44,8 @@ class SupplyResponse(BaseModel):
     name: str
     description: Optional[str]
     unit: str
+    pack_qty: Optional[int]
+    pack_price: Optional[float]
     price_per_unit: float
     notes: Optional[str]
     created_at: datetime
