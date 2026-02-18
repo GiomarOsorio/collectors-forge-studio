@@ -1,8 +1,31 @@
+/**
+ * @file Pagina de gestion de impresoras 3D.
+ *
+ * Permite al usuario realizar operaciones CRUD (crear, leer, actualizar, eliminar)
+ * sobre sus impresoras 3D. Muestra tarjetas con la informacion de cada impresora
+ * y un formulario modal para agregar o editar impresoras.
+ *
+ * Cada impresora tiene propiedades como nombre, modelo, precio de compra,
+ * consumo electrico, vida util, y datos de mantenimiento (boquilla, placa).
+ * Estos datos se usan en el calculo de costos de impresion (depreciacion,
+ * electricidad y mantenimiento).
+ *
+ * @module pages/PrintersPage
+ */
+
 import { useState, useEffect } from 'react';
 import { getPrinters, createPrinter, updatePrinter, deletePrinter } from '../services/api';
 import toast from 'react-hot-toast';
 import { Plus, Pencil, Trash2, X } from 'lucide-react';
 
+/**
+ * Valores iniciales del formulario de impresora.
+ * Los valores por defecto representan parametros tipicos:
+ * - 5000 horas de vida util estimada
+ * - 500 horas de vida util de boquilla
+ * - 2000 horas de vida util de placa de construccion
+ * @type {Object}
+ */
 const emptyForm = {
   name: '', model: '', purchase_price: '', power_consumption_watts: '',
   estimated_lifespan_hours: '5000', current_hours: '0',
@@ -11,20 +34,52 @@ const emptyForm = {
   other_maintenance_per_hour: '0', notes: '',
 };
 
+/**
+ * Componente de la pagina de gestion de impresoras 3D.
+ *
+ * @description Muestra tarjetas (cards) con la informacion de cada impresora
+ * y proporciona un formulario modal para crear o editar impresoras.
+ * El formulario incluye secciones para datos generales y datos de mantenimiento.
+ *
+ * @returns {JSX.Element} Pagina completa de gestion de impresoras
+ */
 export default function PrintersPage() {
+  /** @type {[Array, Function]} Lista de impresoras obtenidas del backend */
   const [printers, setPrinters] = useState([]);
+  /** @type {[boolean, Function]} Controla la visibilidad del formulario modal */
   const [showForm, setShowForm] = useState(false);
+  /** @type {[number|null, Function]} ID de la impresora en edicion, o null si es creacion nueva */
   const [editingId, setEditingId] = useState(null);
+  /** @type {[Object, Function]} Estado actual del formulario de impresora */
   const [form, setForm] = useState(emptyForm);
 
+  /**
+   * Carga la lista de impresoras desde el backend y actualiza el estado.
+   */
   const load = () => getPrinters().then((res) => setPrinters(res.data));
 
+  // Carga las impresoras al montar el componente
   useEffect(() => { load(); }, []);
 
+  /**
+   * Actualiza el campo correspondiente del formulario al cambiar un input.
+   *
+   * @param {React.ChangeEvent<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>} e - Evento de cambio
+   */
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
+  /**
+   * Maneja el envio del formulario para crear o actualizar una impresora.
+   * Itera sobre los campos del formulario y convierte automaticamente los valores:
+   * - Campos de texto (name, model, notes) se mantienen como strings
+   * - Campos numericos se parsean a float
+   * - El campo notes se envia como null si esta vacio
+   *
+   * @param {React.FormEvent<HTMLFormElement>} e - Evento del formulario
+   */
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // Convertir campos numericos a float y mantener strings como texto
     const data = {};
     for (const [key, val] of Object.entries(form)) {
       data[key] = key === 'name' || key === 'model' || key === 'notes'
@@ -49,6 +104,13 @@ export default function PrintersPage() {
     }
   };
 
+  /**
+   * Prepara el formulario para editar una impresora existente.
+   * Convierte todos los valores del objeto impresora a strings para
+   * compatibilidad con los inputs HTML del formulario.
+   *
+   * @param {Object} p - Objeto de la impresora a editar con todas sus propiedades
+   */
   const handleEdit = (p) => {
     const f = {};
     for (const key of Object.keys(emptyForm)) {
@@ -59,6 +121,12 @@ export default function PrintersPage() {
     setShowForm(true);
   };
 
+  /**
+   * Elimina una impresora previa confirmacion del usuario.
+   * Muestra un dialogo de confirmacion antes de proceder con la eliminacion.
+   *
+   * @param {number} id - ID de la impresora a eliminar
+   */
   const handleDelete = async (id) => {
     if (!confirm('¿Eliminar esta impresora?')) return;
     try {

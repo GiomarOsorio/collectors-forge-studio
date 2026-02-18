@@ -1,27 +1,81 @@
+/**
+ * @file Pagina de gestion de filamentos de impresion 3D.
+ *
+ * Permite al usuario realizar operaciones CRUD (crear, leer, actualizar, eliminar)
+ * sobre sus filamentos de impresion 3D. Muestra una tabla con todos los filamentos
+ * registrados y un formulario modal para agregar o editar filamentos.
+ *
+ * Cada filamento tiene propiedades como marca, tipo de material (PLA, PETG, ABS, etc.),
+ * color, precio por kilogramo, peso por rollo, diametro y densidad.
+ *
+ * @module pages/FilamentsPage
+ */
+
 import { useState, useEffect } from 'react';
 import { getFilaments, createFilament, updateFilament, deleteFilament } from '../services/api';
 import toast from 'react-hot-toast';
 import { Plus, Pencil, Trash2, X } from 'lucide-react';
 
+/**
+ * Valores iniciales del formulario de filamento.
+ * Se usa tanto para crear nuevos filamentos como para resetear el formulario.
+ * Los valores por defecto (PLA, 1000g, 1.75mm, densidad 1.24) representan
+ * los parametros mas comunes para un rollo de filamento PLA estandar.
+ * @type {Object}
+ */
 const emptyForm = {
   brand: '', type: 'PLA', color: '', price_per_kg: '',
   weight_per_roll: '1000', diameter: '1.75', density: '1.24', notes: '',
 };
 
+/**
+ * Lista de tipos de filamento disponibles para seleccionar en el formulario.
+ * Incluye los materiales de impresion 3D mas utilizados.
+ * @type {string[]}
+ */
 const filamentTypes = ['PLA', 'PETG', 'ABS', 'TPU', 'ASA', 'Nylon', 'PLA+', 'PETG+', 'Otro'];
 
+/**
+ * Componente de la pagina de gestion de filamentos.
+ *
+ * @description Muestra una tabla con todos los filamentos del usuario y
+ * proporciona un formulario modal para crear o editar filamentos.
+ * Incluye funcionalidad de eliminacion con confirmacion.
+ *
+ * @returns {JSX.Element} Pagina completa de gestion de filamentos
+ */
 export default function FilamentsPage() {
+  /** @type {[Array, Function]} Lista de filamentos obtenidos del backend */
   const [filaments, setFilaments] = useState([]);
+  /** @type {[boolean, Function]} Controla la visibilidad del formulario modal */
   const [showForm, setShowForm] = useState(false);
+  /** @type {[number|null, Function]} ID del filamento en edicion, o null si es creacion nueva */
   const [editingId, setEditingId] = useState(null);
+  /** @type {[Object, Function]} Estado actual del formulario de filamento */
   const [form, setForm] = useState(emptyForm);
 
+  /**
+   * Carga la lista de filamentos desde el backend y actualiza el estado.
+   */
   const load = () => getFilaments().then((res) => setFilaments(res.data));
 
+  // Carga los filamentos al montar el componente
   useEffect(() => { load(); }, []);
 
+  /**
+   * Actualiza el campo correspondiente del formulario al cambiar un input.
+   *
+   * @param {React.ChangeEvent<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>} e - Evento de cambio
+   */
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
+  /**
+   * Maneja el envio del formulario para crear o actualizar un filamento.
+   * Convierte los valores string del formulario a numeros antes de enviar al backend.
+   * Tras una operacion exitosa, cierra el modal, resetea el formulario y recarga la lista.
+   *
+   * @param {React.FormEvent<HTMLFormElement>} e - Evento del formulario
+   */
   const handleSubmit = async (e) => {
     e.preventDefault();
     const data = {
@@ -49,6 +103,12 @@ export default function FilamentsPage() {
     }
   };
 
+  /**
+   * Prepara el formulario para editar un filamento existente.
+   * Carga los datos del filamento en el formulario y abre el modal.
+   *
+   * @param {Object} f - Objeto del filamento a editar con todas sus propiedades
+   */
   const handleEdit = (f) => {
     setForm({
       brand: f.brand, type: f.type, color: f.color,
@@ -62,6 +122,12 @@ export default function FilamentsPage() {
     setShowForm(true);
   };
 
+  /**
+   * Elimina un filamento previa confirmacion del usuario.
+   * Muestra un dialogo de confirmacion antes de proceder con la eliminacion.
+   *
+   * @param {number} id - ID del filamento a eliminar
+   */
   const handleDelete = async (id) => {
     if (!confirm('¿Eliminar este filamento?')) return;
     try {

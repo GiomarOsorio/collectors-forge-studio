@@ -1,16 +1,51 @@
+/**
+ * @file Pagina de historial de cotizaciones de Calculator3D.
+ *
+ * Muestra una tabla con todas las cotizaciones guardadas por el usuario.
+ * Permite ver el detalle de cada cotizacion en un modal, descargar
+ * el PDF de la cotizacion y eliminar cotizaciones del historial.
+ *
+ * El historial es util para llevar un registro de los trabajos cotizados,
+ * generar PDFs para clientes y consultar cotizaciones anteriores.
+ *
+ * @module pages/HistoryPage
+ */
+
 import { useState, useEffect } from 'react';
 import { getQuotes, deleteQuote, downloadQuotePdf } from '../services/api';
 import toast from 'react-hot-toast';
 import { FileDown, Trash2, Eye, X } from 'lucide-react';
 
+/**
+ * Componente de la pagina de historial de cotizaciones.
+ *
+ * @description Presenta una tabla con todas las cotizaciones guardadas,
+ * mostrando fecha, nombre de pieza, cliente, cantidad y precio total.
+ * Cada fila tiene botones para ver detalle, descargar PDF y eliminar.
+ * Al seleccionar una cotizacion, se abre un modal con el desglose completo.
+ *
+ * @returns {JSX.Element} Pagina de historial con tabla y modal de detalle
+ */
 export default function HistoryPage() {
+  /** @type {[Array, Function]} Lista de cotizaciones obtenidas del backend */
   const [quotes, setQuotes] = useState([]);
+  /** @type {[Object|null, Function]} Cotizacion seleccionada para ver en detalle (modal) */
   const [selected, setSelected] = useState(null);
 
+  /**
+   * Carga la lista de cotizaciones desde el backend y actualiza el estado.
+   */
   const load = () => getQuotes().then((res) => setQuotes(res.data));
 
+  // Carga las cotizaciones al montar el componente
   useEffect(() => { load(); }, []);
 
+  /**
+   * Elimina una cotizacion previa confirmacion del usuario.
+   * Muestra un dialogo nativo de confirmacion antes de proceder.
+   *
+   * @param {number} id - ID de la cotizacion a eliminar
+   */
   const handleDelete = async (id) => {
     if (!confirm('¿Eliminar esta cotización?')) return;
     try {
@@ -22,15 +57,25 @@ export default function HistoryPage() {
     }
   };
 
+  /**
+   * Descarga el PDF de una cotizacion.
+   * Crea un enlace temporal en el DOM para forzar la descarga del archivo.
+   * El nombre del archivo sigue el formato: cotizacion_[nombre_pieza]_[id].pdf
+   *
+   * @param {Object} q - Objeto de cotizacion con id y piece_name
+   */
   const handleDownloadPdf = async (q) => {
     try {
       const res = await downloadQuotePdf(q.id);
+      // Crear un URL temporal desde el blob del PDF
       const url = window.URL.createObjectURL(new Blob([res.data]));
+      // Crear un enlace invisible, asignar la URL y forzar el clic para descargar
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', `cotizacion_${q.piece_name.replace(/\s/g, '_')}_${q.id}.pdf`);
       document.body.appendChild(link);
       link.click();
+      // Limpiar el enlace temporal y liberar la URL del blob
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch {
@@ -38,6 +83,12 @@ export default function HistoryPage() {
     }
   };
 
+  /**
+   * Formatea una cadena de fecha ISO a formato legible en espanol (dd/mm/yyyy).
+   *
+   * @param {string} dateStr - Fecha en formato ISO (e.g., "2024-01-15T10:30:00")
+   * @returns {string} Fecha formateada (e.g., "15/01/2024")
+   */
   const formatDate = (dateStr) => {
     const d = new Date(dateStr);
     return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -123,6 +174,17 @@ export default function HistoryPage() {
   );
 }
 
+/**
+ * Componente auxiliar que renderiza una fila del desglose de costos en el modal de detalle.
+ * Muestra una etiqueta a la izquierda y un valor monetario a la derecha.
+ *
+ * @param {Object} props
+ * @param {string} props.label - Texto descriptivo del concepto de costo
+ * @param {number} props.value - Valor numerico del costo a mostrar
+ * @param {boolean} [props.bold] - Si es true, aplica estilo en negrita
+ * @param {boolean} [props.highlight] - Si es true, destaca la fila con fondo azul (usado para el total)
+ * @returns {JSX.Element} Fila con etiqueta y valor formateado como moneda
+ */
 function Row({ label, value, bold, highlight }) {
   return (
     <div className={`flex justify-between ${highlight ? 'bg-blue-50 px-2 py-1 rounded' : ''}`}>
