@@ -325,7 +325,7 @@ export default function CalculatorPage() {
                     <option value="">Insumo...</option>
                     {supplies.map((s) => <option key={s.id} value={s.id}>{s.name} (${s.price_per_unit.toFixed(4)}/{s.unit})</option>)}
                   </select>
-                  <input type="number" step="1" min="1" placeholder="Cant." value={supplyToAdd.quantity}
+                  <input type="number" step="0.01" min="0.01" placeholder="Cant." value={supplyToAdd.quantity}
                     onChange={(e) => setSupplyToAdd({ ...supplyToAdd, quantity: e.target.value })}
                     className="w-20 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
                   <button type="button" onClick={addSupply}

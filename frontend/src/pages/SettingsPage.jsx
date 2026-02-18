@@ -46,8 +46,10 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   /** @type {[Object|null, Function]} Informacion de la tasa de cambio USD/COP */
   const [exchangeRate, setExchangeRate] = useState(null);
-  /** @type {[Object|null, Function]} Tarifa EPM Estrato 4 del mes actual */
+  /** @type {[Object|null, Function]} Tarifas EPM de todos los estratos del mes actual */
   const [epmTariff, setEpmTariff] = useState(null);
+  /** @type {[string, Function]} Estrato seleccionado para aplicar la tarifa EPM */
+  const [selectedEstrato, setSelectedEstrato] = useState('4');
 
   // Carga la configuracion, la tasa de cambio y la tarifa EPM al montar el componente
   useEffect(() => {
@@ -66,14 +68,15 @@ export default function SettingsPage() {
     });
   }, []);
 
-  /** Aplica la tarifa EPM (×2 en USD) al campo de tarifa eléctrica */
+  /** Aplica la tarifa EPM del estrato seleccionado al campo de tarifa eléctrica */
   const handleApplyEpmTariff = async () => {
     if (!epmTariff) return;
-    const newRate = epmTariff.usd_rate;
+    const estratoData = epmTariff.estratos?.[selectedEstrato];
+    const newRate = estratoData ? estratoData.usd_rate : epmTariff.usd_rate;
     setForm((prev) => ({ ...prev, electricity_rate: newRate.toString() }));
     try {
       await applySettings({ electricity_rate: newRate });
-      toast.success(`Tarifa EPM aplicada: ${newRate} USD/kWh`);
+      toast.success(`Tarifa EPM Estrato ${selectedEstrato} aplicada: ${newRate} USD/kWh`);
     } catch {
       toast.error('Error al aplicar la tarifa');
     }
@@ -188,36 +191,56 @@ export default function SettingsPage() {
           </button>
         </form>
 
-        {epmTariff && (
-          <div className="mt-6 bg-green-50 border border-green-200 rounded-xl p-5">
-            <h3 className="font-semibold text-green-900 mb-3">Tarifa Eléctrica EPM — Estrato 4</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-green-700">Tarifa mercado ({epmTariff.month_label})</span>
-                <span className="font-medium text-green-900">{epmTariff.cop_market_rate?.toLocaleString('es-CO')} COP/kWh</span>
+        {epmTariff && (() => {
+          const estratoData = epmTariff.estratos?.[selectedEstrato];
+          const copMarket = estratoData?.cop_market_rate ?? epmTariff.cop_market_rate;
+          const copUsed = estratoData?.cop_rate_used ?? epmTariff.cop_rate_used;
+          const usdRate = estratoData?.usd_rate ?? epmTariff.usd_rate;
+          const estratosDisponibles = Object.keys(epmTariff.estratos || {}).sort();
+          return (
+            <div className="mt-6 bg-green-50 border border-green-200 rounded-xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-green-900">Tarifa Eléctrica EPM — {epmTariff.month_label}</h3>
+                {estratosDisponibles.length > 0 && (
+                  <select
+                    value={selectedEstrato}
+                    onChange={(e) => setSelectedEstrato(e.target.value)}
+                    className="text-sm px-2 py-1 border border-green-300 rounded-lg bg-white text-green-900 outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    {estratosDisponibles.map((n) => (
+                      <option key={n} value={n}>Estrato {n}</option>
+                    ))}
+                  </select>
+                )}
               </div>
-              <div className="flex justify-between">
-                <span className="text-green-700">Factor aplicado</span>
-                <span className="font-medium text-green-900">× {epmTariff.multiplier}</span>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-green-700">Tarifa mercado</span>
+                  <span className="font-medium text-green-900">{copMarket?.toLocaleString('es-CO')} COP/kWh</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-green-700">Factor aplicado</span>
+                  <span className="font-medium text-green-900">× {epmTariff.multiplier}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-green-700">Tarifa usada en estimación</span>
+                  <span className="font-medium text-green-900">{copUsed?.toLocaleString('es-CO')} COP/kWh</span>
+                </div>
+                <hr className="border-green-300" />
+                <div className="flex justify-between">
+                  <span className="font-semibold text-green-800">Equivalente en USD/kWh</span>
+                  <span className="font-bold text-green-900 text-base">{usdRate} USD/kWh</span>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-green-700">Tarifa usada en estimación</span>
-                <span className="font-medium text-green-900">{epmTariff.cop_rate_used?.toLocaleString('es-CO')} COP/kWh</span>
-              </div>
-              <hr className="border-green-300" />
-              <div className="flex justify-between">
-                <span className="font-semibold text-green-800">Equivalente en USD/kWh</span>
-                <span className="font-bold text-green-900 text-base">{epmTariff.usd_rate} USD/kWh</span>
-              </div>
+              <button onClick={handleApplyEpmTariff}
+                className="mt-4 w-full flex items-center justify-center gap-2 bg-green-600 text-white py-2 rounded-lg font-medium hover:bg-green-700 transition-colors text-sm">
+                <Zap size={16} />
+                Aplicar Estrato {selectedEstrato} → {usdRate} USD/kWh
+              </button>
+              <p className="text-xs text-green-600 mt-2">Fuente: epm.com.co — PDF oficial de tarifas. Actualizado cada 24 horas.</p>
             </div>
-            <button onClick={handleApplyEpmTariff}
-              className="mt-4 w-full flex items-center justify-center gap-2 bg-green-600 text-white py-2 rounded-lg font-medium hover:bg-green-700 transition-colors text-sm">
-              <Zap size={16} />
-              Aplicar tarifa EPM automáticamente
-            </button>
-            <p className="text-xs text-green-600 mt-2">Fuente: epm.com.co — PDF oficial de tarifas. Actualizado cada 24 horas.</p>
-          </div>
-        )}
+          );
+        })()}
 
         {exchangeRate && (
           <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-xl p-5">
