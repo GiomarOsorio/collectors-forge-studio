@@ -256,6 +256,22 @@ export default function CalculatorPage() {
                   <CostRow label="TOTAL" value={result.total_price} bold highlight />
                 )}
               </div>
+              {result.usd_to_cop_rate && (
+                <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-xs font-semibold text-yellow-800 mb-1">Equivalente en Pesos Colombianos</p>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-yellow-700">Precio por unidad</span>
+                    <span className="font-bold text-yellow-900">$ {result.total_per_unit_cop?.toLocaleString('es-CO')} COP</span>
+                  </div>
+                  {result.quantity > 1 && (
+                    <div className="flex justify-between text-sm mt-1">
+                      <span className="text-yellow-700">Total ({result.quantity} uds.)</span>
+                      <span className="font-bold text-yellow-900">$ {result.total_price_cop?.toLocaleString('es-CO')} COP</span>
+                    </div>
+                  )}
+                  <p className="text-xs text-yellow-600 mt-2">Tasa usada: 1 USD = {result.usd_to_cop_rate?.toLocaleString('es-CO')} COP</p>
+                </div>
+              )}
               <p className="text-xs text-gray-400 mt-4">* Precios sin IVA</p>
 
               <button onClick={handleSave}

@@ -24,6 +24,7 @@ from app.models.user import User
 from app.models.settings import AppSettings
 from app.schemas.settings import AppSettingsUpdate, AppSettingsResponse
 from app.services.auth import get_current_user
+from app.services.exchange_rate import get_usd_to_cop, COP_MARKUP
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -101,3 +102,26 @@ async def update_settings(
     await db.commit()
     await db.refresh(settings)
     return settings
+
+
+@router.get("/exchange-rate")
+async def get_exchange_rate(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Devuelve la tasa de cambio USD → COP actualmente en uso.
+
+    Incluye la tasa de mercado, el markup aplicado y la tasa final
+    que se usa en todos los cálculos de cotización.
+
+    Returns:
+        dict: Tasa de mercado, markup y tasa final usada en cálculos.
+    """
+    rate_with_markup = await get_usd_to_cop()
+    market_rate = round(rate_with_markup - COP_MARKUP, 2)
+    return {
+        "market_rate": market_rate,
+        "markup": COP_MARKUP,
+        "rate_used": rate_with_markup,
+        "description": f"1 USD = {rate_with_markup:,.0f} COP (mercado {market_rate:,.0f} + {COP_MARKUP:.0f} markup)",
+    }

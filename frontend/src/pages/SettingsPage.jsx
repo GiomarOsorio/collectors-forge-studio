@@ -16,7 +16,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { getSettings, updateSettings } from '../services/api';
+import { getSettings, updateSettings, getExchangeRate } from '../services/api';
 import toast from 'react-hot-toast';
 import { Save } from 'lucide-react';
 
@@ -44,12 +44,13 @@ export default function SettingsPage() {
   });
   /** @type {[boolean, Function]} Estado de carga mientras se obtiene la configuracion del backend */
   const [loading, setLoading] = useState(true);
+  /** @type {[Object|null, Function]} Informacion de la tasa de cambio USD/COP */
+  const [exchangeRate, setExchangeRate] = useState(null);
 
-  // Carga la configuracion actual del backend al montar el componente
-  // y convierte los valores numericos a strings para los inputs
+  // Carga la configuracion actual y la tasa de cambio al montar el componente
   useEffect(() => {
-    getSettings().then((res) => {
-      const s = res.data;
+    Promise.all([getSettings(), getExchangeRate()]).then(([sRes, rRes]) => {
+      const s = sRes.data;
       setForm({
         electricity_rate: s.electricity_rate.toString(),
         failure_rate_percent: s.failure_rate_percent.toString(),
@@ -57,6 +58,7 @@ export default function SettingsPage() {
         default_margin_percent: s.default_margin_percent.toString(),
         currency: s.currency,
       });
+      setExchangeRate(rRes.data);
       setLoading(false);
     });
   }, []);
@@ -169,6 +171,28 @@ export default function SettingsPage() {
             Guardar Configuración
           </button>
         </form>
+
+        {exchangeRate && (
+          <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-xl p-5">
+            <h3 className="font-semibold text-yellow-900 mb-3">Tasa de Cambio USD → COP</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-yellow-700">Precio mercado</span>
+                <span className="font-medium text-yellow-900">$ {exchangeRate.market_rate?.toLocaleString('es-CO')} COP</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-yellow-700">Markup aplicado</span>
+                <span className="font-medium text-yellow-900">+ {exchangeRate.markup} COP</span>
+              </div>
+              <hr className="border-yellow-300" />
+              <div className="flex justify-between">
+                <span className="font-semibold text-yellow-800">Tasa usada en cálculos</span>
+                <span className="font-bold text-yellow-900 text-base">$ {exchangeRate.rate_used?.toLocaleString('es-CO')} COP</span>
+              </div>
+            </div>
+            <p className="text-xs text-yellow-600 mt-3">Actualizado automáticamente cada hora desde open.er-api.com</p>
+          </div>
+        )}
       </div>
     </div>
   );
