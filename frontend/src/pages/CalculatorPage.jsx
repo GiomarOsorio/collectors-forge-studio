@@ -1,15 +1,52 @@
+/**
+ * @file Pagina principal de la calculadora de costos de impresion 3D.
+ *
+ * Contiene el formulario para ingresar los parametros de una pieza
+ * (filamento, impresora, peso, tiempos, cantidad, margen) y muestra
+ * el desglose completo de costos calculado por el backend.
+ * Permite guardar la cotizacion en el historial.
+ *
+ * @module pages/CalculatorPage
+ */
+
 import { useState, useEffect } from 'react';
 import { getFilaments, getPrinters, getSettings, calculateQuote, createQuote } from '../services/api';
 import toast from 'react-hot-toast';
 import { Calculator, Save } from 'lucide-react';
 
+/**
+ * Componente de la pagina de calculadora de costos.
+ *
+ * @description Pagina principal de la aplicacion. Presenta un formulario
+ * de dos columnas donde el usuario ingresa los datos de la pieza a imprimir
+ * y visualiza el desglose de costos resultante.
+ *
+ * Al montarse, carga en paralelo los filamentos, impresoras y configuracion
+ * del usuario para prellenar los selectores del formulario.
+ *
+ * El flujo de uso es:
+ * 1. Completar los datos de la pieza (nombre, filamento, impresora, peso, tiempos)
+ * 2. Presionar "Calcular Costo" para obtener el desglose
+ * 3. Opcionalmente guardar la cotizacion en el historial
+ *
+ * @returns {JSX.Element} Formulario de calculadora y panel de resultados
+ */
 export default function CalculatorPage() {
+  /** @type {[Array, Function]} Lista de filamentos disponibles del usuario */
   const [filaments, setFilaments] = useState([]);
+  /** @type {[Array, Function]} Lista de impresoras disponibles del usuario */
   const [printers, setPrinters] = useState([]);
+  /** @type {[Object|null, Function]} Configuracion de la aplicacion (tarifas, margenes) */
   const [settings, setSettings] = useState(null);
+  /** @type {[Object|null, Function]} Resultado del calculo de costos devuelto por el backend */
   const [result, setResult] = useState(null);
+  /** @type {[boolean, Function]} Estado de carga durante el calculo */
   const [loading, setLoading] = useState(false);
 
+  /**
+   * Estado del formulario con los parametros de la pieza a cotizar.
+   * Los valores se almacenan como strings para compatibilidad con los inputs HTML.
+   */
   const [form, setForm] = useState({
     piece_name: '',
     description: '',
@@ -24,6 +61,9 @@ export default function CalculatorPage() {
     margin_percent: '',
   });
 
+  // Carga inicial: obtiene filamentos, impresoras y configuracion en paralelo.
+  // Preselecciona el primer filamento y la primera impresora si existen,
+  // y establece el margen de ganancia por defecto segun la configuracion.
   useEffect(() => {
     Promise.all([getFilaments(), getPrinters(), getSettings()])
       .then(([f, p, s]) => {
@@ -37,10 +77,23 @@ export default function CalculatorPage() {
       .catch(() => toast.error('Error cargando datos'));
   }, []);
 
+  /**
+   * Actualiza un campo del formulario cuando el usuario modifica un input.
+   * Usa el atributo 'name' del elemento para identificar el campo.
+   *
+   * @param {React.ChangeEvent<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>} e - Evento de cambio
+   */
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
+  /**
+   * Construye el payload para enviar al backend a partir del estado del formulario.
+   * Convierte los valores string del formulario a los tipos numericos que espera la API.
+   * Los campos opcionales (description, client_name) se envian como null si estan vacios.
+   *
+   * @returns {Object} Objeto con los datos de la cotizacion en formato esperado por la API
+   */
   const buildPayload = () => ({
     piece_name: form.piece_name,
     description: form.description || null,
@@ -55,6 +108,13 @@ export default function CalculatorPage() {
     margin_percent: parseFloat(form.margin_percent),
   });
 
+  /**
+   * Maneja el envio del formulario para calcular los costos.
+   * Valida que se haya seleccionado filamento e impresora antes de enviar.
+   * El resultado se almacena en el estado 'result' para mostrarlo en el panel derecho.
+   *
+   * @param {React.FormEvent<HTMLFormElement>} e - Evento del formulario
+   */
   const handleCalculate = async (e) => {
     e.preventDefault();
     if (!form.filament_id || !form.printer_id) {
@@ -72,6 +132,10 @@ export default function CalculatorPage() {
     }
   };
 
+  /**
+   * Guarda la cotizacion actual en el historial del backend.
+   * Envia los mismos datos del formulario al endpoint de creacion de cotizaciones.
+   */
   const handleSave = async () => {
     try {
       await createQuote(buildPayload());
@@ -212,6 +276,17 @@ export default function CalculatorPage() {
   );
 }
 
+/**
+ * Componente auxiliar que renderiza una fila del desglose de costos.
+ * Muestra una etiqueta a la izquierda y un valor monetario a la derecha.
+ *
+ * @param {Object} props
+ * @param {string} props.label - Texto descriptivo del concepto de costo
+ * @param {number} props.value - Valor numerico del costo a mostrar
+ * @param {boolean} [props.bold] - Si es true, aplica estilo en negrita
+ * @param {boolean} [props.highlight] - Si es true, destaca la fila con fondo azul (usado para el total)
+ * @returns {JSX.Element} Fila con etiqueta y valor formateado como moneda
+ */
 function CostRow({ label, value, bold, highlight }) {
   return (
     <div className={`flex justify-between items-center ${highlight ? 'bg-blue-50 -mx-2 px-2 py-2 rounded-lg' : ''}`}>
