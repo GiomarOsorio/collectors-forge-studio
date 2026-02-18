@@ -315,6 +315,7 @@ export default function CalculatorPage() {
                     <div key={si.supply_id} className="flex items-center gap-2 mb-1 text-sm bg-orange-50 px-3 py-1.5 rounded-lg">
                       <span className="flex-1 text-gray-700">{sup ? sup.name : si.supply_id}</span>
                       <span className="text-gray-500">{si.quantity} {sup?.unit || ''}</span>
+                      {sup && <span className="text-orange-600 font-mono text-xs">${(sup.price_per_unit * si.quantity).toFixed(4)}</span>}
                       <button type="button" onClick={() => removeSupply(si.supply_id)} className="text-red-400 hover:text-red-600 ml-1"><Trash2 size={14} /></button>
                     </div>
                   );
@@ -323,7 +324,7 @@ export default function CalculatorPage() {
                   <select value={supplyToAdd.supply_id} onChange={(e) => setSupplyToAdd({ ...supplyToAdd, supply_id: e.target.value })}
                     className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
                     <option value="">Insumo...</option>
-                    {supplies.map((s) => <option key={s.id} value={s.id}>{s.name} (${s.price_per_unit.toFixed(4)}/{s.unit})</option>)}
+                    {supplies.map((s) => <option key={s.id} value={s.id}>{s.name} — ${s.price_per_unit.toFixed(6)}/{s.unit}</option>)}
                   </select>
                   <input type="number" step="0.01" min="0.01" placeholder="Cant." value={supplyToAdd.quantity}
                     onChange={(e) => setSupplyToAdd({ ...supplyToAdd, quantity: e.target.value })}

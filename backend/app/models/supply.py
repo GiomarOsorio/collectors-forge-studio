@@ -33,5 +33,9 @@ class Supply(Base):
     description = Column(Text, nullable=True)
     unit = Column(String, default="unidad", nullable=False)
     price_per_unit = Column(Float, nullable=False)
+    # Compra por paquete: pack_qty unidades al precio pack_price
+    # price_per_unit se calcula automáticamente como pack_price / pack_qty
+    pack_qty = Column(Integer, nullable=True)
+    pack_price = Column(Float, nullable=True)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

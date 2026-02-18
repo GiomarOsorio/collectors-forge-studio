@@ -92,6 +92,8 @@ async def migrate_db():
         ("quotes", "supplies_cost", "ALTER TABLE quotes ADD COLUMN supplies_cost FLOAT DEFAULT 0.0"),
         ("quotes", "supplies_detail", "ALTER TABLE quotes ADD COLUMN supplies_detail TEXT DEFAULT '[]'"),
         ("quotes", "additional_filaments_detail", "ALTER TABLE quotes ADD COLUMN additional_filaments_detail TEXT DEFAULT '[]'"),
+        ("supplies", "pack_qty", "ALTER TABLE supplies ADD COLUMN pack_qty INTEGER"),
+        ("supplies", "pack_price", "ALTER TABLE supplies ADD COLUMN pack_price FLOAT"),
     ]
     async with async_session() as db:
         for table, column, sql in migrations:

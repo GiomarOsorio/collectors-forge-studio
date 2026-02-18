@@ -11,6 +11,8 @@ Endpoints disponibles bajo el prefijo /api/supplies:
 - DELETE /{id} - Elimina un insumo del catálogo.
 """
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +24,23 @@ from app.schemas.supply import SupplyCreate, SupplyUpdate, SupplyResponse
 from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/api/supplies", tags=["supplies"])
+
+
+def _compute_price_per_unit(pack_qty: Optional[int], pack_price: Optional[float], price_per_unit: Optional[float]) -> float:
+    """
+    Calcula el precio por unidad a partir de los datos del paquete.
+
+    Si se dan pack_qty y pack_price, devuelve pack_price / pack_qty.
+    Si no, usa price_per_unit directamente.
+    Lanza ValueError si ninguna combinación es válida.
+    """
+    if pack_qty and pack_price is not None:
+        if pack_qty <= 0:
+            raise ValueError("La cantidad del paquete debe ser mayor que 0")
+        return round(pack_price / pack_qty, 6)
+    if price_per_unit is not None:
+        return price_per_unit
+    raise ValueError("Debes proporcionar pack_qty + pack_price, o price_per_unit")
 
 
 @router.get("/", response_model=list[SupplyResponse])
@@ -40,8 +59,20 @@ async def create_supply(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Crea un nuevo insumo en el catálogo."""
-    supply = Supply(**data.model_dump())
+    """
+    Crea un nuevo insumo en el catálogo.
+
+    Si se proporcionan pack_qty y pack_price, calcula price_per_unit automáticamente.
+    Si no, usa el valor de price_per_unit directamente.
+    """
+    try:
+        computed_price = _compute_price_per_unit(data.pack_qty, data.pack_price, data.price_per_unit)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    payload = data.model_dump(exclude={"price_per_unit"})
+    payload["price_per_unit"] = computed_price
+    supply = Supply(**payload)
     db.add(supply)
     await db.commit()
     await db.refresh(supply)
@@ -55,12 +86,30 @@ async def update_supply(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Actualiza parcialmente un insumo existente."""
+    """
+    Actualiza parcialmente un insumo existente.
+
+    Recalcula price_per_unit si se actualizan pack_qty o pack_price.
+    """
     result = await db.execute(select(Supply).where(Supply.id == supply_id))
     supply = result.scalar_one_or_none()
     if not supply:
         raise HTTPException(status_code=404, detail="Insumo no encontrado")
-    for field, value in data.model_dump(exclude_unset=True).items():
+
+    fields = data.model_dump(exclude_unset=True)
+
+    # Determinar valores finales de pack para recalcular si aplica
+    new_pack_qty = fields.get("pack_qty", supply.pack_qty)
+    new_pack_price = fields.get("pack_price", supply.pack_price)
+    new_price_per_unit = fields.get("price_per_unit", supply.price_per_unit)
+
+    if "pack_qty" in fields or "pack_price" in fields:
+        try:
+            fields["price_per_unit"] = _compute_price_per_unit(new_pack_qty, new_pack_price, new_price_per_unit)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+
+    for field, value in fields.items():
         setattr(supply, field, value)
     await db.commit()
     await db.refresh(supply)
