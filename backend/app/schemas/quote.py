@@ -8,9 +8,15 @@ para cotizaciones guardadas en el historial.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from pydantic import BaseModel
+
+
+class FilamentItem(BaseModel):
+    """Filamento adicional para piezas multicolor."""
+    filament_id: int
+    weight_grams: float
 
 
 class QuoteCalculateRequest(BaseModel):
@@ -56,8 +62,12 @@ class QuoteCalculateRequest(BaseModel):
     preparation_time_hours: float = 0.0
     post_processing_time_hours: float = 0.0
     quantity: int = 1
-    margin_percent: Optional[float] = None  # Si es None, usa el default de settings
-    save: bool = True                       # Si guardar en historial
+    margin_percent: Optional[float] = None
+    save: bool = True
+    # Insumos adicionales (argollas, switches, etc.)
+    supplies: List["SupplyItemRef"] = []
+    # Filamentos adicionales para piezas multicolor
+    additional_filaments: List[FilamentItem] = []
 
 
 class QuoteCostBreakdown(BaseModel):
@@ -95,6 +105,9 @@ class QuoteCostBreakdown(BaseModel):
     total_per_unit: float
     quantity: int
     total_price: float
+    # Insumos adicionales
+    supplies_cost: float = 0.0
+    supplies_detail: list = []
     # Conversión a pesos colombianos
     usd_to_cop_rate: Optional[float] = None
     total_per_unit_cop: Optional[float] = None
@@ -158,8 +171,20 @@ class QuoteResponse(BaseModel):
     margin_amount: float
     total_per_unit: float
     total_price: float
+    supplies_cost: float = 0.0
+    supplies_detail: Optional[str] = "[]"
+    additional_filaments_detail: Optional[str] = "[]"
     notes: Optional[str]
     created_at: datetime
 
-    # Permite construir el schema a partir de instancias ORM (from_orm)
     model_config = {"from_attributes": True}
+
+
+# Referencia circular resuelta aquí para evitar importar supply en quote
+class SupplyItemRef(BaseModel):
+    """Insumo con cantidad para incluir en una cotización."""
+    supply_id: int
+    quantity: float = 1.0
+
+
+QuoteCalculateRequest.model_rebuild()

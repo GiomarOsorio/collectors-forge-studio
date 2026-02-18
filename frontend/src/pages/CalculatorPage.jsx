@@ -10,9 +10,9 @@
  */
 
 import { useState, useEffect } from 'react';
-import { getFilaments, getPrinters, getSettings, calculateQuote, createQuote } from '../services/api';
+import { getFilaments, getPrinters, getSettings, calculateQuote, createQuote, getSupplies } from '../services/api';
 import toast from 'react-hot-toast';
-import { Calculator, Save } from 'lucide-react';
+import { Calculator, Save, Plus, Trash2 } from 'lucide-react';
 
 /**
  * Componente de la pagina de calculadora de costos.
@@ -38,6 +38,12 @@ export default function CalculatorPage() {
   const [printers, setPrinters] = useState([]);
   /** @type {[Object|null, Function]} Configuracion de la aplicacion (tarifas, margenes) */
   const [settings, setSettings] = useState(null);
+  /** @type {[Array, Function]} Catalogo de insumos disponibles */
+  const [supplies, setSupplies] = useState([]);
+  /** @type {[Array, Function]} Insumos seleccionados para esta cotizacion [{supply_id, quantity}] */
+  const [selectedSupplies, setSelectedSupplies] = useState([]);
+  /** @type {[Array, Function]} Filamentos adicionales para pieza multicolor [{filament_id, weight_grams}] */
+  const [additionalFilaments, setAdditionalFilaments] = useState([]);
   /** @type {[Object|null, Function]} Resultado del calculo de costos devuelto por el backend */
   const [result, setResult] = useState(null);
   /** @type {[boolean, Function]} Estado de carga durante el calculo */
@@ -61,15 +67,21 @@ export default function CalculatorPage() {
     margin_percent: '',
   });
 
-  // Carga inicial: obtiene filamentos, impresoras y configuracion en paralelo.
+  /** Estado temporal para el insumo que se esta por agregar a la cotizacion. */
+  const [supplyToAdd, setSupplyToAdd] = useState({ supply_id: '', quantity: 1 });
+  /** Estado temporal para el filamento adicional que se esta por agregar. */
+  const [filamentToAdd, setFilamentToAdd] = useState({ filament_id: '', weight_grams: '' });
+
+  // Carga inicial: obtiene filamentos, impresoras, configuracion e insumos en paralelo.
   // Preselecciona el primer filamento y la primera impresora si existen,
   // y establece el margen de ganancia por defecto segun la configuracion.
   useEffect(() => {
-    Promise.all([getFilaments(), getPrinters(), getSettings()])
-      .then(([f, p, s]) => {
+    Promise.all([getFilaments(), getPrinters(), getSettings(), getSupplies()])
+      .then(([f, p, s, sup]) => {
         setFilaments(f.data);
         setPrinters(p.data);
         setSettings(s.data);
+        setSupplies(sup.data);
         if (p.data.length > 0) setForm((prev) => ({ ...prev, printer_id: p.data[0].id }));
         if (f.data.length > 0) setForm((prev) => ({ ...prev, filament_id: f.data[0].id }));
         setForm((prev) => ({ ...prev, margin_percent: s.data.default_margin_percent }));
@@ -106,7 +118,39 @@ export default function CalculatorPage() {
     post_processing_time_hours: parseFloat(form.post_processing_time_hours) || 0,
     quantity: parseInt(form.quantity) || 1,
     margin_percent: parseFloat(form.margin_percent),
+    supplies: selectedSupplies,
+    additional_filaments: additionalFilaments,
   });
+
+  /** Agrega un insumo al listado de insumos seleccionados para la cotizacion. */
+  const addSupply = () => {
+    if (!supplyToAdd.supply_id) return;
+    const id = parseInt(supplyToAdd.supply_id);
+    const qty = parseFloat(supplyToAdd.quantity) || 1;
+    const existing = selectedSupplies.find((s) => s.supply_id === id);
+    if (existing) {
+      setSelectedSupplies(selectedSupplies.map((s) => s.supply_id === id ? { ...s, quantity: s.quantity + qty } : s));
+    } else {
+      setSelectedSupplies([...selectedSupplies, { supply_id: id, quantity: qty }]);
+    }
+    setSupplyToAdd({ supply_id: '', quantity: 1 });
+  };
+
+  /** Elimina un insumo del listado de insumos seleccionados. */
+  const removeSupply = (supply_id) => setSelectedSupplies(selectedSupplies.filter((s) => s.supply_id !== supply_id));
+
+  /** Agrega un filamento adicional al listado para piezas multicolor. */
+  const addFilament = () => {
+    if (!filamentToAdd.filament_id || !filamentToAdd.weight_grams) return;
+    setAdditionalFilaments([...additionalFilaments, {
+      filament_id: parseInt(filamentToAdd.filament_id),
+      weight_grams: parseFloat(filamentToAdd.weight_grams),
+    }]);
+    setFilamentToAdd({ filament_id: '', weight_grams: '' });
+  };
+
+  /** Elimina un filamento adicional por su indice en el arreglo. */
+  const removeFilament = (index) => setAdditionalFilaments(additionalFilaments.filter((_, i) => i !== index));
 
   /**
    * Maneja el envio del formulario para calcular los costos.
@@ -225,6 +269,74 @@ export default function CalculatorPage() {
             </div>
           </div>
 
+          {/* Filamentos adicionales (multicolor) */}
+          {filaments.length > 0 && (
+            <>
+              <hr className="my-2" />
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Filamentos adicionales <span className="text-gray-400 font-normal">(multicolor)</span></p>
+                {additionalFilaments.map((af, i) => {
+                  const f = filaments.find((x) => x.id === af.filament_id);
+                  return (
+                    <div key={i} className="flex items-center gap-2 mb-1 text-sm bg-gray-50 px-3 py-1.5 rounded-lg">
+                      <span className="flex-1 text-gray-700">{f ? `${f.brand} ${f.type} - ${f.color}` : af.filament_id}</span>
+                      <span className="text-gray-500">{af.weight_grams} g</span>
+                      <button type="button" onClick={() => removeFilament(i)} className="text-red-400 hover:text-red-600 ml-1"><Trash2 size={14} /></button>
+                    </div>
+                  );
+                })}
+                <div className="flex gap-2 mt-1">
+                  <select value={filamentToAdd.filament_id} onChange={(e) => setFilamentToAdd({ ...filamentToAdd, filament_id: e.target.value })}
+                    className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                    <option value="">Filamento...</option>
+                    {filaments.map((f) => <option key={f.id} value={f.id}>{f.brand} {f.type} - {f.color}</option>)}
+                  </select>
+                  <input type="number" step="0.1" min="0" placeholder="g" value={filamentToAdd.weight_grams}
+                    onChange={(e) => setFilamentToAdd({ ...filamentToAdd, weight_grams: e.target.value })}
+                    className="w-20 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                  <button type="button" onClick={addFilament}
+                    className="px-3 py-1.5 bg-gray-700 text-white text-sm rounded-lg hover:bg-gray-800 flex items-center gap-1">
+                    <Plus size={14} /> Añadir
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Insumos adicionales */}
+          {supplies.length > 0 && (
+            <>
+              <hr className="my-2" />
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Insumos adicionales</p>
+                {selectedSupplies.map((si) => {
+                  const sup = supplies.find((x) => x.id === si.supply_id);
+                  return (
+                    <div key={si.supply_id} className="flex items-center gap-2 mb-1 text-sm bg-orange-50 px-3 py-1.5 rounded-lg">
+                      <span className="flex-1 text-gray-700">{sup ? sup.name : si.supply_id}</span>
+                      <span className="text-gray-500">{si.quantity} {sup?.unit || ''}</span>
+                      <button type="button" onClick={() => removeSupply(si.supply_id)} className="text-red-400 hover:text-red-600 ml-1"><Trash2 size={14} /></button>
+                    </div>
+                  );
+                })}
+                <div className="flex gap-2 mt-1">
+                  <select value={supplyToAdd.supply_id} onChange={(e) => setSupplyToAdd({ ...supplyToAdd, supply_id: e.target.value })}
+                    className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                    <option value="">Insumo...</option>
+                    {supplies.map((s) => <option key={s.id} value={s.id}>{s.name} (${s.price_per_unit.toFixed(4)}/{s.unit})</option>)}
+                  </select>
+                  <input type="number" step="1" min="1" placeholder="Cant." value={supplyToAdd.quantity}
+                    onChange={(e) => setSupplyToAdd({ ...supplyToAdd, quantity: e.target.value })}
+                    className="w-20 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                  <button type="button" onClick={addSupply}
+                    className="px-3 py-1.5 bg-orange-600 text-white text-sm rounded-lg hover:bg-orange-700 flex items-center gap-1">
+                    <Plus size={14} /> Añadir
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
           <button type="submit" disabled={loading}
             className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 mt-4">
             <Calculator size={20} />
@@ -244,6 +356,7 @@ export default function CalculatorPage() {
                 <CostRow label="Mantenimiento" value={result.maintenance_cost} />
                 <CostRow label="Mano de obra" value={result.labor_cost} />
                 <CostRow label="Absorción de fallos" value={result.failure_cost} />
+                {result.supplies_cost > 0 && <CostRow label="Insumos adicionales" value={result.supplies_cost} />}
                 <hr />
                 <CostRow label="Subtotal" value={result.subtotal} bold />
                 <CostRow label={`Margen (${result.margin_percent}%)`} value={result.margin_amount} />
@@ -256,6 +369,17 @@ export default function CalculatorPage() {
                   <CostRow label="TOTAL" value={result.total_price} bold highlight />
                 )}
               </div>
+              {result.supplies_detail && result.supplies_detail.length > 0 && (
+                <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                  <p className="text-xs font-semibold text-orange-800 mb-1">Desglose de insumos</p>
+                  {result.supplies_detail.map((sd, i) => (
+                    <div key={i} className="flex justify-between text-xs text-orange-700 mt-0.5">
+                      <span>{sd.name} × {sd.quantity} {sd.unit}</span>
+                      <span>$ {(sd.price_per_unit * sd.quantity).toFixed(4)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
               {result.usd_to_cop_rate && (
                 <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                   <p className="text-xs font-semibold text-yellow-800 mb-1">Equivalente en Pesos Colombianos</p>

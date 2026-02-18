@@ -100,6 +100,13 @@ class Quote(Base):
     total_per_unit: Mapped[float] = mapped_column(Float)
     total_price: Mapped[float] = mapped_column(Float)     # total_per_unit * quantity
 
+    # Insumos adicionales (argollas, switches, etc.) - JSON: [{name, quantity, unit, unit_price, subtotal}]
+    supplies_cost: Mapped[float] = mapped_column(Float, default=0.0)
+    supplies_detail: Mapped[Optional[str]] = mapped_column(Text, default="[]", nullable=True)
+
+    # Filamentos adicionales para piezas multicolor - JSON: [{filament_id, name, weight_grams, material_cost}]
+    additional_filaments_detail: Mapped[Optional[str]] = mapped_column(Text, default="[]", nullable=True)
+
     # Metadata
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

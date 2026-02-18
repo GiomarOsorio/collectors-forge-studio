@@ -29,6 +29,7 @@ import FilamentsPage from './pages/FilamentsPage';
 import PrintersPage from './pages/PrintersPage';
 import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
+import SuppliesPage from './pages/SuppliesPage';
 
 /**
  * Componente guardia de ruta privada.
@@ -73,6 +74,7 @@ function AppRoutes() {
         <Route path="filaments" element={<FilamentsPage />} />
         <Route path="printers" element={<PrintersPage />} />
         <Route path="history" element={<HistoryPage />} />
+        <Route path="supplies" element={<SuppliesPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
     </Routes>

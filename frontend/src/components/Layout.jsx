@@ -21,6 +21,7 @@ import {
   History,
   Settings,
   LogOut,
+  Package,
 } from 'lucide-react';
 
 /**
@@ -38,6 +39,7 @@ import {
 const navItems = [
   { to: '/', icon: Calculator, label: 'Calculadora' },
   { to: '/filaments', icon: Layers, label: 'Filamentos' },
+  { to: '/supplies', icon: Package, label: 'Insumos' },
   { to: '/printers', icon: Printer, label: 'Impresoras' },
   { to: '/history', icon: History, label: 'Historial' },
   { to: '/settings', icon: Settings, label: 'Configuración' },
