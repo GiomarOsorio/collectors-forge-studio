@@ -16,9 +16,9 @@
  */
 
 import { useState, useEffect } from 'react';
-import { getSettings, updateSettings, getExchangeRate } from '../services/api';
+import { getSettings, updateSettings, getExchangeRate, getElectricityTariff, updateSettings as applySettings } from '../services/api';
 import toast from 'react-hot-toast';
-import { Save } from 'lucide-react';
+import { Save, Zap } from 'lucide-react';
 
 /**
  * Componente de la pagina de configuracion.
@@ -46,10 +46,12 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   /** @type {[Object|null, Function]} Informacion de la tasa de cambio USD/COP */
   const [exchangeRate, setExchangeRate] = useState(null);
+  /** @type {[Object|null, Function]} Tarifa EPM Estrato 4 del mes actual */
+  const [epmTariff, setEpmTariff] = useState(null);
 
-  // Carga la configuracion actual y la tasa de cambio al montar el componente
+  // Carga la configuracion, la tasa de cambio y la tarifa EPM al montar el componente
   useEffect(() => {
-    Promise.all([getSettings(), getExchangeRate()]).then(([sRes, rRes]) => {
+    Promise.all([getSettings(), getExchangeRate(), getElectricityTariff()]).then(([sRes, rRes, tRes]) => {
       const s = sRes.data;
       setForm({
         electricity_rate: s.electricity_rate.toString(),
@@ -59,9 +61,23 @@ export default function SettingsPage() {
         currency: s.currency,
       });
       setExchangeRate(rRes.data);
+      if (tRes.data.available) setEpmTariff(tRes.data);
       setLoading(false);
     });
   }, []);
+
+  /** Aplica la tarifa EPM (×2 en USD) al campo de tarifa eléctrica */
+  const handleApplyEpmTariff = async () => {
+    if (!epmTariff) return;
+    const newRate = epmTariff.usd_rate;
+    setForm((prev) => ({ ...prev, electricity_rate: newRate.toString() }));
+    try {
+      await applySettings({ electricity_rate: newRate });
+      toast.success(`Tarifa EPM aplicada: ${newRate} USD/kWh`);
+    } catch {
+      toast.error('Error al aplicar la tarifa');
+    }
+  };
 
   /**
    * Actualiza el campo correspondiente del formulario al cambiar un input.
@@ -171,6 +187,37 @@ export default function SettingsPage() {
             Guardar Configuración
           </button>
         </form>
+
+        {epmTariff && (
+          <div className="mt-6 bg-green-50 border border-green-200 rounded-xl p-5">
+            <h3 className="font-semibold text-green-900 mb-3">Tarifa Eléctrica EPM — Estrato 4</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-green-700">Tarifa mercado ({epmTariff.month_label})</span>
+                <span className="font-medium text-green-900">{epmTariff.cop_market_rate?.toLocaleString('es-CO')} COP/kWh</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-green-700">Factor aplicado</span>
+                <span className="font-medium text-green-900">× {epmTariff.multiplier}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-green-700">Tarifa usada en estimación</span>
+                <span className="font-medium text-green-900">{epmTariff.cop_rate_used?.toLocaleString('es-CO')} COP/kWh</span>
+              </div>
+              <hr className="border-green-300" />
+              <div className="flex justify-between">
+                <span className="font-semibold text-green-800">Equivalente en USD/kWh</span>
+                <span className="font-bold text-green-900 text-base">{epmTariff.usd_rate} USD/kWh</span>
+              </div>
+            </div>
+            <button onClick={handleApplyEpmTariff}
+              className="mt-4 w-full flex items-center justify-center gap-2 bg-green-600 text-white py-2 rounded-lg font-medium hover:bg-green-700 transition-colors text-sm">
+              <Zap size={16} />
+              Aplicar tarifa EPM automáticamente
+            </button>
+            <p className="text-xs text-green-600 mt-2">Fuente: epm.com.co — PDF oficial de tarifas. Actualizado cada 24 horas.</p>
+          </div>
+        )}
 
         {exchangeRate && (
           <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-xl p-5">

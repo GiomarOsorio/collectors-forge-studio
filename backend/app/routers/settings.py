@@ -25,6 +25,7 @@ from app.models.settings import AppSettings
 from app.schemas.settings import AppSettingsUpdate, AppSettingsResponse
 from app.services.auth import get_current_user
 from app.services.exchange_rate import get_usd_to_cop, COP_MARKUP
+from app.services.tariff_scraper import get_epm_estrato4_tariff
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -102,6 +103,27 @@ async def update_settings(
     await db.commit()
     await db.refresh(settings)
     return settings
+
+
+@router.get("/electricity-tariff")
+async def get_electricity_tariff(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Devuelve la tarifa de electricidad EPM Estrato 4 del mes actual.
+
+    Descarga y parsea el PDF oficial de EPM, aplica el multiplicador ×2
+    y convierte el resultado a USD/kWh. Se cachea 24 horas.
+
+    Returns:
+        dict con tarifa original COP, tarifa usada (×2), tasa de cambio y
+        valor en USD/kWh listo para aplicar en electricity_rate.
+        None si no se pudo obtener la tarifa.
+    """
+    data = await get_epm_estrato4_tariff()
+    if not data:
+        return {"available": False, "message": "No se pudo obtener la tarifa EPM en este momento"}
+    return {"available": True, **data}
 
 
 @router.get("/exchange-rate")
