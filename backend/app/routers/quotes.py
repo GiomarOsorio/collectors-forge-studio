@@ -29,6 +29,7 @@ from app.models.filament import Filament
 from app.models.printer import Printer
 from app.models.settings import AppSettings
 from app.models.quote import Quote
+from app.models.supply import Supply
 from app.schemas.quote import QuoteCalculateRequest, QuoteResponse, QuoteCostBreakdown
 from app.services.auth import get_current_user
 from app.services.calculator import calculate_cost
@@ -67,6 +68,8 @@ async def calculate_quote(
         db, current_user.id, data.filament_id, data.printer_id
     )
     cop_rate = await get_usd_to_cop()
+    supplies_data = await _resolve_supplies(db, data.supplies)
+    additional_filaments_data = await _resolve_additional_filaments(db, data.additional_filaments)
 
     return calculate_cost(
         filament=filament,
@@ -79,6 +82,8 @@ async def calculate_quote(
         quantity=data.quantity,
         margin_percent=data.margin_percent,
         usd_to_cop_rate=cop_rate,
+        supplies=supplies_data,
+        additional_filaments=additional_filaments_data,
     )
 
 
@@ -110,7 +115,10 @@ async def create_quote(
         db, current_user.id, data.filament_id, data.printer_id
     )
 
-    # Ejecuta el motor de cálculo para obtener el desglose de costos
+    cop_rate = await get_usd_to_cop()
+    supplies_data = await _resolve_supplies(db, data.supplies)
+    additional_filaments_data = await _resolve_additional_filaments(db, data.additional_filaments)
+
     breakdown = calculate_cost(
         filament=filament,
         printer=printer,
@@ -121,6 +129,9 @@ async def create_quote(
         post_processing_time_hours=data.post_processing_time_hours,
         quantity=data.quantity,
         margin_percent=data.margin_percent,
+        usd_to_cop_rate=cop_rate,
+        supplies=supplies_data,
+        additional_filaments=additional_filaments_data,
     )
 
     # Construye el objeto Quote con los parámetros de entrada y los costos calculados
@@ -147,6 +158,13 @@ async def create_quote(
         margin_amount=breakdown.margin_amount,
         total_per_unit=breakdown.total_per_unit,
         total_price=breakdown.total_price,
+        supplies_cost=breakdown.supplies_cost,
+        supplies_detail=__import__("json").dumps(breakdown.supplies_detail),
+        additional_filaments_detail=__import__("json").dumps([
+            {"filament_id": af["filament_id"], "name": af["name"],
+             "weight_grams": af["weight_grams"], "material_cost": round(af["weight_grams"] * af["price_per_kg"] / 1000, 4)}
+            for af in (additional_filaments_data or [])
+        ]),
     )
     db.add(quote)
     await db.commit()
@@ -362,3 +380,36 @@ async def _get_user_quote(db: AsyncSession, quote_id: int, user_id: int) -> Quot
     if not quote:
         raise HTTPException(status_code=404, detail="Cotización no encontrada")
     return quote
+
+
+async def _resolve_supplies(db: AsyncSession, supply_items) -> list:
+    """Carga los datos de cada insumo desde la DB y los combina con la cantidad solicitada."""
+    result = []
+    for item in (supply_items or []):
+        r = await db.execute(select(Supply).where(Supply.id == item.supply_id))
+        supply = r.scalar_one_or_none()
+        if supply:
+            result.append({
+                "supply_id": supply.id,
+                "name": supply.name,
+                "unit": supply.unit,
+                "price_per_unit": supply.price_per_unit,
+                "quantity": item.quantity,
+            })
+    return result
+
+
+async def _resolve_additional_filaments(db: AsyncSession, filament_items) -> list:
+    """Carga los datos de cada filamento adicional desde la DB."""
+    result = []
+    for item in (filament_items or []):
+        r = await db.execute(select(Filament).where(Filament.id == item.filament_id))
+        filament = r.scalar_one_or_none()
+        if filament:
+            result.append({
+                "filament_id": filament.id,
+                "name": f"{filament.brand} {filament.type} {filament.color}",
+                "price_per_kg": filament.price_per_kg,
+                "weight_grams": item.weight_grams,
+            })
+    return result

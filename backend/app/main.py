@@ -15,11 +15,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 
+from sqlalchemy import text
 from app.config import settings
 from app.database import init_db, async_session
 from app.models import User, AppSettings, Printer
 from app.services.auth import get_password_hash
-from app.routers import auth, filaments, printers, settings as settings_router, quotes
+from app.routers import auth, filaments, printers, settings as settings_router, quotes, supplies
 
 
 @asynccontextmanager
@@ -37,8 +38,9 @@ async def lifespan(app: FastAPI):
     Yields:
         Control al servidor para empezar a atender solicitudes.
     """
-    # Startup: crear tablas y usuario admin
+    # Startup: crear tablas, migrar columnas nuevas y usuario admin
     await init_db()
+    await migrate_db()
     await create_default_data()
     yield
 
@@ -66,6 +68,7 @@ app.include_router(filaments.router)
 app.include_router(printers.router)
 app.include_router(settings_router.router)
 app.include_router(quotes.router)
+app.include_router(supplies.router)
 
 
 @app.get("/api/health")
@@ -81,6 +84,22 @@ async def health_check():
         dict: Diccionario con el campo 'status' en 'ok' y el nombre de la app.
     """
     return {"status": "ok", "app": "Calculator3D"}
+
+
+async def migrate_db():
+    """Agrega columnas nuevas a tablas existentes si no existen (migraciones simples SQLite)."""
+    migrations = [
+        ("quotes", "supplies_cost", "ALTER TABLE quotes ADD COLUMN supplies_cost FLOAT DEFAULT 0.0"),
+        ("quotes", "supplies_detail", "ALTER TABLE quotes ADD COLUMN supplies_detail TEXT DEFAULT '[]'"),
+        ("quotes", "additional_filaments_detail", "ALTER TABLE quotes ADD COLUMN additional_filaments_detail TEXT DEFAULT '[]'"),
+    ]
+    async with async_session() as db:
+        for table, column, sql in migrations:
+            result = await db.execute(text(f"PRAGMA table_info({table})"))
+            columns = [row[1] for row in result.fetchall()]
+            if column not in columns:
+                await db.execute(text(sql))
+        await db.commit()
 
 
 async def create_default_data():

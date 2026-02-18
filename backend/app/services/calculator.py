@@ -20,7 +20,7 @@ Fórmula de cálculo aplicada:
    10. Total final        = total_por_unidad × cantidad
 """
 
-from typing import Optional
+from typing import Optional, List
 
 from app.models.filament import Filament
 from app.models.printer import Printer
@@ -39,6 +39,8 @@ def calculate_cost(
     quantity: int,
     margin_percent: Optional[float] = None,
     usd_to_cop_rate: Optional[float] = None,
+    supplies: Optional[List[dict]] = None,
+    additional_filaments: Optional[List[dict]] = None,
 ) -> QuoteCostBreakdown:
     """
     Calcula el costo total de imprimir una pieza 3D con desglose por componente.
@@ -81,9 +83,11 @@ def calculate_cost(
             margin_percent, margin_amount, total_per_unit, quantity
             y total_price. Todos los valores monetarios redondeados a 2 decimales.
     """
-    # 1. Costo de material: convierte precio/kg a precio/gramo y multiplica por el peso
+    # 1. Costo de material: filamento principal + filamentos adicionales (multicolor)
     price_per_gram = filament.price_per_kg / 1000.0
     material_cost = weight_grams * price_per_gram
+    for af in (additional_filaments or []):
+        material_cost += af["weight_grams"] * (af["price_per_kg"] / 1000.0)
 
     # 2. Costo de electricidad: convierte watts×horas a kWh y aplica la tarifa
     kwh_consumed = (printer.power_consumption_watts * print_time_hours) / 1000.0
@@ -124,14 +128,29 @@ def calculate_cost(
     # Subtotal final incluyendo la absorción de fallos
     subtotal = base_cost + failure_cost
 
-    # 7. Margen de ganancia: usa el proporcionado o el configurado por defecto
+    # 8. Insumos adicionales (solo para piezas exitosas, se suman al subtotal de impresión)
+    supplies_detail = []
+    supplies_cost = 0.0
+    for s in (supplies or []):
+        line_total = round(s["quantity"] * s["price_per_unit"], 4)
+        supplies_cost += line_total
+        supplies_detail.append({
+            "name": s["name"],
+            "unit": s["unit"],
+            "quantity": s["quantity"],
+            "unit_price": s["price_per_unit"],
+            "subtotal": line_total,
+        })
+    supplies_cost = round(supplies_cost, 2)
+
+    # Subtotal final incluyendo insumos
+    subtotal_with_supplies = subtotal + supplies_cost
+
+    # 7. Margen de ganancia sobre el total incluyendo insumos
     margin = margin_percent if margin_percent is not None else app_settings.default_margin_percent
-    margin_amount = subtotal * (margin / 100.0)
+    margin_amount = subtotal_with_supplies * (margin / 100.0)
 
-    # Total por unidad redondeado a 2 decimales para presentación
-    total_per_unit = round(subtotal + margin_amount, 2)
-
-    # Total final para todas las unidades solicitadas
+    total_per_unit = round(subtotal_with_supplies + margin_amount, 2)
     total_price = round(total_per_unit * quantity, 2)
 
     # Conversión a pesos colombianos si se proporcionó la tasa
@@ -145,12 +164,14 @@ def calculate_cost(
         maintenance_cost=round(maintenance_cost, 2),
         labor_cost=round(labor_cost, 2),
         failure_cost=round(failure_cost, 2),
-        subtotal=round(subtotal, 2),
+        subtotal=round(subtotal_with_supplies, 2),
         margin_percent=margin,
         margin_amount=round(margin_amount, 2),
         total_per_unit=total_per_unit,
         quantity=quantity,
         total_price=total_price,
+        supplies_cost=supplies_cost,
+        supplies_detail=supplies_detail,
         usd_to_cop_rate=usd_to_cop_rate,
         total_per_unit_cop=total_per_unit_cop,
         total_price_cop=total_price_cop,

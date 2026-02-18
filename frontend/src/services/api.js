@@ -293,6 +293,12 @@ export const deleteQuote = (id) => api.delete(`/quotes/${id}`);
 export const downloadQuotePdf = (id) =>
   api.get(`/quotes/${id}/pdf`, { responseType: 'blob' });
 
+// ── Insumos ──────────────────────────────────────────────────────────────────
+export const getSupplies = () => api.get('/supplies/');
+export const createSupply = (data) => api.post('/supplies/', data);
+export const updateSupply = (id, data) => api.put(`/supplies/${id}`, data);
+export const deleteSupply = (id) => api.delete(`/supplies/${id}`);
+
 /** Obtiene la tasa de cambio USD → COP actualmente en uso, con markup incluido. */
 export const getExchangeRate = () => api.get('/settings/exchange-rate');
 
