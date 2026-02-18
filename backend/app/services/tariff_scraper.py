@@ -35,25 +35,27 @@ _CACHE_TTL = 86400  # 24 horas
 
 async def get_epm_estrato4_tariff() -> Optional[Dict]:
     """
-    Obtiene la tarifa de electricidad EPM para Estrato 4 con factor ×2.
+    Obtiene las tarifas de electricidad EPM para todos los estratos con factor ×2.
 
     Flujo de ejecución:
     1. Devuelve el caché si tiene menos de 24 horas.
     2. Scraping de la página EPM para encontrar el PDF del mes más reciente.
     3. Descarga y parsea el PDF con pdfplumber.
-    4. Extrae el valor de 'Estrato 4. Todo el consumo' (tarifa EPM en COP/kWh).
-    5. Aplica el multiplicador ×2.
+    4. Extrae las tarifas de los 6 estratos residenciales en COP/kWh.
+    5. Aplica el multiplicador ×2 a cada una.
     6. Convierte a USD/kWh usando la tasa de cambio actual.
 
     Returns:
         dict con las claves:
-            - cop_market_rate: tarifa EPM original (COP/kWh)
-            - cop_rate_used: tarifa aplicada = cop_market_rate × TARIFF_MULTIPLIER
+            - cop_market_rate: tarifa EPM Estrato 4 original (COP/kWh) — compatibilidad
+            - cop_rate_used: tarifa Estrato 4 aplicada = cop_market_rate × TARIFF_MULTIPLIER
             - multiplier: factor aplicado (2.0)
-            - usd_rate: tarifa en USD/kWh lista para usar en electricity_rate
+            - usd_rate: tarifa Estrato 4 en USD/kWh
             - usd_to_cop: tasa de cambio usada para la conversión
             - month_label: texto del mes al que corresponde la tarifa
             - pdf_url: URL del PDF descargado
+            - estratos: dict {"1": {...}, "2": {...}, ..., "6": {...}} con cop_market_rate,
+                        cop_rate_used y usd_rate por estrato
         None si no se pudo obtener la tarifa.
     """
     global _cache
@@ -68,29 +70,46 @@ async def get_epm_estrato4_tariff() -> Optional[Dict]:
             logger.warning("No se encontró URL del PDF de tarifas EPM")
             return _cache["data"] if _cache else None
 
-        cop_rate = await _extract_estrato4_rate(pdf_url)
-        if cop_rate is None:
-            logger.warning("No se pudo extraer la tarifa Estrato 4 del PDF")
+        estratos_cop = await _extract_all_estratos(pdf_url)
+        if not estratos_cop:
+            logger.warning("No se pudo extraer ningún estrato del PDF")
             return _cache["data"] if _cache else None
 
         # Importar aquí para evitar importación circular
         from app.services.exchange_rate import get_usd_to_cop
         usd_to_cop = await get_usd_to_cop()
 
-        cop_rate_used = round(cop_rate * TARIFF_MULTIPLIER, 2)
+        # Construir dict completo por estrato
+        estratos_full = {}
+        for num, cop_r in estratos_cop.items():
+            cop_used = round(cop_r * TARIFF_MULTIPLIER, 2)
+            usd_r = round(cop_used / usd_to_cop, 6)
+            estratos_full[num] = {
+                "cop_market_rate": cop_r,
+                "cop_rate_used": cop_used,
+                "usd_rate": usd_r,
+            }
+
+        # Estrato 4 como valor principal (compatibilidad con código existente)
+        estrato4 = estratos_cop.get("4", next(iter(estratos_cop.values())))
+        cop_rate_used = round(estrato4 * TARIFF_MULTIPLIER, 2)
         usd_rate = round(cop_rate_used / usd_to_cop, 6)
 
         data = {
-            "cop_market_rate": cop_rate,
+            "cop_market_rate": estrato4,
             "cop_rate_used": cop_rate_used,
             "multiplier": TARIFF_MULTIPLIER,
             "usd_rate": usd_rate,
             "usd_to_cop": usd_to_cop,
             "month_label": month_label,
             "pdf_url": pdf_url,
+            "estratos": estratos_full,
         }
         _cache = {"data": data, "ts": time.time()}
-        logger.info(f"Tarifa EPM actualizada: Estrato 4 = {cop_rate} COP/kWh → ×{TARIFF_MULTIPLIER} = {cop_rate_used} → {usd_rate} USD/kWh")
+        logger.info(
+            f"Tarifa EPM actualizada: {len(estratos_full)} estratos extraídos. "
+            f"Estrato 4 = {estrato4} COP/kWh → ×{TARIFF_MULTIPLIER} → {usd_rate} USD/kWh"
+        )
         return data
 
     except Exception as e:
@@ -131,18 +150,20 @@ async def _find_latest_pdf_url() -> tuple:
     return full_url, month_label
 
 
-async def _extract_estrato4_rate(pdf_url: str) -> Optional[float]:
+async def _extract_all_estratos(pdf_url: str) -> Optional[Dict]:
     """
-    Descarga el PDF y extrae la tarifa de Estrato 4 (todo el consumo) en COP/kWh.
+    Descarga el PDF y extrae las tarifas de todos los estratos residenciales en COP/kWh.
 
-    Usa la columna 'Propiedad EPM' que es el caso más común para usuarios
-    residenciales conectados a la red de EPM.
+    Recorre el texto completo del PDF buscando las filas de cada estrato (1-6).
+    El primer valor numérico de cada fila es la tarifa con activos EPM (columna
+    'Propiedad EPM'), que es el caso más común para usuarios residenciales.
 
     Args:
         pdf_url: URL completa del PDF de tarifas EPM.
 
     Returns:
-        float: Tarifa en COP/kWh o None si no se encontró.
+        dict: {"1": 400.0, "2": 450.0, ..., "6": 950.0} con las tarifas encontradas,
+              o None si no se pudo extraer ninguna.
     """
     try:
         import pdfplumber
@@ -155,17 +176,20 @@ async def _extract_estrato4_rate(pdf_url: str) -> Optional[float]:
         response.raise_for_status()
         pdf_bytes = response.content
 
+    # Concatenar texto de todas las páginas para búsqueda global
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-        for page in pdf.pages:
-            text = page.extract_text() or ""
-            # Patrón: "Estrato 4. Todo el consumo 801.24 766.87 732.50"
-            # El primer valor es la tarifa con activos EPM (más común)
-            match = re.search(
-                r'Estrato 4[^\d]+([\d,\.]+)',
-                text
-            )
-            if match:
-                rate_str = match.group(1).replace(",", "")
-                return float(rate_str)
+        full_text = "\n".join(page.extract_text() or "" for page in pdf.pages)
 
-    return None
+    estratos = {}
+    for n in range(1, 7):
+        # Patrón: "Estrato 4. Todo el consumo 801.24 766.87 ..."
+        # El primer valor numérico es la tarifa con propiedad EPM
+        match = re.search(rf'Estrato\s+{n}[^\d]+([\d,\.]+)', full_text)
+        if match:
+            rate_str = match.group(1).replace(",", "")
+            try:
+                estratos[str(n)] = float(rate_str)
+            except ValueError:
+                pass
+
+    return estratos if estratos else None
