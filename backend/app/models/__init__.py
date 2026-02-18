@@ -18,5 +18,6 @@ from app.models.filament import Filament
 from app.models.printer import Printer
 from app.models.settings import AppSettings
 from app.models.quote import Quote
+from app.models.electricity_tariff import ElectricityTariff
 
-__all__ = ["User", "Filament", "Printer", "AppSettings", "Quote"]
+__all__ = ["User", "Filament", "Printer", "AppSettings", "Quote", "ElectricityTariff"]
