@@ -95,6 +95,10 @@ class QuoteCostBreakdown(BaseModel):
     total_per_unit: float
     quantity: int
     total_price: float
+    # Conversión a pesos colombianos
+    usd_to_cop_rate: Optional[float] = None
+    total_per_unit_cop: Optional[float] = None
+    total_price_cop: Optional[float] = None
 
 
 class QuoteResponse(BaseModel):

@@ -38,6 +38,7 @@ def calculate_cost(
     post_processing_time_hours: float,
     quantity: int,
     margin_percent: Optional[float] = None,
+    usd_to_cop_rate: Optional[float] = None,
 ) -> QuoteCostBreakdown:
     """
     Calcula el costo total de imprimir una pieza 3D con desglose por componente.
@@ -133,6 +134,10 @@ def calculate_cost(
     # Total final para todas las unidades solicitadas
     total_price = round(total_per_unit * quantity, 2)
 
+    # Conversión a pesos colombianos si se proporcionó la tasa
+    total_per_unit_cop = round(total_per_unit * usd_to_cop_rate, 0) if usd_to_cop_rate else None
+    total_price_cop = round(total_price * usd_to_cop_rate, 0) if usd_to_cop_rate else None
+
     return QuoteCostBreakdown(
         material_cost=round(material_cost, 2),
         electricity_cost=round(electricity_cost, 2),
@@ -146,4 +151,7 @@ def calculate_cost(
         total_per_unit=total_per_unit,
         quantity=quantity,
         total_price=total_price,
+        usd_to_cop_rate=usd_to_cop_rate,
+        total_per_unit_cop=total_per_unit_cop,
+        total_price_cop=total_price_cop,
     )

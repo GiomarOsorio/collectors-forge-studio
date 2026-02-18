@@ -33,6 +33,7 @@ from app.schemas.quote import QuoteCalculateRequest, QuoteResponse, QuoteCostBre
 from app.services.auth import get_current_user
 from app.services.calculator import calculate_cost
 from app.services.pdf_generator import generate_quote_pdf
+from app.services.exchange_rate import get_usd_to_cop
 
 router = APIRouter(prefix="/api/quotes", tags=["quotes"])
 
@@ -65,6 +66,7 @@ async def calculate_quote(
     filament, printer, app_settings = await _get_dependencies(
         db, current_user.id, data.filament_id, data.printer_id
     )
+    cop_rate = await get_usd_to_cop()
 
     return calculate_cost(
         filament=filament,
@@ -76,6 +78,7 @@ async def calculate_quote(
         post_processing_time_hours=data.post_processing_time_hours,
         quantity=data.quantity,
         margin_percent=data.margin_percent,
+        usd_to_cop_rate=cop_rate,
     )
 
 
