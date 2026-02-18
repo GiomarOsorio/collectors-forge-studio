@@ -65,7 +65,7 @@ async def get_epm_estrato4_tariff() -> Optional[Dict]:
         return _cache["data"]
 
     try:
-        pdf_url, month_label = await _find_latest_pdf_url()
+        pdf_url, month_label, year, month_num = await _find_latest_pdf_url()
         if not pdf_url:
             logger.warning("No se encontró URL del PDF de tarifas EPM")
             return _cache["data"] if _cache else None
@@ -102,6 +102,8 @@ async def get_epm_estrato4_tariff() -> Optional[Dict]:
             "usd_rate": usd_rate,
             "usd_to_cop": usd_to_cop,
             "month_label": month_label,
+            "year": year,
+            "month": month_num,
             "pdf_url": pdf_url,
             "estratos": estratos_full,
         }
@@ -117,12 +119,20 @@ async def get_epm_estrato4_tariff() -> Optional[Dict]:
         return _cache["data"] if _cache else None
 
 
+_MONTH_NAMES = {
+    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4,
+    "mayo": 5, "junio": 6, "julio": 7, "agosto": 8,
+    "septiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12,
+}
+
+
 async def _find_latest_pdf_url() -> tuple:
     """
     Scraping de la página EPM para encontrar la URL del PDF más reciente.
 
     Returns:
-        tuple: (url_absoluta, etiqueta_mes) o (None, None) si no se encontró.
+        tuple: (url_absoluta, etiqueta_mes, year, month_num)
+               o (None, None, None, None) si no se encontró.
     """
     async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
         response = await client.get(EPM_TARIFFS_URL)
@@ -134,20 +144,27 @@ async def _find_latest_pdf_url() -> tuple:
     matches = re.findall(pattern, html)
 
     if not matches:
-        return None, None
+        return None, None, None, None
 
     # El último enlace suele ser el más reciente (publicación más nueva)
     latest_path = matches[-1]
     full_url = EPM_BASE_URL + latest_path
 
-    # Intentar extraer el mes del nombre del archivo
+    # Extraer mes del nombre del archivo
     month_match = re.search(
         r'(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)',
         latest_path, re.IGNORECASE
     )
-    month_label = month_match.group(1).capitalize() if month_match else "Mes actual"
+    month_name = month_match.group(1).lower() if month_match else None
+    month_num = _MONTH_NAMES.get(month_name) if month_name else None
 
-    return full_url, month_label
+    # Extraer año del nombre del archivo o usar el actual
+    year_match = re.search(r'(20\d{2})', latest_path)
+    year = int(year_match.group(1)) if year_match else time.localtime().tm_year
+
+    month_label = f"{month_name.capitalize()} {year}" if month_name else f"Mes actual {year}"
+
+    return full_url, month_label, year, month_num
 
 
 async def _extract_all_estratos(pdf_url: str) -> Optional[Dict]:

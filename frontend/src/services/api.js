@@ -302,7 +302,10 @@ export const deleteSupply = (id) => api.delete(`/supplies/${id}`);
 /** Obtiene la tasa de cambio USD → COP actualmente en uso, con markup incluido. */
 export const getExchangeRate = () => api.get('/settings/exchange-rate');
 
-/** Obtiene la tarifa de electricidad EPM Estrato 4 del mes actual (×2, en USD/kWh). */
+/** Obtiene la tarifa de electricidad EPM del mes actual (todos los estratos, ×2, en USD/kWh). */
 export const getElectricityTariff = () => api.get('/settings/electricity-tariff');
+
+/** Obtiene el historial completo de tarifas EPM guardadas en BD, agrupado por mes. */
+export const getElectricityTariffs = () => api.get('/settings/electricity-tariffs');
 
 export default api;
