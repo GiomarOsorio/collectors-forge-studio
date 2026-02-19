@@ -40,7 +40,7 @@ echo "→ Deteniendo contenedores anteriores..."
 podman rm -f calculator3d-backend calculator3d-frontend calculator3d-tunnel 2>/dev/null || true
 
 echo "→ Levantando backend..."
-podman run -d --name calculator3d-backend \
+podman run -d --replace --name calculator3d-backend \
     --network calculator3d \
     -v calculator3d-data:/app/data:Z \
     -e DATABASE_URL="sqlite+aiosqlite:///./data/calculator3d.db" \
@@ -54,7 +54,7 @@ podman run -d --name calculator3d-backend \
     calculator3d-backend
 
 echo "→ Levantando frontend..."
-podman run -d --name calculator3d-frontend \
+podman run -d --replace --name calculator3d-frontend \
     --network calculator3d \
     -p 3000:80 \
     --restart unless-stopped \
@@ -62,7 +62,7 @@ podman run -d --name calculator3d-frontend \
 
 if [ -n "$TUNNEL_TOKEN" ]; then
     echo "→ Levantando Cloudflare Tunnel..."
-    podman run -d --name calculator3d-tunnel \
+    podman run -d --replace --name calculator3d-tunnel \
         --log-driver=k8s-file \
         --network calculator3d \
         -e TUNNEL_TOKEN="$TUNNEL_TOKEN" \
