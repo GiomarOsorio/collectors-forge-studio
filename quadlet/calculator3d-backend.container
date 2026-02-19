@@ -1,20 +1,23 @@
 [Unit]
-Description=Calculator3D Backend (FastAPI)
-After=network-online.target
+Description=TurtleForge Cost - Backend (FastAPI)
+After=network-online.target calculator3d-postgres.service
+Requires=calculator3d-postgres.service
 
 [Container]
 ContainerName=calculator3d-backend
 Image=localhost/calculator3d-backend:latest
 Network=calculator3d.network
-Volume=calculator3d-data.volume:/app/data:Z
+# DATABASE_URL y demás variables vienen del .env (sin hardcodear SQLite aquí)
 EnvironmentFile=__DEPLOY_PATH__/.env
-Environment=DATABASE_URL=sqlite+aiosqlite:///./data/calculator3d.db
 Environment=ALGORITHM=HS256
 Environment=ACCESS_TOKEN_EXPIRE_MINUTES=1440
 
 [Service]
 Restart=always
-TimeoutStartSec=60
+RestartSec=5
+TimeoutStartSec=120
+# Sin límite de reinicios: permite que el backend reintente hasta que PG esté listo
+StartLimitIntervalSec=0
 
 [Install]
 WantedBy=default.target

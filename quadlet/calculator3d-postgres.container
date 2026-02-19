@@ -1,0 +1,25 @@
+[Unit]
+Description=TurtleForge Cost - PostgreSQL 16
+After=network-online.target
+
+[Container]
+ContainerName=calculator3d-postgres
+Image=docker.io/postgres:16-alpine
+Network=calculator3d.network
+Volume=calculator3d-pgdata.volume:/var/lib/postgresql/data:Z
+# Variables de PostgreSQL leídas desde .env:
+#   POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
+EnvironmentFile=__DEPLOY_PATH__/.env
+HealthCmd=pg_isready -U turtleforge -d turtleforge
+HealthInterval=10s
+HealthTimeout=5s
+HealthRetries=5
+HealthStartPeriod=15s
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+StartLimitIntervalSec=0
+
+[Install]
+WantedBy=default.target
