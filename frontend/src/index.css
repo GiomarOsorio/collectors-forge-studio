@@ -1,7 +1,96 @@
 @import "tailwindcss";
 
+@theme {
+  --color-forge-green: #3FAF4C;
+  --color-deep-green: #1E6F3A;
+  --color-steel: #C7CCD1;
+  --color-gunmetal: #4B4F55;
+  --color-forge-black: #121417;
+  --color-tech-white: #F2F4F6;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
-  background-color: #f3f4f6;
+  background-color: #121417;
+  color: #F2F4F6;
+}
+
+select option {
+  background-color: #1a1d21;
+  color: #F2F4F6;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #121417; }
+::-webkit-scrollbar-thumb { background: #2a2d31; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3FAF4C; }
+
+@layer components {
+  .tf-card {
+    @apply bg-[#1a1d21] border border-[#2a2d31] rounded-xl;
+  }
+  .tf-input {
+    @apply w-full px-3 py-2 bg-[#0d1014] border border-[#2e3238] rounded-lg text-tech-white placeholder:text-gunmetal outline-none focus:ring-1 focus:ring-forge-green focus:border-forge-green transition-colors text-sm;
+  }
+  .tf-label {
+    @apply block text-sm font-medium text-steel mb-1;
+  }
+  .tf-hint {
+    @apply text-xs text-gunmetal mt-1;
+  }
+  .tf-btn-primary {
+    @apply inline-flex items-center justify-center gap-2 bg-forge-green text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-deep-green transition-colors disabled:opacity-50 cursor-pointer;
+  }
+  .tf-btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 bg-transparent text-steel border border-[#2a2d31] px-4 py-2 rounded-lg font-medium text-sm hover:bg-[#1e2125] hover:text-tech-white transition-colors cursor-pointer;
+  }
+  .tf-btn-ghost {
+    @apply text-gunmetal hover:text-tech-white transition-colors;
+  }
+  .tf-btn-danger {
+    @apply text-gunmetal hover:text-red-400 transition-colors;
+  }
+  .tf-page-title {
+    @apply text-2xl font-bold text-tech-white mb-6;
+  }
+  .tf-section-title {
+    @apply text-base font-semibold text-tech-white;
+  }
+  .tf-hr {
+    @apply border-[#1e2125] my-4;
+  }
+  .tf-table-wrap {
+    @apply tf-card overflow-x-auto;
+  }
+  .tf-thead {
+    @apply bg-[#1e2125] border-b border-[#2a2d31];
+  }
+  .tf-th {
+    @apply text-left px-5 py-3 text-xs font-semibold text-gunmetal uppercase tracking-wider;
+  }
+  .tf-th-right {
+    @apply text-right px-5 py-3 text-xs font-semibold text-gunmetal uppercase tracking-wider;
+  }
+  .tf-tr {
+    @apply border-b border-[#1e2125] hover:bg-[#1e2125] transition-colors last:border-0;
+  }
+  .tf-td {
+    @apply px-5 py-3.5 text-sm text-steel;
+  }
+  .tf-td-right {
+    @apply px-5 py-3.5 text-sm text-steel text-right;
+  }
+  .tf-modal-overlay {
+    @apply fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4;
+  }
+  .tf-modal {
+    @apply bg-[#1a1d21] border border-[#2a2d31] rounded-xl p-6 w-full max-h-[90vh] overflow-y-auto;
+  }
+  .tf-badge-green {
+    @apply text-xs font-medium px-2 py-0.5 rounded-full bg-forge-green/15 text-forge-green;
+  }
+  .tf-cost-row {
+    @apply flex justify-between items-center gap-2 py-0.5;
+  }
 }

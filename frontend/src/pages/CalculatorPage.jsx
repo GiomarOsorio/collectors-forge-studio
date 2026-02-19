@@ -223,41 +223,41 @@ export default function CalculatorPage() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">Calculadora de Costos</h2>
+      <h2 className="tf-page-title">Calculadora de Costos</h2>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Form */}
-        <form onSubmit={handleCalculate} className="bg-white rounded-xl shadow-sm p-6 space-y-4">
+        <form onSubmit={handleCalculate} className="tf-card p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="col-span-1 sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nombre de la pieza *</label>
+              <label className="tf-label">Nombre de la pieza *</label>
               <input name="piece_name" value={form.piece_name} onChange={handleChange} required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                className="tf-input" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
+              <label className="tf-label">Cliente</label>
               <input name="client_name" value={form.client_name} onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                className="tf-input" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad</label>
+              <label className="tf-label">Cantidad</label>
               <input name="quantity" type="number" min="1" value={form.quantity} onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                className="tf-input" />
             </div>
             <div className="col-span-1 sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+              <label className="tf-label">Descripción</label>
               <textarea name="description" value={form.description} onChange={handleChange} rows={2}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                className="tf-input" />
             </div>
           </div>
 
-          <hr className="my-4" />
+          <hr className="tf-hr" />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Filamento *</label>
+              <label className="tf-label">Filamento *</label>
               <select name="filament_id" value={form.filament_id} onChange={handleChange} required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                className="tf-input">
                 <option value="">Seleccionar...</option>
                 {filaments.map((f) => (
                   <option key={f.id} value={f.id}>{f.brand} {f.type} - {f.color}</option>
@@ -265,9 +265,9 @@ export default function CalculatorPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Impresora *</label>
+              <label className="tf-label">Impresora *</label>
               <select name="printer_id" value={form.printer_id} onChange={handleChange} required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                className="tf-input">
                 <option value="">Seleccionar...</option>
                 {printers.map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
@@ -275,59 +275,59 @@ export default function CalculatorPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Peso filamento (g) *</label>
+              <label className="tf-label">Peso filamento (g) *</label>
               <input name="weight_grams" type="number" step="0.01" min="0" value={form.weight_grams} onChange={handleChange} required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                className="tf-input" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tiempo impresión (min) *</label>
+              <label className="tf-label">Tiempo impresión (min) *</label>
               <input name="print_time_minutes" type="number" step="1" min="0" value={form.print_time_minutes} onChange={handleChange} required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                className="tf-input" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Preparación (min)</label>
+              <label className="tf-label">Preparación (min)</label>
               <input name="preparation_time_minutes" type="number" step="1" min="0" value={form.preparation_time_minutes} onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                className="tf-input" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Post-procesado (min)</label>
+              <label className="tf-label">Post-procesado (min)</label>
               <input name="post_processing_time_minutes" type="number" step="1" min="0" value={form.post_processing_time_minutes} onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                className="tf-input" />
             </div>
             <div className="col-span-1 sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Margen de ganancia (%)</label>
+              <label className="tf-label">Margen de ganancia (%)</label>
               <input name="margin_percent" type="number" step="0.1" min="0" value={form.margin_percent} onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                className="tf-input" />
             </div>
           </div>
 
           {/* Filamentos adicionales (multicolor) */}
           {filaments.length > 0 && (
             <>
-              <hr className="my-2" />
+              <hr className="tf-hr" />
               <div>
-                <p className="text-sm font-medium text-gray-700 mb-2">Filamentos adicionales <span className="text-gray-400 font-normal">(multicolor)</span></p>
+                <p className="text-sm font-medium text-steel mb-2">Filamentos adicionales <span className="text-gunmetal font-normal">(multicolor)</span></p>
                 {additionalFilaments.map((af, i) => {
                   const f = filaments.find((x) => x.id === af.filament_id);
                   return (
-                    <div key={i} className="flex items-center gap-2 mb-1 text-sm bg-gray-50 px-3 py-1.5 rounded-lg">
-                      <span className="flex-1 text-gray-700">{f ? `${f.brand} ${f.type} - ${f.color}` : af.filament_id}</span>
-                      <span className="text-gray-500">{af.weight_grams} g</span>
-                      <button type="button" onClick={() => removeFilament(i)} className="text-red-400 hover:text-red-600 ml-1"><Trash2 size={14} /></button>
+                    <div key={i} className="flex items-center gap-2 mb-1 text-sm bg-[#0d1014] border border-[#1e2125] px-3 py-1.5 rounded-lg">
+                      <span className="flex-1 text-steel">{f ? `${f.brand} ${f.type} - ${f.color}` : af.filament_id}</span>
+                      <span className="text-gunmetal">{af.weight_grams} g</span>
+                      <button type="button" onClick={() => removeFilament(i)} className="text-gunmetal hover:text-red-400 ml-1 transition-colors"><Trash2 size={14} /></button>
                     </div>
                   );
                 })}
                 <div className="flex flex-wrap gap-2 mt-1">
                   <select value={filamentToAdd.filament_id} onChange={(e) => setFilamentToAdd({ ...filamentToAdd, filament_id: e.target.value })}
-                    className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                    className="tf-input flex-1">
                     <option value="">Filamento...</option>
                     {filaments.map((f) => <option key={f.id} value={f.id}>{f.brand} {f.type} - {f.color}</option>)}
                   </select>
                   <input type="number" step="0.01" min="0" placeholder="g" value={filamentToAdd.weight_grams}
                     onChange={(e) => setFilamentToAdd({ ...filamentToAdd, weight_grams: e.target.value })}
-                    className="w-full sm:w-20 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                    className="tf-input w-full sm:w-20" />
                   <button type="button" onClick={addFilament}
-                    className="px-3 py-1.5 bg-gray-700 text-white text-sm rounded-lg hover:bg-gray-800 flex items-center gap-1">
+                    className="tf-btn-secondary px-3 py-1.5 text-sm">
                     <Plus size={14} /> Añadir
                   </button>
                 </div>
@@ -338,31 +338,31 @@ export default function CalculatorPage() {
           {/* Insumos adicionales */}
           {supplies.length > 0 && (
             <>
-              <hr className="my-2" />
+              <hr className="tf-hr" />
               <div>
-                <p className="text-sm font-medium text-gray-700 mb-2">Insumos adicionales</p>
+                <p className="text-sm font-medium text-steel mb-2">Insumos adicionales</p>
                 {selectedSupplies.map((si) => {
                   const sup = supplies.find((x) => x.id === si.supply_id);
                   return (
-                    <div key={si.supply_id} className="flex items-center gap-2 mb-1 text-sm bg-orange-50 px-3 py-1.5 rounded-lg">
-                      <span className="flex-1 text-gray-700">{sup ? sup.name : si.supply_id}</span>
-                      <span className="text-gray-500">{si.quantity} {sup?.unit || ''}</span>
-                      {sup && <span className="text-orange-600 font-mono text-xs">${(sup.price_per_unit * si.quantity).toFixed(4)}</span>}
-                      <button type="button" onClick={() => removeSupply(si.supply_id)} className="text-red-400 hover:text-red-600 ml-1"><Trash2 size={14} /></button>
+                    <div key={si.supply_id} className="flex items-center gap-2 mb-1 text-sm bg-[#0d1014] border border-[#1e2125] px-3 py-1.5 rounded-lg">
+                      <span className="flex-1 text-steel">{sup ? sup.name : si.supply_id}</span>
+                      <span className="text-gunmetal">{si.quantity} {sup?.unit || ''}</span>
+                      {sup && <span className="text-forge-green font-mono text-xs">${(sup.price_per_unit * si.quantity).toFixed(4)}</span>}
+                      <button type="button" onClick={() => removeSupply(si.supply_id)} className="text-gunmetal hover:text-red-400 ml-1 transition-colors"><Trash2 size={14} /></button>
                     </div>
                   );
                 })}
                 <div className="flex flex-wrap gap-2 mt-1">
                   <select value={supplyToAdd.supply_id} onChange={(e) => setSupplyToAdd({ ...supplyToAdd, supply_id: e.target.value })}
-                    className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                    className="tf-input flex-1">
                     <option value="">Insumo...</option>
                     {supplies.map((s) => <option key={s.id} value={s.id}>{s.name} — ${s.price_per_unit.toFixed(6)}/{s.unit}</option>)}
                   </select>
                   <input type="number" step="0.01" min="0.01" placeholder="Cant." value={supplyToAdd.quantity}
                     onChange={(e) => setSupplyToAdd({ ...supplyToAdd, quantity: e.target.value })}
-                    className="w-full sm:w-20 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                    className="tf-input w-full sm:w-20" />
                   <button type="button" onClick={addSupply}
-                    className="px-3 py-1.5 bg-orange-600 text-white text-sm rounded-lg hover:bg-orange-700 flex items-center gap-1">
+                    className="tf-btn-primary px-3 py-1.5 text-sm">
                     <Plus size={14} /> Añadir
                   </button>
                 </div>
@@ -371,7 +371,7 @@ export default function CalculatorPage() {
           )}
 
           <button type="submit" disabled={loading}
-            className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 mt-4">
+            className="tf-btn-primary w-full py-3 text-base mt-4">
             <Calculator size={20} />
             {loading ? 'Calculando...' : 'Calcular Costo'}
           </button>
@@ -380,10 +380,10 @@ export default function CalculatorPage() {
         {/* Results */}
         <div className="space-y-6">
           {result ? (
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Desglose de Costos</h3>
+            <div className="tf-card p-6">
+              <h3 className="tf-section-title mb-4">Desglose de Costos</h3>
               {result.quantity > 1 && (
-                <p className="text-xs text-blue-600 bg-blue-50 rounded px-2 py-1 mb-3">
+                <p className="text-xs text-forge-green bg-forge-green/10 border border-forge-green/20 rounded px-2 py-1 mb-3">
                   Costos calculados para el trabajo completo ({result.quantity} piezas en la placa)
                 </p>
               )}
@@ -395,20 +395,20 @@ export default function CalculatorPage() {
                 <CostRow label="Mano de obra" value={result.labor_cost} />
                 <CostRow label="Absorción de fallos" value={result.failure_cost} />
                 {result.supplies_cost > 0 && <CostRow label="Insumos adicionales" value={result.supplies_cost} />}
-                <hr />
+                <hr className="tf-hr" />
                 <CostRow label="Subtotal" value={result.subtotal} bold />
                 <CostRow label={`Margen (${result.margin_percent}%)`} value={result.margin_amount} />
-                <hr />
+                <hr className="tf-hr" />
                 <CostRow label="Total cotización" value={result.total_price} bold highlight />
                 {result.quantity > 1 && (
                   <CostRow label={`Precio por pieza (÷${result.quantity})`} value={result.total_per_unit} bold />
                 )}
               </div>
               {result.supplies_detail && result.supplies_detail.length > 0 && (
-                <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                  <p className="text-xs font-semibold text-orange-800 mb-1">Desglose de insumos</p>
+                <div className="mt-3 p-3 bg-[#0d1014] border border-[#2a2d31] rounded-lg">
+                  <p className="text-forge-green text-xs font-semibold mb-1">Desglose de insumos</p>
                   {result.supplies_detail.map((sd, i) => (
-                    <div key={i} className="flex justify-between text-xs text-orange-700 mt-0.5">
+                    <div key={i} className="flex justify-between text-xs text-steel mt-0.5">
                       <span>{sd.name} × {sd.quantity} {sd.unit}</span>
                       <span>$ {sd.subtotal.toFixed(4)}</span>
                     </div>
@@ -416,33 +416,33 @@ export default function CalculatorPage() {
                 </div>
               )}
               {result.usd_to_cop_rate && (
-                <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <p className="text-xs font-semibold text-yellow-800 mb-1">Equivalente en Pesos Colombianos</p>
+                <div className="mt-4 p-3 bg-[#0d2b14] border border-forge-green/20 rounded-lg">
+                  <p className="text-forge-green text-xs font-semibold mb-1">Equivalente en Pesos Colombianos</p>
                   <div className="flex justify-between text-sm">
-                    <span className="text-yellow-700">Total cotización</span>
-                    <span className="font-bold text-yellow-900">$ {result.total_price_cop?.toLocaleString('es-CO')} COP</span>
+                    <span className="text-steel">Total cotización</span>
+                    <span className="font-bold text-tech-white">$ {result.total_price_cop?.toLocaleString('es-CO')} COP</span>
                   </div>
                   {result.quantity > 1 && (
                     <div className="flex justify-between text-sm mt-1">
-                      <span className="text-yellow-700">Precio por pieza (÷{result.quantity})</span>
-                      <span className="font-bold text-yellow-900">$ {result.total_per_unit_cop?.toLocaleString('es-CO')} COP</span>
+                      <span className="text-steel">Precio por pieza (÷{result.quantity})</span>
+                      <span className="font-bold text-tech-white">$ {result.total_per_unit_cop?.toLocaleString('es-CO')} COP</span>
                     </div>
                   )}
-                  <p className="text-xs text-yellow-600 mt-2">Tasa usada: 1 USD = {result.usd_to_cop_rate?.toLocaleString('es-CO')} COP</p>
+                  <p className="text-gunmetal text-xs mt-2">Tasa usada: 1 USD = {result.usd_to_cop_rate?.toLocaleString('es-CO')} COP</p>
                 </div>
               )}
-              <p className="text-xs text-gray-400 mt-4">* Precios sin IVA</p>
+              <p className="text-xs text-gunmetal mt-4">* Precios sin IVA</p>
 
               <button onClick={handleSave}
-                className="w-full flex items-center justify-center gap-2 bg-green-600 text-white py-3 rounded-lg font-medium hover:bg-green-700 transition-colors mt-4">
+                className="tf-btn-primary w-full py-3 text-base mt-4">
                 <Save size={20} />
                 Guardar Cotización
               </button>
             </div>
           ) : (
-            <div className="bg-white rounded-xl shadow-sm p-12 text-center text-gray-400">
-              <Calculator size={48} className="mx-auto mb-4 opacity-30" />
-              <p>Completa el formulario y presiona "Calcular Costo"</p>
+            <div className="tf-card p-12 text-center">
+              <Calculator size={48} className="mx-auto mb-4 text-gunmetal opacity-30" />
+              <p className="text-gunmetal">Completa el formulario y presiona "Calcular Costo"</p>
             </div>
           )}
         </div>
@@ -459,14 +459,14 @@ export default function CalculatorPage() {
  * @param {string} props.label - Texto descriptivo del concepto de costo
  * @param {number} props.value - Valor numerico del costo a mostrar
  * @param {boolean} [props.bold] - Si es true, aplica estilo en negrita
- * @param {boolean} [props.highlight] - Si es true, destaca la fila con fondo azul (usado para el total)
+ * @param {boolean} [props.highlight] - Si es true, destaca la fila con fondo verde (usado para el total)
  * @returns {JSX.Element} Fila con etiqueta y valor formateado como moneda
  */
 function CostRow({ label, value, bold, highlight }) {
   return (
-    <div className={`flex justify-between items-center ${highlight ? 'bg-blue-50 -mx-2 px-2 py-2 rounded-lg' : ''}`}>
-      <span className={`text-gray-${bold ? '900' : '600'} ${bold ? 'font-semibold' : ''}`}>{label}</span>
-      <span className={`${bold ? 'font-bold text-lg' : ''} ${highlight ? 'text-blue-700 text-xl' : 'text-gray-900'}`}>
+    <div className={`tf-cost-row ${highlight ? 'bg-forge-green/10 -mx-2 px-2 py-2 rounded-lg' : ''}`}>
+      <span className={bold ? 'font-semibold text-tech-white' : 'text-steel'}>{label}</span>
+      <span className={`${bold ? 'font-bold' : ''} ${highlight ? 'text-forge-green text-xl' : 'text-tech-white'}`}>
         $ {value.toFixed(2)}
       </span>
     </div>

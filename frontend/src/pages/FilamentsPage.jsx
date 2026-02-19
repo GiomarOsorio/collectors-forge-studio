@@ -142,63 +142,63 @@ export default function FilamentsPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Filamentos</h2>
+        <h2 className="text-2xl font-bold text-tech-white">Filamentos</h2>
         <button onClick={() => { setForm(emptyForm); setEditingId(null); setShowForm(true); }}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+          className="tf-btn-primary">
           <Plus size={20} /> Agregar
         </button>
       </div>
 
       {/* Form modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="tf-modal-overlay">
+          <div className="tf-modal max-w-lg">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">{editingId ? 'Editar' : 'Nuevo'} Filamento</h3>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+              <h3 className="tf-section-title">{editingId ? 'Editar' : 'Nuevo'} Filamento</h3>
+              <button onClick={() => setShowForm(false)} className="tf-btn-ghost"><X size={20} /></button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Marca *</label>
+                  <label className="tf-label">Marca *</label>
                   <input name="brand" value={form.brand} onChange={handleChange} required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="tf-input" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipo *</label>
+                  <label className="tf-label">Tipo *</label>
                   <select name="type" value={form.type} onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                    className="tf-input">
                     {filamentTypes.map((t) => <option key={t}>{t}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Color *</label>
+                  <label className="tf-label">Color *</label>
                   <input name="color" value={form.color} onChange={handleChange} required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="tf-input" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Precio por kg ($) *</label>
+                  <label className="tf-label">Precio por kg ($) *</label>
                   <input name="price_per_kg" type="number" step="0.01" value={form.price_per_kg} onChange={handleChange} required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="tf-input" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Peso por rollo (g)</label>
+                  <label className="tf-label">Peso por rollo (g)</label>
                   <input name="weight_per_roll" type="number" value={form.weight_per_roll} onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="tf-input" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Diámetro (mm)</label>
+                  <label className="tf-label">Diámetro (mm)</label>
                   <input name="diameter" type="number" step="0.01" value={form.diameter} onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="tf-input" />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
+                <label className="tf-label">Notas</label>
                 <textarea name="notes" value={form.notes} onChange={handleChange} rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="tf-input" />
               </div>
               <button type="submit"
-                className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                className="tf-btn-primary w-full">
                 {editingId ? 'Actualizar' : 'Crear'}
               </button>
             </form>
@@ -207,34 +207,34 @@ export default function FilamentsPage() {
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+      <div className="tf-table-wrap">
         <table className="w-full min-w-[500px]">
-          <thead className="bg-gray-50 border-b">
+          <thead className="tf-thead">
             <tr>
-              <th className="text-left px-6 py-3 text-sm font-medium text-gray-500">Marca</th>
-              <th className="text-left px-6 py-3 text-sm font-medium text-gray-500">Tipo</th>
-              <th className="text-left px-6 py-3 text-sm font-medium text-gray-500">Color</th>
-              <th className="text-right px-6 py-3 text-sm font-medium text-gray-500">Precio/kg</th>
-              <th className="text-right px-6 py-3 text-sm font-medium text-gray-500">Acciones</th>
+              <th className="tf-th">Marca</th>
+              <th className="tf-th">Tipo</th>
+              <th className="tf-th">Color</th>
+              <th className="tf-th-right">Precio/kg</th>
+              <th className="tf-th-right">Acciones</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody>
             {filaments.map((f) => (
-              <tr key={f.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 font-medium text-gray-900">{f.brand}</td>
-                <td className="px-6 py-4">
-                  <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">{f.type}</span>
+              <tr key={f.id} className="tf-tr">
+                <td className="tf-td font-medium text-tech-white">{f.brand}</td>
+                <td className="tf-td">
+                  <span className="tf-badge-green">{f.type}</span>
                 </td>
-                <td className="px-6 py-4 text-gray-600">{f.color}</td>
-                <td className="px-6 py-4 text-right font-medium">$ {f.price_per_kg.toFixed(2)}</td>
-                <td className="px-6 py-4 text-right">
-                  <button onClick={() => handleEdit(f)} className="text-gray-400 hover:text-blue-600 mr-2"><Pencil size={16} /></button>
-                  <button onClick={() => handleDelete(f.id)} className="text-gray-400 hover:text-red-600"><Trash2 size={16} /></button>
+                <td className="tf-td text-steel">{f.color}</td>
+                <td className="tf-td-right font-medium text-tech-white">$ {f.price_per_kg.toFixed(2)}</td>
+                <td className="tf-td-right">
+                  <button onClick={() => handleEdit(f)} className="tf-btn-ghost mr-2"><Pencil size={16} /></button>
+                  <button onClick={() => handleDelete(f.id)} className="tf-btn-danger"><Trash2 size={16} /></button>
                 </td>
               </tr>
             ))}
             {filaments.length === 0 && (
-              <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-400">No hay filamentos. Agrega uno para comenzar.</td></tr>
+              <tr><td colSpan={5} className="px-5 py-12 text-center text-gunmetal">No hay filamentos. Agrega uno para comenzar.</td></tr>
             )}
           </tbody>
         </table>

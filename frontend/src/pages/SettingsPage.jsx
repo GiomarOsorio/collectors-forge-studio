@@ -131,66 +131,66 @@ export default function SettingsPage() {
   };
 
   // Muestra indicador de carga mientras se obtiene la configuracion
-  if (loading) return <p className="text-gray-400">Cargando...</p>;
+  if (loading) return <p className="text-gunmetal">Cargando...</p>;
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">Configuración</h2>
+      <h2 className="tf-page-title">Configuración</h2>
 
       <div className="max-w-2xl">
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="tf-card p-6 space-y-6">
           <div>
-            <h3 className="font-semibold text-gray-900 mb-4">Electricidad</h3>
+            <h3 className="tf-section-title mb-4">Electricidad</h3>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="tf-label">
                 Tarifa eléctrica ($ por kWh)
               </label>
               <input name="electricity_rate" type="number" step="0.001" value={form.electricity_rate} onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
-              <p className="text-xs text-gray-400 mt-1">Costo que pagas por cada kilovatio-hora de electricidad</p>
+                className="tf-input" />
+              <p className="tf-hint">Costo que pagas por cada kilovatio-hora de electricidad</p>
             </div>
           </div>
 
-          <hr />
+          <hr className="tf-hr" />
 
           <div>
-            <h3 className="font-semibold text-gray-900 mb-4">Producción</h3>
+            <h3 className="tf-section-title mb-4">Producción</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="tf-label">
                   Tasa de fallos (%)
                 </label>
                 <input name="failure_rate_percent" type="number" step="0.1" value={form.failure_rate_percent} onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
-                <p className="text-xs text-gray-400 mt-1">Porcentaje de impresiones que fallan</p>
+                  className="tf-input" />
+                <p className="tf-hint">Porcentaje de impresiones que fallan</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="tf-label">
                   Costo hora de trabajo ($)
                 </label>
                 <input name="labor_cost_per_hour" type="number" step="0.01" value={form.labor_cost_per_hour} onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
-                <p className="text-xs text-gray-400 mt-1">Tu costo por hora de trabajo manual</p>
+                  className="tf-input" />
+                <p className="tf-hint">Tu costo por hora de trabajo manual</p>
               </div>
             </div>
           </div>
 
-          <hr />
+          <hr className="tf-hr" />
 
           <div>
-            <h3 className="font-semibold text-gray-900 mb-4">Precios</h3>
+            <h3 className="tf-section-title mb-4">Precios</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="tf-label">
                   Margen de ganancia por defecto (%)
                 </label>
                 <input name="default_margin_percent" type="number" step="0.1" value={form.default_margin_percent} onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="tf-input" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Moneda</label>
+                <label className="tf-label">Moneda</label>
                 <select name="currency" value={form.currency} onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                  className="tf-input">
                   <option value="USD">USD ($)</option>
                   <option value="EUR">EUR</option>
                   <option value="MXN">MXN</option>
@@ -204,7 +204,7 @@ export default function SettingsPage() {
           </div>
 
           <button type="submit"
-            className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors">
+            className="tf-btn-primary px-6 py-3">
             <Save size={20} />
             Guardar Configuración
           </button>
@@ -220,35 +220,35 @@ export default function SettingsPage() {
           const estratosDisponibles = Object.keys(source?.estratos || {}).sort();
 
           return (
-            <div className="mt-6 bg-green-50 border border-green-200 rounded-xl p-5">
-              <h3 className="font-semibold text-green-900 mb-3">Tarifa Eléctrica EPM</h3>
+            <div className="mt-6 bg-[#0d2b14] border border-forge-green/20 rounded-xl p-5">
+              <h3 className="font-semibold text-forge-green mb-3">Tarifa Eléctrica EPM</h3>
 
               {/* Dropdowns de mes y estrato */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                 <div>
-                  <label className="block text-xs text-green-700 mb-1">Mes</label>
+                  <label className="block text-xs text-forge-green/70 mb-1">Mes</label>
                   {tariffHistory.length > 0 ? (
                     <select
                       value={selectedMonthIdx}
                       onChange={(e) => setSelectedMonthIdx(parseInt(e.target.value))}
-                      className="w-full text-sm px-2 py-1.5 border border-green-300 rounded-lg bg-white text-green-900 outline-none focus:ring-2 focus:ring-green-500"
+                      className="tf-input text-sm"
                     >
                       {tariffHistory.map((m, i) => (
                         <option key={i} value={i}>{m.month_label}</option>
                       ))}
                     </select>
                   ) : (
-                    <div className="text-sm text-green-700 px-2 py-1.5 border border-green-300 rounded-lg bg-white">
+                    <div className="text-sm text-steel px-2 py-1.5 border border-[#2e3238] rounded-lg bg-[#0d1014]">
                       {epmTariff?.month_label ?? '—'}
                     </div>
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs text-green-700 mb-1">Estrato</label>
+                  <label className="block text-xs text-forge-green/70 mb-1">Estrato</label>
                   <select
                     value={selectedEstrato}
                     onChange={(e) => setSelectedEstrato(e.target.value)}
-                    className="w-full text-sm px-2 py-1.5 border border-green-300 rounded-lg bg-white text-green-900 outline-none focus:ring-2 focus:ring-green-500"
+                    className="tf-input text-sm"
                   >
                     {estratosDisponibles.map((n) => (
                       <option key={n} value={n}>Estrato {n}</option>
@@ -261,56 +261,56 @@ export default function SettingsPage() {
               {estratoData ? (
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-green-700">Tarifa mercado</span>
-                    <span className="font-medium text-green-900">{copMarket?.toLocaleString('es-CO')} COP/kWh</span>
+                    <span className="text-steel/70">Tarifa mercado</span>
+                    <span className="font-medium text-steel">{copMarket?.toLocaleString('es-CO')} COP/kWh</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-green-700">Factor aplicado</span>
-                    <span className="font-medium text-green-900">× {source?.multiplier}</span>
+                    <span className="text-steel/70">Factor aplicado</span>
+                    <span className="font-medium text-steel">× {source?.multiplier}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-green-700">Tarifa usada en estimación</span>
-                    <span className="font-medium text-green-900">{copUsed?.toLocaleString('es-CO')} COP/kWh</span>
+                    <span className="text-steel/70">Tarifa usada en estimación</span>
+                    <span className="font-medium text-steel">{copUsed?.toLocaleString('es-CO')} COP/kWh</span>
                   </div>
-                  <hr className="border-green-300" />
+                  <hr className="border-forge-green/20 my-2" />
                   <div className="flex justify-between">
-                    <span className="font-semibold text-green-800">Equivalente en USD/kWh</span>
-                    <span className="font-bold text-green-900 text-base">{usdRate} USD/kWh</span>
+                    <span className="font-semibold text-forge-green">Equivalente en USD/kWh</span>
+                    <span className="font-bold text-tech-white text-base">{usdRate} USD/kWh</span>
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-green-600">Estrato no disponible para este mes.</p>
+                <p className="text-sm text-forge-green/60">Estrato no disponible para este mes.</p>
               )}
 
               <button onClick={handleApplyEpmTariff} disabled={!estratoData}
-                className="mt-4 w-full flex items-center justify-center gap-2 bg-green-600 text-white py-2 rounded-lg font-medium hover:bg-green-700 transition-colors text-sm disabled:opacity-40">
+                className="mt-4 w-full tf-btn-primary py-2 text-sm disabled:opacity-40">
                 <Zap size={16} />
                 Aplicar {source?.month_label} · Estrato {selectedEstrato} → {usdRate ?? '—'} USD/kWh
               </button>
-              <p className="text-xs text-green-600 mt-2">Fuente: epm.com.co — PDF oficial de tarifas. Los meses se guardan automáticamente.</p>
+              <p className="text-xs text-forge-green/60 mt-2">Fuente: epm.com.co — PDF oficial de tarifas. Los meses se guardan automáticamente.</p>
             </div>
           );
         })()}
 
         {exchangeRate && (
-          <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-xl p-5">
-            <h3 className="font-semibold text-yellow-900 mb-3">Tasa de Cambio USD → COP</h3>
+          <div className="mt-6 bg-[#1a1400] border border-yellow-500/20 rounded-xl p-5">
+            <h3 className="font-semibold text-yellow-400 mb-3">Tasa de Cambio USD → COP</h3>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-yellow-700">Precio mercado</span>
-                <span className="font-medium text-yellow-900">$ {exchangeRate.market_rate?.toLocaleString('es-CO')} COP</span>
+                <span className="text-yellow-600/70">Precio mercado</span>
+                <span className="font-medium text-yellow-300">$ {exchangeRate.market_rate?.toLocaleString('es-CO')} COP</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-yellow-700">Markup aplicado</span>
-                <span className="font-medium text-yellow-900">+ {exchangeRate.markup} COP</span>
+                <span className="text-yellow-600/70">Markup aplicado</span>
+                <span className="font-medium text-yellow-300">+ {exchangeRate.markup} COP</span>
               </div>
-              <hr className="border-yellow-300" />
+              <hr className="border-yellow-500/20 my-2" />
               <div className="flex justify-between">
-                <span className="font-semibold text-yellow-800">Tasa usada en cálculos</span>
-                <span className="font-bold text-yellow-900 text-base">$ {exchangeRate.rate_used?.toLocaleString('es-CO')} COP</span>
+                <span className="font-semibold text-yellow-400">Tasa usada en cálculos</span>
+                <span className="font-bold text-tech-white text-base">$ {exchangeRate.rate_used?.toLocaleString('es-CO')} COP</span>
               </div>
             </div>
-            <p className="text-xs text-yellow-600 mt-3">Actualizado automáticamente cada hora desde open.er-api.com</p>
+            <p className="text-xs text-yellow-600/60 mt-3">Actualizado automáticamente cada hora desde open.er-api.com</p>
           </div>
         )}
       </div>

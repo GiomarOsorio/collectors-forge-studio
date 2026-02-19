@@ -81,23 +81,23 @@ export default function Layout() {
   const closeSidebar = () => setSidebarOpen(false);
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex h-screen bg-forge-black">
       {/* Overlay oscuro en mobile cuando la sidebar esta abierta */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-30 xl:hidden"
+          className="fixed inset-0 bg-black/60 z-30 xl:hidden"
           onClick={closeSidebar}
         />
       )}
 
       {/* Barra lateral de navegacion */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-gray-900 text-white flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} xl:translate-x-0`}>
+      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#0d1014] text-tech-white flex flex-col transition-transform duration-300 border-r border-[#1e2125] ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} xl:translate-x-0`}>
         {/* Encabezado con el nombre de la aplicacion */}
-        <div className="p-6 border-b border-gray-700">
-          <h1 className="text-xl font-bold">TurtleForge Cost</h1>
-          <p className="text-gray-400 text-sm mt-1">TurtleForge Studio</p>
+        <div className="p-6 border-b border-[#1e2125]">
+          <h1 className="text-xl font-bold text-tech-white">TurtleForge Cost</h1>
+          <p className="text-gunmetal text-sm mt-1">TurtleForge Studio</p>
         </div>
-        {/* Menu de navegacion: resalta la ruta activa con fondo azul */}
+        {/* Menu de navegacion: resalta la ruta activa con fondo verde */}
         <nav className="flex-1 p-4 space-y-1">
           {navItems.map(({ to, icon: Icon, label }) => (
             <NavLink
@@ -107,8 +107,8 @@ export default function Layout() {
               className={({ isActive }) =>
                 `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                   isActive
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                    ? 'bg-forge-green/10 text-forge-green font-medium'
+                    : 'text-steel hover:bg-[#1e2125] hover:text-tech-white'
                 }`
               }
             >
@@ -118,12 +118,12 @@ export default function Layout() {
           ))}
         </nav>
         {/* Pie de la barra lateral: nombre de usuario y boton de logout */}
-        <div className="p-4 border-t border-gray-700">
+        <div className="p-4 border-t border-[#1e2125]">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-400">{user?.username}</span>
+            <span className="text-gunmetal text-sm">{user?.username}</span>
             <button
               onClick={handleLogout}
-              className="text-gray-400 hover:text-white transition-colors"
+              className="text-gunmetal hover:text-tech-white transition-colors"
               title="Cerrar sesión"
             >
               <LogOut size={18} />
@@ -135,15 +135,15 @@ export default function Layout() {
       {/* Area de contenido principal */}
       <div className="flex-1 flex flex-col xl:ml-64">
         {/* Header con hamburger: visible en todas las pantallas menores a xl (1280px) */}
-        <header className="xl:hidden bg-gray-900 text-white px-4 py-3 flex items-center gap-3 sticky top-0 z-20">
+        <header className="xl:hidden bg-[#0d1014] text-tech-white px-4 py-3 flex items-center gap-3 sticky top-0 z-20 border-b border-[#1e2125]">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="text-gray-300 hover:text-white"
+            className="text-steel hover:text-tech-white"
             aria-label="Abrir menú"
           >
             <Menu size={24} />
           </button>
-          <h1 className="text-lg font-bold">TurtleForge Cost</h1>
+          <h1 className="text-lg font-bold text-tech-white">TurtleForge Cost</h1>
         </header>
 
         {/* Contenido de la pagina activa */}
