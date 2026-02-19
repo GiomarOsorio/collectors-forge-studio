@@ -92,16 +92,9 @@ def generate_quote_pdf(quote: Quote) -> bytes:
     elements.append(info_table)
     elements.append(Spacer(1, 24))
 
-    # Tabla de precio — solo lo que el cliente necesita ver
-    use_cop = quote.total_price_cop is not None
-    currency = "COP $" if use_cop else "USD $"
-
-    if use_cop:
-        unit_price = f"COP $ {quote.total_per_unit_cop:,.0f}"
-        total_price = f"COP $ {quote.total_price_cop:,.0f}"
-    else:
-        unit_price = f"USD $ {quote.total_per_unit:.2f}"
-        total_price = f"USD $ {quote.total_price:.2f}"
+    # Tabla de precio — solo lo que el cliente necesita ver (siempre en USD)
+    unit_price = f"USD $ {quote.total_per_unit:.2f}"
+    total_price = f"USD $ {quote.total_price:.2f}"
 
     price_data = [
         ["Descripción", "Cant.", "Precio unitario", "Total"],

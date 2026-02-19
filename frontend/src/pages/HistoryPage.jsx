@@ -123,13 +123,19 @@ export default function HistoryPage() {
               <Row label="Subtotal" value={selected.subtotal} bold />
               <Row label={`Margen (${selected.margin_percent}%)`} value={selected.margin_amount} />
               <hr />
-              <Row label="Precio/unidad (USD)" value={selected.total_per_unit} bold />
-              <Row label={`Total (${selected.quantity} uds.)`} value={selected.total_price} bold highlight />
+              <Row label="Precio/unidad" value={selected.total_per_unit} bold />
+              <Row label={`Total USD (${selected.quantity} uds.)`} value={selected.total_price} bold highlight />
               {selected.total_price_cop && (
-                <div className="flex justify-between bg-green-50 px-2 py-1 rounded">
-                  <span className="font-semibold">Total COP</span>
-                  <span className="font-bold text-green-700">$ {Math.round(selected.total_price_cop).toLocaleString('es-CO')} COP</span>
-                </div>
+                <>
+                  <div className="flex justify-between bg-green-50 px-2 py-1 rounded">
+                    <span className="font-semibold text-green-800">Precio/unidad COP</span>
+                    <span className="font-bold text-green-700">$ {Math.round(selected.total_per_unit_cop).toLocaleString('es-CO')}</span>
+                  </div>
+                  <div className="flex justify-between bg-green-50 px-2 py-1 rounded">
+                    <span className="font-semibold text-green-800">Total COP ({selected.quantity} uds.)</span>
+                    <span className="font-bold text-green-700">$ {Math.round(selected.total_price_cop).toLocaleString('es-CO')}</span>
+                  </div>
+                </>
               )}
             </div>
             <div className="mt-4 flex gap-2">
