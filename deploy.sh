@@ -11,8 +11,8 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 # ── Archivo de variables de entorno ──────────────────────────────────────────
 # Busca primero ~/Calculator3dENV (fuente única fuera del repo),
 # luego cae a .env en el directorio del proyecto como fallback.
-if [ -f "$HOME/Calculator3dENV" ]; then
-    ENV_FILE="$HOME/Calculator3dENV"
+if [ -f "$HOME/Calculator3DENV" ]; then
+    ENV_FILE="$HOME/Calculator3DENV"
 elif [ -f "$DEPLOY_PATH/.env" ]; then
     ENV_FILE="$DEPLOY_PATH/.env"
 else
