@@ -123,22 +123,25 @@ export default function HistoryPage() {
               <Row label="Subtotal" value={selected.subtotal} bold />
               <Row label={`Margen (${selected.margin_percent}%)`} value={selected.margin_amount} />
               <hr />
-              <Row label="Total cotización" value={selected.total_price} bold highlight />
+              {/* Total en USD */}
+              <Row label="Total cotización (USD)" value={selected.total_price} bold highlight />
               {selected.quantity > 1 && (
-                <Row label={`Precio por pieza (÷${selected.quantity})`} value={selected.total_per_unit} bold />
+                <Row label={`Precio por pieza USD (÷${selected.quantity})`} value={selected.total_per_unit} bold />
               )}
+              {/* Total en COP */}
               {selected.total_price_cop && (
                 <>
-                  <div className="flex justify-between bg-green-50 px-2 py-1 rounded">
-                    <span className="font-semibold text-green-800">Total cotización COP</span>
-                    <span className="font-bold text-green-700">$ {Math.round(selected.total_price_cop).toLocaleString('es-CO')}</span>
+                  <div className="flex justify-between items-baseline gap-2 bg-green-50 px-2 py-2 rounded-lg">
+                    <span className="font-semibold text-green-800 min-w-0">Total cotización (COP)</span>
+                    <span className="font-bold text-green-700 text-lg shrink-0">$ {Math.round(selected.total_price_cop).toLocaleString('es-CO')}</span>
                   </div>
                   {selected.quantity > 1 && (
-                    <div className="flex justify-between bg-green-50 px-2 py-1 rounded">
-                      <span className="font-semibold text-green-800">Precio por pieza COP (÷{selected.quantity})</span>
-                      <span className="font-bold text-green-700">$ {Math.round(selected.total_per_unit_cop).toLocaleString('es-CO')}</span>
+                    <div className="flex justify-between items-baseline gap-2 bg-green-50 px-2 py-1 rounded">
+                      <span className="font-semibold text-green-800 text-sm min-w-0">Por pieza COP (÷{selected.quantity})</span>
+                      <span className="font-bold text-green-700 shrink-0">$ {Math.round(selected.total_per_unit_cop).toLocaleString('es-CO')}</span>
                     </div>
                   )}
+                  <p className="text-xs text-gray-400">Tasa: 1 USD = {selected.usd_to_cop_rate?.toLocaleString('es-CO')} COP</p>
                 </>
               )}
             </div>
@@ -207,9 +210,9 @@ export default function HistoryPage() {
  */
 function Row({ label, value, bold, highlight }) {
   return (
-    <div className={`flex justify-between ${highlight ? 'bg-blue-50 px-2 py-1 rounded' : ''}`}>
-      <span className={bold ? 'font-semibold' : 'text-gray-600'}>{label}</span>
-      <span className={`${bold ? 'font-bold' : ''} ${highlight ? 'text-blue-700' : ''}`}>$ {value.toFixed(2)}</span>
+    <div className={`flex justify-between items-baseline gap-2 ${highlight ? 'bg-blue-50 px-2 py-1 rounded' : ''}`}>
+      <span className={`${bold ? 'font-semibold' : 'text-gray-600'} min-w-0`}>{label}</span>
+      <span className={`${bold ? 'font-bold' : ''} ${highlight ? 'text-blue-700' : ''} shrink-0`}>$ {value.toFixed(2)}</span>
     </div>
   );
 }

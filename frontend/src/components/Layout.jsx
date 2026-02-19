@@ -147,7 +147,7 @@ export default function Layout() {
         </header>
 
         {/* Contenido de la pagina activa */}
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden">
           <div className="p-4 md:p-6 xl:p-8 max-w-7xl mx-auto w-full">
             <Outlet />
           </div>

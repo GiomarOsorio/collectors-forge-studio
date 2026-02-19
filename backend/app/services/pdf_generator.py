@@ -92,43 +92,57 @@ def generate_quote_pdf(quote: Quote) -> bytes:
     elements.append(info_table)
     elements.append(Spacer(1, 24))
 
-    # Tabla de precio — solo lo que el cliente necesita ver (siempre en COP)
-    if quote.total_price_cop is not None:
-        unit_price = f"$ {quote.total_per_unit_cop:,.0f} COP"
-        total_price = f"$ {quote.total_price_cop:,.0f} COP"
-    else:
-        unit_price = f"USD $ {quote.total_per_unit:.2f}"
-        total_price = f"USD $ {quote.total_price:.2f}"
+    # Tabla de precio — muestra USD y COP si está disponible
+    usd_unit = f"USD {quote.total_per_unit:.2f}"
+    usd_total = f"USD {quote.total_price:.2f}"
 
     price_data = [
         ["Descripción", "Cant.", "Precio unitario", "Total"],
-        [quote.piece_name, str(quote.quantity), unit_price, total_price],
+        [quote.piece_name, str(quote.quantity), usd_unit, usd_total],
     ]
+
+    # Si hay tasa de cambio, añade una fila con precios en COP
+    if quote.total_price_cop is not None:
+        cop_unit = f"$ {quote.total_per_unit_cop:,.0f} COP"
+        cop_total = f"$ {quote.total_price_cop:,.0f} COP"
+        price_data.append(["", "", cop_unit, cop_total])
 
     col_widths = [2.8 * inch, 0.7 * inch, 1.8 * inch, 1.5 * inch]
     price_table = Table(price_data, colWidths=col_widths)
-    price_table.setStyle(TableStyle([
+
+    table_style = [
         # Encabezado
         ("BACKGROUND", (0, 0), (-1, 0), DARK),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTSIZE", (0, 0), (-1, 0), 10),
         ("ALIGN", (1, 0), (-1, 0), "RIGHT"),
-        # Fila de contenido
+        # Fila USD
         ("FONTNAME", (0, 1), (-1, 1), "Helvetica"),
         ("FONTSIZE", (0, 1), (-1, 1), 11),
         ("ALIGN", (1, 1), (-1, 1), "RIGHT"),
         ("BACKGROUND", (0, 1), (-1, 1), LIGHT_BG),
-        # Total destacado
         ("FONTNAME", (-1, 1), (-1, 1), "Helvetica-Bold"),
-        ("FONTSIZE", (-1, 1), (-1, 1), 12),
-        ("TEXTCOLOR", (-1, 1), (-1, 1), DARK),
         # Bordes y espaciado
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#d0d0d0")),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
         ("TOPPADDING", (0, 0), (-1, -1), 10),
         ("LEFTPADDING", (0, 0), (-1, -1), 8),
-    ]))
+    ]
+
+    # Estilo adicional para la fila COP si existe
+    if quote.total_price_cop is not None:
+        COP_BG = colors.HexColor("#f0fdf4")
+        COP_COLOR = colors.HexColor("#166534")
+        table_style += [
+            ("BACKGROUND", (0, 2), (-1, 2), COP_BG),
+            ("FONTNAME", (0, 2), (-1, 2), "Helvetica-Bold"),
+            ("FONTSIZE", (2, 2), (-1, 2), 12),
+            ("TEXTCOLOR", (2, 2), (-1, 2), COP_COLOR),
+            ("ALIGN", (1, 2), (-1, 2), "RIGHT"),
+        ]
+
+    price_table.setStyle(TableStyle(table_style))
     elements.append(price_table)
     elements.append(Spacer(1, 24))
 
