@@ -228,8 +228,8 @@ export default function CalculatorPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Form */}
         <form onSubmit={handleCalculate} className="bg-white rounded-xl shadow-sm p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="col-span-1 sm:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Nombre de la pieza *</label>
               <input name="piece_name" value={form.piece_name} onChange={handleChange} required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
@@ -244,7 +244,7 @@ export default function CalculatorPage() {
               <input name="quantity" type="number" min="1" value={form.quantity} onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
             </div>
-            <div className="col-span-2">
+            <div className="col-span-1 sm:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
               <textarea name="description" value={form.description} onChange={handleChange} rows={2}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
@@ -253,7 +253,7 @@ export default function CalculatorPage() {
 
           <hr className="my-4" />
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Filamento *</label>
               <select name="filament_id" value={form.filament_id} onChange={handleChange} required
@@ -294,7 +294,7 @@ export default function CalculatorPage() {
               <input name="post_processing_time_minutes" type="number" step="1" min="0" value={form.post_processing_time_minutes} onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
             </div>
-            <div className="col-span-2">
+            <div className="col-span-1 sm:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Margen de ganancia (%)</label>
               <input name="margin_percent" type="number" step="0.1" min="0" value={form.margin_percent} onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
@@ -317,7 +317,7 @@ export default function CalculatorPage() {
                     </div>
                   );
                 })}
-                <div className="flex gap-2 mt-1">
+                <div className="flex flex-wrap gap-2 mt-1">
                   <select value={filamentToAdd.filament_id} onChange={(e) => setFilamentToAdd({ ...filamentToAdd, filament_id: e.target.value })}
                     className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
                     <option value="">Filamento...</option>
@@ -325,7 +325,7 @@ export default function CalculatorPage() {
                   </select>
                   <input type="number" step="0.01" min="0" placeholder="g" value={filamentToAdd.weight_grams}
                     onChange={(e) => setFilamentToAdd({ ...filamentToAdd, weight_grams: e.target.value })}
-                    className="w-20 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                    className="w-full sm:w-20 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
                   <button type="button" onClick={addFilament}
                     className="px-3 py-1.5 bg-gray-700 text-white text-sm rounded-lg hover:bg-gray-800 flex items-center gap-1">
                     <Plus size={14} /> Añadir
@@ -352,7 +352,7 @@ export default function CalculatorPage() {
                     </div>
                   );
                 })}
-                <div className="flex gap-2 mt-1">
+                <div className="flex flex-wrap gap-2 mt-1">
                   <select value={supplyToAdd.supply_id} onChange={(e) => setSupplyToAdd({ ...supplyToAdd, supply_id: e.target.value })}
                     className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
                     <option value="">Insumo...</option>
@@ -360,7 +360,7 @@ export default function CalculatorPage() {
                   </select>
                   <input type="number" step="0.01" min="0.01" placeholder="Cant." value={supplyToAdd.quantity}
                     onChange={(e) => setSupplyToAdd({ ...supplyToAdd, quantity: e.target.value })}
-                    className="w-20 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                    className="w-full sm:w-20 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
                   <button type="button" onClick={addSupply}
                     className="px-3 py-1.5 bg-orange-600 text-white text-sm rounded-lg hover:bg-orange-700 flex items-center gap-1">
                     <Plus size={14} /> Añadir

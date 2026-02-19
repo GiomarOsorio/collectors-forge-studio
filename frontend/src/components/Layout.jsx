@@ -7,11 +7,15 @@
  * a todas las secciones de la aplicacion, asi como la informacion
  * del usuario y el boton de cerrar sesion.
  *
+ * En pantallas menores a xl (1280px) la sidebar se oculta y se accede
+ * mediante un boton hamburger. En xl: (1280px+) la sidebar siempre es visible.
+ *
  * El contenido de cada pagina se renderiza dentro del Outlet de React Router.
  *
  * @module components/Layout
  */
 
+import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -22,6 +26,7 @@ import {
   Settings,
   LogOut,
   Package,
+  Menu,
 } from 'lucide-react';
 
 /**
@@ -52,14 +57,16 @@ const navItems = [
  * - Barra lateral izquierda (sidebar) con navegacion, logo y cerrar sesion
  * - Area de contenido principal donde se renderizan las paginas hijas via Outlet
  *
- * La barra lateral destaca visualmente la seccion activa usando NavLink de React Router.
- * El nombre del usuario autenticado se muestra en la parte inferior de la barra lateral.
+ * En pantallas menores a xl (<1280px) la sidebar se muestra como overlay al presionar
+ * el boton hamburger. En xl: (1280px+) la sidebar es siempre visible y fija a la izquierda.
  *
  * @returns {JSX.Element} Layout completo con sidebar y area de contenido
  */
 export default function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  /** @type {[boolean, Function]} Controla si la sidebar esta abierta en mobile */
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   /**
    * Maneja el cierre de sesion del usuario.
@@ -70,10 +77,21 @@ export default function Layout() {
     navigate('/login');
   };
 
+  /** Cierra la sidebar (usado al navegar o al hacer click en el overlay) */
+  const closeSidebar = () => setSidebarOpen(false);
+
   return (
     <div className="flex h-screen bg-gray-100">
+      {/* Overlay oscuro en mobile cuando la sidebar esta abierta */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-30 xl:hidden"
+          onClick={closeSidebar}
+        />
+      )}
+
       {/* Barra lateral de navegacion */}
-      <aside className="w-64 bg-gray-900 text-white flex flex-col">
+      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-gray-900 text-white flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} xl:translate-x-0`}>
         {/* Encabezado con el nombre de la aplicacion */}
         <div className="p-6 border-b border-gray-700">
           <h1 className="text-xl font-bold">Calculator3D</h1>
@@ -85,6 +103,7 @@ export default function Layout() {
             <NavLink
               key={to}
               to={to}
+              onClick={closeSidebar}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                   isActive
@@ -113,12 +132,27 @@ export default function Layout() {
         </div>
       </aside>
 
-      {/* Area de contenido principal: renderiza la pagina activa */}
-      <main className="flex-1 overflow-auto">
-        <div className="p-8">
-          <Outlet />
-        </div>
-      </main>
+      {/* Area de contenido principal */}
+      <div className="flex-1 flex flex-col xl:ml-64">
+        {/* Header con hamburger: visible en todas las pantallas menores a xl (1280px) */}
+        <header className="xl:hidden bg-gray-900 text-white px-4 py-3 flex items-center gap-3 sticky top-0 z-20">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="text-gray-300 hover:text-white"
+            aria-label="Abrir menú"
+          >
+            <Menu size={24} />
+          </button>
+          <h1 className="text-lg font-bold">Calculator3D</h1>
+        </header>
+
+        {/* Contenido de la pagina activa */}
+        <main className="flex-1 overflow-auto">
+          <div className="p-4 md:p-6 xl:p-8 max-w-7xl mx-auto w-full">
+            <Outlet />
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

@@ -191,8 +191,8 @@ export default function SuppliesPage() {
         Se compran en paquetes y el sistema calcula el precio por unidad automáticamente.
       </p>
 
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        <table className="w-full">
+      <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+        <table className="w-full min-w-[550px]">
           <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
             <tr>
               <th className="px-4 py-3 text-left">Nombre</th>
@@ -235,8 +235,8 @@ export default function SuppliesPage() {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-semibold text-lg">{editing ? 'Editar Insumo' : 'Nuevo Insumo'}</h3>
               <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
@@ -268,7 +268,7 @@ export default function SuppliesPage() {
 
               <hr />
               <p className="text-sm font-medium text-gray-700">Compra por paquete *</p>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">Unidades en el paquete</label>
                   <input name="pack_qty" type="number" step="1" min="1" value={form.pack_qty} onChange={handleChange} required

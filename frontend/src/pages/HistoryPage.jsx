@@ -100,8 +100,8 @@ export default function HistoryPage() {
 
       {/* Detail modal */}
       {selected && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">{selected.piece_name}</h3>
               <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
@@ -153,13 +153,13 @@ export default function HistoryPage() {
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        <table className="w-full">
+      <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+        <table className="w-full min-w-[600px]">
           <thead className="bg-gray-50 border-b">
             <tr>
               <th className="text-left px-6 py-3 text-sm font-medium text-gray-500">Fecha</th>
               <th className="text-left px-6 py-3 text-sm font-medium text-gray-500">Pieza</th>
-              <th className="text-left px-6 py-3 text-sm font-medium text-gray-500">Cliente</th>
+              <th className="text-left px-6 py-3 text-sm font-medium text-gray-500 hidden sm:table-cell">Cliente</th>
               <th className="text-right px-6 py-3 text-sm font-medium text-gray-500">Cant.</th>
               <th className="text-right px-6 py-3 text-sm font-medium text-gray-500">Total</th>
               <th className="text-right px-6 py-3 text-sm font-medium text-gray-500">Acciones</th>
@@ -170,7 +170,7 @@ export default function HistoryPage() {
               <tr key={q.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 text-sm text-gray-500">{formatDate(q.created_at)}</td>
                 <td className="px-6 py-4 font-medium text-gray-900">{q.piece_name}</td>
-                <td className="px-6 py-4 text-gray-600">{q.client_name || '-'}</td>
+                <td className="px-6 py-4 text-gray-600 hidden sm:table-cell">{q.client_name || '-'}</td>
                 <td className="px-6 py-4 text-right">{q.quantity}</td>
                 <td className="px-6 py-4 text-right font-semibold text-green-700">
                   {q.total_price_cop
