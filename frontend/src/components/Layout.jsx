@@ -94,8 +94,8 @@ export default function Layout() {
       <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-gray-900 text-white flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} xl:translate-x-0`}>
         {/* Encabezado con el nombre de la aplicacion */}
         <div className="p-6 border-b border-gray-700">
-          <h1 className="text-xl font-bold">Calculator3D</h1>
-          <p className="text-gray-400 text-sm mt-1">Costos de impresión 3D</p>
+          <h1 className="text-xl font-bold">TurtleForge Cost</h1>
+          <p className="text-gray-400 text-sm mt-1">TurtleForge Studio</p>
         </div>
         {/* Menu de navegacion: resalta la ruta activa con fondo azul */}
         <nav className="flex-1 p-4 space-y-1">
@@ -143,7 +143,7 @@ export default function Layout() {
           >
             <Menu size={24} />
           </button>
-          <h1 className="text-lg font-bold">Calculator3D</h1>
+          <h1 className="text-lg font-bold">TurtleForge Cost</h1>
         </header>
 
         {/* Contenido de la pagina activa */}

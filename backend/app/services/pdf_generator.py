@@ -69,7 +69,7 @@ def generate_quote_pdf(quote: Quote) -> bytes:
 
     # Encabezado
     elements.append(Paragraph("Cotización", title_style))
-    elements.append(Paragraph("Impresión 3D · Calculator3D", subtitle_style))
+    elements.append(Paragraph("TurtleForge Cost · TurtleForge Studio", subtitle_style))
 
     # Información general
     info_rows = [
@@ -149,7 +149,7 @@ def generate_quote_pdf(quote: Quote) -> bytes:
     # Pie de página
     elements.append(Paragraph("Precios sin IVA.", note_style))
     elements.append(Paragraph(
-        f"Cotización generada el {datetime.utcnow().strftime('%d/%m/%Y')} · Calculator3D",
+        f"Cotización generada el {datetime.utcnow().strftime('%d/%m/%Y')} · TurtleForge Cost",
         note_style,
     ))
     if quote.notes:
