@@ -63,6 +63,7 @@ podman run -d --name calculator3d-frontend \
 if [ -n "$TUNNEL_TOKEN" ]; then
     echo "→ Levantando Cloudflare Tunnel..."
     podman run -d --name calculator3d-tunnel \
+        --log-driver=k8s-file \
         --network calculator3d \
         -e TUNNEL_TOKEN="$TUNNEL_TOKEN" \
         --restart unless-stopped \
