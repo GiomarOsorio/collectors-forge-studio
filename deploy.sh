@@ -3,8 +3,13 @@ set -e
 
 echo "=== Calculator3D - Deploy ==="
 
+DEPLOY_PATH="$(cd "$(dirname "$0")" && pwd)"
+
+# Asegurar XDG_RUNTIME_DIR para systemctl --user en CI/CD
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
 # Verificar .env
-if [ ! -f .env ]; then
+if [ ! -f "$DEPLOY_PATH/.env" ]; then
     echo "ERROR: No se encontró el archivo .env"
     echo "Copia .env.example como .env y completa los valores:"
     echo "  cp .env.example .env"
@@ -12,8 +17,7 @@ if [ ! -f .env ]; then
     exit 1
 fi
 
-# Cargar variables
-source .env
+source "$DEPLOY_PATH/.env"
 
 # Validar variables requeridas
 if [ -z "$SECRET_KEY" ]; then
@@ -28,46 +32,41 @@ if [ -z "$TUNNEL_TOKEN" ]; then
     echo ""
 fi
 
+echo "→ Habilitando linger para servicios persistentes..."
+loginctl enable-linger "$(whoami)" 2>/dev/null || true
+
 echo "→ Construyendo imágenes..."
-podman build -t calculator3d-backend -f backend/Containerfile backend/
-podman build -t calculator3d-frontend -f frontend/Containerfile frontend/
+podman build -t calculator3d-backend -f "$DEPLOY_PATH/backend/Containerfile" "$DEPLOY_PATH/backend/"
+podman build -t calculator3d-frontend -f "$DEPLOY_PATH/frontend/Containerfile" "$DEPLOY_PATH/frontend/"
 
-echo "→ Creando red y volumen..."
-podman network create calculator3d 2>/dev/null || true
-podman volume create calculator3d-data 2>/dev/null || true
+echo "→ Instalando Quadlets en systemd..."
+QUADLET_DIR="$HOME/.config/containers/systemd"
+mkdir -p "$QUADLET_DIR"
 
-echo "→ Deteniendo contenedores anteriores..."
-podman rm -f calculator3d-backend calculator3d-frontend calculator3d-tunnel 2>/dev/null || true
+# Copiar red y volumen (sin sustituciones)
+cp "$DEPLOY_PATH/quadlet/calculator3d.network" "$QUADLET_DIR/"
+cp "$DEPLOY_PATH/quadlet/calculator3d-data.volume" "$QUADLET_DIR/"
 
-echo "→ Levantando backend..."
-podman run -d --replace --name calculator3d-backend \
-    --network calculator3d \
-    -v calculator3d-data:/app/data:Z \
-    -e DATABASE_URL="sqlite+aiosqlite:///./data/calculator3d.db" \
-    -e SECRET_KEY="$SECRET_KEY" \
-    -e ALGORITHM="HS256" \
-    -e ACCESS_TOKEN_EXPIRE_MINUTES="1440" \
-    -e ADMIN_USERNAME="${ADMIN_USERNAME:-admin}" \
-    -e ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin123}" \
-    -e ADMIN_EMAIL="${ADMIN_EMAIL:-admin@turtlenode.dev}" \
-    --restart unless-stopped \
-    calculator3d-backend
+# Copiar contenedores sustituyendo la ruta de deploy
+for f in "$DEPLOY_PATH"/quadlet/*.container; do
+    sed "s|__DEPLOY_PATH__|$DEPLOY_PATH|g" "$f" > "$QUADLET_DIR/$(basename "$f")"
+done
 
-echo "→ Levantando frontend..."
-podman run -d --replace --name calculator3d-frontend \
-    --network calculator3d \
-    -p 3000:80 \
-    --restart unless-stopped \
-    calculator3d-frontend
+# Si no hay TUNNEL_TOKEN, quitar el tunnel
+if [ -z "$TUNNEL_TOKEN" ]; then
+    rm -f "$QUADLET_DIR/calculator3d-tunnel.container"
+fi
+
+echo "→ Recargando systemd..."
+systemctl --user daemon-reload
+
+echo "→ Habilitando e iniciando servicios..."
+systemctl --user enable calculator3d-backend calculator3d-frontend
+systemctl --user restart calculator3d-backend calculator3d-frontend
 
 if [ -n "$TUNNEL_TOKEN" ]; then
-    echo "→ Levantando Cloudflare Tunnel..."
-    podman run -d --replace --name calculator3d-tunnel \
-        --log-driver=k8s-file \
-        --network calculator3d \
-        --restart unless-stopped \
-        docker.io/cloudflare/cloudflared:latest \
-        tunnel --no-autoupdate run --token "$TUNNEL_TOKEN"
+    systemctl --user enable calculator3d-tunnel
+    systemctl --user restart calculator3d-tunnel
     echo ""
     echo "=== Deploy completo ==="
     echo "App disponible en: https://3d.turtlenode.dev"
@@ -79,7 +78,8 @@ fi
 
 echo ""
 echo "Comandos útiles:"
-echo "  podman logs calculator3d-backend    # Ver logs del backend"
-echo "  podman logs calculator3d-frontend   # Ver logs del frontend"
-echo "  podman logs calculator3d-tunnel     # Ver logs del tunnel"
-echo "  podman ps                           # Ver contenedores"
+echo "  systemctl --user status calculator3d-backend     # Estado backend"
+echo "  systemctl --user status calculator3d-frontend    # Estado frontend"
+echo "  systemctl --user status calculator3d-tunnel      # Estado tunnel"
+echo "  journalctl --user -u calculator3d-tunnel -f      # Logs tunnel"
+echo "  podman ps                                         # Ver contenedores"
