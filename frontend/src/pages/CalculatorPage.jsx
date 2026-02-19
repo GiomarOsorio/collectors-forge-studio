@@ -408,7 +408,7 @@ export default function CalculatorPage() {
                   {result.supplies_detail.map((sd, i) => (
                     <div key={i} className="flex justify-between text-xs text-orange-700 mt-0.5">
                       <span>{sd.name} × {sd.quantity} {sd.unit}</span>
-                      <span>$ {(sd.price_per_unit * sd.quantity).toFixed(4)}</span>
+                      <span>$ {sd.subtotal.toFixed(4)}</span>
                     </div>
                   ))}
                 </div>
