@@ -60,9 +60,9 @@ export default function CalculatorPage() {
     filament_id: '',
     printer_id: '',
     weight_grams: '',
-    print_time_hours: '',
-    preparation_time_hours: '0',
-    post_processing_time_hours: '0',
+    print_time_minutes: '',
+    preparation_time_minutes: '0',
+    post_processing_time_minutes: '0',
     quantity: '1',
     margin_percent: '',
   });
@@ -123,9 +123,9 @@ export default function CalculatorPage() {
     filament_id: parseInt(form.filament_id),
     printer_id: parseInt(form.printer_id),
     weight_grams: parseFloat(form.weight_grams),
-    print_time_hours: parseFloat(form.print_time_hours),
-    preparation_time_hours: parseFloat(form.preparation_time_hours) || 0,
-    post_processing_time_hours: parseFloat(form.post_processing_time_hours) || 0,
+    print_time_hours: (parseFloat(form.print_time_minutes) || 0) / 60,
+    preparation_time_hours: (parseFloat(form.preparation_time_minutes) || 0) / 60,
+    post_processing_time_hours: (parseFloat(form.post_processing_time_minutes) || 0) / 60,
     quantity: parseInt(form.quantity) || 1,
     margin_percent: parseFloat(form.margin_percent),
     supplies: selectedSupplies,
@@ -276,22 +276,22 @@ export default function CalculatorPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Peso filamento (g) *</label>
-              <input name="weight_grams" type="number" step="0.1" min="0" value={form.weight_grams} onChange={handleChange} required
+              <input name="weight_grams" type="number" step="0.01" min="0" value={form.weight_grams} onChange={handleChange} required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tiempo impresión (h) *</label>
-              <input name="print_time_hours" type="number" step="0.1" min="0" value={form.print_time_hours} onChange={handleChange} required
+              <label className="block text-sm font-medium text-gray-700 mb-1">Tiempo impresión (min) *</label>
+              <input name="print_time_minutes" type="number" step="1" min="0" value={form.print_time_minutes} onChange={handleChange} required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Preparación (h)</label>
-              <input name="preparation_time_hours" type="number" step="0.1" min="0" value={form.preparation_time_hours} onChange={handleChange}
+              <label className="block text-sm font-medium text-gray-700 mb-1">Preparación (min)</label>
+              <input name="preparation_time_minutes" type="number" step="1" min="0" value={form.preparation_time_minutes} onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Post-procesado (h)</label>
-              <input name="post_processing_time_hours" type="number" step="0.1" min="0" value={form.post_processing_time_hours} onChange={handleChange}
+              <label className="block text-sm font-medium text-gray-700 mb-1">Post-procesado (min)</label>
+              <input name="post_processing_time_minutes" type="number" step="1" min="0" value={form.post_processing_time_minutes} onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
             </div>
             <div className="col-span-2">
@@ -323,7 +323,7 @@ export default function CalculatorPage() {
                     <option value="">Filamento...</option>
                     {filaments.map((f) => <option key={f.id} value={f.id}>{f.brand} {f.type} - {f.color}</option>)}
                   </select>
-                  <input type="number" step="0.1" min="0" placeholder="g" value={filamentToAdd.weight_grams}
+                  <input type="number" step="0.01" min="0" placeholder="g" value={filamentToAdd.weight_grams}
                     onChange={(e) => setFilamentToAdd({ ...filamentToAdd, weight_grams: e.target.value })}
                     className="w-20 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
                   <button type="button" onClick={addFilament}

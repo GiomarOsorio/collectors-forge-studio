@@ -155,7 +155,7 @@ export default function FilamentsPage() {
           <div className="bg-white rounded-xl p-6 w-full max-w-lg">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">{editingId ? 'Editar' : 'Nuevo'} Filamento</h3>
-              <button onClick={() => setShowForm(false)}><X size={20} /></button>
+              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">

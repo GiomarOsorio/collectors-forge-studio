@@ -104,7 +104,7 @@ export default function HistoryPage() {
           <div className="bg-white rounded-xl p-6 w-full max-w-lg">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">{selected.piece_name}</h3>
-              <button onClick={() => setSelected(null)}><X size={20} /></button>
+              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
             {selected.client_name && (
               <p className="text-gray-500 mb-2">Cliente: {selected.client_name}</p>

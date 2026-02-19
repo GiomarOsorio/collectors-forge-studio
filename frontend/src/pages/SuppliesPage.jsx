@@ -239,7 +239,7 @@ export default function SuppliesPage() {
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-semibold text-lg">{editing ? 'Editar Insumo' : 'Nuevo Insumo'}</h3>
-              <button onClick={() => setShowModal(false)}><X size={20} /></button>
+              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
