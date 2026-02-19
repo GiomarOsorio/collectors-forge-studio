@@ -123,8 +123,14 @@ export default function HistoryPage() {
               <Row label="Subtotal" value={selected.subtotal} bold />
               <Row label={`Margen (${selected.margin_percent}%)`} value={selected.margin_amount} />
               <hr />
-              <Row label="Precio/unidad" value={selected.total_per_unit} bold />
+              <Row label="Precio/unidad (USD)" value={selected.total_per_unit} bold />
               <Row label={`Total (${selected.quantity} uds.)`} value={selected.total_price} bold highlight />
+              {selected.total_price_cop && (
+                <div className="flex justify-between bg-green-50 px-2 py-1 rounded">
+                  <span className="font-semibold">Total COP</span>
+                  <span className="font-bold text-green-700">$ {Math.round(selected.total_price_cop).toLocaleString('es-CO')} COP</span>
+                </div>
+              )}
             </div>
             <div className="mt-4 flex gap-2">
               <button onClick={() => handleDownloadPdf(selected)}
@@ -156,7 +162,11 @@ export default function HistoryPage() {
                 <td className="px-6 py-4 font-medium text-gray-900">{q.piece_name}</td>
                 <td className="px-6 py-4 text-gray-600">{q.client_name || '-'}</td>
                 <td className="px-6 py-4 text-right">{q.quantity}</td>
-                <td className="px-6 py-4 text-right font-semibold text-green-700">$ {q.total_price.toFixed(2)}</td>
+                <td className="px-6 py-4 text-right font-semibold text-green-700">
+                  {q.total_price_cop
+                    ? `$ ${Math.round(q.total_price_cop).toLocaleString('es-CO')} COP`
+                    : `$ ${q.total_price.toFixed(2)}`}
+                </td>
                 <td className="px-6 py-4 text-right">
                   <button onClick={() => setSelected(q)} className="text-gray-400 hover:text-blue-600 mr-2" title="Ver detalle"><Eye size={16} /></button>
                   <button onClick={() => handleDownloadPdf(q)} className="text-gray-400 hover:text-blue-600 mr-2" title="PDF"><FileDown size={16} /></button>

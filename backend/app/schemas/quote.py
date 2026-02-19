@@ -197,6 +197,9 @@ class QuoteResponse(BaseModel):
     supplies_cost: float = 0.0
     supplies_detail: Optional[str] = "[]"
     additional_filaments_detail: Optional[str] = "[]"
+    usd_to_cop_rate: Optional[float] = None
+    total_per_unit_cop: Optional[float] = None
+    total_price_cop: Optional[float] = None
     notes: Optional[str]
     created_at: datetime
 
