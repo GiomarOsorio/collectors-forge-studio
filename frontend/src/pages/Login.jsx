@@ -67,44 +67,27 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-900">
-      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-forge-black">
+      <div className="tf-card rounded-2xl p-8 w-full max-w-md shadow-2xl">
         {/* Encabezado con el nombre y descripcion de la aplicacion */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">TurtleForge Cost</h1>
-          <p className="text-gray-500 mt-2">TurtleForge Studio</p>
+          <h1 className="text-3xl font-bold text-tech-white tracking-tight">TurtleForge Cost</h1>
+          <p className="text-gunmetal mt-2 text-sm">TurtleForge Studio</p>
         </div>
         {/* Formulario de autenticacion */}
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Usuario
-            </label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-              required
-            />
+            <label className="tf-label">Usuario</label>
+            <input type="text" value={username} onChange={(e) => setUsername(e.target.value)}
+              className="tf-input py-3" required />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Contraseña
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-              required
-            />
+            <label className="tf-label">Contraseña</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+              className="tf-input py-3" required />
           </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
-          >
+          <button type="submit" disabled={loading}
+            className="tf-btn-primary w-full py-3 text-base">
             {loading ? 'Ingresando...' : 'Ingresar'}
           </button>
         </form>

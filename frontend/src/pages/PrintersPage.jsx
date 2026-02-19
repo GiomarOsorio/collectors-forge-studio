@@ -141,86 +141,86 @@ export default function PrintersPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Impresoras</h2>
+        <h2 className="text-2xl font-bold text-tech-white">Impresoras</h2>
         <button onClick={() => { setForm(emptyForm); setEditingId(null); setShowForm(true); }}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+          className="tf-btn-primary">
           <Plus size={20} /> Agregar
         </button>
       </div>
 
       {/* Form modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="tf-modal-overlay">
+          <div className="tf-modal max-w-2xl">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">{editingId ? 'Editar' : 'Nueva'} Impresora</h3>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+              <h3 className="tf-section-title">{editingId ? 'Editar' : 'Nueva'} Impresora</h3>
+              <button onClick={() => setShowForm(false)} className="tf-btn-ghost"><X size={20} /></button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+                  <label className="tf-label">Nombre *</label>
                   <input name="name" value={form.name} onChange={handleChange} required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="tf-input" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Modelo *</label>
+                  <label className="tf-label">Modelo *</label>
                   <input name="model" value={form.model} onChange={handleChange} required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="tf-input" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Precio de compra ($) *</label>
+                  <label className="tf-label">Precio de compra ($) *</label>
                   <input name="purchase_price" type="number" step="0.01" value={form.purchase_price} onChange={handleChange} required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="tf-input" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Consumo (watts) *</label>
+                  <label className="tf-label">Consumo (watts) *</label>
                   <input name="power_consumption_watts" type="number" value={form.power_consumption_watts} onChange={handleChange} required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="tf-input" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Vida útil (horas)</label>
+                  <label className="tf-label">Vida útil (horas)</label>
                   <input name="estimated_lifespan_hours" type="number" value={form.estimated_lifespan_hours} onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="tf-input" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Horas de uso actual</label>
+                  <label className="tf-label">Horas de uso actual</label>
                   <input name="current_hours" type="number" value={form.current_hours} onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="tf-input" />
                 </div>
               </div>
 
-              <h4 className="font-medium text-gray-700 mt-4">Mantenimiento</h4>
+              <h4 className="font-medium text-steel mt-4">Mantenimiento</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Precio boquilla ($)</label>
+                  <label className="tf-label">Precio boquilla ($)</label>
                   <input name="nozzle_price" type="number" step="0.01" value={form.nozzle_price} onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="tf-input" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Vida boquilla (h)</label>
+                  <label className="tf-label">Vida boquilla (h)</label>
                   <input name="nozzle_lifespan_hours" type="number" value={form.nozzle_lifespan_hours} onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="tf-input" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Precio placa ($)</label>
+                  <label className="tf-label">Precio placa ($)</label>
                   <input name="buildplate_price" type="number" step="0.01" value={form.buildplate_price} onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="tf-input" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Vida placa (h)</label>
+                  <label className="tf-label">Vida placa (h)</label>
                   <input name="buildplate_lifespan_hours" type="number" value={form.buildplate_lifespan_hours} onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="tf-input" />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
+                <label className="tf-label">Notas</label>
                 <textarea name="notes" value={form.notes} onChange={handleChange} rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="tf-input" />
               </div>
               <button type="submit"
-                className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                className="tf-btn-primary w-full">
                 {editingId ? 'Actualizar' : 'Crear'}
               </button>
             </form>
@@ -231,28 +231,28 @@ export default function PrintersPage() {
       {/* Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {printers.map((p) => (
-          <div key={p.id} className="bg-white rounded-xl shadow-sm p-6">
+          <div key={p.id} className="tf-card p-6">
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="font-semibold text-gray-900 text-lg">{p.name}</h3>
-                <p className="text-gray-500 text-sm">{p.model}</p>
+                <h3 className="font-semibold text-tech-white text-lg">{p.name}</h3>
+                <p className="text-gunmetal text-sm">{p.model}</p>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => handleEdit(p)} className="text-gray-400 hover:text-blue-600"><Pencil size={16} /></button>
-                <button onClick={() => handleDelete(p.id)} className="text-gray-400 hover:text-red-600"><Trash2 size={16} /></button>
+                <button onClick={() => handleEdit(p)} className="tf-btn-ghost"><Pencil size={16} /></button>
+                <button onClick={() => handleDelete(p.id)} className="tf-btn-danger"><Trash2 size={16} /></button>
               </div>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <div><span className="text-gray-500">Costo:</span> <span className="font-medium">$ {p.purchase_price.toFixed(2)}</span></div>
-              <div><span className="text-gray-500">Consumo:</span> <span className="font-medium">{p.power_consumption_watts} W</span></div>
-              <div><span className="text-gray-500">Vida útil:</span> <span className="font-medium">{p.estimated_lifespan_hours} h</span></div>
-              <div><span className="text-gray-500">Horas usadas:</span> <span className="font-medium">{p.current_hours} h</span></div>
+              <div><span className="text-gunmetal">Costo:</span> <span className="text-steel font-medium">$ {p.purchase_price.toFixed(2)}</span></div>
+              <div><span className="text-gunmetal">Consumo:</span> <span className="text-steel font-medium">{p.power_consumption_watts} W</span></div>
+              <div><span className="text-gunmetal">Vida útil:</span> <span className="text-steel font-medium">{p.estimated_lifespan_hours} h</span></div>
+              <div><span className="text-gunmetal">Horas usadas:</span> <span className="text-steel font-medium">{p.current_hours} h</span></div>
             </div>
-            {p.notes && <p className="mt-3 text-sm text-gray-400">{p.notes}</p>}
+            {p.notes && <p className="mt-3 text-sm text-gunmetal">{p.notes}</p>}
           </div>
         ))}
         {printers.length === 0 && (
-          <div className="col-span-2 bg-white rounded-xl shadow-sm p-12 text-center text-gray-400">
+          <div className="col-span-2 tf-card p-12 text-center text-gunmetal">
             No hay impresoras configuradas.
           </div>
         )}

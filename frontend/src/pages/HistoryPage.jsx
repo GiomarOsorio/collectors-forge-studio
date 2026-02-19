@@ -96,21 +96,21 @@ export default function HistoryPage() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">Historial de Cotizaciones</h2>
+      <h2 className="tf-page-title">Historial de Cotizaciones</h2>
 
       {/* Detail modal */}
       {selected && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="tf-modal-overlay">
+          <div className="tf-modal max-w-lg">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">{selected.piece_name}</h3>
-              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+              <h3 className="tf-section-title">{selected.piece_name}</h3>
+              <button onClick={() => setSelected(null)} className="tf-btn-ghost"><X size={20} /></button>
             </div>
             {selected.client_name && (
-              <p className="text-gray-500 mb-2">Cliente: {selected.client_name}</p>
+              <p className="text-steel mb-2 text-sm">Cliente: {selected.client_name}</p>
             )}
             {selected.description && (
-              <p className="text-gray-500 mb-4 text-sm">{selected.description}</p>
+              <p className="text-gunmetal mb-4 text-sm">{selected.description}</p>
             )}
             <div className="space-y-2 text-sm">
               <Row label="Material" value={selected.material_cost} />
@@ -119,10 +119,10 @@ export default function HistoryPage() {
               <Row label="Mantenimiento" value={selected.maintenance_cost} />
               <Row label="Mano de obra" value={selected.labor_cost} />
               <Row label="Absorción fallos" value={selected.failure_cost} />
-              <hr />
+              <hr className="tf-hr" />
               <Row label="Subtotal" value={selected.subtotal} bold />
               <Row label={`Margen (${selected.margin_percent}%)`} value={selected.margin_amount} />
-              <hr />
+              <hr className="tf-hr" />
               {/* Total en USD */}
               <Row label="Total cotización (USD)" value={selected.total_price} bold highlight />
               {selected.quantity > 1 && (
@@ -131,23 +131,23 @@ export default function HistoryPage() {
               {/* Total en COP */}
               {selected.total_price_cop && (
                 <>
-                  <div className="flex justify-between items-baseline gap-2 bg-green-50 px-2 py-2 rounded-lg">
-                    <span className="font-semibold text-green-800 min-w-0">Total cotización (COP)</span>
-                    <span className="font-bold text-green-700 text-lg shrink-0">$ {Math.round(selected.total_price_cop).toLocaleString('es-CO')}</span>
+                  <div className="flex justify-between items-baseline gap-2 bg-[#0d2b14] border border-forge-green/20 px-3 py-2 rounded-lg">
+                    <span className="font-semibold text-forge-green min-w-0">Total cotización (COP)</span>
+                    <span className="font-bold text-forge-green text-lg shrink-0">$ {Math.round(selected.total_price_cop).toLocaleString('es-CO')}</span>
                   </div>
                   {selected.quantity > 1 && (
-                    <div className="flex justify-between items-baseline gap-2 bg-green-50 px-2 py-1 rounded">
-                      <span className="font-semibold text-green-800 text-sm min-w-0">Por pieza COP (÷{selected.quantity})</span>
-                      <span className="font-bold text-green-700 shrink-0">$ {Math.round(selected.total_per_unit_cop).toLocaleString('es-CO')}</span>
+                    <div className="flex justify-between items-baseline gap-2 bg-[#0d2b14]/60 px-3 py-1 rounded">
+                      <span className="font-semibold text-forge-green text-sm min-w-0">Por pieza COP (÷{selected.quantity})</span>
+                      <span className="font-bold text-forge-green shrink-0">$ {Math.round(selected.total_per_unit_cop).toLocaleString('es-CO')}</span>
                     </div>
                   )}
-                  <p className="text-xs text-gray-400">Tasa: 1 USD = {selected.usd_to_cop_rate?.toLocaleString('es-CO')} COP</p>
+                  <p className="text-xs text-gunmetal">Tasa: 1 USD = {selected.usd_to_cop_rate?.toLocaleString('es-CO')} COP</p>
                 </>
               )}
             </div>
             <div className="mt-4 flex gap-2">
               <button onClick={() => handleDownloadPdf(selected)}
-                className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                className="tf-btn-primary flex-1">
                 <FileDown size={18} /> Descargar PDF
               </button>
             </div>
@@ -156,39 +156,39 @@ export default function HistoryPage() {
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+      <div className="tf-table-wrap">
         <table className="w-full min-w-[600px]">
-          <thead className="bg-gray-50 border-b">
+          <thead className="tf-thead border-b">
             <tr>
-              <th className="text-left px-6 py-3 text-sm font-medium text-gray-500">Fecha</th>
-              <th className="text-left px-6 py-3 text-sm font-medium text-gray-500">Pieza</th>
-              <th className="text-left px-6 py-3 text-sm font-medium text-gray-500 hidden sm:table-cell">Cliente</th>
-              <th className="text-right px-6 py-3 text-sm font-medium text-gray-500">Cant.</th>
-              <th className="text-right px-6 py-3 text-sm font-medium text-gray-500">Total</th>
-              <th className="text-right px-6 py-3 text-sm font-medium text-gray-500">Acciones</th>
+              <th className="tf-th">Fecha</th>
+              <th className="tf-th">Pieza</th>
+              <th className="tf-th hidden sm:table-cell">Cliente</th>
+              <th className="tf-th-right">Cant.</th>
+              <th className="tf-th-right">Total</th>
+              <th className="tf-th-right">Acciones</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody>
             {quotes.map((q) => (
-              <tr key={q.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 text-sm text-gray-500">{formatDate(q.created_at)}</td>
-                <td className="px-6 py-4 font-medium text-gray-900">{q.piece_name}</td>
-                <td className="px-6 py-4 text-gray-600 hidden sm:table-cell">{q.client_name || '-'}</td>
-                <td className="px-6 py-4 text-right">{q.quantity}</td>
-                <td className="px-6 py-4 text-right font-semibold text-green-700">
+              <tr key={q.id} className="tf-tr">
+                <td className="tf-td text-gunmetal">{formatDate(q.created_at)}</td>
+                <td className="tf-td font-medium text-tech-white">{q.piece_name}</td>
+                <td className="tf-td text-steel hidden sm:table-cell">{q.client_name || '-'}</td>
+                <td className="tf-td-right text-steel">{q.quantity}</td>
+                <td className="tf-td-right font-semibold text-forge-green">
                   {q.total_price_cop
                     ? `$ ${Math.round(q.total_price_cop).toLocaleString('es-CO')} COP`
                     : `$ ${q.total_price.toFixed(2)}`}
                 </td>
-                <td className="px-6 py-4 text-right">
-                  <button onClick={() => setSelected(q)} className="text-gray-400 hover:text-blue-600 mr-2" title="Ver detalle"><Eye size={16} /></button>
-                  <button onClick={() => handleDownloadPdf(q)} className="text-gray-400 hover:text-blue-600 mr-2" title="PDF"><FileDown size={16} /></button>
-                  <button onClick={() => handleDelete(q.id)} className="text-gray-400 hover:text-red-600" title="Eliminar"><Trash2 size={16} /></button>
+                <td className="tf-td-right">
+                  <button onClick={() => setSelected(q)} className="tf-btn-ghost mr-2" title="Ver detalle"><Eye size={16} /></button>
+                  <button onClick={() => handleDownloadPdf(q)} className="tf-btn-ghost mr-2" title="PDF"><FileDown size={16} /></button>
+                  <button onClick={() => handleDelete(q.id)} className="tf-btn-danger" title="Eliminar"><Trash2 size={16} /></button>
                 </td>
               </tr>
             ))}
             {quotes.length === 0 && (
-              <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-400">No hay cotizaciones guardadas.</td></tr>
+              <tr><td colSpan={6} className="px-5 py-12 text-center text-gunmetal">No hay cotizaciones guardadas.</td></tr>
             )}
           </tbody>
         </table>
@@ -205,14 +205,14 @@ export default function HistoryPage() {
  * @param {string} props.label - Texto descriptivo del concepto de costo
  * @param {number} props.value - Valor numerico del costo a mostrar
  * @param {boolean} [props.bold] - Si es true, aplica estilo en negrita
- * @param {boolean} [props.highlight] - Si es true, destaca la fila con fondo azul (usado para el total)
+ * @param {boolean} [props.highlight] - Si es true, destaca la fila con fondo verde (usado para el total)
  * @returns {JSX.Element} Fila con etiqueta y valor formateado como moneda
  */
 function Row({ label, value, bold, highlight }) {
   return (
-    <div className={`flex justify-between items-baseline gap-2 ${highlight ? 'bg-blue-50 px-2 py-1 rounded' : ''}`}>
-      <span className={`${bold ? 'font-semibold' : 'text-gray-600'} min-w-0`}>{label}</span>
-      <span className={`${bold ? 'font-bold' : ''} ${highlight ? 'text-blue-700' : ''} shrink-0`}>$ {value.toFixed(2)}</span>
+    <div className={`tf-cost-row ${highlight ? 'bg-forge-green/10 -mx-2 px-2 py-2 rounded-lg' : ''}`}>
+      <span className={`${bold ? 'font-semibold text-tech-white' : 'text-steel'} min-w-0`}>{label}</span>
+      <span className={`${bold ? 'font-bold' : ''} ${highlight ? 'text-forge-green' : 'text-tech-white'} shrink-0`}>$ {value.toFixed(2)}</span>
     </div>
   );
 }

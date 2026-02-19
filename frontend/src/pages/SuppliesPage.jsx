@@ -177,56 +177,56 @@ export default function SuppliesPage() {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Insumos Adicionales</h2>
+        <h2 className="text-2xl font-bold text-tech-white">Insumos Adicionales</h2>
         <button
           onClick={() => { setEditing(null); setForm(emptyForm); setShowModal(true); }}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          className="tf-btn-primary"
         >
           <Plus size={18} /> Nuevo Insumo
         </button>
       </div>
 
-      <p className="text-sm text-gray-500 mb-4">
+      <p className="text-sm text-gunmetal mb-4">
         Materiales adicionales que se usan en las piezas: argollas, switches, imanes, insertos, etc.
         Se compran en paquetes y el sistema calcula el precio por unidad automáticamente.
       </p>
 
-      <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+      <div className="tf-table-wrap">
         <table className="w-full min-w-[550px]">
-          <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+          <thead className="tf-thead">
             <tr>
-              <th className="px-4 py-3 text-left">Nombre</th>
-              <th className="px-4 py-3 text-left">Descripción</th>
-              <th className="px-4 py-3 text-left">Unidad</th>
-              <th className="px-4 py-3 text-right">Paquete</th>
-              <th className="px-4 py-3 text-right">Precio / unidad</th>
-              <th className="px-4 py-3"></th>
+              <th className="tf-th">Nombre</th>
+              <th className="tf-th">Descripción</th>
+              <th className="tf-th">Unidad</th>
+              <th className="tf-th-right">Paquete</th>
+              <th className="tf-th-right">Precio / unidad</th>
+              <th className="tf-th"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody>
             {supplies.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={6} className="px-4 py-8 text-center text-gunmetal">
                   No hay insumos registrados
                 </td>
               </tr>
             )}
             {supplies.map((s) => (
-              <tr key={s.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium text-gray-900">{s.name}</td>
-                <td className="px-4 py-3 text-gray-500 text-sm">{s.description || '—'}</td>
-                <td className="px-4 py-3 text-gray-600">{s.unit}</td>
-                <td className="px-4 py-3 text-right text-sm text-gray-500">
+              <tr key={s.id} className="tf-tr">
+                <td className="tf-td font-medium text-tech-white">{s.name}</td>
+                <td className="tf-td text-gunmetal text-sm">{s.description || '—'}</td>
+                <td className="tf-td text-steel">{s.unit}</td>
+                <td className="tf-td-right text-sm text-gunmetal">
                   {s.pack_qty && s.pack_price != null
-                    ? <span className="flex items-center justify-end gap-1"><Package size={13} className="text-gray-400" />{s.pack_qty} uds. · ${s.pack_price.toFixed(2)}</span>
+                    ? <span className="flex items-center justify-end gap-1"><Package size={13} className="text-gunmetal" />{s.pack_qty} uds. · ${s.pack_price.toFixed(2)}</span>
                     : '—'}
                 </td>
-                <td className="px-4 py-3 text-right font-mono font-semibold text-gray-900">
+                <td className="tf-td-right font-mono font-semibold text-tech-white">
                   $ {s.price_per_unit.toFixed(6)}
                 </td>
-                <td className="px-4 py-3 text-right">
-                  <button onClick={() => handleEdit(s)} className="text-blue-500 hover:text-blue-700 mr-3"><Pencil size={16} /></button>
-                  <button onClick={() => handleDelete(s.id)} className="text-red-400 hover:text-red-600"><Trash2 size={16} /></button>
+                <td className="tf-td-right">
+                  <button onClick={() => handleEdit(s)} className="text-forge-green hover:text-deep-green mr-3 transition-colors"><Pencil size={16} /></button>
+                  <button onClick={() => handleDelete(s.id)} className="tf-btn-danger"><Trash2 size={16} /></button>
                 </td>
               </tr>
             ))}
@@ -235,58 +235,58 @@ export default function SuppliesPage() {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="tf-modal-overlay">
+          <div className="tf-modal max-w-md">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold text-lg">{editing ? 'Editar Insumo' : 'Nuevo Insumo'}</h3>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+              <h3 className="tf-section-title">{editing ? 'Editar Insumo' : 'Nuevo Insumo'}</h3>
+              <button onClick={() => setShowModal(false)} className="tf-btn-ghost"><X size={20} /></button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+                <label className="tf-label">Nombre *</label>
                 <input name="name" value={form.name} onChange={handleChange} required
                   placeholder="Ej: Argolla metálica 25mm"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="tf-input" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                <label className="tf-label">Descripción</label>
                 <input name="description" value={form.description} onChange={handleChange}
                   placeholder="Ej: Argolla de acero inoxidable para keychains"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="tf-input" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Unidad base *</label>
+                <label className="tf-label">Unidad base *</label>
                 <select name="unit" value={form.unit} onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                  className="tf-input">
                   <option value="unidad">unidad</option>
                   <option value="pieza">pieza</option>
                   <option value="cm">cm</option>
                   <option value="gramo">gramo</option>
                 </select>
-                <p className="text-xs text-gray-400 mt-1">Qué representa "1" cuando lo añades a la calculadora</p>
+                <p className="tf-hint">Qué representa "1" cuando lo añades a la calculadora</p>
               </div>
 
-              <hr />
-              <p className="text-sm font-medium text-gray-700">Compra por paquete *</p>
+              <hr className="tf-hr" />
+              <p className="text-sm font-medium text-steel">Compra por paquete *</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">Unidades en el paquete</label>
+                  <label className="tf-label">Unidades en el paquete</label>
                   <input name="pack_qty" type="number" step="1" min="1" value={form.pack_qty} onChange={handleChange} required
                     placeholder="Ej: 50"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="tf-input" />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">Precio del paquete (USD)</label>
+                  <label className="tf-label">Precio del paquete (USD)</label>
                   <input name="pack_price" type="number" step="0.01" min="0" value={form.pack_price} onChange={handleChange} required
                     placeholder="Ej: 5.00"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="tf-input" />
                 </div>
               </div>
 
               {/* Preview del precio por unidad calculado en tiempo real */}
-              <div className={`rounded-lg px-4 py-3 text-sm flex justify-between items-center ${computedUnitPrice !== null ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50 border border-gray-200'}`}>
-                <span className="text-gray-600">Precio por {form.unit}:</span>
-                <span className={`font-bold font-mono text-base ${computedUnitPrice !== null ? 'text-blue-700' : 'text-gray-400'}`}>
+              <div className={`rounded-lg px-4 py-3 text-sm flex justify-between items-center ${computedUnitPrice !== null ? 'bg-forge-green/10 border border-forge-green/20' : 'bg-[#0d1014] border border-[#2e3238]'}`}>
+                <span className="text-steel">Precio por {form.unit}:</span>
+                <span className={`font-bold font-mono text-base ${computedUnitPrice !== null ? 'text-forge-green' : 'text-gunmetal'}`}>
                   {computedUnitPrice !== null
                     ? `$ ${computedUnitPrice.toFixed(6)}`
                     : '—'}
@@ -294,16 +294,16 @@ export default function SuppliesPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
+                <label className="tf-label">Notas</label>
                 <input name="notes" value={form.notes} onChange={handleChange}
                   placeholder="Proveedor, referencia, color, etc."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="tf-input" />
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancelar</button>
+                  className="tf-btn-secondary flex-1">Cancelar</button>
                 <button type="submit"
-                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                  className="tf-btn-primary flex-1">
                   {editing ? 'Guardar' : 'Crear'}
                 </button>
               </div>

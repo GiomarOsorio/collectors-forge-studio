@@ -45,7 +45,7 @@ import SuppliesPage from './pages/SuppliesPage';
  */
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
-  if (loading) return <div className="flex items-center justify-center h-screen text-gray-400">Cargando...</div>;
+  if (loading) return <div className="flex items-center justify-center h-screen" style={{ color: '#4B4F55' }}>Cargando...</div>;
   return user ? children : <Navigate to="/login" />;
 }
 
@@ -98,7 +98,10 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <AppRoutes />
-        <Toaster position="top-right" />
+        <Toaster position="top-right" toastOptions={{
+          style: { background: '#1a1d21', color: '#F2F4F6', border: '1px solid #2a2d31' },
+          success: { iconTheme: { primary: '#3FAF4C', secondary: '#F2F4F6' } },
+        }} />
       </AuthProvider>
     </BrowserRouter>
   );
