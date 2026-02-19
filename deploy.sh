@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "=== Calculator3D - Deploy ==="
+echo "=== TurtleForge Cost - Deploy ==="
 
 DEPLOY_PATH="$(cd "$(dirname "$0")" && pwd)"
 
@@ -26,6 +26,12 @@ if [ -z "$SECRET_KEY" ]; then
     exit 1
 fi
 
+if [ -z "$POSTGRES_PASSWORD" ]; then
+    echo "ERROR: POSTGRES_PASSWORD no está configurada en .env"
+    echo "Agrega al .env:  POSTGRES_PASSWORD=$(openssl rand -hex 16)"
+    exit 1
+fi
+
 if [ -z "$TUNNEL_TOKEN" ]; then
     echo "AVISO: TUNNEL_TOKEN no configurado. Se levantará sin Cloudflare Tunnel."
     echo "La app estará disponible solo en http://localhost:3000"
@@ -35,17 +41,21 @@ fi
 echo "→ Habilitando linger para servicios persistentes..."
 loginctl enable-linger "$(whoami)" 2>/dev/null || true
 
-echo "→ Construyendo imágenes..."
+echo "→ Construyendo imágenes de la aplicación..."
 podman build -t calculator3d-backend -f "$DEPLOY_PATH/backend/Containerfile" "$DEPLOY_PATH/backend/"
 podman build -t calculator3d-frontend -f "$DEPLOY_PATH/frontend/Containerfile" "$DEPLOY_PATH/frontend/"
+
+echo "→ Descargando imagen de PostgreSQL..."
+podman pull docker.io/postgres:16-alpine
 
 echo "→ Instalando Quadlets en systemd..."
 QUADLET_DIR="$HOME/.config/containers/systemd"
 mkdir -p "$QUADLET_DIR"
 
-# Copiar red y volumen (sin sustituciones)
+# Copiar red y volúmenes
 cp "$DEPLOY_PATH/quadlet/calculator3d.network" "$QUADLET_DIR/"
 cp "$DEPLOY_PATH/quadlet/calculator3d-data.volume" "$QUADLET_DIR/"
+cp "$DEPLOY_PATH/quadlet/calculator3d-pgdata.volume" "$QUADLET_DIR/"
 
 # Copiar contenedores sustituyendo la ruta de deploy
 for f in "$DEPLOY_PATH"/quadlet/*.container; do
@@ -60,7 +70,25 @@ fi
 echo "→ Recargando systemd..."
 systemctl --user daemon-reload
 
-echo "→ Iniciando servicios..."
+echo "→ Iniciando PostgreSQL..."
+systemctl --user restart calculator3d-postgres
+
+echo "→ Esperando que PostgreSQL esté listo (máx. 60s)..."
+for i in $(seq 1 30); do
+    if podman exec calculator3d-postgres pg_isready -U turtleforge -d turtleforge 2>/dev/null; then
+        echo "  PostgreSQL listo."
+        break
+    fi
+    if [ "$i" -eq 30 ]; then
+        echo "ERROR: PostgreSQL no respondió en 60 segundos."
+        echo "  Revisa los logs: journalctl --user -u calculator3d-postgres -n 50"
+        exit 1
+    fi
+    echo "  Esperando... ($i/30)"
+    sleep 2
+done
+
+echo "→ Iniciando backend y frontend..."
 systemctl --user restart calculator3d-backend calculator3d-frontend
 
 if [ -n "$TUNNEL_TOKEN" ]; then
@@ -76,8 +104,9 @@ fi
 
 echo ""
 echo "Comandos útiles:"
-echo "  systemctl --user status calculator3d-backend     # Estado backend"
-echo "  systemctl --user status calculator3d-frontend    # Estado frontend"
-echo "  systemctl --user status calculator3d-tunnel      # Estado tunnel"
-echo "  journalctl --user -u calculator3d-tunnel -f      # Logs tunnel"
-echo "  podman ps                                         # Ver contenedores"
+echo "  systemctl --user status calculator3d-postgres        # Estado PostgreSQL"
+echo "  systemctl --user status calculator3d-backend         # Estado backend"
+echo "  systemctl --user status calculator3d-frontend        # Estado frontend"
+echo "  journalctl --user -u calculator3d-backend -f         # Logs backend"
+echo "  podman exec -it calculator3d-postgres psql -U turtleforge turtleforge  # Shell PG"
+echo "  podman ps                                             # Ver contenedores"
