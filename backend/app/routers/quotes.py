@@ -6,8 +6,8 @@ desde el cálculo previo sin guardar (preview), pasando por la creación y
 almacenamiento en el historial, hasta la consulta, eliminación y descarga
 del PDF de una cotización guardada.
 
-Todos los endpoints filtran por el usuario autenticado, por lo que cada
-usuario solo puede ver y gestionar sus propias cotizaciones.
+Las cotizaciones son compartidas entre todos los usuarios autenticados:
+cualquier usuario puede ver, descargar o eliminar cualquier cotización del historial.
 
 Endpoints disponibles bajo el prefijo /api/quotes:
 - POST /calculate     - Calcula el costo sin guardar (previsualización).
@@ -181,22 +181,21 @@ async def list_quotes(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Lista el historial de cotizaciones del usuario autenticado.
+    Lista el historial completo de cotizaciones de todos los usuarios.
 
-    Los resultados se ordenan de más reciente a más antiguo para mostrar
-    primero las cotizaciones más recientes en la interfaz.
+    Los resultados se ordenan de más reciente a más antiguo. Las cotizaciones
+    son compartidas entre todos los usuarios del sistema.
 
     Args:
         db: Sesión de base de datos inyectada por FastAPI.
-        current_user: Usuario autenticado cuyas cotizaciones se listan.
+        current_user: Usuario autenticado (solo se usa para verificar autenticación).
 
     Returns:
-        list[QuoteResponse]: Lista de cotizaciones del usuario ordenadas
+        list[QuoteResponse]: Lista de todas las cotizaciones ordenadas
             por fecha de creación descendente.
     """
     result = await db.execute(
         select(Quote)
-        .where(Quote.user_id == current_user.id)
         .order_by(Quote.created_at.desc())
     )
     return result.scalars().all()
@@ -348,26 +347,25 @@ async def _get_dependencies(
 
 async def _get_user_quote(db: AsyncSession, quote_id: int, user_id: int) -> Quote:
     """
-    Función auxiliar que recupera una cotización validando la propiedad del usuario.
+    Función auxiliar que recupera una cotización por su ID.
 
-    Garantiza que el usuario solo pueda acceder a sus propias cotizaciones
-    filtrando simultáneamente por ID de cotización y por ID de usuario.
+    Las cotizaciones son compartidas entre todos los usuarios, por lo que
+    cualquier usuario autenticado puede acceder, descargar o eliminar cualquier
+    cotización del historial.
 
     Args:
         db: Sesión de base de datos activa.
         quote_id: Identificador de la cotización a recuperar.
-        user_id: Identificador del usuario propietario esperado.
+        user_id: Identificador del usuario autenticado (no se usa para filtrar).
 
     Returns:
         Quote: Instancia ORM de la cotización encontrada.
 
     Raises:
-        HTTPException 404: Si no existe una cotización con ese ID que pertenezca
-            al usuario indicado (incluye el caso en que la cotización existe pero
-            pertenece a otro usuario).
+        HTTPException 404: Si no existe una cotización con ese ID.
     """
     result = await db.execute(
-        select(Quote).where(Quote.id == quote_id, Quote.user_id == user_id)
+        select(Quote).where(Quote.id == quote_id)
     )
     quote = result.scalar_one_or_none()
     if not quote:
