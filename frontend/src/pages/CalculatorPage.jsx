@@ -382,6 +382,11 @@ export default function CalculatorPage() {
           {result ? (
             <div className="bg-white rounded-xl shadow-sm p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Desglose de Costos</h3>
+              {result.quantity > 1 && (
+                <p className="text-xs text-blue-600 bg-blue-50 rounded px-2 py-1 mb-3">
+                  Costos calculados para el trabajo completo ({result.quantity} piezas en la placa)
+                </p>
+              )}
               <div className="space-y-3">
                 <CostRow label="Material" value={result.material_cost} />
                 <CostRow label="Electricidad" value={result.electricity_cost} />
@@ -394,12 +399,9 @@ export default function CalculatorPage() {
                 <CostRow label="Subtotal" value={result.subtotal} bold />
                 <CostRow label={`Margen (${result.margin_percent}%)`} value={result.margin_amount} />
                 <hr />
-                <CostRow label="Precio por unidad" value={result.total_per_unit} bold />
+                <CostRow label="Total cotización" value={result.total_price} bold highlight />
                 {result.quantity > 1 && (
-                  <CostRow label={`Total (${result.quantity} uds.)`} value={result.total_price} bold highlight />
-                )}
-                {result.quantity === 1 && (
-                  <CostRow label="TOTAL" value={result.total_price} bold highlight />
+                  <CostRow label={`Precio por pieza (÷${result.quantity})`} value={result.total_per_unit} bold />
                 )}
               </div>
               {result.supplies_detail && result.supplies_detail.length > 0 && (
@@ -417,13 +419,13 @@ export default function CalculatorPage() {
                 <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                   <p className="text-xs font-semibold text-yellow-800 mb-1">Equivalente en Pesos Colombianos</p>
                   <div className="flex justify-between text-sm">
-                    <span className="text-yellow-700">Precio por unidad</span>
-                    <span className="font-bold text-yellow-900">$ {result.total_per_unit_cop?.toLocaleString('es-CO')} COP</span>
+                    <span className="text-yellow-700">Total cotización</span>
+                    <span className="font-bold text-yellow-900">$ {result.total_price_cop?.toLocaleString('es-CO')} COP</span>
                   </div>
                   {result.quantity > 1 && (
                     <div className="flex justify-between text-sm mt-1">
-                      <span className="text-yellow-700">Total ({result.quantity} uds.)</span>
-                      <span className="font-bold text-yellow-900">$ {result.total_price_cop?.toLocaleString('es-CO')} COP</span>
+                      <span className="text-yellow-700">Precio por pieza (÷{result.quantity})</span>
+                      <span className="font-bold text-yellow-900">$ {result.total_per_unit_cop?.toLocaleString('es-CO')} COP</span>
                     </div>
                   )}
                   <p className="text-xs text-yellow-600 mt-2">Tasa usada: 1 USD = {result.usd_to_cop_rate?.toLocaleString('es-CO')} COP</p>

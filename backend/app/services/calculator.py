@@ -8,18 +8,21 @@ configuración del usuario, junto con los parámetros específicos de la
 impresión (peso, tiempo, cantidad), y devuelve un desglose detallado.
 
 Fórmula de cálculo aplicada:
-    1. Costo de material  = gramos × (precio_por_kg / 1000) + filamentos adicionales
-    2. Costo eléctrico    = (watts × horas / 1000) × tarifa_kWh
-    3. Depreciación       = (precio_impresora / vida_útil_horas) × horas
-    4. Mantenimiento      = (boquilla/vida_boquilla + placa/vida_placa + otros) × horas
+    El peso y tiempo de impresión representan el trabajo completo (la placa con
+    todas las piezas). La cantidad indica cuántas piezas produce ese trabajo.
+
+    1. Costo de material  = gramos_totales × (precio_por_kg / 1000) + filamentos adicionales
+    2. Costo eléctrico    = (watts × horas_totales / 1000) × tarifa_kWh
+    3. Depreciación       = (precio_impresora / vida_útil_horas) × horas_totales
+    4. Mantenimiento      = (boquilla/vida_boquilla + placa/vida_placa + otros) × horas_totales
     5. Mano de obra       = (t_preparación + t_post_procesado) × costo_hora
     6. Costo de fallos    = (suma 1-5) × (tasa_fallos / 100)
     7. Subtotal base      = suma 1-5 + costo_fallos
     8. Insumos            = suma(cantidad × precio_unitario) por cada insumo
     9. Subtotal final     = subtotal_base + insumos
    10. Margen             = subtotal_final × (margen_percent / 100)
-   11. Total por unidad   = subtotal_final + margen
-   12. Total final        = total_por_unidad × cantidad
+   11. Total trabajo      = subtotal_final + margen  (lo que paga el cliente)
+   12. Precio por pieza   = total_trabajo / cantidad
 """
 
 from typing import Optional, List
@@ -164,8 +167,10 @@ def calculate_cost(
     margin = margin_percent if margin_percent is not None else app_settings.default_margin_percent
     margin_amount = subtotal_with_supplies * (margin / 100.0)
 
-    total_per_unit = round(subtotal_with_supplies + margin_amount, 2)
-    total_price = round(total_per_unit * quantity, 2)
+    # El precio total es el costo del trabajo completo (la placa con todas las piezas)
+    total_price = round(subtotal_with_supplies + margin_amount, 2)
+    # El precio por pieza es el total dividido entre la cantidad producida
+    total_per_unit = round(total_price / quantity, 2)
 
     # Conversión a pesos colombianos si se proporcionó la tasa
     total_per_unit_cop = round(total_per_unit * usd_to_cop_rate, 0) if usd_to_cop_rate else None
