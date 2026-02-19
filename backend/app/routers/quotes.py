@@ -158,6 +158,9 @@ async def create_quote(
         margin_amount=breakdown.margin_amount,
         total_per_unit=breakdown.total_per_unit,
         total_price=breakdown.total_price,
+        usd_to_cop_rate=breakdown.usd_to_cop_rate,
+        total_per_unit_cop=breakdown.total_per_unit_cop,
+        total_price_cop=breakdown.total_price_cop,
         supplies_cost=breakdown.supplies_cost,
         supplies_detail=__import__("json").dumps(breakdown.supplies_detail),
         additional_filaments_detail=__import__("json").dumps([
@@ -260,11 +263,11 @@ async def download_quote_pdf(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Genera y descarga la cotización como un archivo PDF.
+    Genera y descarga la cotización como un archivo PDF orientado al cliente.
 
-    Recupera la cotización junto con los datos del filamento e impresora
-    asociados, genera el documento PDF y lo devuelve como archivo adjunto
-    para descarga directa desde el navegador.
+    Recupera la cotización y genera un PDF con la información del cliente:
+    nombre de la pieza, cantidad y precio en COP (o USD como respaldo).
+    No incluye el desglose interno de costos de producción.
 
     Args:
         quote_id: Identificador de la cotización a exportar como PDF.
@@ -280,17 +283,7 @@ async def download_quote_pdf(
     """
     quote = await _get_user_quote(db, quote_id, current_user.id)
 
-    # Obtener filamento e impresora asociados a la cotización para el PDF
-    filament_result = await db.execute(
-        select(Filament).where(Filament.id == quote.filament_id)
-    )
-    filament = filament_result.scalar_one()
-    printer_result = await db.execute(
-        select(Printer).where(Printer.id == quote.printer_id)
-    )
-    printer = printer_result.scalar_one()
-
-    pdf_bytes = generate_quote_pdf(quote, filament, printer)
+    pdf_bytes = generate_quote_pdf(quote)
     # Nombre de archivo con espacios reemplazados por guiones bajos y el ID al final
     filename = f"cotizacion_{quote.piece_name.replace(' ', '_')}_{quote.id}.pdf"
 

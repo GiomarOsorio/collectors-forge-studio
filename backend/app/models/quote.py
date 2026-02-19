@@ -107,6 +107,11 @@ class Quote(Base):
     # Filamentos adicionales para piezas multicolor - JSON: [{filament_id, name, weight_grams, material_cost}]
     additional_filaments_detail: Mapped[Optional[str]] = mapped_column(Text, default="[]", nullable=True)
 
+    # Conversión a pesos colombianos (guardada al momento de cotizar)
+    usd_to_cop_rate: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    total_per_unit_cop: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    total_price_cop: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
     # Metadata
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

@@ -101,6 +101,9 @@ async def migrate_db():
         - quotes.additional_filaments_detail: Desglose JSON de filamentos adicionales (TEXT).
         - supplies.pack_qty:                 Cantidad de unidades por paquete (INTEGER).
         - supplies.pack_price:               Precio del paquete de compra (FLOAT).
+        - quotes.usd_to_cop_rate:            Tasa de cambio USD→COP usada al cotizar (FLOAT).
+        - quotes.total_per_unit_cop:         Precio por unidad en COP (FLOAT).
+        - quotes.total_price_cop:            Precio total en COP (FLOAT).
     """
     migrations = [
         ("quotes", "supplies_cost", "ALTER TABLE quotes ADD COLUMN supplies_cost FLOAT DEFAULT 0.0"),
@@ -108,6 +111,9 @@ async def migrate_db():
         ("quotes", "additional_filaments_detail", "ALTER TABLE quotes ADD COLUMN additional_filaments_detail TEXT DEFAULT '[]'"),
         ("supplies", "pack_qty", "ALTER TABLE supplies ADD COLUMN pack_qty INTEGER"),
         ("supplies", "pack_price", "ALTER TABLE supplies ADD COLUMN pack_price FLOAT"),
+        ("quotes", "usd_to_cop_rate", "ALTER TABLE quotes ADD COLUMN usd_to_cop_rate FLOAT"),
+        ("quotes", "total_per_unit_cop", "ALTER TABLE quotes ADD COLUMN total_per_unit_cop FLOAT"),
+        ("quotes", "total_price_cop", "ALTER TABLE quotes ADD COLUMN total_price_cop FLOAT"),
     ]
     async with async_session() as db:
         for table, column, sql in migrations:
