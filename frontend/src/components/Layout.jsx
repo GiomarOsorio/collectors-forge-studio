@@ -92,10 +92,15 @@ export default function Layout() {
 
       {/* Barra lateral de navegacion */}
       <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#0d1014] text-tech-white flex flex-col transition-transform duration-300 border-r border-[#1e2125] ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} xl:translate-x-0`}>
-        {/* Encabezado con el nombre de la aplicacion */}
+        {/* Encabezado con logo y nombre de la aplicacion */}
         <div className="p-6 border-b border-[#1e2125]">
-          <h1 className="text-xl font-bold text-tech-white">TurtleForge Cost</h1>
-          <p className="text-gunmetal text-sm mt-1">TurtleForge Studio</p>
+          <div className="flex items-center gap-3">
+            <img src="/logo.png" alt="TurtleForge" className="h-10 w-10 object-contain" />
+            <div>
+              <h1 className="text-xl font-bold text-tech-white">TurtleForge Cost</h1>
+              <p className="text-gunmetal text-sm">TurtleForge Studio</p>
+            </div>
+          </div>
         </div>
         {/* Menu de navegacion: resalta la ruta activa con fondo verde */}
         <nav className="flex-1 p-4 space-y-1">
@@ -143,6 +148,7 @@ export default function Layout() {
           >
             <Menu size={24} />
           </button>
+          <img src="/logo.png" alt="TurtleForge" className="h-7 w-7 object-contain" />
           <h1 className="text-lg font-bold text-tech-white">TurtleForge Cost</h1>
         </header>
 
