@@ -1,15 +1,34 @@
 version: "3"
 
 services:
+  postgres:
+    container_name: calculator3d-postgres
+    image: docker.io/postgres:16-alpine
+    volumes:
+      - calculator3d-pgdata:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=turtleforge
+      - POSTGRES_USER=turtleforge
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme_in_production}
+    restart: unless-stopped
+    networks:
+      - calculator3d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U turtleforge -d turtleforge"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     container_name: calculator3d-backend
     build:
       context: ./backend
       dockerfile: Containerfile
-    volumes:
-      - calculator3d-data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
-      - DATABASE_URL=sqlite+aiosqlite:///./data/calculator3d.db
+      - DATABASE_URL=postgresql+asyncpg://turtleforge:${POSTGRES_PASSWORD:-changeme_in_production}@postgres:5432/turtleforge
       - SECRET_KEY=${SECRET_KEY:-cambiar-esta-clave-en-produccion-xyz789}
       - ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=1440
@@ -50,4 +69,4 @@ networks:
     driver: bridge
 
 volumes:
-  calculator3d-data:
+  calculator3d-pgdata:

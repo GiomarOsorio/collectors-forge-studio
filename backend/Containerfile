@@ -3,7 +3,7 @@ FROM docker.io/python:3.11-slim
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc libffi-dev \
+    gcc libffi-dev libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -13,4 +13,6 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Ejecuta las migraciones de Alembic antes de arrancar el servidor.
+# Si las tablas ya están al día, alembic upgrade head es un no-op seguro.
+CMD alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000
