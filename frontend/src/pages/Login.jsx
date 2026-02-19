@@ -71,8 +71,8 @@ export default function Login() {
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
         {/* Encabezado con el nombre y descripcion de la aplicacion */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Calculator3D</h1>
-          <p className="text-gray-500 mt-2">Calculadora de costos de impresión 3D</p>
+          <h1 className="text-3xl font-bold text-gray-900">TurtleForge Cost</h1>
+          <p className="text-gray-500 mt-2">TurtleForge Studio</p>
         </div>
         {/* Formulario de autenticacion */}
         <form onSubmit={handleSubmit} className="space-y-5">
