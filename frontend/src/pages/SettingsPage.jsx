@@ -155,7 +155,7 @@ export default function SettingsPage() {
 
           <div>
             <h3 className="font-semibold text-gray-900 mb-4">Producción</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Tasa de fallos (%)
@@ -179,7 +179,7 @@ export default function SettingsPage() {
 
           <div>
             <h3 className="font-semibold text-gray-900 mb-4">Precios</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Margen de ganancia por defecto (%)
@@ -224,7 +224,7 @@ export default function SettingsPage() {
               <h3 className="font-semibold text-green-900 mb-3">Tarifa Eléctrica EPM</h3>
 
               {/* Dropdowns de mes y estrato */}
-              <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                 <div>
                   <label className="block text-xs text-green-700 mb-1">Mes</label>
                   {tariffHistory.length > 0 ? (
