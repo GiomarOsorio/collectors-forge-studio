@@ -8,7 +8,7 @@ ContainerName=calculator3d-backend
 Image=localhost/calculator3d-backend:latest
 Network=calculator3d.network
 # DATABASE_URL y demás variables vienen del .env (sin hardcodear SQLite aquí)
-EnvironmentFile=__DEPLOY_PATH__/.env
+EnvironmentFile=__ENV_FILE__
 Environment=ALGORITHM=HS256
 Environment=ACCESS_TOKEN_EXPIRE_MINUTES=1440
 

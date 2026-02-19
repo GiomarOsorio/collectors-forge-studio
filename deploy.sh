@@ -8,27 +8,33 @@ DEPLOY_PATH="$(cd "$(dirname "$0")" && pwd)"
 # Asegurar XDG_RUNTIME_DIR para systemctl --user en CI/CD
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 
-# Verificar .env
-if [ ! -f "$DEPLOY_PATH/.env" ]; then
-    echo "ERROR: No se encontró el archivo .env"
-    echo "Copia .env.example como .env y completa los valores:"
-    echo "  cp .env.example .env"
-    echo "  nano .env"
+# ── Archivo de variables de entorno ──────────────────────────────────────────
+# Busca primero ~/Calculator3dENV (fuente única fuera del repo),
+# luego cae a .env en el directorio del proyecto como fallback.
+if [ -f "$HOME/Calculator3dENV" ]; then
+    ENV_FILE="$HOME/Calculator3dENV"
+elif [ -f "$DEPLOY_PATH/.env" ]; then
+    ENV_FILE="$DEPLOY_PATH/.env"
+else
+    echo "ERROR: No se encontró el archivo de variables de entorno."
+    echo "  Opción A (recomendada): ~/Calculator3dENV"
+    echo "  Opción B (fallback):    $DEPLOY_PATH/.env"
     exit 1
 fi
 
-source "$DEPLOY_PATH/.env"
+echo "→ Usando variables de entorno desde: $ENV_FILE"
+source "$ENV_FILE"
 
-# Validar variables requeridas
+# ── Validar variables requeridas ─────────────────────────────────────────────
 if [ -z "$SECRET_KEY" ]; then
-    echo "ERROR: SECRET_KEY no está configurada en .env"
+    echo "ERROR: SECRET_KEY no está configurada."
     echo "Genera una con: openssl rand -hex 32"
     exit 1
 fi
 
 if [ -z "$POSTGRES_PASSWORD" ]; then
-    echo "ERROR: POSTGRES_PASSWORD no está configurada en .env"
-    echo "Agrega al .env:  POSTGRES_PASSWORD=$(openssl rand -hex 16)"
+    echo "ERROR: POSTGRES_PASSWORD no está configurada."
+    echo "Agrega a $ENV_FILE:  POSTGRES_PASSWORD=$(openssl rand -hex 16)"
     exit 1
 fi
 
@@ -57,9 +63,10 @@ cp "$DEPLOY_PATH/quadlet/calculator3d.network" "$QUADLET_DIR/"
 cp "$DEPLOY_PATH/quadlet/calculator3d-data.volume" "$QUADLET_DIR/"
 cp "$DEPLOY_PATH/quadlet/calculator3d-pgdata.volume" "$QUADLET_DIR/"
 
-# Copiar contenedores sustituyendo la ruta de deploy
+# Copiar contenedores sustituyendo __DEPLOY_PATH__ y __ENV_FILE__
 for f in "$DEPLOY_PATH"/quadlet/*.container; do
-    sed "s|__DEPLOY_PATH__|$DEPLOY_PATH|g" "$f" > "$QUADLET_DIR/$(basename "$f")"
+    sed "s|__DEPLOY_PATH__|$DEPLOY_PATH|g; s|__ENV_FILE__|$ENV_FILE|g" \
+        "$f" > "$QUADLET_DIR/$(basename "$f")"
 done
 
 # Si no hay TUNNEL_TOKEN, quitar el tunnel
@@ -74,8 +81,10 @@ echo "→ Iniciando PostgreSQL..."
 systemctl --user restart calculator3d-postgres
 
 echo "→ Esperando que PostgreSQL esté listo (máx. 60s)..."
+PG_USER="${POSTGRES_USER:-turtleforge}"
+PG_DB="${POSTGRES_DB:-turtleforge}"
 for i in $(seq 1 30); do
-    if podman exec calculator3d-postgres pg_isready -U turtleforge -d turtleforge 2>/dev/null; then
+    if podman exec calculator3d-postgres pg_isready -U "$PG_USER" -d "$PG_DB" 2>/dev/null; then
         echo "  PostgreSQL listo."
         break
     fi
@@ -108,5 +117,5 @@ echo "  systemctl --user status calculator3d-postgres        # Estado PostgreSQL
 echo "  systemctl --user status calculator3d-backend         # Estado backend"
 echo "  systemctl --user status calculator3d-frontend        # Estado frontend"
 echo "  journalctl --user -u calculator3d-backend -f         # Logs backend"
-echo "  podman exec -it calculator3d-postgres psql -U turtleforge turtleforge  # Shell PG"
+echo "  podman exec -it calculator3d-postgres psql -U $PG_USER $PG_DB  # Shell PG"
 echo "  podman ps                                             # Ver contenedores"

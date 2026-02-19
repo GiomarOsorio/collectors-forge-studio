@@ -9,7 +9,7 @@ Network=calculator3d.network
 Volume=calculator3d-pgdata.volume:/var/lib/postgresql/data:Z
 # Variables de PostgreSQL leídas desde .env:
 #   POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
-EnvironmentFile=__DEPLOY_PATH__/.env
+EnvironmentFile=__ENV_FILE__
 HealthCmd=pg_isready -U turtleforge -d turtleforge
 HealthInterval=10s
 HealthTimeout=5s
