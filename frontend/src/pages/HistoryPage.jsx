@@ -123,18 +123,22 @@ export default function HistoryPage() {
               <Row label="Subtotal" value={selected.subtotal} bold />
               <Row label={`Margen (${selected.margin_percent}%)`} value={selected.margin_amount} />
               <hr />
-              <Row label="Precio/unidad" value={selected.total_per_unit} bold />
-              <Row label={`Total USD (${selected.quantity} uds.)`} value={selected.total_price} bold highlight />
+              <Row label="Total cotización" value={selected.total_price} bold highlight />
+              {selected.quantity > 1 && (
+                <Row label={`Precio por pieza (÷${selected.quantity})`} value={selected.total_per_unit} bold />
+              )}
               {selected.total_price_cop && (
                 <>
                   <div className="flex justify-between bg-green-50 px-2 py-1 rounded">
-                    <span className="font-semibold text-green-800">Precio/unidad COP</span>
-                    <span className="font-bold text-green-700">$ {Math.round(selected.total_per_unit_cop).toLocaleString('es-CO')}</span>
-                  </div>
-                  <div className="flex justify-between bg-green-50 px-2 py-1 rounded">
-                    <span className="font-semibold text-green-800">Total COP ({selected.quantity} uds.)</span>
+                    <span className="font-semibold text-green-800">Total cotización COP</span>
                     <span className="font-bold text-green-700">$ {Math.round(selected.total_price_cop).toLocaleString('es-CO')}</span>
                   </div>
+                  {selected.quantity > 1 && (
+                    <div className="flex justify-between bg-green-50 px-2 py-1 rounded">
+                      <span className="font-semibold text-green-800">Precio por pieza COP (÷{selected.quantity})</span>
+                      <span className="font-bold text-green-700">$ {Math.round(selected.total_per_unit_cop).toLocaleString('es-CO')}</span>
+                    </div>
+                  )}
                 </>
               )}
             </div>
