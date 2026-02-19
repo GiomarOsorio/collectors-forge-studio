@@ -3,13 +3,14 @@ Servicio de scraping de tarifas de electricidad EPM para Calculator3D.
 
 Descarga automáticamente el PDF de tarifas mensuales publicado por
 Empresas Públicas de Medellín (EPM) en su sitio web oficial, extrae
-la tarifa para Estrato 4 (todo el consumo), la duplica (×2) para
-estimación conservadora del próximo mes, y la convierte de COP/kWh
-a USD/kWh usando la tasa de cambio actual.
+las tarifas de los 6 estratos residenciales en COP/kWh, aplica el
+multiplicador ×2 (estimación conservadora del próximo mes) a cada una,
+y las convierte a USD/kWh usando la tasa de cambio actual.
 
-El resultado se cachea durante 24 horas para evitar descargas repetidas.
-Si el scraping falla (PDF no disponible, cambio de estructura, sin red),
-se devuelve el último valor cacheado o None.
+El resultado completo (todos los estratos) se cachea durante 24 horas
+para evitar descargas repetidas del PDF. Si el scraping falla (PDF no
+disponible, cambio de estructura, sin red), se devuelve el último valor
+cacheado o None.
 """
 
 import re

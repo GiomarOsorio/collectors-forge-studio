@@ -383,7 +383,23 @@ async def _get_user_quote(db: AsyncSession, quote_id: int, user_id: int) -> Quot
 
 
 async def _resolve_supplies(db: AsyncSession, supply_items) -> list:
-    """Carga los datos de cada insumo desde la DB y los combina con la cantidad solicitada."""
+    """
+    Carga los datos de cada insumo desde la DB y los combina con la cantidad solicitada.
+
+    Itera sobre la lista de referencias de insumos de la solicitud, consulta cada
+    Supply en la base de datos y construye un dict con los datos necesarios para
+    que el motor de cálculo compute el costo. Los insumos que no existan en la BD
+    se omiten silenciosamente.
+
+    Args:
+        db: Sesión de base de datos activa.
+        supply_items: Lista de SupplyItemRef (supply_id + quantity) proveniente
+            de QuoteCalculateRequest.supplies.
+
+    Returns:
+        list: Lista de dicts con las claves supply_id, name, unit,
+              price_per_unit y quantity, listos para pasar a calculate_cost.
+    """
     result = []
     for item in (supply_items or []):
         r = await db.execute(select(Supply).where(Supply.id == item.supply_id))
@@ -400,7 +416,23 @@ async def _resolve_supplies(db: AsyncSession, supply_items) -> list:
 
 
 async def _resolve_additional_filaments(db: AsyncSession, filament_items) -> list:
-    """Carga los datos de cada filamento adicional desde la DB."""
+    """
+    Carga los datos de cada filamento adicional desde la DB para piezas multicolor.
+
+    Itera sobre la lista de referencias de filamentos adicionales, consulta cada
+    Filament en la base de datos y construye un dict con los datos necesarios para
+    que el motor de cálculo sume el costo de material de cada filamento extra.
+    Los filamentos que no existan en la BD se omiten silenciosamente.
+
+    Args:
+        db: Sesión de base de datos activa.
+        filament_items: Lista de FilamentItem (filament_id + weight_grams) proveniente
+            de QuoteCalculateRequest.additional_filaments.
+
+    Returns:
+        list: Lista de dicts con las claves filament_id, name, price_per_kg y
+              weight_grams, listos para pasar a calculate_cost.
+    """
     result = []
     for item in (filament_items or []):
         r = await db.execute(select(Filament).where(Filament.id == item.filament_id))

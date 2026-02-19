@@ -8,16 +8,18 @@ configuración del usuario, junto con los parámetros específicos de la
 impresión (peso, tiempo, cantidad), y devuelve un desglose detallado.
 
 Fórmula de cálculo aplicada:
-    1. Costo de material  = gramos × (precio_por_kg / 1000)
+    1. Costo de material  = gramos × (precio_por_kg / 1000) + filamentos adicionales
     2. Costo eléctrico    = (watts × horas / 1000) × tarifa_kWh
     3. Depreciación       = (precio_impresora / vida_útil_horas) × horas
     4. Mantenimiento      = (boquilla/vida_boquilla + placa/vida_placa + otros) × horas
     5. Mano de obra       = (t_preparación + t_post_procesado) × costo_hora
     6. Costo de fallos    = (suma 1-5) × (tasa_fallos / 100)
-    7. Subtotal           = suma 1-5 + costo_fallos
-    8. Margen             = subtotal × (margen_percent / 100)
-    9. Total por unidad   = subtotal + margen
-   10. Total final        = total_por_unidad × cantidad
+    7. Subtotal base      = suma 1-5 + costo_fallos
+    8. Insumos            = suma(cantidad × precio_unitario) por cada insumo
+    9. Subtotal final     = subtotal_base + insumos
+   10. Margen             = subtotal_final × (margen_percent / 100)
+   11. Total por unidad   = subtotal_final + margen
+   12. Total final        = total_por_unidad × cantidad
 """
 
 from typing import Optional, List
@@ -75,13 +77,25 @@ def calculate_cost(
         quantity: Número de unidades idénticas a producir.
         margin_percent: Porcentaje de margen de ganancia a aplicar. Si es None,
             se utiliza el valor default_margin_percent de app_settings.
+        usd_to_cop_rate: Tasa de cambio 1 USD → COP para calcular los campos
+            total_per_unit_cop y total_price_cop. Si es None, dichos campos
+            se devuelven como None en el resultado.
+        supplies: Lista de dicts con los insumos adicionales de la pieza. Cada
+            dict debe tener las claves name, unit, price_per_unit y quantity.
+            Generado por _resolve_supplies en el router de cotizaciones.
+        additional_filaments: Lista de dicts con filamentos adicionales para
+            piezas multicolor o multimaterial. Cada dict debe tener las claves
+            price_per_kg y weight_grams. Su costo se suma a material_cost.
+            Generado por _resolve_additional_filaments en el router de cotizaciones.
 
     Returns:
         QuoteCostBreakdown: Objeto Pydantic con el desglose completo de costos:
             material_cost, electricity_cost, depreciation_cost,
             maintenance_cost, labor_cost, failure_cost, subtotal,
-            margin_percent, margin_amount, total_per_unit, quantity
-            y total_price. Todos los valores monetarios redondeados a 2 decimales.
+            margin_percent, margin_amount, total_per_unit, quantity,
+            total_price, supplies_cost, supplies_detail y los campos
+            opcionales usd_to_cop_rate, total_per_unit_cop y total_price_cop.
+            Todos los valores monetarios redondeados a 2 decimales.
     """
     # 1. Costo de material: filamento principal + filamentos adicionales (multicolor)
     price_per_gram = filament.price_per_kg / 1000.0
@@ -128,7 +142,7 @@ def calculate_cost(
     # Subtotal final incluyendo la absorción de fallos
     subtotal = base_cost + failure_cost
 
-    # 8. Insumos adicionales (solo para piezas exitosas, se suman al subtotal de impresión)
+    # 8. Insumos adicionales: costo de materiales no filamento (argollas, imanes, etc.)
     supplies_detail = []
     supplies_cost = 0.0
     for s in (supplies or []):
@@ -146,7 +160,7 @@ def calculate_cost(
     # Subtotal final incluyendo insumos
     subtotal_with_supplies = subtotal + supplies_cost
 
-    # 7. Margen de ganancia sobre el total incluyendo insumos
+    # 10. Margen de ganancia sobre el subtotal final (incluyendo insumos)
     margin = margin_percent if margin_percent is not None else app_settings.default_margin_percent
     margin_amount = subtotal_with_supplies * (margin / 100.0)
 
