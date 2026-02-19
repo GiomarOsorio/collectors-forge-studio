@@ -67,9 +67,17 @@ export default function CalculatorPage() {
     margin_percent: '',
   });
 
-  /** Estado temporal para el insumo que se esta por agregar a la cotizacion. */
+  /**
+   * Estado temporal para el insumo que se esta por agregar a la cotizacion.
+   * Se resetea a valores vacios tras cada llamada a addSupply.
+   * @type {[{supply_id: string, quantity: number}, Function]}
+   */
   const [supplyToAdd, setSupplyToAdd] = useState({ supply_id: '', quantity: 1 });
-  /** Estado temporal para el filamento adicional que se esta por agregar. */
+  /**
+   * Estado temporal para el filamento adicional que se esta por agregar.
+   * Se resetea a valores vacios tras cada llamada a addFilament.
+   * @type {[{filament_id: string, weight_grams: string}, Function]}
+   */
   const [filamentToAdd, setFilamentToAdd] = useState({ filament_id: '', weight_grams: '' });
 
   // Carga inicial: obtiene filamentos, impresoras, configuracion e insumos en paralelo.
@@ -104,6 +112,8 @@ export default function CalculatorPage() {
    * Convierte los valores string del formulario a los tipos numericos que espera la API.
    * Los campos opcionales (description, client_name) se envian como null si estan vacios.
    *
+   * Incluye supplies (insumos adicionales) y additional_filaments (filamentos multicolor).
+   *
    * @returns {Object} Objeto con los datos de la cotizacion en formato esperado por la API
    */
   const buildPayload = () => ({
@@ -122,7 +132,13 @@ export default function CalculatorPage() {
     additional_filaments: additionalFilaments,
   });
 
-  /** Agrega un insumo al listado de insumos seleccionados para la cotizacion. */
+  /**
+   * Agrega el insumo seleccionado en supplyToAdd al listado de insumos de la cotizacion.
+   * Si el insumo ya existe en la lista, incrementa su cantidad en lugar de duplicarlo.
+   * No hace nada si supply_id esta vacio. Resetea supplyToAdd tras agregar.
+   *
+   * @returns {void}
+   */
   const addSupply = () => {
     if (!supplyToAdd.supply_id) return;
     const id = parseInt(supplyToAdd.supply_id);
@@ -136,10 +152,21 @@ export default function CalculatorPage() {
     setSupplyToAdd({ supply_id: '', quantity: 1 });
   };
 
-  /** Elimina un insumo del listado de insumos seleccionados. */
+  /**
+   * Elimina un insumo del listado de insumos seleccionados para la cotizacion.
+   *
+   * @param {number} supply_id - ID del insumo a eliminar
+   * @returns {void}
+   */
   const removeSupply = (supply_id) => setSelectedSupplies(selectedSupplies.filter((s) => s.supply_id !== supply_id));
 
-  /** Agrega un filamento adicional al listado para piezas multicolor. */
+  /**
+   * Agrega el filamento seleccionado en filamentToAdd al listado de filamentos
+   * adicionales (para piezas multicolor). No hace nada si falta filament_id
+   * o weight_grams. Resetea filamentToAdd tras agregar.
+   *
+   * @returns {void}
+   */
   const addFilament = () => {
     if (!filamentToAdd.filament_id || !filamentToAdd.weight_grams) return;
     setAdditionalFilaments([...additionalFilaments, {
@@ -149,7 +176,12 @@ export default function CalculatorPage() {
     setFilamentToAdd({ filament_id: '', weight_grams: '' });
   };
 
-  /** Elimina un filamento adicional por su indice en el arreglo. */
+  /**
+   * Elimina un filamento adicional del listado por su posicion en el arreglo.
+   *
+   * @param {number} index - Indice del filamento a eliminar en additionalFilaments
+   * @returns {void}
+   */
   const removeFilament = (index) => setAdditionalFilaments(additionalFilaments.filter((_, i) => i !== index));
 
   /**

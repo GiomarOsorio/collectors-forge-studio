@@ -14,6 +14,7 @@
  * - /filaments   -> Gestion de filamentos (protegida)
  * - /printers    -> Gestion de impresoras (protegida)
  * - /history     -> Historial de cotizaciones (protegida)
+ * - /supplies    -> Gestion de insumos adicionales (protegida)
  * - /settings    -> Configuracion de la aplicacion (protegida)
  *
  * @module App

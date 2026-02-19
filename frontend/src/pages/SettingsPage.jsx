@@ -48,14 +48,18 @@ export default function SettingsPage() {
   const [exchangeRate, setExchangeRate] = useState(null);
   /** @type {[Object|null, Function]} Tarifas EPM del mes actual (scraped) */
   const [epmTariff, setEpmTariff] = useState(null);
-  /** @type {[Array, Function]} Historial de tarifas EPM guardadas en BD por mes */
+  /** @type {[Array<Object>, Function]} Historial de tarifas EPM guardadas en BD, ordenado por mes descendente */
   const [tariffHistory, setTariffHistory] = useState([]);
   /** @type {[string, Function]} Estrato seleccionado para aplicar la tarifa EPM */
   const [selectedEstrato, setSelectedEstrato] = useState('4');
-  /** @type {[number, Function]} Indice del mes seleccionado en el historial */
+  /**
+   * Indice del mes seleccionado dentro de tariffHistory.
+   * 0 corresponde al mes mas reciente del historial.
+   * @type {[number, Function]}
+   */
   const [selectedMonthIdx, setSelectedMonthIdx] = useState(0);
 
-  // Carga la configuracion, la tasa de cambio, la tarifa EPM actual y el historial
+  // Carga en paralelo: configuracion, tasa USD/COP, tarifa EPM actual y historial de tarifas.
   useEffect(() => {
     Promise.all([getSettings(), getExchangeRate(), getElectricityTariff(), getElectricityTariffs()])
       .then(([sRes, rRes, tRes, hRes]) => {
@@ -74,7 +78,14 @@ export default function SettingsPage() {
       });
   }, []);
 
-  /** Aplica la tarifa del mes y estrato seleccionados al campo de tarifa eléctrica */
+  /**
+   * Aplica la tarifa electrica del mes y estrato seleccionados al formulario y al backend.
+   * Usa tariffHistory[selectedMonthIdx] si existe historial, o epmTariff como fallback.
+   * Actualiza electricity_rate en el formulario y llama a updateSettings inmediatamente.
+   * Muestra un toast de confirmacion con el mes, estrato y valor aplicado.
+   *
+   * @returns {Promise<void>}
+   */
   const handleApplyEpmTariff = async () => {
     const source = tariffHistory.length > 0 ? tariffHistory[selectedMonthIdx] : epmTariff;
     if (!source) return;

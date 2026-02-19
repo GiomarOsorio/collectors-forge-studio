@@ -14,7 +14,18 @@ from pydantic import BaseModel
 
 
 class FilamentItem(BaseModel):
-    """Filamento adicional para piezas multicolor."""
+    """
+    Referencia a un filamento adicional para piezas multicolor o multimaterial.
+
+    Se usa en QuoteCalculateRequest.additional_filaments para indicar qué
+    filamentos extra (distintos al principal) se usan en la pieza y cuántos
+    gramos consume cada uno. Su costo de material se suma al del filamento
+    principal en el motor de cálculo.
+
+    Atributos:
+        filament_id:  ID del filamento adicional registrado en el catálogo.
+        weight_grams: Gramos de este filamento consumidos por la pieza.
+    """
     filament_id: int
     weight_grams: float
 
@@ -66,8 +77,14 @@ class QuoteCalculateRequest(BaseModel):
     save: bool = True
     # Insumos adicionales (argollas, switches, etc.)
     supplies: List["SupplyItemRef"] = []
-    # Filamentos adicionales para piezas multicolor
+    # Filamentos adicionales para piezas multicolor o multimaterial
     additional_filaments: List[FilamentItem] = []
+    # Nota sobre supplies y additional_filaments:
+    #   supplies:              Lista de insumos no filamento (argollas, imanes, etc.)
+    #                          que se incorporan físicamente a la pieza. Cada uno
+    #                          contribuye a supplies_cost en el desglose final.
+    #   additional_filaments:  Filamentos extra distintos al filament_id principal.
+    #                          Su costo se suma a material_cost (piezas multicolor).
 
 
 class QuoteCostBreakdown(BaseModel):
@@ -105,10 +122,16 @@ class QuoteCostBreakdown(BaseModel):
     total_per_unit: float
     quantity: int
     total_price: float
-    # Insumos adicionales
+    # Insumos adicionales:
+    #   supplies_cost:   Suma del costo de todos los insumos por unidad (USD).
+    #   supplies_detail: Lista de dicts con el desglose por insumo (nombre,
+    #                    cantidad, precio unitario y subtotal).
     supplies_cost: float = 0.0
     supplies_detail: list = []
-    # Conversión a pesos colombianos
+    # Conversión a pesos colombianos (solo si se proporcionó la tasa de cambio):
+    #   usd_to_cop_rate:    Tasa 1 USD → COP usada en la conversión.
+    #   total_per_unit_cop: Precio por unidad expresado en COP.
+    #   total_price_cop:    Precio total de todas las unidades en COP.
     usd_to_cop_rate: Optional[float] = None
     total_per_unit_cop: Optional[float] = None
     total_price_cop: Optional[float] = None
@@ -182,7 +205,17 @@ class QuoteResponse(BaseModel):
 
 # Referencia circular resuelta aquí para evitar importar supply en quote
 class SupplyItemRef(BaseModel):
-    """Insumo con cantidad para incluir en una cotización."""
+    """
+    Referencia a un insumo del catálogo para incluir en una cotización.
+
+    Se usa en QuoteCalculateRequest.supplies para indicar qué insumos se
+    incorporan a la pieza y en qué cantidad. El router resuelve el precio
+    desde la BD y lo pasa al motor de cálculo para determinar supplies_cost.
+
+    Atributos:
+        supply_id: ID del insumo registrado en el catálogo de insumos.
+        quantity:  Cantidad de unidades de este insumo por pieza. Por defecto 1.0.
+    """
     supply_id: int
     quantity: float = 1.0
 

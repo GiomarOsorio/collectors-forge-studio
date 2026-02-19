@@ -87,7 +87,21 @@ async def health_check():
 
 
 async def migrate_db():
-    """Agrega columnas nuevas a tablas existentes si no existen (migraciones simples SQLite)."""
+    """
+    Agrega columnas nuevas a tablas existentes si aún no están presentes.
+
+    Implementa migraciones simples y seguras para SQLite: antes de cada ALTER
+    TABLE consulta PRAGMA table_info para verificar si la columna ya existe y
+    evitar errores en reinicios posteriores. Esto reemplaza el uso de Alembic
+    para el ciclo de vida actual del proyecto.
+
+    Migraciones incluidas:
+        - quotes.supplies_cost:              Costo total de insumos por unidad (FLOAT).
+        - quotes.supplies_detail:            Desglose JSON de insumos (TEXT).
+        - quotes.additional_filaments_detail: Desglose JSON de filamentos adicionales (TEXT).
+        - supplies.pack_qty:                 Cantidad de unidades por paquete (INTEGER).
+        - supplies.pack_price:               Precio del paquete de compra (FLOAT).
+    """
     migrations = [
         ("quotes", "supplies_cost", "ALTER TABLE quotes ADD COLUMN supplies_cost FLOAT DEFAULT 0.0"),
         ("quotes", "supplies_detail", "ALTER TABLE quotes ADD COLUMN supplies_detail TEXT DEFAULT '[]'"),

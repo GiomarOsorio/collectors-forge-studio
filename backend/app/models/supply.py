@@ -21,7 +21,12 @@ class Supply(Base):
         name:           Nombre del insumo. Ej: "Argolla metálica 25mm".
         description:    Descripción opcional del insumo.
         unit:           Unidad de medida. Ej: "unidad", "par", "set".
-        price_per_unit: Precio por unidad en USD.
+        price_per_unit: Precio por unidad en USD. Se calcula automáticamente
+                        como pack_price / pack_qty cuando se usan campos de paquete.
+        pack_qty:       Cantidad de unidades que trae el paquete de compra.
+                        Ej: 50 para un paquete de 50 argollas.
+        pack_price:     Precio total del paquete de compra en USD.
+                        Junto con pack_qty permite calcular price_per_unit.
         notes:          Notas adicionales opcionales (proveedor, talla, etc.).
         created_at:     Fecha y hora UTC de creación del registro.
     """

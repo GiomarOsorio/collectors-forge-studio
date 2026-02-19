@@ -10,7 +10,8 @@
  * - Autenticacion (login, registro, perfil)
  * - CRUD de filamentos
  * - CRUD de impresoras
- * - Configuracion de la aplicacion
+ * - CRUD de insumos adicionales
+ * - Configuracion de la aplicacion (incluye tasa de cambio y tarifas EPM)
  * - Cotizaciones (calcular, crear, listar, descargar PDF)
  *
  * @module services/api
@@ -293,19 +294,76 @@ export const deleteQuote = (id) => api.delete(`/quotes/${id}`);
 export const downloadQuotePdf = (id) =>
   api.get(`/quotes/${id}/pdf`, { responseType: 'blob' });
 
-// ── Insumos ──────────────────────────────────────────────────────────────────
+// ============================================================================
+// Insumos
+// ============================================================================
+
+/**
+ * Obtiene la lista completa de insumos adicionales del usuario.
+ *
+ * @returns {Promise<import('axios').AxiosResponse>} Respuesta con array de insumos en data
+ */
 export const getSupplies = () => api.get('/supplies/');
+
+/**
+ * Crea un nuevo insumo adicional.
+ *
+ * @param {Object} data - Datos del insumo
+ * @param {string} data.name - Nombre del insumo
+ * @param {string|null} data.description - Descripcion opcional
+ * @param {string} data.unit - Unidad base (unidad, pieza, cm, gramo)
+ * @param {number} data.pack_qty - Cantidad de unidades por paquete
+ * @param {number} data.pack_price - Precio del paquete en USD
+ * @param {string|null} data.notes - Notas adicionales opcionales
+ * @returns {Promise<import('axios').AxiosResponse>} Respuesta con el insumo creado (incluye price_per_unit)
+ */
 export const createSupply = (data) => api.post('/supplies/', data);
+
+/**
+ * Actualiza un insumo existente.
+ *
+ * @param {number} id - ID del insumo a actualizar
+ * @param {Object} data - Datos actualizados (misma estructura que createSupply)
+ * @returns {Promise<import('axios').AxiosResponse>} Respuesta con el insumo actualizado
+ */
 export const updateSupply = (id, data) => api.put(`/supplies/${id}`, data);
+
+/**
+ * Elimina un insumo por su ID.
+ *
+ * @param {number} id - ID del insumo a eliminar
+ * @returns {Promise<import('axios').AxiosResponse>} Respuesta de confirmacion
+ */
 export const deleteSupply = (id) => api.delete(`/supplies/${id}`);
 
-/** Obtiene la tasa de cambio USD → COP actualmente en uso, con markup incluido. */
+// ============================================================================
+// Informacion de mercado (tasa de cambio y tarifas electricas)
+// ============================================================================
+
+/**
+ * Obtiene la tasa de cambio USD a COP actualmente en uso por la aplicacion.
+ * Incluye la tasa de mercado, el markup configurado y la tasa final usada en calculos.
+ * Se actualiza automaticamente cada hora desde open.er-api.com.
+ *
+ * @returns {Promise<import('axios').AxiosResponse>} Respuesta con market_rate, markup y rate_used
+ */
 export const getExchangeRate = () => api.get('/settings/exchange-rate');
 
-/** Obtiene la tarifa de electricidad EPM del mes actual (todos los estratos, ×2, en USD/kWh). */
+/**
+ * Obtiene la tarifa de electricidad EPM del mes actual.
+ * Incluye todos los estratos (1-6), cada uno con su tarifa en COP/kWh
+ * y su equivalente en USD/kWh (aplicando el multiplicador configurado).
+ *
+ * @returns {Promise<import('axios').AxiosResponse>} Respuesta con available, month_label, estratos y multiplier
+ */
 export const getElectricityTariff = () => api.get('/settings/electricity-tariff');
 
-/** Obtiene el historial completo de tarifas EPM guardadas en BD, agrupado por mes. */
+/**
+ * Obtiene el historial completo de tarifas EPM guardadas en la base de datos,
+ * agrupado por mes. Permite consultar y aplicar tarifas de meses anteriores.
+ *
+ * @returns {Promise<import('axios').AxiosResponse>} Respuesta con array de entradas mensuales, cada una con month_label, estratos y multiplier
+ */
 export const getElectricityTariffs = () => api.get('/settings/electricity-tariffs');
 
 export default api;

@@ -14,6 +14,11 @@ import { getSupplies, createSupply, updateSupply, deleteSupply } from '../servic
 import toast from 'react-hot-toast';
 import { Plus, Pencil, Trash2, X, Package } from 'lucide-react';
 
+/**
+ * Valores iniciales del formulario de insumo.
+ * Se usan tanto al abrir el modal de creacion como al cancelar una edicion.
+ * @type {Object}
+ */
 const emptyForm = {
   name: '',
   description: '',
@@ -23,18 +28,49 @@ const emptyForm = {
   notes: '',
 };
 
+/**
+ * Componente de la pagina de gestion de insumos adicionales.
+ *
+ * @description Presenta una tabla con todos los insumos registrados y un modal
+ * para crear o editar insumos. Cada insumo se define por su precio de paquete
+ * (pack_qty unidades a pack_price), y el sistema calcula price_per_unit en tiempo
+ * real dentro del formulario como preview antes de guardar.
+ *
+ * La tabla muestra la informacion del paquete (cantidad y precio) y el precio
+ * por unidad calculado con precision de 6 decimales (para insumos de bajo costo).
+ *
+ * @returns {JSX.Element} Pagina de gestion de insumos con tabla y modal de formulario
+ */
 export default function SuppliesPage() {
+  /** @type {[Array, Function]} Lista de insumos cargados desde el backend */
   const [supplies, setSupplies] = useState([]);
+  /** @type {[boolean, Function]} Controla la visibilidad del modal de creacion/edicion */
   const [showModal, setShowModal] = useState(false);
+  /** @type {[Object|null, Function]} Insumo que se esta editando, o null si es creacion nueva */
   const [editing, setEditing] = useState(null);
+  /**
+   * Estado del formulario del modal.
+   * @type {[Object, Function]}
+   */
   const [form, setForm] = useState(emptyForm);
 
-  // Precio por unidad calculado en tiempo real para mostrar preview
+  /**
+   * Precio por unidad calculado en tiempo real a partir de pack_qty y pack_price.
+   * Se usa como preview dentro del modal antes de guardar.
+   * Es null si los campos requeridos no estan completos o son invalidos.
+   * @type {number|null}
+   */
   const computedUnitPrice =
     form.pack_qty && form.pack_price && parseFloat(form.pack_qty) > 0
       ? parseFloat(form.pack_price) / parseFloat(form.pack_qty)
       : null;
 
+  /**
+   * Carga la lista de insumos desde el backend y actualiza el estado.
+   * Muestra un toast de error si la peticion falla.
+   *
+   * @returns {Promise<void>}
+   */
   const load = async () => {
     try {
       const res = await getSupplies();
@@ -44,10 +80,25 @@ export default function SuppliesPage() {
     }
   };
 
+  // Carga los insumos al montar el componente.
   useEffect(() => { load(); }, []);
 
+  /**
+   * Actualiza el campo del formulario correspondiente al input modificado.
+   *
+   * @param {React.ChangeEvent<HTMLInputElement|HTMLSelectElement>} e - Evento de cambio
+   */
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
+  /**
+   * Maneja el envio del formulario para crear o actualizar un insumo.
+   * Valida que pack_qty y pack_price esten presentes antes de enviar.
+   * Segun si hay un insumo en edicion, llama a updateSupply o createSupply.
+   * Al terminar, cierra el modal, limpia el formulario y recarga la lista.
+   *
+   * @param {React.FormEvent<HTMLFormElement>} e - Evento del formulario
+   * @returns {Promise<void>}
+   */
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.pack_qty || !form.pack_price) {
@@ -79,6 +130,19 @@ export default function SuppliesPage() {
     }
   };
 
+  /**
+   * Prepara el modal para editar un insumo existente.
+   * Carga los datos del insumo en el formulario y abre el modal.
+   *
+   * @param {Object} s - Objeto del insumo a editar
+   * @param {number} s.id - ID del insumo
+   * @param {string} s.name - Nombre del insumo
+   * @param {string|null} s.description - Descripcion del insumo
+   * @param {string} s.unit - Unidad base del insumo
+   * @param {number} s.pack_qty - Cantidad de unidades por paquete
+   * @param {number} s.pack_price - Precio del paquete en USD
+   * @param {string|null} s.notes - Notas adicionales
+   */
   const handleEdit = (s) => {
     setEditing(s);
     setForm({
@@ -92,6 +156,13 @@ export default function SuppliesPage() {
     setShowModal(true);
   };
 
+  /**
+   * Elimina un insumo tras pedir confirmacion al usuario.
+   * Recarga la lista si la eliminacion es exitosa.
+   *
+   * @param {number} id - ID del insumo a eliminar
+   * @returns {Promise<void>}
+   */
   const handleDelete = async (id) => {
     if (!confirm('¿Eliminar este insumo?')) return;
     try {
@@ -212,7 +283,7 @@ export default function SuppliesPage() {
                 </div>
               </div>
 
-              {/* Preview del precio por unidad */}
+              {/* Preview del precio por unidad calculado en tiempo real */}
               <div className={`rounded-lg px-4 py-3 text-sm flex justify-between items-center ${computedUnitPrice !== null ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50 border border-gray-200'}`}>
                 <span className="text-gray-600">Precio por {form.unit}:</span>
                 <span className={`font-bold font-mono text-base ${computedUnitPrice !== null ? 'text-blue-700' : 'text-gray-400'}`}>
