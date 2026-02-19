@@ -5,9 +5,9 @@ After=calculator3d-frontend.service
 [Container]
 ContainerName=calculator3d-tunnel
 Image=docker.io/cloudflare/cloudflared:latest
-Exec=tunnel run
+Exec=tunnel --no-autoupdate run
 Network=calculator3d.network
-Environment=TUNNEL_TOKEN=PONER-TU-TOKEN-AQUI
+EnvironmentFile=__DEPLOY_PATH__/.env
 
 [Service]
 Restart=always
