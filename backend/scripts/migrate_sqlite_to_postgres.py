@@ -174,15 +174,20 @@ def migrate_table(
     col_names = [desc[0] for desc in sqlite_cur.description]
     col_list = ", ".join([f'"{c}"' for c in col_names])
     placeholders = ", ".join(["%s"] * len(col_names))
+    # ON CONFLICT DO UPDATE: los datos del backup siempre sobreescriben los
+    # valores auto-generados por create_default_data() en el arranque.
+    update_set = ", ".join(
+        [f'"{c}" = EXCLUDED."{c}"' for c in col_names if c != "id"]
+    )
     sql = (
         f"INSERT INTO {table_name} ({col_list}) "
         f"VALUES ({placeholders}) "
-        f"ON CONFLICT DO NOTHING"
+        f"ON CONFLICT (id) DO UPDATE SET {update_set}"
     )
 
     pg_cur = pg_conn.cursor()
     inserted = 0
-    skipped = 0
+    updated = 0
 
     for raw_row in rows:
         row_dict = dict(zip(col_names, raw_row))
@@ -193,13 +198,13 @@ def migrate_table(
         if pg_cur.rowcount > 0:
             inserted += 1
         else:
-            skipped += 1
+            updated += 1
 
     pg_conn.commit()
     pg_cur.close()
 
-    if skipped > 0:
-        print(f"  {table_name}: {inserted} insertadas, {skipped} omitidas (ON CONFLICT)")
+    if updated > 0:
+        print(f"  {table_name}: {inserted} insertadas, {updated} actualizadas (ON CONFLICT UPDATE)")
     else:
         print(f"  {table_name}: {inserted} insertadas")
 
