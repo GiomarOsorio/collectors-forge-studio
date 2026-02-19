@@ -7,6 +7,8 @@ de entorno o desde un archivo .env, facilitando la gestión de entornos
 (desarrollo, producción, pruebas).
 """
 
+from urllib.parse import quote_plus
+
 from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
@@ -61,8 +63,10 @@ class Settings(BaseSettings):
         Solo necesitas definir POSTGRES_PASSWORD y el resto usa sus valores por defecto.
         """
         if not self.DATABASE_URL:
+            # quote_plus encoda caracteres especiales (#, @, &, etc.) en usuario y
+            # contraseña para que no rompan el parsing de la URL de conexión.
             self.DATABASE_URL = (
-                f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+                f"postgresql+asyncpg://{quote_plus(self.POSTGRES_USER)}:{quote_plus(self.POSTGRES_PASSWORD)}"
                 f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
             )
         return self

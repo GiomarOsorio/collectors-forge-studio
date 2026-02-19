@@ -7,7 +7,6 @@ detecte los modelos ORM correctamente.
 """
 
 import asyncio
-import os
 from logging.config import fileConfig
 
 from sqlalchemy import pool
@@ -38,22 +37,12 @@ from app.models import (  # noqa: E402, F401
 
 target_metadata = Base.metadata
 
-# Leer DATABASE_URL desde variable de entorno y sobreescribir el placeholder
-# del alembic.ini. Si DATABASE_URL no está definida, se construye desde las
-# variables POSTGRES_* igual que en config.py, para que el env file solo
-# necesite POSTGRES_PASSWORD.
-database_url = os.environ.get("DATABASE_URL")
-if not database_url:
-    pg_user = os.environ.get("POSTGRES_USER", "turtleforge")
-    pg_password = os.environ.get("POSTGRES_PASSWORD", "")
-    pg_host = os.environ.get("POSTGRES_HOST", "calculator3d-postgres")
-    pg_port = os.environ.get("POSTGRES_PORT", "5432")
-    pg_db = os.environ.get("POSTGRES_DB", "turtleforge")
-    database_url = (
-        f"postgresql+asyncpg://{pg_user}:{pg_password}"
-        f"@{pg_host}:{pg_port}/{pg_db}"
-    )
-config.set_main_option("sqlalchemy.url", database_url)
+# Obtener DATABASE_URL desde el objeto settings (config.py), que construye la URL
+# correctamente con quote_plus para manejar contraseñas con caracteres especiales.
+# Esto evita duplicar la lógica de construcción de URL en este archivo.
+from app.config import settings as app_settings  # noqa: E402
+
+config.set_main_option("sqlalchemy.url", app_settings.DATABASE_URL)
 
 
 def run_migrations_offline() -> None:
