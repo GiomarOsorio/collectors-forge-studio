@@ -65,9 +65,9 @@ if [ -n "$TUNNEL_TOKEN" ]; then
     podman run -d --replace --name calculator3d-tunnel \
         --log-driver=k8s-file \
         --network calculator3d \
-        -e TUNNEL_TOKEN="$TUNNEL_TOKEN" \
         --restart unless-stopped \
-        docker.io/cloudflare/cloudflared:latest tunnel run
+        docker.io/cloudflare/cloudflared:latest \
+        tunnel --no-autoupdate run --token "$TUNNEL_TOKEN"
     echo ""
     echo "=== Deploy completo ==="
     echo "App disponible en: https://3d.turtlenode.dev"
