@@ -60,12 +60,10 @@ fi
 echo "→ Recargando systemd..."
 systemctl --user daemon-reload
 
-echo "→ Habilitando e iniciando servicios..."
-systemctl --user enable calculator3d-backend calculator3d-frontend
+echo "→ Iniciando servicios..."
 systemctl --user restart calculator3d-backend calculator3d-frontend
 
 if [ -n "$TUNNEL_TOKEN" ]; then
-    systemctl --user enable calculator3d-tunnel
     systemctl --user restart calculator3d-tunnel
     echo ""
     echo "=== Deploy completo ==="
