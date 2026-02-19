@@ -1,0 +1,21 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Deploy to Laptop
+    runs-on: self-hosted
+
+    steps:
+      - name: Pull latest changes
+        run: |
+          cd $HOME/Calculator3D
+          git pull origin main
+
+      - name: Deploy
+        run: |
+          cd $HOME/Calculator3D
+          ./deploy.sh
