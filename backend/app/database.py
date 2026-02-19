@@ -1,11 +1,9 @@
 """
-Configuración de la base de datos y gestión de sesiones para Calculator3D.
+Configuración de la base de datos y gestión de sesiones para TurtleForge Cost.
 
-Este módulo establece la conexión asíncrona con la base de datos mediante
-SQLAlchemy y aiosqlite. Expone el motor de base de datos, la fábrica de
-sesiones asíncronas, la clase base para los modelos ORM, y las funciones
-auxiliares necesarias para inyectar sesiones en los endpoints de FastAPI y
-para inicializar el esquema de la base de datos al arranque de la aplicación.
+Este módulo establece la conexión asíncrona con PostgreSQL mediante
+SQLAlchemy 2.0 + asyncpg. Las tablas se crean y migran a través de
+Alembic (alembic upgrade head), no desde la aplicación en tiempo de ejecución.
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
@@ -48,17 +46,4 @@ async def get_db():
         try:
             yield session
         finally:
-            # Cierre explícito de la sesión para liberar la conexión al pool
             await session.close()
-
-
-async def init_db():
-    """
-    Inicializa la base de datos creando todas las tablas definidas en los modelos.
-
-    Debe invocarse una única vez durante el arranque de la aplicación (lifespan).
-    Si las tablas ya existen, SQLAlchemy las deja intactas (CREATE TABLE IF NOT EXISTS).
-    """
-    async with engine.begin() as conn:
-        # Crea todas las tablas registradas en Base.metadata de forma sincrónica
-        await conn.run_sync(Base.metadata.create_all)

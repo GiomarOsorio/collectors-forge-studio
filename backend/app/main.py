@@ -1,12 +1,14 @@
 """
-Punto de entrada principal de la API Calculator3D.
+Punto de entrada principal de la API TurtleForge Cost.
 
 Este módulo crea y configura la instancia de FastAPI, registra el middleware
 de CORS para permitir solicitudes desde el frontend, incluye todos los
 routers de la aplicación y define el ciclo de vida (lifespan) que se encarga
-de inicializar la base de datos y crear los datos por defecto (usuario admin,
-configuración inicial e impresora BambuLab P1S Combo) la primera vez que
-arranca el servidor.
+de crear los datos por defecto (usuario admin, configuración inicial e
+impresora BambuLab P1S Combo) si aún no existen.
+
+Las tablas de la base de datos se crean y migran a través de Alembic
+(alembic upgrade head) ANTES de arrancar el servidor, no en tiempo de ejecución.
 """
 
 from contextlib import asynccontextmanager
@@ -15,9 +17,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 
-from sqlalchemy import text
 from app.config import settings
-from app.database import init_db, async_session
+from app.database import async_session
 from app.models import User, AppSettings, Printer
 from app.services.auth import get_password_hash
 from app.routers import auth, filaments, printers, settings as settings_router, quotes, supplies
@@ -29,8 +30,8 @@ async def lifespan(app: FastAPI):
     Gestor de ciclo de vida de la aplicación FastAPI.
 
     Se ejecuta al arrancar el servidor (antes de aceptar solicitudes) y al
-    apagarse. En la fase de inicio crea las tablas de la base de datos y
-    genera los datos por defecto si no existen.
+    apagarse. En la fase de inicio crea los datos por defecto si no existen.
+    Las tablas deben haberse creado previamente con `alembic upgrade head`.
 
     Args:
         app: Instancia de FastAPI gestionada por el contexto.
@@ -38,25 +39,26 @@ async def lifespan(app: FastAPI):
     Yields:
         Control al servidor para empezar a atender solicitudes.
     """
-    # Startup: crear tablas, migrar columnas nuevas y usuario admin
-    await init_db()
-    await migrate_db()
     await create_default_data()
     yield
 
 
 # Instancia principal de la aplicación FastAPI con metadatos para la documentación
 app = FastAPI(
-    title="Calculator3D API",
+    title="TurtleForge Cost API",
     description="API para calcular costos de impresión 3D",
     version="1.0.0",
     lifespan=lifespan,
 )
 
-# CORS para permitir el frontend (Vite en puerto 5173 y CRA en 3000)
+# CORS: permite el frontend local (Vite/CRA) y el dominio de producción
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://3d.turtlenode.dev",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -76,52 +78,10 @@ async def health_check():
     """
     Endpoint de verificación del estado del servidor.
 
-    Permite comprobar de forma sencilla que la API está en línea y responde
-    correctamente. Útil para herramientas de monitoreo y health checks de
-    contenedores (Docker, Kubernetes).
-
     Returns:
         dict: Diccionario con el campo 'status' en 'ok' y el nombre de la app.
     """
-    return {"status": "ok", "app": "Calculator3D"}
-
-
-async def migrate_db():
-    """
-    Agrega columnas nuevas a tablas existentes si aún no están presentes.
-
-    Implementa migraciones simples y seguras para SQLite: antes de cada ALTER
-    TABLE consulta PRAGMA table_info para verificar si la columna ya existe y
-    evitar errores en reinicios posteriores. Esto reemplaza el uso de Alembic
-    para el ciclo de vida actual del proyecto.
-
-    Migraciones incluidas:
-        - quotes.supplies_cost:              Costo total de insumos por unidad (FLOAT).
-        - quotes.supplies_detail:            Desglose JSON de insumos (TEXT).
-        - quotes.additional_filaments_detail: Desglose JSON de filamentos adicionales (TEXT).
-        - supplies.pack_qty:                 Cantidad de unidades por paquete (INTEGER).
-        - supplies.pack_price:               Precio del paquete de compra (FLOAT).
-        - quotes.usd_to_cop_rate:            Tasa de cambio USD→COP usada al cotizar (FLOAT).
-        - quotes.total_per_unit_cop:         Precio por unidad en COP (FLOAT).
-        - quotes.total_price_cop:            Precio total en COP (FLOAT).
-    """
-    migrations = [
-        ("quotes", "supplies_cost", "ALTER TABLE quotes ADD COLUMN supplies_cost FLOAT DEFAULT 0.0"),
-        ("quotes", "supplies_detail", "ALTER TABLE quotes ADD COLUMN supplies_detail TEXT DEFAULT '[]'"),
-        ("quotes", "additional_filaments_detail", "ALTER TABLE quotes ADD COLUMN additional_filaments_detail TEXT DEFAULT '[]'"),
-        ("supplies", "pack_qty", "ALTER TABLE supplies ADD COLUMN pack_qty INTEGER"),
-        ("supplies", "pack_price", "ALTER TABLE supplies ADD COLUMN pack_price FLOAT"),
-        ("quotes", "usd_to_cop_rate", "ALTER TABLE quotes ADD COLUMN usd_to_cop_rate FLOAT"),
-        ("quotes", "total_per_unit_cop", "ALTER TABLE quotes ADD COLUMN total_per_unit_cop FLOAT"),
-        ("quotes", "total_price_cop", "ALTER TABLE quotes ADD COLUMN total_price_cop FLOAT"),
-    ]
-    async with async_session() as db:
-        for table, column, sql in migrations:
-            result = await db.execute(text(f"PRAGMA table_info({table})"))
-            columns = [row[1] for row in result.fetchall()]
-            if column not in columns:
-                await db.execute(text(sql))
-        await db.commit()
+    return {"status": "ok", "app": "TurtleForge Cost"}
 
 
 async def create_default_data():
