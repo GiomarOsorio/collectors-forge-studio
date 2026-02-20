@@ -1,21 +1,26 @@
 /**
- * @file Componente raiz de la aplicacion Calculator3D.
+ * @file Componente raíz de TurtleForge Studio.
  *
- * Configura la estructura principal de la aplicacion incluyendo:
- * - React Router (BrowserRouter) para la navegacion del lado del cliente
- * - Proveedor de autenticacion (AuthProvider) para gestionar el estado de sesion
- * - Sistema de notificaciones (Toaster) para mensajes de exito y error
- * - Definicion de todas las rutas de la aplicacion
- * - Guardias de autenticacion (PrivateRoute) para proteger las rutas privadas
+ * Configura la estructura principal de la aplicación:
+ * - BrowserRouter para navegación del lado del cliente
+ * - AuthProvider para el estado de sesión
+ * - DirtyStateProvider para rastrear formularios con datos sin guardar
+ * - Toaster para notificaciones
+ * - Dos zonas de rutas:
+ *     /         → TurtleForge Studio (lanzador de apps)
+ *     /cost/*   → Aplicación Cost (calculadora de costos de impresión 3D)
  *
  * Estructura de rutas:
- * - /login       -> Pagina de inicio de sesion (publica)
- * - /            -> Calculadora de costos (protegida)
- * - /filaments   -> Gestion de filamentos (protegida)
- * - /printers    -> Gestion de impresoras (protegida)
- * - /history     -> Historial de cotizaciones (protegida)
- * - /supplies    -> Gestion de insumos adicionales (protegida)
- * - /settings    -> Configuracion de la aplicacion (protegida)
+ * - /login              → Página de inicio de sesión (pública)
+ * - /                   → TurtleForge Studio Home (protegida)
+ * - /cost/calculator    → Calculadora de costos (protegida)
+ * - /cost/quotes        → Historial de cotizaciones de cliente (protegida)
+ * - /cost/manual        → Nueva cotización de cliente (protegida)
+ * - /cost/filaments     → Gestión de filamentos (protegida)
+ * - /cost/printers      → Gestión de impresoras (protegida)
+ * - /cost/history       → Historial de costos de impresión (protegida)
+ * - /cost/supplies      → Gestión de insumos adicionales (protegida)
+ * - /cost/settings      → Configuración de la aplicación (protegida)
  *
  * @module App
  */
@@ -23,8 +28,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import Layout from './components/Layout';
+import { DirtyStateProvider } from './context/DirtyStateContext';
+import StudioLayout from './components/StudioLayout';
+import CostLayout from './components/CostLayout';
 import Login from './pages/Login';
+import StudioHomePage from './pages/StudioHomePage';
 import CalculatorPage from './pages/CalculatorPage';
 import ManualQuotePage from './pages/ManualQuotePage';
 import QuotesPage from './pages/QuotesPage';
@@ -36,14 +44,11 @@ import SuppliesPage from './pages/SuppliesPage';
 
 /**
  * Componente guardia de ruta privada.
- *
- * @description Protege las rutas que requieren autenticacion.
- * Si el usuario no esta autenticado, redirige a /login.
- * Mientras se verifica la sesion, muestra un indicador de carga.
+ * Si el usuario no está autenticado, redirige a /login.
  *
  * @param {Object} props
- * @param {React.ReactNode} props.children - Componentes hijos a renderizar si el usuario esta autenticado
- * @returns {JSX.Element} Los hijos si esta autenticado, o redireccion a /login
+ * @param {React.ReactNode} props.children
+ * @returns {JSX.Element}
  */
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -52,28 +57,29 @@ function PrivateRoute({ children }) {
 }
 
 /**
- * Componente que define la estructura de rutas de la aplicacion.
+ * Árbol de rutas de la aplicación.
  *
- * @description Configura todas las rutas usando React Router v6.
- * La ruta /login es publica pero redirige a / si el usuario ya esta autenticado.
- * Todas las demas rutas estan protegidas por PrivateRoute y anidadas
- * dentro del Layout principal (que incluye la barra lateral de navegacion).
- *
- * @returns {JSX.Element|null} Arbol de rutas de la aplicacion, o null mientras carga
+ * @returns {JSX.Element|null}
  */
 function AppRoutes() {
   const { user, loading } = useAuth();
 
-  // No renderizar nada mientras se verifica la sesion para evitar parpadeos
   if (loading) return null;
 
   return (
     <Routes>
-      {/* Ruta publica: redirige a / si ya hay sesion activa */}
-      <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
-      {/* Rutas protegidas: requieren autenticacion, se renderizan dentro del Layout */}
-      <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
-        <Route index element={<CalculatorPage />} />
+      {/* Ruta pública: redirige a /cost/calculator si ya hay sesión */}
+      <Route path="/login" element={user ? <Navigate to="/cost/calculator" /> : <Login />} />
+
+      {/* TurtleForge Studio Home: lanzador de aplicaciones */}
+      <Route path="/" element={<PrivateRoute><StudioLayout /></PrivateRoute>}>
+        <Route index element={<StudioHomePage />} />
+      </Route>
+
+      {/* Aplicación Cost: calculadora de costos de impresión 3D */}
+      <Route path="/cost" element={<PrivateRoute><CostLayout /></PrivateRoute>}>
+        <Route index element={<Navigate to="/cost/calculator" replace />} />
+        <Route path="calculator" element={<CalculatorPage />} />
         <Route path="quotes" element={<QuotesPage />} />
         <Route path="manual" element={<ManualQuotePage />} />
         <Route path="filaments" element={<FilamentsPage />} />
@@ -87,25 +93,21 @@ function AppRoutes() {
 }
 
 /**
- * Componente raiz de la aplicacion Calculator3D.
+ * Componente raíz de TurtleForge Studio.
  *
- * @description Punto de entrada principal que envuelve toda la aplicacion con:
- * - BrowserRouter: habilita la navegacion basada en el historial del navegador
- * - AuthProvider: provee el contexto de autenticacion a toda la aplicacion
- * - AppRoutes: define las rutas y la navegacion
- * - Toaster: sistema de notificaciones posicionado en la esquina superior derecha
- *
- * @returns {JSX.Element} Aplicacion completa envuelta en sus proveedores
+ * @returns {JSX.Element}
  */
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
-        <Toaster position="top-right" toastOptions={{
-          style: { background: '#1a1d21', color: '#F2F4F6', border: '1px solid #2a2d31' },
-          success: { iconTheme: { primary: '#3FAF4C', secondary: '#F2F4F6' } },
-        }} />
+        <DirtyStateProvider>
+          <AppRoutes />
+          <Toaster position="top-right" toastOptions={{
+            style: { background: '#1a1d21', color: '#F2F4F6', border: '1px solid #2a2d31' },
+            success: { iconTheme: { primary: '#3FAF4C', secondary: '#F2F4F6' } },
+          }} />
+        </DirtyStateProvider>
       </AuthProvider>
     </BrowserRouter>
   );
