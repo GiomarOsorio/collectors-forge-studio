@@ -11,9 +11,11 @@ es compatible con cualquier impresora FDM.
 """
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import String, Float, DateTime, Text
+from sqlalchemy import String, DateTime, Text, Numeric
+from sqlalchemy import text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -59,18 +61,29 @@ class Printer(Base):
     __tablename__ = "printers"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(100))   # Ej: "Mi BambuLab P1S Combo"
-    model: Mapped[str] = mapped_column(String(100))  # Ej: "BambuLab P1S Combo"
-    purchase_price: Mapped[float] = mapped_column(Float)           # Precio de compra
-    power_consumption_watts: Mapped[float] = mapped_column(Float)  # Consumo promedio en watts
-    estimated_lifespan_hours: Mapped[float] = mapped_column(Float) # Vida útil estimada en horas
-    current_hours: Mapped[float] = mapped_column(Float, default=0.0)  # Horas de uso actual
-    # Costos de mantenimiento periódico
-    nozzle_price: Mapped[float] = mapped_column(Float, default=0.0)           # Precio boquilla
-    nozzle_lifespan_hours: Mapped[float] = mapped_column(Float, default=500.0)   # Horas por boquilla
-    buildplate_price: Mapped[float] = mapped_column(Float, default=0.0)          # Precio placa
-    buildplate_lifespan_hours: Mapped[float] = mapped_column(Float, default=2000.0)  # Horas por placa
-    other_maintenance_per_hour: Mapped[float] = mapped_column(Float, default=0.0)    # Otros costos/hora
+    name: Mapped[str] = mapped_column(String(100))
+    model: Mapped[str] = mapped_column(String(100))
+    purchase_price: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    power_consumption_watts: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    estimated_lifespan_hours: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    current_hours: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), server_default=text("0.00")
+    )
+    nozzle_price: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), server_default=text("0.00")
+    )
+    nozzle_lifespan_hours: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), server_default=text("500.00")
+    )
+    buildplate_price: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), server_default=text("0.00")
+    )
+    buildplate_lifespan_hours: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), server_default=text("2000.00")
+    )
+    other_maintenance_per_hour: Mapped[Decimal] = mapped_column(
+        Numeric(10, 6), server_default=text("0.000000")
+    )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(

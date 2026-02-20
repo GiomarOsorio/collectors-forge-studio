@@ -34,6 +34,7 @@ import argparse
 import sqlite3
 import sys
 from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Optional
 
 try:
@@ -43,6 +44,64 @@ except ImportError:
     print("ERROR: psycopg2-binary no está instalado.")
     print("  Ejecuta: pip install psycopg2-binary")
     sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Columnas NUMERIC por tabla: columna → escala de cuantización como string.
+# La escala coincide con la definición Numeric(precision, escala) del modelo ORM.
+# Se usa para limpiar artefactos IEEE 754 de SQLite antes de insertar en PostgreSQL.
+# ---------------------------------------------------------------------------
+
+NUMERIC_COLS: dict = {
+    "filaments": {
+        "price_per_kg":    "0.0001",    # Numeric(12, 4)
+        "weight_per_roll": "0.001",     # Numeric(10, 3)
+        "diameter":        "0.001",     # Numeric(6,  3)
+        "density":         "0.000001",  # Numeric(8,  6)
+    },
+    "printers": {
+        "purchase_price":             "0.01",      # Numeric(12, 2)
+        "power_consumption_watts":    "0.01",      # Numeric(10, 2)
+        "estimated_lifespan_hours":   "0.01",      # Numeric(10, 2)
+        "current_hours":              "0.01",      # Numeric(10, 2)
+        "nozzle_price":               "0.01",      # Numeric(10, 2)
+        "nozzle_lifespan_hours":      "0.01",      # Numeric(10, 2)
+        "buildplate_price":           "0.01",      # Numeric(10, 2)
+        "buildplate_lifespan_hours":  "0.01",      # Numeric(10, 2)
+        "other_maintenance_per_hour": "0.000001",  # Numeric(10, 6)
+    },
+    "app_settings": {
+        "electricity_rate":       "0.000001",  # Numeric(10, 6)
+        "failure_rate_percent":   "0.01",      # Numeric(6,  2)
+        "labor_cost_per_hour":    "0.01",      # Numeric(10, 2)
+        "default_margin_percent": "0.01",      # Numeric(6,  2)
+    },
+    "supplies": {
+        "price_per_unit": "0.0001",  # Numeric(12, 4)
+        "pack_price":     "0.01",    # Numeric(12, 2)
+    },
+    "quotes": {
+        "weight_grams":               "0.001",   # Numeric(10, 3)
+        "print_time_hours":           "0.0001",  # Numeric(10, 4)
+        "preparation_time_hours":     "0.0001",  # Numeric(10, 4)
+        "post_processing_time_hours": "0.0001",  # Numeric(10, 4)
+        "material_cost":              "0.01",    # Numeric(12, 2)
+        "electricity_cost":           "0.01",    # Numeric(12, 2)
+        "depreciation_cost":          "0.01",    # Numeric(12, 2)
+        "maintenance_cost":           "0.01",    # Numeric(12, 2)
+        "labor_cost":                 "0.01",    # Numeric(12, 2)
+        "failure_cost":               "0.01",    # Numeric(12, 2)
+        "subtotal":                   "0.01",    # Numeric(12, 2)
+        "margin_percent":             "0.01",    # Numeric(6,  2)
+        "margin_amount":              "0.01",    # Numeric(12, 2)
+        "total_per_unit":             "0.01",    # Numeric(12, 2)
+        "total_price":                "0.01",    # Numeric(12, 2)
+        "supplies_cost":              "0.01",    # Numeric(12, 2)
+        "usd_to_cop_rate":            "0.0001",  # Numeric(14, 4)
+        "total_per_unit_cop":         "1",       # Numeric(14, 0) — COP entero
+        "total_price_cop":            "1",       # Numeric(14, 0) — COP entero
+    },
+}
 
 
 # ---------------------------------------------------------------------------
@@ -144,6 +203,50 @@ def convert_row(row_dict: dict, datetime_cols: list, bool_cols: list) -> dict:
     return row_dict
 
 
+def round_numeric_cols(table_name: str, row_dict: dict) -> dict:
+    """
+    Limpia contaminación IEEE 754 en columnas float de SQLite antes de
+    insertar en columnas NUMERIC de PostgreSQL.
+
+    SQLite almacena valores Float con artefactos binarios (ej: 1.2400000000000002).
+    PostgreSQL acepta esos valores en columnas Float, pero cuando las columnas
+    son NUMERIC(precision, escala) los valores deben ser exactos.
+
+    Estrategia de conversión segura:
+        1. Decimal(str(valor))  → elimina la representación binaria IEEE 754
+        2. .quantize(escala, ROUND_HALF_UP) → redondea a los decimales correctos
+
+    NUNCA se usa Decimal(float_valor) directamente: eso propaga el artefacto
+    binario (Decimal(1.24) == Decimal('1.2399999999999999911182158029987476766109466552734375')).
+
+    La escala de cada columna está definida en NUMERIC_COLS y coincide con la
+    definición Numeric(precision, escala) del modelo ORM.
+
+    Args:
+        table_name: Nombre de la tabla (clave en NUMERIC_COLS).
+        row_dict:   Fila leída de SQLite como dict {columna: valor}.
+
+    Returns:
+        El mismo dict con las columnas numéricas reemplazadas por Decimal exactos.
+        Columnas ausentes o con valor None se dejan sin cambios.
+    """
+    cols = NUMERIC_COLS.get(table_name, {})
+    for col, scale_str in cols.items():
+        if col not in row_dict or row_dict[col] is None:
+            continue
+        try:
+            row_dict[col] = (
+                Decimal(str(row_dict[col]))
+                .quantize(Decimal(scale_str), rounding=ROUND_HALF_UP)
+            )
+        except Exception as exc:
+            # Dejamos el valor original: el INSERT fallará con un error claro
+            # en lugar de silenciar el problema con un valor incorrecto.
+            print(f"  AVISO: No se pudo redondear {table_name}.{col}={row_dict[col]!r}: {exc}")
+
+    return row_dict
+
+
 # ---------------------------------------------------------------------------
 # Migración de una tabla
 # ---------------------------------------------------------------------------
@@ -192,6 +295,7 @@ def migrate_table(
     for raw_row in rows:
         row_dict = dict(zip(col_names, raw_row))
         row_dict = convert_row(row_dict, datetime_cols, bool_cols)
+        row_dict = round_numeric_cols(table_name, row_dict)
         values = [row_dict[col] for col in col_names]
 
         pg_cur.execute(sql, values)
