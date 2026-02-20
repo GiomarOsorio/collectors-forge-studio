@@ -1,0 +1,15 @@
+[run]
+# Sin 'source' para que 'include' funcione correctamente.
+# Mide solo el dominio de negocio (calculador + schemas).
+include =
+    app/services/calculator.py
+    app/schemas/quote.py
+    app/schemas/filament.py
+    app/schemas/printer.py
+    app/schemas/settings.py
+    app/schemas/supply.py
+
+[report]
+fail_under = 80
+show_missing = True
+skip_empty = True
