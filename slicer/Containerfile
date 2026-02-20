@@ -6,7 +6,7 @@ ENV DISPLAY=
 # Dependencias del sistema
 RUN apt-get update && apt-get install -y \
     wget curl python3.12 python3-pip python3.12-venv \
-    libgl1-mesa-glx libglu1-mesa libgles2 \
+    libgl1 libglx-mesa0 libglu1-mesa libgles2 \
     libx11-6 libxrender1 libxi6 libxext6 \
     libdbus-1-3 libfontconfig1 libfreetype6 \
     libglib2.0-0 libgomp1 \
