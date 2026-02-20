@@ -9,7 +9,7 @@
  */
 
 import { useNavigate } from 'react-router-dom';
-import { Calculator, Package } from 'lucide-react';
+import { Calculator, Package, Cpu } from 'lucide-react';
 
 /**
  * Definición de las aplicaciones disponibles.
@@ -32,6 +32,15 @@ const APPS = [
     icon: Package,
     route: '/inventory/stock',
     color: '#3B82F6',
+    badge: null,
+  },
+  {
+    id: 'slicer',
+    name: 'Slicer',
+    description: 'Lamina modelos STL con OrcaSlicer o sube archivos .gcode/.3mf para extraer datos de impresión.',
+    icon: Cpu,
+    route: '/slicer/upload',
+    color: '#F59E0B',
     badge: null,
   },
 ];
@@ -92,13 +101,6 @@ export default function StudioHomePage() {
             );
           })}
 
-          {/* Tarjeta placeholder "Próximamente" */}
-          <div className="flex flex-col items-center gap-4 p-6 rounded-2xl bg-[#13171c]/30 border border-dashed border-[#1e2125] text-center opacity-40 cursor-not-allowed">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-[#1e2125]">
-              <span className="text-2xl text-gunmetal font-light">+</span>
-            </div>
-            <p className="text-sm text-gunmetal font-medium">Próximamente</p>
-          </div>
         </div>
       </div>
 

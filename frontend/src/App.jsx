@@ -23,6 +23,8 @@
  * - /inventory/supplies       → Insumos y accesorios del inventario (protegida)
  * - /inventory/stock          → Todo el stock del inventario (protegida)
  * - /inventory/purchases      → Pedidos de compra (protegida)
+ * - /slicer/upload            → Subir modelo STL / .gcode / .3mf o URL MakerWorld (protegida)
+ * - /slicer/history           → Historial de trabajos de laminado (protegida)
  *
  * @module App
  */
@@ -34,6 +36,7 @@ import { DirtyStateProvider } from './context/DirtyStateContext';
 import StudioLayout from './components/StudioLayout';
 import CostLayout from './components/CostLayout';
 import InventoryLayout from './components/InventoryLayout';
+import SlicerLayout from './components/SlicerLayout';
 import Login from './pages/Login';
 import StudioHomePage from './pages/StudioHomePage';
 import InventoryStockPage from './pages/inventory/InventoryStockPage';
@@ -46,6 +49,8 @@ import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
 import InventoryFilamentsPage from './pages/inventory/InventoryFilamentsPage';
 import InventorySuppliesPage from './pages/inventory/InventorySuppliesPage';
+import SlicerUploadPage from './pages/slicer/SlicerUploadPage';
+import SlicerHistoryPage from './pages/slicer/SlicerHistoryPage';
 
 /**
  * Componente guardia de ruta privada.
@@ -99,6 +104,13 @@ function AppRoutes() {
         <Route path="printers" element={<PrintersPage />} />
         <Route path="history" element={<HistoryPage />} />
         <Route path="settings" element={<SettingsPage />} />
+      </Route>
+
+      {/* Aplicación Slicer: laminado de modelos 3D */}
+      <Route path="/slicer" element={<PrivateRoute><SlicerLayout /></PrivateRoute>}>
+        <Route index element={<Navigate to="/slicer/upload" replace />} />
+        <Route path="upload" element={<SlicerUploadPage />} />
+        <Route path="history" element={<SlicerHistoryPage />} />
       </Route>
     </Routes>
   );
