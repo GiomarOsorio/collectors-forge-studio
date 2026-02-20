@@ -8,9 +8,11 @@ densidad del material se determina el costo exacto de material por pieza.
 """
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import String, Float, DateTime, Text
+from sqlalchemy import String, DateTime, Text, Numeric
+from sqlalchemy import text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -45,13 +47,19 @@ class Filament(Base):
     __tablename__ = "filaments"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    brand: Mapped[str] = mapped_column(String(100))  # Ej: eSun, Bambu, Polymaker
-    type: Mapped[str] = mapped_column(String(50))    # PLA, PETG, ABS, TPU, etc.
+    brand: Mapped[str] = mapped_column(String(100))
+    type: Mapped[str] = mapped_column(String(50))
     color: Mapped[str] = mapped_column(String(50))
-    price_per_kg: Mapped[float] = mapped_column(Float)           # Precio por kg
-    weight_per_roll: Mapped[float] = mapped_column(Float, default=1000.0)  # Gramos por rollo
-    diameter: Mapped[float] = mapped_column(Float, default=1.75)  # mm
-    density: Mapped[float] = mapped_column(Float, default=1.24)   # g/cm³ (PLA default)
+    price_per_kg: Mapped[Decimal] = mapped_column(Numeric(12, 4))
+    weight_per_roll: Mapped[Decimal] = mapped_column(
+        Numeric(10, 3), server_default=text("1000.000")
+    )
+    diameter: Mapped[Decimal] = mapped_column(
+        Numeric(6, 3), server_default=text("1.750")
+    )
+    density: Mapped[Decimal] = mapped_column(
+        Numeric(8, 6), server_default=text("1.240000")
+    )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(

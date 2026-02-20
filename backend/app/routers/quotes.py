@@ -18,6 +18,9 @@ Endpoints disponibles bajo el prefijo /api/quotes:
 - GET  /{id}/pdf      - Descarga la cotización como archivo PDF.
 """
 
+import json
+from decimal import Decimal
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy import select
@@ -37,6 +40,13 @@ from app.services.pdf_generator import generate_quote_pdf
 from app.services.exchange_rate import get_usd_to_cop
 
 router = APIRouter(prefix="/api/quotes", tags=["quotes"])
+
+
+def _json_float(obj):
+    """Convierte Decimal a float para serialización JSON en campos TEXT de la DB."""
+    if isinstance(obj, Decimal):
+        return float(obj)
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 
 @router.post("/calculate", response_model=QuoteCostBreakdown)
@@ -162,10 +172,14 @@ async def create_quote(
         total_per_unit_cop=breakdown.total_per_unit_cop,
         total_price_cop=breakdown.total_price_cop,
         supplies_cost=breakdown.supplies_cost,
-        supplies_detail=__import__("json").dumps(breakdown.supplies_detail),
-        additional_filaments_detail=__import__("json").dumps([
-            {"filament_id": af["filament_id"], "name": af["name"],
-             "weight_grams": af["weight_grams"], "material_cost": round(af["weight_grams"] * af["price_per_kg"] / 1000, 4)}
+        supplies_detail=json.dumps(breakdown.supplies_detail, default=_json_float),
+        additional_filaments_detail=json.dumps([
+            {
+                "filament_id": af["filament_id"],
+                "name": af["name"],
+                "weight_grams": float(af["weight_grams"]),
+                "material_cost": round(float(af["weight_grams"]) * float(af["price_per_kg"]) / 1000, 4),
+            }
             for af in (additional_filaments_data or [])
         ]),
     )
