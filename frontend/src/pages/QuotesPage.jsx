@@ -74,7 +74,7 @@ export default function QuotesPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="tf-page-title mb-0">Historial de Cotizaciones</h2>
-        <button onClick={() => navigate('/manual')} className="tf-btn-primary gap-2">
+        <button onClick={() => navigate('/cost/manual')} className="tf-btn-primary gap-2">
           <Plus size={18} /> Nueva cotización
         </button>
       </div>
@@ -182,7 +182,7 @@ export default function QuotesPage() {
               <tr>
                 <td colSpan={7} className="px-5 py-12 text-center text-gunmetal">
                   No hay cotizaciones aún.{' '}
-                  <button onClick={() => navigate('/manual')} className="text-forge-green hover:underline">
+                  <button onClick={() => navigate('/cost/manual')} className="text-forge-green hover:underline">
                     Crear la primera
                   </button>
                 </td>

@@ -108,7 +108,7 @@ export default function ManualQuotePage() {
         notes: form.notes || null,
       });
       toast.success('Cotización guardada');
-      navigate('/quotes');
+      navigate('/cost/quotes');
     } catch {
       toast.error('Error al guardar la cotización');
     } finally {

@@ -58,7 +58,7 @@ export default function Login() {
       const userRes = await getMe();
       // Paso 3: Actualizar el contexto global de autenticacion
       loginUser(res.data.access_token, userRes.data);
-      navigate('/');
+      navigate('/cost/calculator');
     } catch {
       toast.error('Usuario o contraseña incorrectos');
     } finally {
