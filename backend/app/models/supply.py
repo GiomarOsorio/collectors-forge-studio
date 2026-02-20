@@ -8,7 +8,12 @@ y se pueden añadir a cualquier cotización en la calculadora.
 """
 
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, Text, DateTime
+from decimal import Decimal
+from typing import Optional
+
+from sqlalchemy import Integer, String, Numeric, Text, DateTime, CheckConstraint
+from sqlalchemy.orm import Mapped, mapped_column
+
 from app.database import Base
 
 
@@ -21,26 +26,24 @@ class Supply(Base):
         name:           Nombre del insumo. Ej: "Argolla metálica 25mm".
         description:    Descripción opcional del insumo.
         unit:           Unidad de medida. Ej: "unidad", "par", "set".
-        price_per_unit: Precio por unidad en USD. Se calcula automáticamente
-                        como pack_price / pack_qty cuando se usan campos de paquete.
-        pack_qty:       Cantidad de unidades que trae el paquete de compra.
-                        Ej: 50 para un paquete de 50 argollas.
-        pack_price:     Precio total del paquete de compra en USD.
-                        Junto con pack_qty permite calcular price_per_unit.
-        notes:          Notas adicionales opcionales (proveedor, talla, etc.).
+        price_per_unit: Precio por unidad en USD. Numeric(12,4).
+        pack_qty:       Cantidad de unidades en el paquete de compra.
+        pack_price:     Precio total del paquete en USD. Numeric(12,4).
+        notes:          Notas adicionales opcionales.
         created_at:     Fecha y hora UTC de creación del registro.
     """
 
     __tablename__ = "supplies"
+    __table_args__ = (
+        CheckConstraint("price_per_unit >= 0", name="ck_supplies_price_ge0"),
+    )
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False, index=True)
-    description = Column(Text, nullable=True)
-    unit = Column(String, default="unidad", nullable=False)
-    price_per_unit = Column(Float, nullable=False)
-    # Compra por paquete: pack_qty unidades al precio pack_price
-    # price_per_unit se calcula automáticamente como pack_price / pack_qty
-    pack_qty = Column(Integer, nullable=True)
-    pack_price = Column(Float, nullable=True)
-    notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True, index=True)
+    name: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    unit: Mapped[str] = mapped_column(String, nullable=False, server_default="unidad")
+    price_per_unit: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
+    pack_qty: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    pack_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 4), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

@@ -11,6 +11,7 @@ Endpoints disponibles bajo el prefijo /api/supplies:
 - DELETE /{id} - Elimina un insumo del catálogo.
 """
 
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -25,8 +26,14 @@ from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/api/supplies", tags=["supplies"])
 
+_6 = Decimal("0.000001")
 
-def _compute_price_per_unit(pack_qty: Optional[int], pack_price: Optional[float], price_per_unit: Optional[float]) -> float:
+
+def _compute_price_per_unit(
+    pack_qty: Optional[int],
+    pack_price: Optional[Decimal],
+    price_per_unit: Optional[Decimal],
+) -> Decimal:
     """
     Calcula el precio por unidad a partir de los datos del paquete.
 
@@ -37,7 +44,7 @@ def _compute_price_per_unit(pack_qty: Optional[int], pack_price: Optional[float]
     if pack_qty and pack_price is not None:
         if pack_qty <= 0:
             raise ValueError("La cantidad del paquete debe ser mayor que 0")
-        return round(pack_price / pack_qty, 6)
+        return (pack_price / Decimal(pack_qty)).quantize(_6, rounding=ROUND_HALF_UP)
     if price_per_unit is not None:
         return price_per_unit
     raise ValueError("Debes proporcionar pack_qty + pack_price, o price_per_unit")

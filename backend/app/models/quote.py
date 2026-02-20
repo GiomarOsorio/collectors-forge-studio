@@ -4,14 +4,14 @@ Modelo ORM para la tabla de cotizaciones de impresión 3D.
 Define la entidad Quote que representa el resultado completo de un cálculo de
 costo de impresión guardado en el historial del usuario. Almacena tanto los
 parámetros de entrada (peso, tiempo, cantidad) como el desglose detallado de
-todos los componentes del costo (material, electricidad, depreciación,
-mantenimiento, mano de obra, fallos y margen).
+todos los componentes del costo.
 """
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import String, Float, DateTime, Text, Integer, ForeignKey
+from sqlalchemy import String, Numeric, DateTime, Text, Integer, ForeignKey, CheckConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -19,54 +19,20 @@ from app.database import Base
 
 class Quote(Base):
     """
-    Modelo de base de datos que representa una cotización de impresión 3D guardada.
+    Cotización de impresión 3D guardada en el historial.
 
-    Cada cotización es el resultado persistido de ejecutar el motor de cálculo
-    de costos para una pieza específica. Contiene referencias al filamento e
-    impresora utilizados, los parámetros de la impresión y el desglose completo
-    de costos para facilitar la consulta histórica y la generación de PDFs.
-
-    Atributos:
-        id: Clave primaria autoincremental de la cotización.
-        user_id: Clave foránea hacia el usuario propietario de la cotización.
-
-        -- Información de la pieza --
-        piece_name: Nombre descriptivo de la pieza o trabajo cotizado.
-        description: Descripción opcional detallada del trabajo.
-        client_name: Nombre opcional del cliente al que va dirigida la cotización.
-
-        -- Referencias a recursos --
-        filament_id: Clave foránea al filamento utilizado en la cotización.
-        printer_id: Clave foránea a la impresora utilizada en la cotización.
-
-        -- Parámetros de impresión --
-        weight_grams: Cantidad de filamento consumido en gramos.
-        print_time_hours: Duración de la impresión en horas.
-        preparation_time_hours: Tiempo de preparación del archivo y la impresora
-            en horas. Contribuye al costo de mano de obra.
-        post_processing_time_hours: Tiempo de post-procesado (lijado, pintura,
-            ensamblaje, etc.) en horas. Contribuye al costo de mano de obra.
-        quantity: Número de unidades de la pieza a producir.
-
-        -- Desglose de costos (valores calculados por unidad) --
-        material_cost: Costo del filamento consumido por unidad.
-        electricity_cost: Costo de electricidad consumida por unidad.
-        depreciation_cost: Cuota de depreciación de la impresora por unidad.
-        maintenance_cost: Costo de mantenimiento (boquilla, placa, otros) por unidad.
-        labor_cost: Costo de mano de obra (preparación + post-procesado) por unidad.
-        failure_cost: Incremento porcentual para absorber impresiones fallidas.
-        subtotal: Suma de todos los costos anteriores (base_cost + failure_cost).
-        margin_percent: Porcentaje de margen de ganancia aplicado.
-        margin_amount: Importe en moneda del margen de ganancia.
-        total_per_unit: Precio de venta recomendado por unidad (subtotal + margen).
-        total_price: Precio total para todas las unidades (total_per_unit × quantity).
-
-        -- Metadata --
-        notes: Notas opcionales adicionales sobre la cotización.
-        created_at: Marca de tiempo UTC de creación de la cotización.
+    Todos los campos monetarios usan Numeric(12,4).
+    Los porcentajes usan Numeric(7,4) con restricción 0–100.
+    Los valores COP usan Numeric(16,0).
     """
 
     __tablename__ = "quotes"
+    __table_args__ = (
+        CheckConstraint(
+            "margin_percent >= 0 AND margin_percent <= 100",
+            name="ck_quotes_margin_range",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"))
@@ -81,36 +47,50 @@ class Quote(Base):
     printer_id: Mapped[int] = mapped_column(Integer, ForeignKey("printers.id"))
 
     # Parámetros de impresión ingresados por el usuario
-    weight_grams: Mapped[float] = mapped_column(Float)               # Gramos de filamento
-    print_time_hours: Mapped[float] = mapped_column(Float)           # Tiempo de impresión
-    preparation_time_hours: Mapped[float] = mapped_column(Float, default=0.0)       # Preparación
-    post_processing_time_hours: Mapped[float] = mapped_column(Float, default=0.0)   # Post-procesado
-    quantity: Mapped[int] = mapped_column(Integer, default=1)        # Cantidad de piezas
+    weight_grams: Mapped[Decimal] = mapped_column(Numeric(10, 3))
+    print_time_hours: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    preparation_time_hours: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), server_default=text("0.00")
+    )
+    post_processing_time_hours: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), server_default=text("0.00")
+    )
+    quantity: Mapped[int] = mapped_column(Integer, server_default=text("1"))
 
-    # Desglose de costos calculados (por unidad)
-    material_cost: Mapped[float] = mapped_column(Float)
-    electricity_cost: Mapped[float] = mapped_column(Float)
-    depreciation_cost: Mapped[float] = mapped_column(Float)
-    maintenance_cost: Mapped[float] = mapped_column(Float)
-    labor_cost: Mapped[float] = mapped_column(Float)
-    failure_cost: Mapped[float] = mapped_column(Float)    # Costo absorbido por fallos
-    subtotal: Mapped[float] = mapped_column(Float)
-    margin_percent: Mapped[float] = mapped_column(Float)
-    margin_amount: Mapped[float] = mapped_column(Float)
-    total_per_unit: Mapped[float] = mapped_column(Float)
-    total_price: Mapped[float] = mapped_column(Float)     # total_per_unit * quantity
+    # Desglose de costos calculados — Numeric(12,4)
+    material_cost: Mapped[Decimal] = mapped_column(Numeric(12, 4))
+    electricity_cost: Mapped[Decimal] = mapped_column(Numeric(12, 4))
+    depreciation_cost: Mapped[Decimal] = mapped_column(Numeric(12, 4))
+    maintenance_cost: Mapped[Decimal] = mapped_column(Numeric(12, 4))
+    labor_cost: Mapped[Decimal] = mapped_column(Numeric(12, 4))
+    failure_cost: Mapped[Decimal] = mapped_column(Numeric(12, 4))
+    subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 4))
+    margin_percent: Mapped[Decimal] = mapped_column(Numeric(7, 4))
+    margin_amount: Mapped[Decimal] = mapped_column(Numeric(12, 4))
+    total_per_unit: Mapped[Decimal] = mapped_column(Numeric(12, 4))
+    total_price: Mapped[Decimal] = mapped_column(Numeric(12, 4))
 
-    # Insumos adicionales (argollas, switches, etc.) - JSON: [{name, quantity, unit, unit_price, subtotal}]
-    supplies_cost: Mapped[float] = mapped_column(Float, default=0.0)
-    supplies_detail: Mapped[Optional[str]] = mapped_column(Text, default="[]", nullable=True)
-
-    # Filamentos adicionales para piezas multicolor - JSON: [{filament_id, name, weight_grams, material_cost}]
-    additional_filaments_detail: Mapped[Optional[str]] = mapped_column(Text, default="[]", nullable=True)
+    # Insumos adicionales
+    supplies_cost: Mapped[Decimal] = mapped_column(
+        Numeric(12, 4), server_default=text("0.0000")
+    )
+    supplies_detail: Mapped[Optional[str]] = mapped_column(
+        Text, server_default=text("'[]'"), nullable=True
+    )
+    additional_filaments_detail: Mapped[Optional[str]] = mapped_column(
+        Text, server_default=text("'[]'"), nullable=True
+    )
 
     # Conversión a pesos colombianos (guardada al momento de cotizar)
-    usd_to_cop_rate: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    total_per_unit_cop: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    total_price_cop: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    usd_to_cop_rate: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2), nullable=True
+    )
+    total_per_unit_cop: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(16, 0), nullable=True
+    )
+    total_price_cop: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(16, 0), nullable=True
+    )
 
     # Metadata
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

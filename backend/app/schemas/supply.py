@@ -1,14 +1,20 @@
 """
 Esquemas Pydantic para los insumos adicionales de Calculator3D.
 
-Define los modelos de validación para las operaciones CRUD del catálogo
-de insumos y el esquema SupplyItem usado en las solicitudes de cotización
-para especificar qué insumos y en qué cantidad se incluyen.
+Todos los campos financieros usan Decimal internamente y se serializan
+a float en JSON via PlainSerializer.
 """
 
 from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel
+from decimal import Decimal
+from typing import Annotated, Optional
+
+from pydantic import BaseModel, Field, PlainSerializer
+
+DecimalAsFloat = Annotated[
+    Decimal,
+    PlainSerializer(float, return_type=float, when_used="json"),
+]
 
 
 class SupplyCreate(BaseModel):
@@ -22,8 +28,8 @@ class SupplyCreate(BaseModel):
     description: Optional[str] = None
     unit: str = "unidad"
     pack_qty: Optional[int] = None
-    pack_price: Optional[float] = None
-    price_per_unit: Optional[float] = None
+    pack_price: Optional[Decimal] = Field(default=None, ge=0)
+    price_per_unit: Optional[Decimal] = Field(default=None, ge=0)
     notes: Optional[str] = None
 
 
@@ -33,8 +39,8 @@ class SupplyUpdate(BaseModel):
     description: Optional[str] = None
     unit: Optional[str] = None
     pack_qty: Optional[int] = None
-    pack_price: Optional[float] = None
-    price_per_unit: Optional[float] = None
+    pack_price: Optional[Decimal] = Field(default=None, ge=0)
+    price_per_unit: Optional[Decimal] = Field(default=None, ge=0)
     notes: Optional[str] = None
 
 
@@ -45,8 +51,8 @@ class SupplyResponse(BaseModel):
     description: Optional[str]
     unit: str
     pack_qty: Optional[int]
-    pack_price: Optional[float]
-    price_per_unit: float
+    pack_price: Optional[DecimalAsFloat]
+    price_per_unit: DecimalAsFloat
     notes: Optional[str]
     created_at: datetime
 
@@ -57,12 +63,9 @@ class SupplyItem(BaseModel):
     """
     Insumo con cantidad para incluir en una cotización.
 
-    Usado dentro de QuoteCalculateRequest para especificar los insumos
-    adicionales de una pieza concreta y cuántos se necesitan por unidad.
-
     Atributos:
         supply_id: ID del insumo del catálogo.
         quantity:  Cantidad de unidades del insumo por pieza impresa.
     """
     supply_id: int
-    quantity: float = 1.0
+    quantity: Decimal = Field(default=Decimal("1"), gt=0)
