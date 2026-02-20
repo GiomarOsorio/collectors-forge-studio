@@ -31,8 +31,11 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { DirtyStateProvider } from './context/DirtyStateContext';
 import StudioLayout from './components/StudioLayout';
 import CostLayout from './components/CostLayout';
+import InventoryLayout from './components/InventoryLayout';
 import Login from './pages/Login';
 import StudioHomePage from './pages/StudioHomePage';
+import InventoryStockPage from './pages/inventory/InventoryStockPage';
+import InventoryPurchasesPage from './pages/inventory/InventoryPurchasesPage';
 import CalculatorPage from './pages/CalculatorPage';
 import ManualQuotePage from './pages/ManualQuotePage';
 import QuotesPage from './pages/QuotesPage';
@@ -74,6 +77,13 @@ function AppRoutes() {
       {/* TurtleForge Studio Home: lanzador de aplicaciones */}
       <Route path="/" element={<PrivateRoute><StudioLayout /></PrivateRoute>}>
         <Route index element={<StudioHomePage />} />
+      </Route>
+
+      {/* Aplicación Inventario: gestión de stock y pedidos */}
+      <Route path="/inventory" element={<PrivateRoute><InventoryLayout /></PrivateRoute>}>
+        <Route index element={<Navigate to="/inventory/stock" replace />} />
+        <Route path="stock" element={<InventoryStockPage />} />
+        <Route path="purchases" element={<InventoryPurchasesPage />} />
       </Route>
 
       {/* Aplicación Cost: calculadora de costos de impresión 3D */}

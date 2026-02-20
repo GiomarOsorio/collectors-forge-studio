@@ -1,0 +1,163 @@
+"""
+Esquemas Pydantic para ítems de inventario.
+
+Define los modelos de validación y serialización para crear, actualizar
+y retornar ítems del inventario. Los campos monetarios y de cantidad
+usan Decimal internamente y se serializan como float en JSON.
+"""
+
+from datetime import datetime
+from decimal import Decimal
+from typing import Annotated, Optional
+
+from pydantic import BaseModel, Field, PlainSerializer, model_validator
+
+# Decimal internamente -> float en JSON (serialización explícita)
+DecimalAsFloat = Annotated[
+    Decimal,
+    PlainSerializer(float, return_type=float, when_used="json"),
+]
+
+
+class InventoryItemCreate(BaseModel):
+    """
+    Datos para crear un nuevo ítem de inventario.
+
+    Atributos:
+        name:             Nombre del artículo (requerido, max 200 caracteres).
+        category:         Categoría del artículo (default 'General').
+        description:      Descripción detallada (opcional).
+        unit:             Unidad de medida (default 'unidades').
+        quantity:         Cantidad actual en stock (default 0).
+        min_quantity:     Cantidad mínima antes de alerta (default 0).
+        unit_cost:        Costo unitario en USD (default 0).
+        supplier_name:    Nombre del proveedor (opcional).
+        supplier_contact: Contacto del proveedor: email/tel/web (opcional).
+        supplier_info:    Información adicional del proveedor (opcional).
+        needs_purchase:   Marcar si necesita recompra (default False).
+        notes:            Notas adicionales (opcional).
+    """
+    name: str = Field(min_length=1, max_length=200)
+    category: str = Field(default="General", max_length=100)
+    description: Optional[str] = None
+    unit: str = Field(default="unidades", max_length=50)
+    quantity: Decimal = Field(default=Decimal("0"), ge=0)
+    min_quantity: Decimal = Field(default=Decimal("0"), ge=0)
+    unit_cost: Decimal = Field(default=Decimal("0"), ge=0)
+    supplier_name: Optional[str] = Field(default=None, max_length=200)
+    supplier_contact: Optional[str] = Field(default=None, max_length=300)
+    supplier_info: Optional[str] = None
+    needs_purchase: bool = False
+    notes: Optional[str] = None
+
+
+class InventoryItemUpdate(BaseModel):
+    """
+    Datos opcionales para actualizar un ítem de inventario (PUT parcial).
+
+    Todos los campos son opcionales. Solo se actualizan los que se envíen.
+
+    Atributos:
+        name:             Nuevo nombre del artículo.
+        category:         Nueva categoría.
+        description:      Nueva descripción.
+        unit:             Nueva unidad de medida.
+        quantity:         Nueva cantidad en stock.
+        min_quantity:     Nuevo stock mínimo.
+        unit_cost:        Nuevo costo unitario.
+        supplier_name:    Nuevo nombre del proveedor.
+        supplier_contact: Nuevo contacto del proveedor.
+        supplier_info:    Nueva información del proveedor.
+        needs_purchase:   Nuevo estado de necesidad de compra.
+        notes:            Nuevas notas.
+    """
+    name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    category: Optional[str] = Field(default=None, max_length=100)
+    description: Optional[str] = None
+    unit: Optional[str] = Field(default=None, max_length=50)
+    quantity: Optional[Decimal] = Field(default=None, ge=0)
+    min_quantity: Optional[Decimal] = Field(default=None, ge=0)
+    unit_cost: Optional[Decimal] = Field(default=None, ge=0)
+    supplier_name: Optional[str] = Field(default=None, max_length=200)
+    supplier_contact: Optional[str] = Field(default=None, max_length=300)
+    supplier_info: Optional[str] = None
+    needs_purchase: Optional[bool] = None
+    notes: Optional[str] = None
+
+
+class InventoryItemResponse(BaseModel):
+    """
+    Datos completos de un ítem de inventario (respuesta de la API).
+
+    Incluye el campo calculado low_stock que indica si la cantidad actual
+    está por debajo del stock mínimo configurado.
+
+    Atributos:
+        id:               Identificador único.
+        name:             Nombre del artículo.
+        category:         Categoría del artículo.
+        description:      Descripción detallada.
+        unit:             Unidad de medida.
+        quantity:         Cantidad actual en stock.
+        min_quantity:     Cantidad mínima configurada.
+        unit_cost:        Costo unitario.
+        supplier_name:    Nombre del proveedor.
+        supplier_contact: Contacto del proveedor.
+        supplier_info:    Información adicional del proveedor.
+        needs_purchase:   Flag de necesidad de recompra.
+        notes:            Notas adicionales.
+        low_stock:        True si quantity < min_quantity y min_quantity > 0.
+        created_at:       Fecha de creación.
+        updated_at:       Fecha de última actualización.
+    """
+    id: int
+    name: str
+    category: str
+    description: Optional[str]
+    unit: str
+    quantity: DecimalAsFloat
+    min_quantity: DecimalAsFloat
+    unit_cost: DecimalAsFloat
+    supplier_name: Optional[str]
+    supplier_contact: Optional[str]
+    supplier_info: Optional[str]
+    needs_purchase: bool
+    notes: Optional[str]
+    low_stock: bool = False
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def compute_low_stock(self):
+        """Calcula low_stock: True si quantity < min_quantity y min_quantity > 0."""
+        if self.min_quantity > 0 and self.quantity < self.min_quantity:
+            self.low_stock = True
+        else:
+            self.low_stock = False
+        return self
+
+
+class InventoryItemFlagResponse(BaseModel):
+    """
+    Respuesta tras alternar el flag needs_purchase de un ítem.
+
+    Atributos:
+        id:             Identificador del ítem.
+        needs_purchase: Nuevo estado del flag.
+    """
+    id: int
+    needs_purchase: bool
+
+    model_config = {"from_attributes": True}
+
+
+class InventoryItemAdjustRequest(BaseModel):
+    """
+    Solicitud para ajustar la cantidad de un ítem (suma o resta al stock).
+
+    Atributos:
+        quantity: Cantidad a sumar (positiva) o restar (negativa) del stock.
+    """
+    quantity: Decimal

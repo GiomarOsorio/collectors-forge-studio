@@ -435,4 +435,49 @@ export const getElectricityTariff = () => api.get('/settings/electricity-tariff'
  */
 export const getElectricityTariffs = () => api.get('/settings/electricity-tariffs');
 
+// ============================================================================
+// Inventario - Ítems de stock
+// ============================================================================
+
+/** Obtiene todos los ítems de inventario de la empresa. */
+export const getInventoryItems = () => api.get('/inventory/items/');
+
+/** Crea un nuevo ítem de inventario. */
+export const createInventoryItem = (data) => api.post('/inventory/items/', data);
+
+/** Actualiza un ítem de inventario existente. */
+export const updateInventoryItem = (id, data) => api.put(`/inventory/items/${id}`, data);
+
+/** Elimina un ítem de inventario. */
+export const deleteInventoryItem = (id) => api.delete(`/inventory/items/${id}`);
+
+/** Alterna la bandera "necesita compra" de un ítem. */
+export const flagInventoryItem = (id) => api.patch(`/inventory/items/${id}/flag`);
+
+/** Ajusta la cantidad de un ítem (suma o resta). */
+export const adjustInventoryItem = (id, quantity) =>
+  api.patch(`/inventory/items/${id}/adjust`, { quantity });
+
+// ============================================================================
+// Inventario - Pedidos de compra
+// ============================================================================
+
+/** Obtiene todos los pedidos de compra de la empresa. */
+export const getPurchaseOrders = () => api.get('/inventory/purchases/');
+
+/** Crea un nuevo pedido de compra con sus ítems. */
+export const createPurchaseOrder = (data) => api.post('/inventory/purchases/', data);
+
+/** Obtiene un pedido de compra por ID. */
+export const getPurchaseOrder = (id) => api.get(`/inventory/purchases/${id}`);
+
+/** Actualiza los datos del pedido (sin ítems). */
+export const updatePurchaseOrder = (id, data) => api.put(`/inventory/purchases/${id}`, data);
+
+/** Elimina un pedido de compra. */
+export const deletePurchaseOrder = (id) => api.delete(`/inventory/purchases/${id}`);
+
+/** Marca un pedido como llegado y actualiza el stock de inventario. */
+export const arrivePurchaseOrder = (id) => api.post(`/inventory/purchases/${id}/arrive`);
+
 export default api;

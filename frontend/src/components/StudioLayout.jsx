@@ -7,7 +7,7 @@
  * @module components/StudioLayout
  */
 
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LogOut } from 'lucide-react';
 
@@ -29,13 +29,13 @@ export default function StudioLayout() {
     <div className="min-h-screen bg-forge-black flex flex-col">
       {/* Header */}
       <header className="bg-[#0d1014] border-b border-[#1e2125] px-6 py-4 flex items-center justify-between sticky top-0 z-10">
-        <div className="flex items-center gap-3">
+        <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
           <img src="/logo.png" alt="TurtleForge" className="h-9 w-9 object-contain" />
           <div>
             <h1 className="text-lg font-bold text-tech-white leading-none">TurtleForge Studio</h1>
             <p className="text-xs text-gunmetal">Panel de aplicaciones</p>
           </div>
-        </div>
+        </Link>
         <div className="flex items-center gap-4">
           <span className="text-gunmetal text-sm hidden sm:block">{user?.username}</span>
           <button
