@@ -134,6 +134,14 @@ def upgrade() -> None:
     op.execute(
         f"UPDATE app_settings SET company_id = '{DEFAULT_COMPANY_ID}' WHERE company_id IS NULL"
     )
+    # Deduplicar: si hay varias filas con el mismo company_id (situación normal
+    # cuando existía una configuración por usuario), conservar solo la de menor id.
+    op.execute(
+        "DELETE FROM app_settings "
+        "WHERE id NOT IN ("
+        "  SELECT MIN(id) FROM app_settings GROUP BY company_id"
+        ")"
+    )
     # Una sola configuración por empresa
     op.create_unique_constraint("uq_app_settings_company_id", "app_settings", ["company_id"])
     op.create_index("ix_app_settings_company_id", "app_settings", ["company_id"])
