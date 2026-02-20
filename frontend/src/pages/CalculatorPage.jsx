@@ -14,6 +14,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   getInventoryFilaments,
   getInventoryItems,
@@ -45,6 +46,7 @@ import { Calculator, Save, Plus, Trash2, AlertTriangle } from 'lucide-react';
  * @returns {JSX.Element} Formulario de calculadora y panel de resultados
  */
 export default function CalculatorPage() {
+  const [searchParams] = useSearchParams();
   /** @type {[Array, Function]} Lista de items de inventario tipo Filamento */
   const [filaments, setFilaments] = useState([]);
   /** @type {[Array, Function]} Lista de impresoras disponibles del usuario */
@@ -123,6 +125,8 @@ export default function CalculatorPage() {
   // impresoras y configuracion en paralelo.
   // Preselecciona el primer filamento y la primera impresora si existen,
   // y establece el margen de ganancia por defecto segun la configuracion.
+  // Si hay URL params provenientes del Slicer (?weight_grams, ?print_time_hours,
+  // ?filament_type), los aplica tras cargar los datos.
   useEffect(() => {
     Promise.all([getInventoryFilaments(), getInventoryItems(), getPrinters(), getSettings()])
       .then(([fRes, allRes, pRes, sRes]) => {
@@ -135,16 +139,39 @@ export default function CalculatorPage() {
         setPrinters(pRes.data);
         setSettings(sRes.data);
 
-        if (pRes.data.length > 0) {
-          setForm((prev) => ({ ...prev, printer_id: pRes.data[0].id }));
+        // Valores base: primera impresora, primer filamento, margen por defecto
+        const updates = { margin_percent: sRes.data.default_margin_percent };
+        if (pRes.data.length > 0) updates.printer_id = pRes.data[0].id;
+        if (filamentItems.length > 0) updates.inventory_item_id = filamentItems[0].id;
+
+        // Aplicar URL params del Slicer si están presentes
+        const weightGrams = searchParams.get('weight_grams');
+        const printTimeHours = searchParams.get('print_time_hours');
+        const filamentType = searchParams.get('filament_type');
+
+        if (weightGrams) updates.weight_grams = parseFloat(weightGrams).toFixed(2);
+        if (printTimeHours) {
+          // Convertir horas a minutos para el formulario
+          updates.print_time_minutes = Math.round(parseFloat(printTimeHours) * 60).toString();
         }
-        if (filamentItems.length > 0) {
-          setForm((prev) => ({ ...prev, inventory_item_id: filamentItems[0].id }));
+        if (filamentType && filamentItems.length > 0) {
+          // Buscar filamento que coincida por tipo (filament_type o nombre)
+          const match = filamentItems.find(
+            (item) =>
+              (item.filament_type || '').toLowerCase() === filamentType.toLowerCase() ||
+              item.name.toLowerCase().includes(filamentType.toLowerCase()),
+          );
+          if (match) updates.inventory_item_id = match.id;
         }
-        setForm((prev) => ({ ...prev, margin_percent: sRes.data.default_margin_percent }));
+
+        setForm((prev) => ({ ...prev, ...updates }));
+
+        if (weightGrams || printTimeHours) {
+          toast.success('Datos del Slicer cargados en la calculadora');
+        }
       })
       .catch(() => toast.error('Error cargando datos'));
-  }, []);
+  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * Actualiza un campo del formulario cuando el usuario modifica un input.

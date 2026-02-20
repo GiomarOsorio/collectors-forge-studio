@@ -35,9 +35,27 @@ services:
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@calculator3d.local}
+    volumes:
+      - slicer_jobs:/slicer_jobs
     restart: unless-stopped
     networks:
       - calculator3d
+
+  slicer:
+    container_name: calculator3d-slicer
+    build:
+      context: ./slicer
+      dockerfile: Containerfile
+    volumes:
+      - slicer_jobs:/slicer_jobs
+    networks:
+      - calculator3d
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   frontend:
     container_name: calculator3d-frontend
@@ -70,3 +88,4 @@ networks:
 
 volumes:
   calculator3d-pgdata:
+  slicer_jobs:

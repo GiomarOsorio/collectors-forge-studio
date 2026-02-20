@@ -24,7 +24,7 @@ from app.models import Company, User, AppSettings, Printer
 from app.services.auth import get_password_hash
 from app.routers import (
     auth, filaments, printers, settings as settings_router, quotes,
-    supplies, client_quotes, inventory, purchase_orders,
+    supplies, client_quotes, inventory, purchase_orders, slicer,
 )
 
 # UUID fijo de la empresa por defecto — coincide con la migración f4a1b9c2d8e7
@@ -81,6 +81,7 @@ app.include_router(client_quotes.router)
 app.include_router(supplies.router)
 app.include_router(inventory.router)
 app.include_router(purchase_orders.router)
+app.include_router(slicer.router)
 
 
 @app.get("/api/health")
@@ -163,7 +164,7 @@ async def create_default_data():
             buildplate_price=35.0,             # Costo de la placa de construcción
             buildplate_lifespan_hours=2000.0,  # Horas de vida útil de la placa
             other_maintenance_per_hour=0.01,   # Otros costos de mantenimiento por hora
-            notes="Impresora principal - BambuLab P1S Combo con AMS",
+            notes="Impresora principal - BambuLab P2S Combo con AMS 2 Pro",
             company_id=DEFAULT_COMPANY_ID,
         )
         db.add(default_printer)

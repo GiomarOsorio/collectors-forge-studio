@@ -10,7 +10,7 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, Calculator, Package, Home } from 'lucide-react';
+import { X, Calculator, Package, Home, Cpu } from 'lucide-react';
 import { useDirtyState } from '../context/DirtyStateContext';
 
 /**
@@ -33,6 +33,14 @@ const APPS = [
     icon: Package,
     route: '/inventory/stock',
     color: '#3B82F6',
+  },
+  {
+    id: 'slicer',
+    name: 'Slicer',
+    description: 'Laminar modelos y calcular tiempos',
+    icon: Cpu,
+    route: '/slicer/upload',
+    color: '#F59E0B',
   },
 ];
 
@@ -153,13 +161,6 @@ export default function AppSwitcherDrawer({ isOpen, onClose }) {
                 );
               })}
 
-              {/* Placeholder para futuras apps */}
-              <div className="flex flex-col items-center gap-3 p-4 rounded-xl bg-[#13171c]/40 border border-[#1e2125]/40 text-center opacity-40 cursor-not-allowed">
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-[#1e2125]">
-                  <span className="text-xl text-gunmetal">+</span>
-                </div>
-                <p className="text-xs text-gunmetal">Próximamente</p>
-              </div>
             </div>
           </div>
 
