@@ -11,6 +11,7 @@ Las tablas de la base de datos se crean y migran a través de Alembic
 (alembic upgrade head) ANTES de arrancar el servidor, no en tiempo de ejecución.
 """
 
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -19,9 +20,12 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.database import async_session
-from app.models import User, AppSettings, Printer
+from app.models import Company, User, AppSettings, Printer
 from app.services.auth import get_password_hash
 from app.routers import auth, filaments, printers, settings as settings_router, quotes, supplies
+
+# UUID fijo de la empresa por defecto — coincide con la migración f4a1b9c2d8e7
+DEFAULT_COMPANY_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
 
 @asynccontextmanager
@@ -104,20 +108,34 @@ async def create_default_data():
         if result.scalar_one_or_none():
             return
 
+        # Crear empresa por defecto si aún no existe (la migración la crea en upgrade,
+        # pero en una instalación fresca sin datos previos puede no estar presente)
+        company_result = await db.execute(
+            select(Company).where(Company.id == DEFAULT_COMPANY_ID)
+        )
+        default_company = company_result.scalar_one_or_none()
+        if not default_company:
+            default_company = Company(id=DEFAULT_COMPANY_ID, name="Calculator3D")
+            db.add(default_company)
+            await db.commit()
+            await db.refresh(default_company)
+
         # Crear usuario admin con contraseña hasheada usando bcrypt
         admin = User(
             username=settings.ADMIN_USERNAME,
             email=settings.ADMIN_EMAIL,
             hashed_password=get_password_hash(settings.ADMIN_PASSWORD),
             is_admin=True,
+            company_id=DEFAULT_COMPANY_ID,
         )
         db.add(admin)
         await db.commit()
         await db.refresh(admin)
 
-        # Crear configuración de aplicación con valores por defecto razonables
+        # Crear configuración de la empresa con valores por defecto razonables
         default_settings = AppSettings(
             user_id=admin.id,
+            company_id=DEFAULT_COMPANY_ID,
             electricity_rate=0.15,        # USD por kWh
             failure_rate_percent=5.0,      # 5% de absorción por fallos de impresión
             labor_cost_per_hour=10.0,      # USD por hora de trabajo manual
@@ -140,6 +158,7 @@ async def create_default_data():
             buildplate_lifespan_hours=2000.0,  # Horas de vida útil de la placa
             other_maintenance_per_hour=0.01,   # Otros costos de mantenimiento por hora
             notes="Impresora principal - BambuLab P1S Combo con AMS",
+            company_id=DEFAULT_COMPANY_ID,
         )
         db.add(default_printer)
 

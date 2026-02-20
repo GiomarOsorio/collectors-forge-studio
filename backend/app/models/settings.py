@@ -7,12 +7,14 @@ obra y margen de ganancia por defecto. Cada usuario tiene exactamente una fila
 en esta tabla (relación uno-a-uno con users).
 """
 
+import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import DateTime, Integer, ForeignKey, Numeric, CheckConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
 from app.database import Base
 
@@ -41,7 +43,12 @@ class AppSettings(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), unique=True)
+    # user_id se mantiene por auditoría (quién creó/modificó) pero ya no es la clave de aislamiento
+    user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    # company_id es el identificador de aislamiento multi-tenant (una fila por empresa)
+    company_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id"), unique=True, nullable=True
+    )
     electricity_rate: Mapped[Decimal] = mapped_column(
         Numeric(12, 6), server_default=text("0.150000")
     )

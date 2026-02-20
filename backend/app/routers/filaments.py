@@ -1,13 +1,13 @@
 """
 Router CRUD para la gestión de filamentos de impresión 3D.
 
-Este módulo expone los endpoints HTTP para crear, leer, actualizar y eliminar
-filamentos registrados en el sistema. Todos los endpoints requieren
-autenticación mediante token JWT.
+Todos los endpoints filtran automáticamente por company_id del usuario
+autenticado, garantizando el aislamiento multi-tenant: cada empresa solo
+ve y gestiona sus propios filamentos.
 
 Endpoints disponibles bajo el prefijo /api/filaments:
-- GET    /           - Lista todos los filamentos ordenados por marca y tipo.
-- GET    /{id}       - Obtiene un filamento específico por su ID.
+- GET    /           - Lista los filamentos de la empresa del usuario.
+- GET    /{id}       - Obtiene un filamento específico de la empresa.
 - POST   /           - Crea un nuevo filamento (devuelve 201 Created).
 - PUT    /{id}       - Actualiza parcialmente un filamento existente.
 - DELETE /{id}       - Elimina un filamento (devuelve 204 No Content).
@@ -29,22 +29,19 @@ router = APIRouter(prefix="/api/filaments", tags=["filaments"])
 @router.get("/", response_model=list[FilamentResponse])
 async def list_filaments(
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Lista todos los filamentos registrados en el sistema.
+    Lista los filamentos de la empresa del usuario autenticado.
 
-    Los resultados se ordenan alfabéticamente por marca y luego por tipo de
-    material para facilitar la selección en el formulario de cotización.
-
-    Args:
-        db: Sesión de base de datos inyectada por FastAPI.
-        _: Usuario autenticado (requerido para acceder al endpoint).
-
-    Returns:
-        list[FilamentResponse]: Lista de todos los filamentos registrados.
+    Filtra por company_id para garantizar el aislamiento multi-tenant.
+    Los resultados se ordenan alfabéticamente por marca y tipo.
     """
-    result = await db.execute(select(Filament).order_by(Filament.brand, Filament.type))
+    result = await db.execute(
+        select(Filament)
+        .where(Filament.company_id == current_user.company_id)
+        .order_by(Filament.brand, Filament.type)
+    )
     return result.scalars().all()
 
 
@@ -52,23 +49,20 @@ async def list_filaments(
 async def get_filament(
     filament_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Obtiene los datos de un filamento específico por su ID.
-
-    Args:
-        filament_id: Identificador numérico del filamento a consultar.
-        db: Sesión de base de datos inyectada por FastAPI.
-        _: Usuario autenticado (requerido para acceder al endpoint).
-
-    Returns:
-        FilamentResponse: Datos completos del filamento encontrado.
+    Obtiene un filamento específico de la empresa del usuario autenticado.
 
     Raises:
-        HTTPException 404: Si no existe ningún filamento con el ID indicado.
+        HTTPException 404: Si no existe o no pertenece a la empresa del usuario.
     """
-    result = await db.execute(select(Filament).where(Filament.id == filament_id))
+    result = await db.execute(
+        select(Filament).where(
+            Filament.id == filament_id,
+            Filament.company_id == current_user.company_id,
+        )
+    )
     filament = result.scalar_one_or_none()
     if not filament:
         raise HTTPException(status_code=404, detail="Filamento no encontrado")
@@ -79,21 +73,14 @@ async def get_filament(
 async def create_filament(
     data: FilamentCreate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Crea un nuevo filamento en el sistema.
+    Crea un nuevo filamento asociado a la empresa del usuario autenticado.
 
-    Args:
-        data: Datos del filamento a crear, validados por FilamentCreate.
-        db: Sesión de base de datos inyectada por FastAPI.
-        _: Usuario autenticado (requerido para acceder al endpoint).
-
-    Returns:
-        FilamentResponse: Datos completos del filamento recién creado,
-            incluyendo el ID asignado y las marcas de tiempo.
+    El company_id se asigna automáticamente desde el usuario autenticado.
     """
-    filament = Filament(**data.model_dump())
+    filament = Filament(**data.model_dump(), company_id=current_user.company_id)
     db.add(filament)
     await db.commit()
     await db.refresh(filament)
@@ -105,33 +92,26 @@ async def update_filament(
     filament_id: int,
     data: FilamentUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Actualiza parcialmente un filamento existente.
+    Actualiza parcialmente un filamento de la empresa del usuario autenticado.
 
-    Solo se modifican los campos incluidos en la solicitud (exclude_unset=True),
-    permitiendo actualizar, por ejemplo, únicamente el precio sin necesidad de
-    re-enviar todos los demás atributos.
-
-    Args:
-        filament_id: Identificador del filamento a actualizar.
-        data: Campos a actualizar con sus nuevos valores.
-        db: Sesión de base de datos inyectada por FastAPI.
-        _: Usuario autenticado (requerido para acceder al endpoint).
-
-    Returns:
-        FilamentResponse: Datos completos del filamento con los cambios aplicados.
+    Solo se modifican los campos incluidos en la solicitud (exclude_unset=True).
 
     Raises:
-        HTTPException 404: Si no existe ningún filamento con el ID indicado.
+        HTTPException 404: Si no existe o no pertenece a la empresa del usuario.
     """
-    result = await db.execute(select(Filament).where(Filament.id == filament_id))
+    result = await db.execute(
+        select(Filament).where(
+            Filament.id == filament_id,
+            Filament.company_id == current_user.company_id,
+        )
+    )
     filament = result.scalar_one_or_none()
     if not filament:
         raise HTTPException(status_code=404, detail="Filamento no encontrado")
 
-    # Aplica solo los campos explícitamente enviados en la solicitud
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(filament, field, value)
 
@@ -144,23 +124,20 @@ async def update_filament(
 async def delete_filament(
     filament_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Elimina un filamento del sistema de forma permanente.
-
-    Args:
-        filament_id: Identificador del filamento a eliminar.
-        db: Sesión de base de datos inyectada por FastAPI.
-        _: Usuario autenticado (requerido para acceder al endpoint).
-
-    Returns:
-        None: Respuesta vacía con código HTTP 204 No Content.
+    Elimina un filamento de la empresa del usuario autenticado.
 
     Raises:
-        HTTPException 404: Si no existe ningún filamento con el ID indicado.
+        HTTPException 404: Si no existe o no pertenece a la empresa del usuario.
     """
-    result = await db.execute(select(Filament).where(Filament.id == filament_id))
+    result = await db.execute(
+        select(Filament).where(
+            Filament.id == filament_id,
+            Filament.company_id == current_user.company_id,
+        )
+    )
     filament = result.scalar_one_or_none()
     if not filament:
         raise HTTPException(status_code=404, detail="Filamento no encontrado")

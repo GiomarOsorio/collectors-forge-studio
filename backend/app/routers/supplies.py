@@ -1,14 +1,15 @@
 """
 Router para la gestión del catálogo de insumos adicionales.
 
-Expone los endpoints CRUD para los insumos (argollas, switches, imanes, etc.)
-que se pueden asociar a cotizaciones en la calculadora.
+Todos los endpoints filtran automáticamente por company_id del usuario
+autenticado, garantizando el aislamiento multi-tenant: cada empresa solo
+ve y gestiona sus propios insumos.
 
 Endpoints disponibles bajo el prefijo /api/supplies:
-- GET  /       - Lista todos los insumos del catálogo.
-- POST /        - Crea un nuevo insumo.
-- PUT  /{id}   - Actualiza un insumo existente.
-- DELETE /{id} - Elimina un insumo del catálogo.
+- GET    /       - Lista los insumos de la empresa del usuario.
+- POST   /       - Crea un nuevo insumo.
+- PUT    /{id}   - Actualiza un insumo existente.
+- DELETE /{id}   - Elimina un insumo del catálogo.
 """
 
 from decimal import Decimal, ROUND_HALF_UP
@@ -55,8 +56,12 @@ async def list_supplies(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Lista todos los insumos del catálogo ordenados por nombre."""
-    result = await db.execute(select(Supply).order_by(Supply.name))
+    """Lista los insumos de la empresa del usuario, ordenados por nombre."""
+    result = await db.execute(
+        select(Supply)
+        .where(Supply.company_id == current_user.company_id)
+        .order_by(Supply.name)
+    )
     return result.scalars().all()
 
 
@@ -67,10 +72,10 @@ async def create_supply(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Crea un nuevo insumo en el catálogo.
+    Crea un nuevo insumo en el catálogo de la empresa del usuario.
 
     Si se proporcionan pack_qty y pack_price, calcula price_per_unit automáticamente.
-    Si no, usa el valor de price_per_unit directamente.
+    El company_id se asigna automáticamente desde el usuario autenticado.
     """
     try:
         computed_price = _compute_price_per_unit(data.pack_qty, data.pack_price, data.price_per_unit)
@@ -79,7 +84,7 @@ async def create_supply(
 
     payload = data.model_dump(exclude={"price_per_unit"})
     payload["price_per_unit"] = computed_price
-    supply = Supply(**payload)
+    supply = Supply(**payload, company_id=current_user.company_id)
     db.add(supply)
     await db.commit()
     await db.refresh(supply)
@@ -94,18 +99,22 @@ async def update_supply(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Actualiza parcialmente un insumo existente.
+    Actualiza parcialmente un insumo de la empresa del usuario autenticado.
 
     Recalcula price_per_unit si se actualizan pack_qty o pack_price.
     """
-    result = await db.execute(select(Supply).where(Supply.id == supply_id))
+    result = await db.execute(
+        select(Supply).where(
+            Supply.id == supply_id,
+            Supply.company_id == current_user.company_id,
+        )
+    )
     supply = result.scalar_one_or_none()
     if not supply:
         raise HTTPException(status_code=404, detail="Insumo no encontrado")
 
     fields = data.model_dump(exclude_unset=True)
 
-    # Determinar valores finales de pack para recalcular si aplica
     new_pack_qty = fields.get("pack_qty", supply.pack_qty)
     new_pack_price = fields.get("pack_price", supply.pack_price)
     new_price_per_unit = fields.get("price_per_unit", supply.price_per_unit)
@@ -129,8 +138,13 @@ async def delete_supply(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Elimina un insumo del catálogo."""
-    result = await db.execute(select(Supply).where(Supply.id == supply_id))
+    """Elimina un insumo de la empresa del usuario autenticado."""
+    result = await db.execute(
+        select(Supply).where(
+            Supply.id == supply_id,
+            Supply.company_id == current_user.company_id,
+        )
+    )
     supply = result.scalar_one_or_none()
     if not supply:
         raise HTTPException(status_code=404, detail="Insumo no encontrado")

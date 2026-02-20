@@ -156,4 +156,76 @@ class SupplyItemRef(BaseModel):
     quantity: Decimal = Field(default=Decimal("1"), gt=0)
 
 
+class QuoteManualRequest(BaseModel):
+    """
+    Esquema de solicitud para cotización manual (sin filamento/impresora registrados).
+
+    Permite calcular el costo de una impresión 3D proporcionando todos los
+    parámetros directamente, sin necesidad de tener filamentos o impresoras
+    pre-registrados en el sistema.
+
+    Los campos de configuración (electricity_rate, failure_rate_percent,
+    labor_cost_per_hour) son opcionales: si se omiten, se usan los valores
+    guardados en la configuración de la empresa del usuario autenticado.
+
+    Atributos de filamento:
+        filament_name:  Nombre descriptivo del material (solo para referencia).
+        price_per_kg:   Precio del filamento en USD por kilogramo.
+
+    Atributos de impresora:
+        power_consumption_watts:    Consumo promedio en vatios durante impresión.
+        purchase_price:             Precio de compra de la impresora en USD.
+        estimated_lifespan_hours:   Vida útil estimada en horas de impresión.
+        nozzle_price:               Costo de reemplazo de boquilla en USD.
+        nozzle_lifespan_hours:      Vida útil de la boquilla en horas.
+        buildplate_price:           Costo de reemplazo de placa de construcción en USD.
+        buildplate_lifespan_hours:  Vida útil de la placa en horas.
+        other_maintenance_per_hour: Otros costos de mantenimiento por hora en USD.
+
+    Atributos de impresión:
+        weight_grams:               Gramos totales de filamento consumidos.
+        print_time_hours:           Horas totales de impresión.
+        preparation_time_hours:     Horas de preparación para mano de obra.
+        post_processing_time_hours: Horas de post-procesado para mano de obra.
+        quantity:                   Número de piezas producidas.
+        margin_percent:             Margen de ganancia (0–100). None usa el default de la empresa.
+
+    Atributos de configuración (opcionales — usan los valores guardados si se omiten):
+        electricity_rate:       Tarifa eléctrica en USD/kWh.
+        failure_rate_percent:   Porcentaje de fallos esperados (0–100).
+        labor_cost_per_hour:    Costo de mano de obra en USD por hora.
+    """
+
+    piece_name: str
+    description: Optional[str] = None
+    client_name: Optional[str] = None
+
+    # Parámetros del filamento
+    filament_name: str = "Material"
+    price_per_kg: Decimal = Field(gt=0)
+
+    # Parámetros de la impresora
+    power_consumption_watts: Decimal = Field(gt=0)
+    purchase_price: Decimal = Field(ge=0)
+    estimated_lifespan_hours: Decimal = Field(gt=0)
+    nozzle_price: Decimal = Field(default=Decimal("0"), ge=0)
+    nozzle_lifespan_hours: Decimal = Field(default=Decimal("500"), gt=0)
+    buildplate_price: Decimal = Field(default=Decimal("0"), ge=0)
+    buildplate_lifespan_hours: Decimal = Field(default=Decimal("2000"), gt=0)
+    other_maintenance_per_hour: Decimal = Field(default=Decimal("0"), ge=0)
+
+    # Parámetros de impresión
+    weight_grams: Decimal = Field(gt=0)
+    print_time_hours: Decimal = Field(gt=0)
+    preparation_time_hours: Decimal = Field(default=Decimal("0"), ge=0)
+    post_processing_time_hours: Decimal = Field(default=Decimal("0"), ge=0)
+    quantity: int = Field(default=1, ge=1)
+    margin_percent: Optional[Decimal] = Field(default=None, ge=0, le=100)
+
+    # Sobrescritura opcional de configuración de la empresa
+    electricity_rate: Optional[Decimal] = Field(default=None, ge=0)
+    failure_rate_percent: Optional[Decimal] = Field(default=None, ge=0, le=100)
+    labor_cost_per_hour: Optional[Decimal] = Field(default=None, ge=0)
+
+
 QuoteCalculateRequest.model_rebuild()

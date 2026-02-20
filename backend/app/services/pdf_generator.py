@@ -101,7 +101,7 @@ def generate_quote_pdf(quote: Quote) -> bytes:
     company_cell = [
         Paragraph("TurtleForge Studio", sCo),
         Spacer(1, 4),
-        Paragraph("Colombia", sCoS),
+        Paragraph("Medellín, Colombia", sCoS),
     ]
     hdr_tbl = Table(
         [[logo_cell, "", company_cell]],
@@ -119,7 +119,10 @@ def generate_quote_pdf(quote: Quote) -> bytes:
 
     # ── 2. BLOQUE CLIENTE (alineado a la derecha) ─────────────────────────────
     if quote.client_name:
-        client_cell: list = [Paragraph(quote.client_name.upper(), sCl)]
+        client_cell: list = [
+            Paragraph("Cliente:", sClS),
+            Paragraph(quote.client_name.upper(), sCl),
+        ]
         if quote.description:
             client_cell += [Spacer(1, 3), Paragraph(quote.description, sClS)]
         client_tbl = Table(
@@ -228,9 +231,25 @@ def generate_quote_pdf(quote: Quote) -> bytes:
     if quote.notes:
         elements.append(Spacer(1, 6))
         elements.append(Paragraph(f"Notas: {quote.notes}", sNote))
-    elements.append(Spacer(1, 8))
+    elements.append(Spacer(1, 14))
+
+    # Términos y condiciones de pago
+    sTermTitle = ps("TermTitle", fontSize=8, fontName="Helvetica-Bold", textColor=_DARK)
+    sTermItem  = ps("TermItem",  fontSize=8, fontName="Helvetica",      textColor=_GRAY)
+    elementos_terminos = [
+        Paragraph("Términos de pago y envío:", sTermTitle),
+        Spacer(1, 4),
+        Paragraph("• Una vez aprobada la cotización, el cliente debe realizar el pago del 50% del monto total.", sTermItem),
+        Paragraph("• Antes de realizar el envío, el cliente debe cancelar el 50% restante.", sTermItem),
+        Paragraph("• No se despacha ningún pedido sin haber recibido el pago completo correspondiente.", sTermItem),
+        Paragraph("• Los gastos de envío corren por cuenta del cliente.", sTermItem),
+    ]
+    for elem in elementos_terminos:
+        elements.append(elem)
+
+    elements.append(Spacer(1, 12))
     elements.append(Paragraph(
-        f"Cotización generada el {datetime.utcnow().strftime('%d-%m-%Y')} · TurtleForge Cost",
+        f"Cotización generada el {datetime.utcnow().strftime('%d-%m-%Y')} · TurtleForge Cost · Medellín, Colombia",
         sNote,
     ))
 

@@ -20,6 +20,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   Calculator,
+  FileEdit,
   Layers,
   Printer,
   History,
@@ -43,6 +44,7 @@ import {
  */
 const navItems = [
   { to: '/', icon: Calculator, label: 'Calculadora' },
+  { to: '/manual', icon: FileEdit, label: 'Cotiz. Manual' },
   { to: '/filaments', icon: Layers, label: 'Filamentos' },
   { to: '/supplies', icon: Package, label: 'Insumos' },
   { to: '/printers', icon: Printer, label: 'Impresoras' },
