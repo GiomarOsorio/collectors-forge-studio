@@ -53,12 +53,15 @@ async def get_settings(
             parámetros económicos (tarifa eléctrica, margen, moneda, etc.).
     """
     result = await db.execute(
-        select(AppSettings).where(AppSettings.user_id == current_user.id)
+        select(AppSettings).where(AppSettings.company_id == current_user.company_id)
     )
     settings = result.scalar_one_or_none()
     if not settings:
-        # Crear configuración por defecto si no existe para este usuario
-        settings = AppSettings(user_id=current_user.id)
+        # Crear configuración por defecto si no existe para esta empresa
+        settings = AppSettings(
+            user_id=current_user.id,
+            company_id=current_user.company_id,
+        )
         db.add(settings)
         await db.commit()
         await db.refresh(settings)
@@ -89,12 +92,15 @@ async def update_settings(
             sus parámetros reflejando los cambios aplicados.
     """
     result = await db.execute(
-        select(AppSettings).where(AppSettings.user_id == current_user.id)
+        select(AppSettings).where(AppSettings.company_id == current_user.company_id)
     )
     settings = result.scalar_one_or_none()
     if not settings:
         # Crear configuración base si no existe antes de aplicar los cambios
-        settings = AppSettings(user_id=current_user.id)
+        settings = AppSettings(
+            user_id=current_user.id,
+            company_id=current_user.company_id,
+        )
         db.add(settings)
         await db.commit()
         await db.refresh(settings)

@@ -115,15 +115,14 @@ async def register(
         username=user_data.username,
         email=user_data.email,
         hashed_password=get_password_hash(user_data.password),
+        company_id=current_user.company_id,  # Mismo company que el admin que registra
     )
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)
 
-    # Crear configuración por defecto para el nuevo usuario al momento del registro
-    default_settings = AppSettings(user_id=new_user.id)
-    db.add(default_settings)
-    await db.commit()
+    # No se crea configuración de usuario: la empresa ya tiene una configuración compartida.
+    # Si por algún motivo no existiera, se crea automáticamente en el primer acceso a /api/settings.
 
     return new_user
 

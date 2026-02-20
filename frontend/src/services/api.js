@@ -254,6 +254,25 @@ export const updateSettings = (data) => api.put('/settings/', data);
 export const calculateQuote = (data) => api.post('/quotes/calculate', data);
 
 /**
+ * Calcula el costo de una cotizacion manual (sin filamento/impresora registrados).
+ * Permite calcular el desglose proporcionando todos los parametros directamente.
+ *
+ * @param {Object} data - Datos completos de la cotizacion manual
+ * @param {string} data.piece_name - Nombre de la pieza
+ * @param {string} data.filament_name - Nombre descriptivo del material
+ * @param {number} data.price_per_kg - Precio del filamento en USD/kg
+ * @param {number} data.power_consumption_watts - Consumo de la impresora en watts
+ * @param {number} data.purchase_price - Precio de compra de la impresora en USD
+ * @param {number} data.estimated_lifespan_hours - Vida util de la impresora en horas
+ * @param {number} data.weight_grams - Peso del filamento en gramos
+ * @param {number} data.print_time_hours - Tiempo de impresion en horas
+ * @param {number} data.quantity - Cantidad de unidades
+ * @param {number|null} data.margin_percent - Porcentaje de margen (null = usa el default)
+ * @returns {Promise<import('axios').AxiosResponse>} Respuesta con el desglose de costos
+ */
+export const calculateManualQuote = (data) => api.post('/quotes/calculate/manual', data);
+
+/**
  * Crea y guarda una cotizacion en el historial.
  *
  * @param {Object} data - Datos de la cotizacion (misma estructura que calculateQuote)
