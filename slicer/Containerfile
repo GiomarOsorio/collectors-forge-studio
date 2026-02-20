@@ -14,13 +14,19 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Descargar y extraer OrcaSlicer nightly (AppImage Ubuntu 24.04)
-# El AppImage se extrae con --appimage-extract porque FUSE no esta en contenedores
+# El AppImage se extrae con --appimage-extract porque FUSE no esta en contenedores.
+# La ruta del binario varía entre versiones, por eso se usa find para localizarlo
+# y crear un symlink fijo en /usr/local/bin/OrcaSlicer.
 RUN wget -q -O /tmp/OrcaSlicer.AppImage \
     "https://github.com/OrcaSlicer/OrcaSlicer/releases/download/nightly-builds/OrcaSlicer_Linux_AppImage_Ubuntu2404_nightly.AppImage" \
     && chmod +x /tmp/OrcaSlicer.AppImage \
     && cd /opt && /tmp/OrcaSlicer.AppImage --appimage-extract \
     && rm /tmp/OrcaSlicer.AppImage \
-    && chmod +x /opt/squashfs-root/usr/bin/OrcaSlicer
+    && ORCA_BIN=$(find /opt/squashfs-root -maxdepth 5 \( -name "OrcaSlicer" -o -name "orca-slicer" \) -type f | head -1) \
+    && echo "OrcaSlicer binary found at: $ORCA_BIN" \
+    && test -n "$ORCA_BIN" \
+    && chmod +x "$ORCA_BIN" \
+    && ln -sf "$ORCA_BIN" /usr/local/bin/OrcaSlicer
 
 # Instalar dependencias Python del wrapper FastAPI
 WORKDIR /app
