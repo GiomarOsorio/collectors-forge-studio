@@ -23,7 +23,7 @@ app = FastAPI(title="TurtleForge Slicer Service", version="1.0.0")
 JOBS_DIR = Path("/slicer_jobs")
 JOBS_DIR.mkdir(exist_ok=True)
 
-ORCA_BIN = Path("/opt/squashfs-root/usr/bin/OrcaSlicer")
+ORCA_BIN = Path("/usr/local/bin/OrcaSlicer")
 
 
 class SliceRequest(BaseModel):
