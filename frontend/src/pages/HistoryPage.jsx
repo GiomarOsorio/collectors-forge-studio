@@ -12,9 +12,9 @@
  */
 
 import { useState, useEffect } from 'react';
-import { getQuotes, deleteQuote, downloadQuotePdf } from '../services/api';
+import { getQuotes, deleteQuote } from '../services/api';
 import toast from 'react-hot-toast';
-import { FileDown, Trash2, Eye, X } from 'lucide-react';
+import { Trash2, Eye, X } from 'lucide-react';
 
 /**
  * Componente de la pagina de historial de cotizaciones.
@@ -41,45 +41,18 @@ export default function HistoryPage() {
   useEffect(() => { load(); }, []);
 
   /**
-   * Elimina una cotizacion previa confirmacion del usuario.
-   * Muestra un dialogo nativo de confirmacion antes de proceder.
+   * Elimina un registro de costo de impresión previa confirmación.
    *
-   * @param {number} id - ID de la cotizacion a eliminar
+   * @param {number} id - ID del registro a eliminar
    */
   const handleDelete = async (id) => {
-    if (!confirm('¿Eliminar esta cotización?')) return;
+    if (!confirm('¿Eliminar este registro?')) return;
     try {
       await deleteQuote(id);
-      toast.success('Cotización eliminada');
+      toast.success('Registro eliminado');
       load();
     } catch {
       toast.error('Error al eliminar');
-    }
-  };
-
-  /**
-   * Descarga el PDF de una cotizacion.
-   * Crea un enlace temporal en el DOM para forzar la descarga del archivo.
-   * El nombre del archivo sigue el formato: cotizacion_[nombre_pieza]_[id].pdf
-   *
-   * @param {Object} q - Objeto de cotizacion con id y piece_name
-   */
-  const handleDownloadPdf = async (q) => {
-    try {
-      const res = await downloadQuotePdf(q.id);
-      // Crear un URL temporal desde el blob del PDF
-      const url = window.URL.createObjectURL(new Blob([res.data]));
-      // Crear un enlace invisible, asignar la URL y forzar el clic para descargar
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `cotizacion_${q.piece_name.replace(/\s/g, '_')}_${q.id}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      // Limpiar el enlace temporal y liberar la URL del blob
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch {
-      toast.error('Error al descargar PDF');
     }
   };
 
@@ -96,7 +69,7 @@ export default function HistoryPage() {
 
   return (
     <div>
-      <h2 className="tf-page-title">Historial de Cotizaciones</h2>
+      <h2 className="tf-page-title">Historial de Costos de Impresión</h2>
 
       {/* Detail modal */}
       {selected && (
@@ -145,11 +118,8 @@ export default function HistoryPage() {
                 </>
               )}
             </div>
-            <div className="mt-4 flex gap-2">
-              <button onClick={() => handleDownloadPdf(selected)}
-                className="tf-btn-primary flex-1">
-                <FileDown size={18} /> Descargar PDF
-              </button>
+            <div className="mt-4 text-xs text-gunmetal">
+              Este registro corresponde a un cálculo de costo de impresión, no a una cotización de cliente.
             </div>
           </div>
         </div>
@@ -182,13 +152,12 @@ export default function HistoryPage() {
                 </td>
                 <td className="tf-td-right">
                   <button onClick={() => setSelected(q)} className="tf-btn-ghost mr-2" title="Ver detalle"><Eye size={16} /></button>
-                  <button onClick={() => handleDownloadPdf(q)} className="tf-btn-ghost mr-2" title="PDF"><FileDown size={16} /></button>
                   <button onClick={() => handleDelete(q.id)} className="tf-btn-danger" title="Eliminar"><Trash2 size={16} /></button>
                 </td>
               </tr>
             ))}
             {quotes.length === 0 && (
-              <tr><td colSpan={6} className="px-5 py-12 text-center text-gunmetal">No hay cotizaciones guardadas.</td></tr>
+              <tr><td colSpan={6} className="px-5 py-12 text-center text-gunmetal">No hay registros de costos de impresión.</td></tr>
             )}
           </tbody>
         </table>

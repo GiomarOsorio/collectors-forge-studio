@@ -21,6 +21,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   Calculator,
   FileEdit,
+  FileText,
   Layers,
   Printer,
   History,
@@ -44,11 +45,12 @@ import {
  */
 const navItems = [
   { to: '/', icon: Calculator, label: 'Calculadora' },
-  { to: '/manual', icon: FileEdit, label: 'Cotiz. Manual' },
+  { to: '/quotes', icon: FileText, label: 'Cotizaciones' },
+  { to: '/manual', icon: FileEdit, label: 'Nueva Cotización' },
   { to: '/filaments', icon: Layers, label: 'Filamentos' },
   { to: '/supplies', icon: Package, label: 'Insumos' },
   { to: '/printers', icon: Printer, label: 'Impresoras' },
-  { to: '/history', icon: History, label: 'Historial' },
+  { to: '/history', icon: History, label: 'Costos Impresión' },
   { to: '/settings', icon: Settings, label: 'Configuración' },
 ];
 

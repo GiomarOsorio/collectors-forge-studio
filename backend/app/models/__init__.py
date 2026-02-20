@@ -11,7 +11,8 @@ Exportaciones:
     Filament:          Modelo de filamento de impresión 3D.
     Printer:           Modelo de impresora 3D.
     AppSettings:       Modelo de configuración de la aplicación por empresa.
-    Quote:             Modelo de cotización de impresión guardada.
+    Quote:             Modelo de costo de impresión guardado (historial calculadora).
+    ClientQuote:       Modelo de cotización de cliente con múltiples productos.
     Supply:            Modelo de insumo adicional del catálogo (argollas, etc.).
     ElectricityTariff: Modelo de tarifa de electricidad EPM por mes y estrato.
 """
@@ -22,7 +23,11 @@ from app.models.filament import Filament
 from app.models.printer import Printer
 from app.models.settings import AppSettings
 from app.models.quote import Quote
+from app.models.client_quote import ClientQuote
 from app.models.supply import Supply
 from app.models.electricity_tariff import ElectricityTariff
 
-__all__ = ["Company", "User", "Filament", "Printer", "AppSettings", "Quote", "Supply", "ElectricityTariff"]
+__all__ = [
+    "Company", "User", "Filament", "Printer", "AppSettings",
+    "Quote", "ClientQuote", "Supply", "ElectricityTariff",
+]
