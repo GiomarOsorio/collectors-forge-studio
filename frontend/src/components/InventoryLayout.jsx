@@ -14,6 +14,8 @@ import AppSwitcherDrawer from './AppSwitcherDrawer';
 import {
   PackageOpen,
   ShoppingCart,
+  Layers,
+  Package,
   LogOut,
   Menu,
 } from 'lucide-react';
@@ -22,7 +24,9 @@ import {
  * Elementos del menú de navegación de la app Inventario.
  */
 const navItems = [
-  { to: '/inventory/stock', icon: PackageOpen, label: 'Stock' },
+  { to: '/inventory/filaments', icon: Layers, label: 'Filamentos' },
+  { to: '/inventory/supplies', icon: Package, label: 'Insumos' },
+  { to: '/inventory/stock', icon: PackageOpen, label: 'Todo el stock' },
   { to: '/inventory/purchases', icon: ShoppingCart, label: 'Pedidos' },
 ];
 

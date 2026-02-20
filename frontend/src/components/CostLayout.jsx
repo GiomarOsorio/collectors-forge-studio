@@ -17,12 +17,10 @@ import {
   Calculator,
   FileEdit,
   FileText,
-  Layers,
   Printer,
   History,
   Settings,
   LogOut,
-  Package,
   Menu,
 } from 'lucide-react';
 
@@ -34,8 +32,6 @@ const navItems = [
   { to: '/cost/calculator', icon: Calculator, label: 'Calculadora' },
   { to: '/cost/quotes', icon: FileText, label: 'Cotizaciones' },
   { to: '/cost/manual', icon: FileEdit, label: 'Nueva Cotización' },
-  { to: '/cost/filaments', icon: Layers, label: 'Filamentos' },
-  { to: '/cost/supplies', icon: Package, label: 'Insumos' },
   { to: '/cost/printers', icon: Printer, label: 'Impresoras' },
   { to: '/cost/history', icon: History, label: 'Costos Impresión' },
   { to: '/cost/settings', icon: Settings, label: 'Configuración' },

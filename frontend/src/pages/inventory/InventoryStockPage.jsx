@@ -10,14 +10,17 @@
  * filament_color, filament_diameter, filament_density, weight_per_roll).
  * Los ítems de otras categorías incluyen price_per_unit para la calculadora.
  *
+ * Acepta props opcionales para filtrar por categoría (usado por las páginas
+ * de Filamentos e Insumos que comparten este componente).
+ *
  * @module pages/inventory/InventoryStockPage
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import {
   Plus, Pencil, Trash2, X, AlertTriangle, ShoppingCart,
-  PackageOpen, CheckCircle, ChevronDown,
+  PackageOpen, CheckCircle, ChevronUp, ChevronDown,
 } from 'lucide-react';
 import {
   getInventoryItems,
@@ -27,6 +30,9 @@ import {
   flagInventoryItem,
   adjustInventoryItem,
 } from '../../services/api';
+
+/** Ítems por página en la tabla */
+const PAGE_SIZE = 15;
 
 /** Categorías predefinidas de inventario */
 const CATEGORIES = [
@@ -38,6 +44,9 @@ const CATEGORIES = [
   'Herramienta',
   'General',
 ];
+
+/** Tipos de filamento disponibles */
+const FILAMENT_TYPES = ['PLA', 'PETG', 'ABS', 'TPU', 'ASA', 'Nylon', 'PLA+', 'PETG+', 'Otro'];
 
 /** Unidades de medida disponibles */
 const UNITS = ['unidades', 'kg', 'g', 'litros', 'ml', 'm', 'cm', 'láminas', 'piezas', 'cajas'];
@@ -55,26 +64,32 @@ const EMPTY_FORM = {
   supplier_contact: '',
   supplier_info: '',
   notes: '',
-  // Campos especificos para items de categoria "Filamento" (usados por la calculadora)
   price_per_kg: '',
   filament_brand: '',
-  filament_type: '',
+  filament_type: 'PLA',
   filament_color: '',
-  filament_diameter: '',
-  filament_density: '',
-  weight_per_roll: '',
-  // Campo para insumos de otras categorias (precio unitario para la calculadora)
+  filament_diameter: '1.75',
+  filament_density: '1.24',
+  weight_per_roll: '1000',
   price_per_unit: '',
 };
+
+/**
+ * Devuelve un número para ordenar el estado de stock.
+ * OK=0, Stock bajo=1, Comprar=2
+ */
+function getStatusOrder(item) {
+  if (item.needs_purchase) return 2;
+  const low = parseFloat(item.min_quantity) > 0 && parseFloat(item.quantity) < parseFloat(item.min_quantity);
+  return low ? 1 : 0;
+}
 
 /**
  * Etiqueta de estado de stock de un ítem.
  */
 function StockBadge({ item }) {
   const lowStock = parseFloat(item.min_quantity) > 0 && parseFloat(item.quantity) < parseFloat(item.min_quantity);
-  const needsPurchase = item.needs_purchase;
-
-  if (needsPurchase) {
+  if (item.needs_purchase) {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-500/20 text-orange-400 border border-orange-500/30">
         <ShoppingCart size={10} /> Comprar
@@ -96,19 +111,54 @@ function StockBadge({ item }) {
 }
 
 /**
+ * Encabezado de columna ordenable.
+ *
+ * @param {Object} props
+ * @param {string} props.label - Texto del encabezado
+ * @param {string} props.sortKey - Clave del campo a ordenar
+ * @param {{key:string, direction:string}} props.sortConfig - Estado de ordenamiento actual
+ * @param {Function} props.onSort - Callback al hacer click
+ * @param {string} [props.className] - Clase CSS del th
+ */
+function SortTh({ label, sortKey, sortConfig, onSort, className = 'tf-th' }) {
+  const active = sortConfig.key === sortKey;
+  return (
+    <th className={className}>
+      <button
+        onClick={() => onSort(sortKey)}
+        className={`flex items-center gap-1 transition-colors group ${active ? 'text-blue-400' : 'hover:text-tech-white'}`}
+      >
+        <span>{label}</span>
+        <span className={`transition-opacity ${active ? 'opacity-100' : 'opacity-30 group-hover:opacity-60'}`}>
+          {active && sortConfig.direction === 'desc'
+            ? <ChevronDown size={13} />
+            : <ChevronUp size={13} />}
+        </span>
+      </button>
+    </th>
+  );
+}
+
+/**
  * Página de stock del inventario.
+ *
+ * @param {Object} props
+ * @param {string|null} [props.categoryFilter] - Si se pasa, solo muestra ítems de esa categoría
+ * @param {string|null} [props.excludeCategory] - Si se pasa, excluye ítems de esa categoría
  * @returns {JSX.Element}
  */
-export default function InventoryStockPage() {
+export default function InventoryStockPage({ categoryFilter = null, excludeCategory = null }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
-  const [adjustModal, setAdjustModal] = useState(null); // {item, value}
+  const [adjustModal, setAdjustModal] = useState(null);
   const [filterCategory, setFilterCategory] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [currentPage, setCurrentPage] = useState(1);
 
   const load = async () => {
     try {
@@ -123,9 +173,24 @@ export default function InventoryStockPage() {
 
   useEffect(() => { load(); }, []);
 
+  // Resetear página al cambiar filtros
+  useEffect(() => { setCurrentPage(1); }, [filterCategory, filterStatus]);
+
+  /** Alterna el criterio de ordenamiento al hacer click en un encabezado. */
+  const handleSort = (key) => {
+    setSortConfig((prev) => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
+    }));
+    setCurrentPage(1);
+  };
+
   const openCreate = () => {
     setEditItem(null);
-    setForm(EMPTY_FORM);
+    setForm({
+      ...EMPTY_FORM,
+      category: categoryFilter || 'General',
+    });
     setModalOpen(true);
   };
 
@@ -143,6 +208,14 @@ export default function InventoryStockPage() {
       supplier_contact: item.supplier_contact || '',
       supplier_info: item.supplier_info || '',
       notes: item.notes || '',
+      price_per_kg: item.price_per_kg != null ? String(item.price_per_kg) : '',
+      filament_brand: item.filament_brand || '',
+      filament_type: item.filament_type || 'PLA',
+      filament_color: item.filament_color || '',
+      filament_diameter: item.filament_diameter != null ? String(item.filament_diameter) : '1.75',
+      filament_density: item.filament_density != null ? String(item.filament_density) : '1.24',
+      weight_per_roll: item.weight_per_roll != null ? String(item.weight_per_roll) : '1000',
+      price_per_unit: item.price_per_unit != null ? String(item.price_per_unit) : '',
     });
     setModalOpen(true);
   };
@@ -156,6 +229,7 @@ export default function InventoryStockPage() {
     if (!form.name.trim()) { toast.error('El nombre es obligatorio'); return; }
     setSaving(true);
     try {
+      const isFilament = form.category === 'Filamento';
       const payload = {
         name: form.name.trim(),
         category: form.category,
@@ -168,6 +242,15 @@ export default function InventoryStockPage() {
         supplier_contact: form.supplier_contact || null,
         supplier_info: form.supplier_info || null,
         notes: form.notes || null,
+        // Campos de filamento o insumo según categoría
+        price_per_kg: isFilament && form.price_per_kg ? parseFloat(form.price_per_kg) : null,
+        filament_brand: isFilament ? form.filament_brand || null : null,
+        filament_type: isFilament ? form.filament_type || null : null,
+        filament_color: isFilament ? form.filament_color || null : null,
+        filament_diameter: isFilament && form.filament_diameter ? parseFloat(form.filament_diameter) : null,
+        filament_density: isFilament && form.filament_density ? parseFloat(form.filament_density) : null,
+        weight_per_roll: isFilament && form.weight_per_roll ? parseFloat(form.weight_per_roll) : null,
+        price_per_unit: !isFilament && form.price_per_unit ? parseFloat(form.price_per_unit) : null,
       };
       if (editItem) {
         await updateInventoryItem(editItem.id, payload);
@@ -219,31 +302,75 @@ export default function InventoryStockPage() {
     }
   };
 
-  // Filtros
-  const categories = [...new Set(items.map((i) => i.category))].sort();
-  const filtered = items.filter((item) => {
-    if (filterCategory && item.category !== filterCategory) return false;
-    if (filterStatus === 'bajo') {
-      const low = parseFloat(item.min_quantity) > 0 && parseFloat(item.quantity) < parseFloat(item.min_quantity);
-      if (!low && !item.needs_purchase) return false;
-    }
-    if (filterStatus === 'ok') {
-      const low = parseFloat(item.min_quantity) > 0 && parseFloat(item.quantity) < parseFloat(item.min_quantity);
-      if (low || item.needs_purchase) return false;
-    }
-    return true;
-  });
+  // Filtrado
+  const categories = useMemo(
+    () => [...new Set(items.map((i) => i.category))].sort(),
+    [items],
+  );
+
+  const filtered = useMemo(() => {
+    return items.filter((item) => {
+      if (categoryFilter && item.category !== categoryFilter) return false;
+      if (excludeCategory && item.category === excludeCategory) return false;
+      if (filterCategory && item.category !== filterCategory) return false;
+      if (filterStatus === 'bajo') {
+        const low = parseFloat(item.min_quantity) > 0 && parseFloat(item.quantity) < parseFloat(item.min_quantity);
+        if (!low && !item.needs_purchase) return false;
+      }
+      if (filterStatus === 'ok') {
+        const low = parseFloat(item.min_quantity) > 0 && parseFloat(item.quantity) < parseFloat(item.min_quantity);
+        if (low || item.needs_purchase) return false;
+      }
+      return true;
+    });
+  }, [items, categoryFilter, excludeCategory, filterCategory, filterStatus]);
+
+  // Ordenamiento
+  const sorted = useMemo(() => {
+    if (!sortConfig.key) return filtered;
+    const { key, direction } = sortConfig;
+    const dir = direction === 'asc' ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      if (key === 'quantity' || key === 'min_quantity') {
+        return (parseFloat(a[key]) - parseFloat(b[key])) * dir;
+      }
+      if (key === 'status') {
+        return (getStatusOrder(a) - getStatusOrder(b)) * dir;
+      }
+      if (key === 'supplier_name') {
+        if (!a.supplier_name && !b.supplier_name) return 0;
+        if (!a.supplier_name) return 1;   // nulos siempre al final
+        if (!b.supplier_name) return -1;
+        return a.supplier_name.toLowerCase().localeCompare(b.supplier_name.toLowerCase()) * dir;
+      }
+      // Campos de texto (name, category)
+      return (a[key] || '').toLowerCase().localeCompare((b[key] || '').toLowerCase()) * dir;
+    });
+  }, [filtered, sortConfig]);
+
+  // Paginación
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const paginated = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const alertCount = items.filter(
     (i) => i.needs_purchase || (parseFloat(i.min_quantity) > 0 && parseFloat(i.quantity) < parseFloat(i.min_quantity))
   ).length;
 
+  // Título adaptado según props
+  const pageTitle = categoryFilter === 'Filamento'
+    ? 'Filamentos'
+    : excludeCategory === 'Filamento'
+      ? 'Insumos y Accesorios'
+      : 'Todo el stock';
+
+  const isFilamentForm = form.category === 'Filamento';
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="tf-page-title mb-0">Stock de Inventario</h2>
-          {alertCount > 0 && (
+          <h2 className="tf-page-title mb-0">{pageTitle}</h2>
+          {alertCount > 0 && !categoryFilter && !excludeCategory && (
             <p className="text-sm text-orange-400 mt-1 flex items-center gap-1">
               <AlertTriangle size={14} />
               {alertCount} ítem{alertCount > 1 ? 's' : ''} requiere{alertCount === 1 ? '' : 'n'} atención
@@ -255,16 +382,18 @@ export default function InventoryStockPage() {
         </button>
       </div>
 
-      {/* Filtros */}
+      {/* Filtros — se ocultan cuando la página ya filtra por categoría fija */}
       <div className="flex flex-wrap gap-3 mb-4">
-        <select
-          value={filterCategory}
-          onChange={(e) => setFilterCategory(e.target.value)}
-          className="tf-input py-1.5 text-sm w-auto"
-        >
-          <option value="">Todas las categorías</option>
-          {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
+        {!categoryFilter && !excludeCategory && (
+          <select
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+            className="tf-input py-1.5 text-sm w-auto"
+          >
+            <option value="">Todas las categorías</option>
+            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        )}
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
@@ -281,12 +410,14 @@ export default function InventoryStockPage() {
         <table className="w-full min-w-[700px]">
           <thead className="tf-thead border-b">
             <tr>
-              <th className="tf-th">Nombre</th>
-              <th className="tf-th hidden md:table-cell">Categoría</th>
-              <th className="tf-th-right">Cantidad</th>
-              <th className="tf-th-right hidden sm:table-cell">Mínimo</th>
-              <th className="tf-th hidden sm:table-cell">Estado</th>
-              <th className="tf-th hidden lg:table-cell">Proveedor</th>
+              <SortTh label="Nombre" sortKey="name" sortConfig={sortConfig} onSort={handleSort} />
+              {!categoryFilter && (
+                <SortTh label="Categoría" sortKey="category" sortConfig={sortConfig} onSort={handleSort} className="tf-th hidden md:table-cell" />
+              )}
+              <SortTh label="Cantidad" sortKey="quantity" sortConfig={sortConfig} onSort={handleSort} className="tf-th-right" />
+              <SortTh label="Mínimo" sortKey="min_quantity" sortConfig={sortConfig} onSort={handleSort} className="tf-th-right hidden sm:table-cell" />
+              <SortTh label="Estado" sortKey="status" sortConfig={sortConfig} onSort={handleSort} className="tf-th hidden sm:table-cell" />
+              <SortTh label="Proveedor" sortKey="supplier_name" sortConfig={sortConfig} onSort={handleSort} className="tf-th hidden lg:table-cell" />
               <th className="tf-th-right">Acciones</th>
             </tr>
           </thead>
@@ -303,7 +434,7 @@ export default function InventoryStockPage() {
                 </td>
               </tr>
             )}
-            {filtered.map((item) => {
+            {paginated.map((item) => {
               const lowStock = parseFloat(item.min_quantity) > 0 && parseFloat(item.quantity) < parseFloat(item.min_quantity);
               const alert = item.needs_purchase || lowStock;
               return (
@@ -314,9 +445,11 @@ export default function InventoryStockPage() {
                     </span>
                     {item.description && <p className="text-xs text-gunmetal truncate max-w-[180px]">{item.description}</p>}
                   </td>
-                  <td className="tf-td hidden md:table-cell">
-                    <span className="px-2 py-0.5 rounded text-xs bg-[#1e2125] text-steel">{item.category}</span>
-                  </td>
+                  {!categoryFilter && (
+                    <td className="tf-td hidden md:table-cell">
+                      <span className="px-2 py-0.5 rounded text-xs bg-[#1e2125] text-steel">{item.category}</span>
+                    </td>
+                  )}
                   <td className="tf-td-right">
                     <span className={`font-semibold ${alert ? 'text-red-400' : 'text-tech-white'}`}>
                       {parseFloat(item.quantity).toLocaleString('es-CO', { maximumFractionDigits: 3 })}
@@ -324,7 +457,9 @@ export default function InventoryStockPage() {
                     <span className="text-gunmetal text-xs ml-1">{item.unit}</span>
                   </td>
                   <td className="tf-td-right hidden sm:table-cell text-steel text-sm">
-                    {parseFloat(item.min_quantity) > 0 ? parseFloat(item.min_quantity).toLocaleString('es-CO', { maximumFractionDigits: 3 }) : '—'}
+                    {parseFloat(item.min_quantity) > 0
+                      ? parseFloat(item.min_quantity).toLocaleString('es-CO', { maximumFractionDigits: 3 })
+                      : '—'}
                   </td>
                   <td className="tf-td hidden sm:table-cell">
                     <StockBadge item={item} />
@@ -334,7 +469,6 @@ export default function InventoryStockPage() {
                   </td>
                   <td className="tf-td-right">
                     <div className="flex items-center justify-end gap-1">
-                      {/* Ajustar cantidad */}
                       <button
                         onClick={() => setAdjustModal({ item, value: '' })}
                         className="tf-btn-ghost p-1.5 text-xs"
@@ -342,7 +476,6 @@ export default function InventoryStockPage() {
                       >
                         ±
                       </button>
-                      {/* Toggle bandera */}
                       <button
                         onClick={() => handleFlag(item.id)}
                         className={`tf-btn-ghost p-1.5 ${item.needs_purchase ? 'text-orange-400' : ''}`}
@@ -350,11 +483,9 @@ export default function InventoryStockPage() {
                       >
                         <ShoppingCart size={14} />
                       </button>
-                      {/* Editar */}
                       <button onClick={() => openEdit(item)} className="tf-btn-ghost p-1.5" title="Editar">
                         <Pencil size={14} />
                       </button>
-                      {/* Eliminar */}
                       <button onClick={() => handleDelete(item.id)} className="tf-btn-danger p-1.5" title="Eliminar">
                         <Trash2 size={14} />
                       </button>
@@ -366,6 +497,59 @@ export default function InventoryStockPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Paginación */}
+      {!loading && sorted.length > 0 && (
+        <div className="flex items-center justify-between mt-4 text-sm text-steel px-1">
+          <span>
+            {sorted.length} ítem{sorted.length !== 1 ? 's' : ''}
+            {totalPages > 1 && ` · Página ${currentPage} de ${totalPages}`}
+          </span>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="tf-btn-ghost px-3 py-1 text-xs disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                ← Anterior
+              </button>
+              {/* Números de página — máximo 5 visibles */}
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                .reduce((acc, p, idx, arr) => {
+                  if (idx > 0 && p - arr[idx - 1] > 1) acc.push('...');
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((p, idx) =>
+                  p === '...'
+                    ? <span key={`dots-${idx}`} className="px-1 text-gunmetal">…</span>
+                    : (
+                      <button
+                        key={p}
+                        onClick={() => setCurrentPage(p)}
+                        className={`px-2.5 py-1 rounded text-xs transition-colors ${
+                          p === currentPage
+                            ? 'bg-blue-500/20 text-blue-400 font-medium'
+                            : 'tf-btn-ghost'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    )
+                )}
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="tf-btn-ghost px-3 py-1 text-xs disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                Siguiente →
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Modal crear/editar ítem */}
       {modalOpen && (
@@ -387,22 +571,29 @@ export default function InventoryStockPage() {
                   <input name="name" value={form.name} onChange={handleChange}
                     required className="tf-input" placeholder="Ej: PLA Bambu Lab Negro 1kg" />
                 </div>
+                {/* Categoría: readonly si la página ya filtra por una */}
                 <div>
                   <label className="tf-label">Categoría *</label>
-                  <div className="relative">
-                    <input
-                      name="category"
-                      value={form.category}
-                      onChange={handleChange}
-                      list="categories-list"
-                      required
-                      className="tf-input"
-                      placeholder="Selecciona o escribe una categoría"
-                    />
-                    <datalist id="categories-list">
-                      {CATEGORIES.map((c) => <option key={c} value={c} />)}
-                    </datalist>
-                  </div>
+                  {categoryFilter ? (
+                    <input value={categoryFilter} readOnly className="tf-input opacity-60 cursor-not-allowed" />
+                  ) : (
+                    <div className="relative">
+                      <input
+                        name="category"
+                        value={form.category}
+                        onChange={handleChange}
+                        list="categories-list"
+                        required
+                        className="tf-input"
+                        placeholder="Selecciona o escribe una categoría"
+                      />
+                      <datalist id="categories-list">
+                        {CATEGORIES
+                          .filter((c) => !excludeCategory || c !== excludeCategory)
+                          .map((c) => <option key={c} value={c} />)}
+                      </datalist>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="tf-label">Unidad *</label>
@@ -448,6 +639,66 @@ export default function InventoryStockPage() {
                     value={form.unit_cost} onChange={handleChange} className="tf-input" />
                 </div>
               </div>
+
+              {/* Campos específicos para filamentos */}
+              {isFilamentForm && (
+                <div className="border border-blue-500/20 rounded-lg p-4 space-y-4 bg-blue-500/5">
+                  <p className="text-sm font-medium text-blue-400 flex items-center gap-2">
+                    <PackageOpen size={15} /> Datos del filamento (para la calculadora)
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="tf-label">Marca</label>
+                      <input name="filament_brand" value={form.filament_brand} onChange={handleChange}
+                        className="tf-input" placeholder="Ej: Bambu Lab, eSUN" />
+                    </div>
+                    <div>
+                      <label className="tf-label">Tipo</label>
+                      <select name="filament_type" value={form.filament_type} onChange={handleChange}
+                        className="tf-input">
+                        {FILAMENT_TYPES.map((t) => <option key={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="tf-label">Color</label>
+                      <input name="filament_color" value={form.filament_color} onChange={handleChange}
+                        className="tf-input" placeholder="Ej: Negro, Rojo, Gris" />
+                    </div>
+                    <div>
+                      <label className="tf-label">Precio por kg (USD) *</label>
+                      <input name="price_per_kg" type="number" step="0.01" min="0"
+                        value={form.price_per_kg} onChange={handleChange}
+                        className="tf-input" placeholder="Ej: 18.50" required={isFilamentForm} />
+                      <p className="text-xs text-gunmetal mt-1">Usado por la calculadora</p>
+                    </div>
+                    <div>
+                      <label className="tf-label">Peso por rollo (g)</label>
+                      <input name="weight_per_roll" type="number" step="1" min="0"
+                        value={form.weight_per_roll} onChange={handleChange}
+                        className="tf-input" placeholder="Ej: 1000" />
+                    </div>
+                    <div>
+                      <label className="tf-label">Diámetro (mm)</label>
+                      <input name="filament_diameter" type="number" step="0.01" min="0"
+                        value={form.filament_diameter} onChange={handleChange}
+                        className="tf-input" placeholder="Ej: 1.75" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Precio por unidad para insumos (no filamento) */}
+              {!isFilamentForm && (
+                <div>
+                  <label className="tf-label">Precio por unidad para calculadora (USD)</label>
+                  <input name="price_per_unit" type="number" step="0.0001" min="0"
+                    value={form.price_per_unit} onChange={handleChange}
+                    className="tf-input" placeholder="Ej: 0.05" />
+                  <p className="text-xs text-gunmetal mt-1">
+                    Costo que se sumará al cotizar cuando se incluya este insumo
+                  </p>
+                </div>
+              )}
 
               {/* Proveedor */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -501,7 +752,9 @@ export default function InventoryStockPage() {
             <p className="text-steel text-sm mb-4">
               <span className="text-tech-white font-medium">{adjustModal.item.name}</span>
               <br />
-              Actual: <span className="text-blue-400 font-medium">{parseFloat(adjustModal.item.quantity).toLocaleString('es-CO', { maximumFractionDigits: 3 })} {adjustModal.item.unit}</span>
+              Actual: <span className="text-blue-400 font-medium">
+                {parseFloat(adjustModal.item.quantity).toLocaleString('es-CO', { maximumFractionDigits: 3 })} {adjustModal.item.unit}
+              </span>
             </p>
             <label className="tf-label">
               Cantidad a sumar o restar (usa número negativo para restar)
@@ -518,7 +771,8 @@ export default function InventoryStockPage() {
             {adjustModal.value !== '' && !isNaN(parseFloat(adjustModal.value)) && (
               <p className="text-xs text-gunmetal mb-4">
                 Nuevo total: <span className="text-tech-white font-medium">
-                  {(parseFloat(adjustModal.item.quantity) + parseFloat(adjustModal.value)).toLocaleString('es-CO', { maximumFractionDigits: 3 })} {adjustModal.item.unit}
+                  {(parseFloat(adjustModal.item.quantity) + parseFloat(adjustModal.value))
+                    .toLocaleString('es-CO', { maximumFractionDigits: 3 })} {adjustModal.item.unit}
                 </span>
               </p>
             )}
