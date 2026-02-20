@@ -7,6 +7,7 @@ Requires=calculator3d-postgres.service
 ContainerName=calculator3d-backend
 Image=localhost/calculator3d-backend:latest
 Network=calculator3d.network
+Volume=calculator3d-slicer-jobs.volume:/slicer_jobs:Z
 # DATABASE_URL y demás variables vienen del .env (sin hardcodear SQLite aquí)
 EnvironmentFile=__ENV_FILE__
 Environment=ALGORITHM=HS256
