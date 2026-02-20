@@ -119,7 +119,12 @@ def calculate_cost(
     electricity_cost: Decimal = kwh_consumed * _d(app_settings.electricity_rate)
 
     # ── 3. Depreciación lineal ───────────────────────────────────────────────
-    depreciation_per_hour: Decimal = _d(printer.purchase_price) / _d(printer.estimated_lifespan_hours)
+    estimated_lifespan: Decimal = _d(printer.estimated_lifespan_hours)
+    depreciation_per_hour: Decimal = (
+        _d(printer.purchase_price) / estimated_lifespan
+        if estimated_lifespan > _D0
+        else _D0
+    )
     depreciation_cost: Decimal = depreciation_per_hour * print_time_hours
 
     # ── 4. Mantenimiento ─────────────────────────────────────────────────────

@@ -11,8 +11,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import String, DateTime, Text, Numeric
-from sqlalchemy import text
+from sqlalchemy import String, DateTime, Text, Numeric, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -22,26 +21,18 @@ class Filament(Base):
     """
     Modelo de base de datos que representa un filamento de impresión 3D.
 
-    Almacena tanto los datos comerciales del filamento (marca, tipo, color,
-    precio) como sus propiedades físicas (diámetro, densidad) necesarias para
-    los cálculos de costo de material.
-
     Atributos:
-        id: Clave primaria autoincremental del filamento.
-        brand: Fabricante del filamento. Ej: eSun, Bambu, Polymaker, Prusament.
-        type: Tipo de material. Ej: PLA, PETG, ABS, TPU, ASA, PA.
-        color: Color del filamento. Ej: Blanco, Negro, Rojo translúcido.
-        price_per_kg: Precio de compra del filamento por kilogramo en la moneda
-            configurada por el usuario.
-        weight_per_roll: Peso neto de filamento por carrete en gramos.
-            El valor por defecto es 1000 g (1 kg), que es el estándar más común.
-        diameter: Diámetro del filamento en milímetros. El estándar FDM es 1.75 mm.
-        density: Densidad del material en g/cm³. El valor por defecto (1.24)
-            corresponde al PLA estándar. Cada material tiene su propia densidad.
-        notes: Campo libre para anotaciones adicionales sobre el filamento.
-        created_at: Marca de tiempo UTC de creación del registro.
-        updated_at: Marca de tiempo UTC de la última modificación del registro,
-            actualizada automáticamente en cada UPDATE.
+        id: Clave primaria autoincremental.
+        brand: Fabricante. Ej: eSun, Bambu, Polymaker.
+        type: Tipo de material. Ej: PLA, PETG, ABS.
+        color: Color. Ej: Blanco, Negro.
+        price_per_kg: Precio por kilogramo en USD. Numeric(12,4).
+        weight_per_roll: Peso neto del carrete en gramos. Numeric(10,3).
+        diameter: Diámetro en milímetros. Numeric(6,3).
+        density: Densidad en g/cm³. Numeric(8,6).
+        notes: Anotaciones opcionales.
+        created_at: Timestamp UTC de creación.
+        updated_at: Timestamp UTC de la última modificación.
     """
 
     __tablename__ = "filaments"
