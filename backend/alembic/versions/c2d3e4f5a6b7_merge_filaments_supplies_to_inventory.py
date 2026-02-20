@@ -96,12 +96,15 @@ def upgrade() -> None:
     )
 
     # 5. Intentar vincular quotes existentes con los filamentos migrados
+    # Nota: PostgreSQL no permite referenciar el alias de la tabla actualizada
+    # dentro de JOIN en FROM; se usa FROM con coma y condiciones en WHERE.
     op.execute(text("""
-        UPDATE quotes q
+        UPDATE quotes
         SET inventory_item_id = ii.id
-        FROM inventory_items ii
-        JOIN filaments f ON f.id = q.filament_id
-        WHERE ii.company_id = q.company_id
+        FROM inventory_items ii,
+             filaments f
+        WHERE f.id = quotes.filament_id
+          AND ii.company_id = quotes.company_id
           AND ii.filament_brand = f.brand
           AND ii.filament_type = f.type
           AND ii.filament_color = f.color
