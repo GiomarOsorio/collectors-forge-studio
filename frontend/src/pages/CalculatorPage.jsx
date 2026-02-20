@@ -192,7 +192,7 @@ export default function CalculatorPage() {
    */
   const addSupply = () => {
     if (!supplyToAdd.inventory_item_id) return;
-    const id = supplyToAdd.inventory_item_id;
+    const id = parseInt(supplyToAdd.inventory_item_id);
     const qty = parseFloat(supplyToAdd.quantity) || 1;
     const existing = selectedSupplies.find((s) => s.inventory_item_id === id);
     if (existing) {
@@ -228,7 +228,7 @@ export default function CalculatorPage() {
     setAdditionalFilaments([
       ...additionalFilaments,
       {
-        inventory_item_id: filamentToAdd.inventory_item_id,
+        inventory_item_id: parseInt(filamentToAdd.inventory_item_id),
         weight_grams: parseFloat(filamentToAdd.weight_grams),
       },
     ]);
