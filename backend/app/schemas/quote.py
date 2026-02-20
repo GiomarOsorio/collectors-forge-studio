@@ -24,10 +24,10 @@ class FilamentItem(BaseModel):
     Referencia a un filamento adicional para piezas multicolor o multimaterial.
 
     Atributos:
-        filament_id:  ID del filamento adicional registrado en el catálogo.
-        weight_grams: Gramos de este filamento consumidos por la pieza.
+        inventory_item_id: ID del ítem de inventario (categoría Filamento).
+        weight_grams:      Gramos de este filamento consumidos por la pieza.
     """
-    filament_id: int
+    inventory_item_id: int
     weight_grams: Decimal = Field(gt=0)
 
 
@@ -40,7 +40,7 @@ class QuoteCalculateRequest(BaseModel):
 
     Atributos:
         piece_name: Nombre de la pieza.
-        filament_id: ID del filamento principal.
+        inventory_item_id: ID del ítem de inventario (filamento principal).
         printer_id: ID de la impresora.
         weight_grams: Gramos totales de filamento (placa completa).
         print_time_hours: Horas totales de impresión (placa completa).
@@ -53,7 +53,7 @@ class QuoteCalculateRequest(BaseModel):
     piece_name: str
     description: Optional[str] = None
     client_name: Optional[str] = None
-    filament_id: int
+    inventory_item_id: int
     printer_id: int
     weight_grams: Decimal = Field(gt=0)
     print_time_hours: Decimal = Field(gt=0)
@@ -114,8 +114,9 @@ class QuoteResponse(BaseModel):
     piece_name: str
     description: Optional[str]
     client_name: Optional[str]
-    filament_id: int
+    filament_id: Optional[int]
     printer_id: int
+    inventory_item_id: Optional[int] = None
     weight_grams: DecimalAsFloat
     print_time_hours: DecimalAsFloat
     preparation_time_hours: DecimalAsFloat
@@ -146,13 +147,13 @@ class QuoteResponse(BaseModel):
 
 class SupplyItemRef(BaseModel):
     """
-    Referencia a un insumo del catálogo para incluir en una cotización.
+    Referencia a un insumo del inventario para incluir en una cotización.
 
     Atributos:
-        supply_id: ID del insumo registrado en el catálogo.
-        quantity:  Cantidad de unidades de este insumo por pieza.
+        inventory_item_id: ID del ítem de inventario (insumo).
+        quantity:          Cantidad de unidades de este insumo por pieza.
     """
-    supply_id: int
+    inventory_item_id: int
     quantity: Decimal = Field(default=Decimal("1"), gt=0)
 
 

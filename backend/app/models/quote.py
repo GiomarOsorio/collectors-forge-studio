@@ -48,8 +48,11 @@ class Quote(Base):
     client_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
     # Referencias al filamento e impresora utilizados
-    filament_id: Mapped[int] = mapped_column(Integer, ForeignKey("filaments.id"))
+    filament_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("filaments.id"), nullable=True)
     printer_id: Mapped[int] = mapped_column(Integer, ForeignKey("printers.id"))
+    inventory_item_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("inventory_items.id"), nullable=True
+    )
 
     # Parámetros de impresión ingresados por el usuario
     weight_grams: Mapped[Decimal] = mapped_column(Numeric(10, 3))

@@ -24,11 +24,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.user import User
-from app.models.filament import Filament
+from app.models.inventory import InventoryItem
 from app.models.printer import Printer
 from app.models.settings import AppSettings
 from app.models.quote import Quote
-from app.models.supply import Supply
 from app.schemas.quote import QuoteCalculateRequest, QuoteManualRequest, QuoteResponse, QuoteCostBreakdown
 from app.services.auth import get_current_user
 from app.services.calculator import calculate_cost
@@ -83,7 +82,7 @@ async def calculate_quote(
         HTTPException 404: Si el filamento o la impresora no pertenecen a la empresa.
     """
     filament, printer, app_settings = await _get_dependencies(
-        db, current_user, data.filament_id, data.printer_id
+        db, current_user, data.inventory_item_id, data.printer_id
     )
     cop_rate = await get_usd_to_cop()
     supplies_data = await _resolve_supplies(db, current_user, data.supplies)
@@ -191,7 +190,7 @@ async def create_quote(
         HTTPException 404: Si el filamento o la impresora no pertenecen a la empresa.
     """
     filament, printer, app_settings = await _get_dependencies(
-        db, current_user, data.filament_id, data.printer_id
+        db, current_user, data.inventory_item_id, data.printer_id
     )
 
     cop_rate = await get_usd_to_cop()
@@ -219,7 +218,8 @@ async def create_quote(
         piece_name=data.piece_name,
         description=data.description,
         client_name=data.client_name,
-        filament_id=data.filament_id,
+        filament_id=None,
+        inventory_item_id=data.inventory_item_id,
         printer_id=data.printer_id,
         weight_grams=data.weight_grams,
         print_time_hours=data.print_time_hours,
@@ -335,28 +335,29 @@ async def download_quote_pdf(
 
 
 async def _get_dependencies(
-    db: AsyncSession, current_user: User, filament_id: int, printer_id: int
+    db: AsyncSession, current_user: User, inventory_item_id: int, printer_id: int
 ):
     """
     Recupera y valida las dependencias de una cotización filtrando por company_id.
 
-    Carga el filamento, la impresora y la configuración de la empresa necesarios
-    para ejecutar el motor de cálculo. Si la configuración de la empresa no
-    existe, la crea con valores por defecto.
+    Carga el ítem de inventario (filamento), la impresora y la configuración de la
+    empresa necesarios para ejecutar el motor de cálculo. Si la configuración de
+    la empresa no existe, la crea con valores por defecto.
 
     Raises:
-        HTTPException 404: Si el filamento no pertenece a la empresa del usuario.
+        HTTPException 404: Si el filamento no existe en el inventario de la empresa.
         HTTPException 404: Si la impresora no pertenece a la empresa del usuario.
     """
-    filament_result = await db.execute(
-        select(Filament).where(
-            Filament.id == filament_id,
-            Filament.company_id == current_user.company_id,
+    inv_result = await db.execute(
+        select(InventoryItem).where(
+            InventoryItem.id == inventory_item_id,
+            InventoryItem.company_id == current_user.company_id,
+            InventoryItem.category == "Filamento",
         )
     )
-    filament = filament_result.scalar_one_or_none()
+    filament = inv_result.scalar_one_or_none()
     if not filament:
-        raise HTTPException(status_code=404, detail="Filamento no encontrado")
+        raise HTTPException(status_code=404, detail="Filamento no encontrado en inventario")
 
     printer_result = await db.execute(
         select(Printer).where(
@@ -405,25 +406,28 @@ async def _get_company_quote(db: AsyncSession, quote_id: int, company_id) -> Quo
 
 async def _resolve_supplies(db: AsyncSession, current_user: User, supply_items) -> list:
     """
-    Carga insumos desde la DB filtrando por company_id del usuario.
+    Carga insumos desde el inventario filtrando por company_id del usuario.
 
-    Los insumos que no existan en la empresa del usuario se omiten silenciosamente.
+    Los ítems que no existan en la empresa del usuario se omiten silenciosamente.
+    El precio se toma de price_per_unit si está definido; si no, de unit_cost.
     """
     result = []
     for item in (supply_items or []):
         r = await db.execute(
-            select(Supply).where(
-                Supply.id == item.supply_id,
-                Supply.company_id == current_user.company_id,
+            select(InventoryItem).where(
+                InventoryItem.id == item.inventory_item_id,
+                InventoryItem.company_id == current_user.company_id,
             )
         )
-        supply = r.scalar_one_or_none()
-        if supply:
+        inv = r.scalar_one_or_none()
+        if inv:
+            # price_per_unit: si está definido, úsalo; si no, usa unit_cost
+            price = inv.price_per_unit if inv.price_per_unit is not None else inv.unit_cost
             result.append({
-                "supply_id": supply.id,
-                "name": supply.name,
-                "unit": supply.unit,
-                "price_per_unit": supply.price_per_unit,
+                "supply_id": inv.id,
+                "name": inv.name,
+                "unit": inv.unit,
+                "price_per_unit": price,
                 "quantity": item.quantity,
             })
     return result
@@ -431,24 +435,27 @@ async def _resolve_supplies(db: AsyncSession, current_user: User, supply_items) 
 
 async def _resolve_additional_filaments(db: AsyncSession, current_user: User, filament_items) -> list:
     """
-    Carga filamentos adicionales desde la DB filtrando por company_id del usuario.
+    Carga filamentos adicionales desde el inventario filtrando por company_id.
 
-    Los filamentos que no existan en la empresa del usuario se omiten silenciosamente.
+    Los ítems que no existan o no tengan price_per_kg se omiten silenciosamente.
+    El nombre se construye a partir de filament_brand, filament_type y filament_color;
+    si no hay datos específicos, se usa el nombre genérico del ítem.
     """
     result = []
     for item in (filament_items or []):
         r = await db.execute(
-            select(Filament).where(
-                Filament.id == item.filament_id,
-                Filament.company_id == current_user.company_id,
+            select(InventoryItem).where(
+                InventoryItem.id == item.inventory_item_id,
+                InventoryItem.company_id == current_user.company_id,
             )
         )
-        filament = r.scalar_one_or_none()
-        if filament:
+        inv = r.scalar_one_or_none()
+        if inv and inv.price_per_kg:
+            name = " ".join(filter(None, [inv.filament_brand, inv.filament_type, inv.filament_color])) or inv.name
             result.append({
-                "filament_id": filament.id,
-                "name": f"{filament.brand} {filament.type} {filament.color}",
-                "price_per_kg": filament.price_per_kg,
+                "filament_id": inv.id,
+                "name": name,
+                "price_per_kg": inv.price_per_kg,
                 "weight_grams": item.weight_grams,
             })
     return result

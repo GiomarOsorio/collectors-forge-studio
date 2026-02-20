@@ -16,9 +16,9 @@ Endpoints:
 """
 
 from decimal import Decimal
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -71,24 +71,28 @@ async def _get_company_inventory_item(
 
 @router.get("/", response_model=List[InventoryItemResponse])
 async def list_inventory_items(
+    category: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Lista todos los ítems de inventario de la empresa, ordenados por fecha desc.
+    Lista los ítems de inventario de la empresa, ordenados por fecha desc.
+
+    Si se proporciona el parámetro category, filtra por esa categoría exacta.
 
     Args:
+        category:     Categoría para filtrar (opcional). Ej: "Filamento", "Insumo".
         db:           Sesión de base de datos.
         current_user: Usuario autenticado.
 
     Returns:
         Lista de InventoryItemResponse ordenada por created_at descendente.
     """
-    result = await db.execute(
-        select(InventoryItem)
-        .where(InventoryItem.company_id == current_user.company_id)
-        .order_by(InventoryItem.created_at.desc())
-    )
+    query = select(InventoryItem).where(InventoryItem.company_id == current_user.company_id)
+    if category:
+        query = query.where(InventoryItem.category == category)
+    query = query.order_by(InventoryItem.created_at.desc())
+    result = await db.execute(query)
     return result.scalars().all()
 
 
@@ -123,6 +127,16 @@ async def create_inventory_item(
         supplier_info=data.supplier_info,
         needs_purchase=data.needs_purchase,
         notes=data.notes,
+        # Campos específicos para filamentos (calculadora)
+        price_per_kg=data.price_per_kg,
+        filament_brand=data.filament_brand,
+        filament_type=data.filament_type,
+        filament_color=data.filament_color,
+        filament_diameter=data.filament_diameter,
+        filament_density=data.filament_density,
+        weight_per_roll=data.weight_per_roll,
+        # Precio por unidad para insumos (calculadora)
+        price_per_unit=data.price_per_unit,
     )
     db.add(item)
     await db.commit()

@@ -49,6 +49,16 @@ class InventoryItemCreate(BaseModel):
     supplier_info: Optional[str] = None
     needs_purchase: bool = False
     notes: Optional[str] = None
+    # Campos específicos para filamentos (calculadora)
+    price_per_kg: Optional[Decimal] = None
+    filament_brand: Optional[str] = Field(default=None, max_length=100)
+    filament_type: Optional[str] = Field(default=None, max_length=50)
+    filament_color: Optional[str] = Field(default=None, max_length=50)
+    filament_diameter: Optional[Decimal] = None
+    filament_density: Optional[Decimal] = None
+    weight_per_roll: Optional[Decimal] = None
+    # Precio por unidad para insumos (calculadora)
+    price_per_unit: Optional[Decimal] = None
 
 
 class InventoryItemUpdate(BaseModel):
@@ -83,6 +93,16 @@ class InventoryItemUpdate(BaseModel):
     supplier_info: Optional[str] = None
     needs_purchase: Optional[bool] = None
     notes: Optional[str] = None
+    # Campos específicos para filamentos (calculadora)
+    price_per_kg: Optional[Decimal] = None
+    filament_brand: Optional[str] = Field(default=None, max_length=100)
+    filament_type: Optional[str] = Field(default=None, max_length=50)
+    filament_color: Optional[str] = Field(default=None, max_length=50)
+    filament_diameter: Optional[Decimal] = None
+    filament_density: Optional[Decimal] = None
+    weight_per_roll: Optional[Decimal] = None
+    # Precio por unidad para insumos (calculadora)
+    price_per_unit: Optional[Decimal] = None
 
 
 class InventoryItemResponse(BaseModel):
@@ -123,6 +143,16 @@ class InventoryItemResponse(BaseModel):
     supplier_info: Optional[str]
     needs_purchase: bool
     notes: Optional[str]
+    # Campos específicos para filamentos (calculadora)
+    price_per_kg: Optional[DecimalAsFloat] = None
+    filament_brand: Optional[str] = None
+    filament_type: Optional[str] = None
+    filament_color: Optional[str] = None
+    filament_diameter: Optional[DecimalAsFloat] = None
+    filament_density: Optional[DecimalAsFloat] = None
+    weight_per_roll: Optional[DecimalAsFloat] = None
+    # Precio por unidad para insumos (calculadora)
+    price_per_unit: Optional[DecimalAsFloat] = None
     low_stock: bool = False
     created_at: datetime
     updated_at: Optional[datetime] = None

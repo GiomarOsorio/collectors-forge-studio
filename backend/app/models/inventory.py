@@ -75,6 +75,17 @@ class InventoryItem(Base):
     )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Campos específicos para ítems de categoría "Filamento" (calculadora)
+    price_per_kg: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 4), nullable=True)
+    filament_brand: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    filament_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)   # PLA, PETG, ABS...
+    filament_color: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    filament_diameter: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 3), nullable=True)
+    filament_density: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 6), nullable=True)
+    weight_per_roll: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 3), nullable=True)
+    # Precio por unidad para insumos (usado por la calculadora)
+    price_per_unit: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 4), nullable=True)
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
