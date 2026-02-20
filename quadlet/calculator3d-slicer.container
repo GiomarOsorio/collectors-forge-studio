@@ -1,0 +1,24 @@
+[Unit]
+Description=TurtleForge Slicer - OrcaSlicer CLI microservice
+After=network-online.target
+
+[Container]
+ContainerName=calculator3d-slicer
+Image=localhost/calculator3d-slicer:latest
+Network=calculator3d.network
+Volume=calculator3d-slicer-jobs.volume:/slicer_jobs:Z
+HealthCmd=curl -sf http://localhost:8001/health
+HealthInterval=30s
+HealthTimeout=10s
+HealthRetries=3
+HealthStartPeriod=60s
+
+[Service]
+Restart=always
+RestartSec=10
+TimeoutStartSec=300
+# OrcaSlicer nightly puede tardar en arrancar la primera vez
+StartLimitIntervalSec=0
+
+[Install]
+WantedBy=default.target

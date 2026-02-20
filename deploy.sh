@@ -50,6 +50,7 @@ loginctl enable-linger "$(whoami)" 2>/dev/null || true
 echo "→ Construyendo imágenes de la aplicación..."
 podman build -t calculator3d-backend -f "$DEPLOY_PATH/backend/Containerfile" "$DEPLOY_PATH/backend/"
 podman build -t calculator3d-frontend -f "$DEPLOY_PATH/frontend/Containerfile" "$DEPLOY_PATH/frontend/"
+podman build -t calculator3d-slicer -f "$DEPLOY_PATH/slicer/Containerfile" "$DEPLOY_PATH/slicer/"
 
 echo "→ Descargando imagen de PostgreSQL..."
 podman pull docker.io/postgres:16-alpine
@@ -62,6 +63,7 @@ mkdir -p "$QUADLET_DIR"
 cp "$DEPLOY_PATH/quadlet/calculator3d.network" "$QUADLET_DIR/"
 cp "$DEPLOY_PATH/quadlet/calculator3d-data.volume" "$QUADLET_DIR/"
 cp "$DEPLOY_PATH/quadlet/calculator3d-pgdata.volume" "$QUADLET_DIR/"
+cp "$DEPLOY_PATH/quadlet/calculator3d-slicer-jobs.volume" "$QUADLET_DIR/"
 
 # Copiar contenedores sustituyendo __DEPLOY_PATH__ y __ENV_FILE__
 for f in "$DEPLOY_PATH"/quadlet/*.container; do
@@ -97,8 +99,8 @@ for i in $(seq 1 30); do
     sleep 2
 done
 
-echo "→ Iniciando backend y frontend..."
-systemctl --user restart calculator3d-backend calculator3d-frontend
+echo "→ Iniciando backend, slicer y frontend..."
+systemctl --user restart calculator3d-slicer calculator3d-backend calculator3d-frontend
 
 if [ -n "$TUNNEL_TOKEN" ]; then
     systemctl --user restart calculator3d-tunnel
@@ -115,7 +117,9 @@ echo ""
 echo "Comandos útiles:"
 echo "  systemctl --user status calculator3d-postgres        # Estado PostgreSQL"
 echo "  systemctl --user status calculator3d-backend         # Estado backend"
+echo "  systemctl --user status calculator3d-slicer          # Estado OrcaSlicer"
 echo "  systemctl --user status calculator3d-frontend        # Estado frontend"
 echo "  journalctl --user -u calculator3d-backend -f         # Logs backend"
+echo "  journalctl --user -u calculator3d-slicer -f          # Logs OrcaSlicer"
 echo "  podman exec -it calculator3d-postgres psql -U $PG_USER $PG_DB  # Shell PG"
 echo "  podman ps                                             # Ver contenedores"
