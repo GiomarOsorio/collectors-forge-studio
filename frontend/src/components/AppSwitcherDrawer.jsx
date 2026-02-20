@@ -10,7 +10,7 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, Calculator } from 'lucide-react';
+import { X, Calculator, Package } from 'lucide-react';
 import { useDirtyState } from '../context/DirtyStateContext';
 
 /**
@@ -25,6 +25,14 @@ const APPS = [
     icon: Calculator,
     route: '/cost/calculator',
     color: '#3FAF4C',
+  },
+  {
+    id: 'inventory',
+    name: 'Inventario',
+    description: 'Stock, alertas y seguimiento de compras',
+    icon: Package,
+    route: '/inventory/stock',
+    color: '#3B82F6',
   },
 ];
 

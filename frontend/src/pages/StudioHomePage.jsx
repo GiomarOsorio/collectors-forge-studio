@@ -9,7 +9,7 @@
  */
 
 import { useNavigate } from 'react-router-dom';
-import { Calculator } from 'lucide-react';
+import { Calculator, Package } from 'lucide-react';
 
 /**
  * Definición de las aplicaciones disponibles.
@@ -23,6 +23,15 @@ const APPS = [
     icon: Calculator,
     route: '/cost/calculator',
     color: '#3FAF4C',
+    badge: null,
+  },
+  {
+    id: 'inventory',
+    name: 'Inventario',
+    description: 'Gestión de stock, alertas de mínimos y seguimiento de compras con tracking internacional.',
+    icon: Package,
+    route: '/inventory/stock',
+    color: '#3B82F6',
     badge: null,
   },
 ];
