@@ -314,6 +314,56 @@ export const downloadQuotePdf = (id) =>
   api.get(`/quotes/${id}/pdf`, { responseType: 'blob' });
 
 // ============================================================================
+// Cotizaciones de cliente (multi-producto)
+// ============================================================================
+
+/**
+ * Crea y guarda una cotización de cliente con múltiples líneas de producto.
+ *
+ * @param {Object} data - Datos de la cotización
+ * @param {string} data.client_name - Nombre del cliente
+ * @param {string|null} data.description - Descripción general opcional
+ * @param {string} data.quote_date - Fecha de emisión (YYYY-MM-DD)
+ * @param {number} data.expiry_days - Días de vigencia
+ * @param {Array} data.items - Líneas de producto [{name, quantity, unit_price}]
+ * @param {string|null} data.notes - Notas adicionales opcionales
+ * @returns {Promise<import('axios').AxiosResponse>} Cotización creada
+ */
+export const createClientQuote = (data) => api.post('/client-quotes/', data);
+
+/**
+ * Obtiene el historial de cotizaciones de cliente de la empresa.
+ *
+ * @returns {Promise<import('axios').AxiosResponse>} Array de cotizaciones
+ */
+export const getClientQuotes = () => api.get('/client-quotes/');
+
+/**
+ * Obtiene una cotización de cliente por su ID.
+ *
+ * @param {number} id - ID de la cotización
+ * @returns {Promise<import('axios').AxiosResponse>} Datos de la cotización
+ */
+export const getClientQuote = (id) => api.get(`/client-quotes/${id}`);
+
+/**
+ * Elimina una cotización de cliente por su ID.
+ *
+ * @param {number} id - ID de la cotización a eliminar
+ * @returns {Promise<import('axios').AxiosResponse>} Respuesta de confirmación
+ */
+export const deleteClientQuote = (id) => api.delete(`/client-quotes/${id}`);
+
+/**
+ * Descarga el PDF de una cotización de cliente.
+ *
+ * @param {number} id - ID de la cotización
+ * @returns {Promise<import('axios').AxiosResponse>} PDF como Blob
+ */
+export const downloadClientQuotePdf = (id) =>
+  api.get(`/client-quotes/${id}/pdf`, { responseType: 'blob' });
+
+// ============================================================================
 // Insumos
 // ============================================================================
 

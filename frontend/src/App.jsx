@@ -27,6 +27,7 @@ import Layout from './components/Layout';
 import Login from './pages/Login';
 import CalculatorPage from './pages/CalculatorPage';
 import ManualQuotePage from './pages/ManualQuotePage';
+import QuotesPage from './pages/QuotesPage';
 import FilamentsPage from './pages/FilamentsPage';
 import PrintersPage from './pages/PrintersPage';
 import HistoryPage from './pages/HistoryPage';
@@ -73,6 +74,7 @@ function AppRoutes() {
       {/* Rutas protegidas: requieren autenticacion, se renderizan dentro del Layout */}
       <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
         <Route index element={<CalculatorPage />} />
+        <Route path="quotes" element={<QuotesPage />} />
         <Route path="manual" element={<ManualQuotePage />} />
         <Route path="filaments" element={<FilamentsPage />} />
         <Route path="printers" element={<PrintersPage />} />
