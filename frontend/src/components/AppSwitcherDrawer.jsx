@@ -10,7 +10,7 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, Calculator, Package } from 'lucide-react';
+import { X, Calculator, Package, Home } from 'lucide-react';
 import { useDirtyState } from '../context/DirtyStateContext';
 
 /**
@@ -111,6 +111,23 @@ export default function AppSwitcherDrawer({ isOpen, onClose }) {
 
           {/* Grid de aplicaciones */}
           <div className="flex-1 overflow-y-auto p-6">
+            {/* Botón de regreso al Studio Home */}
+            <button
+              onClick={() => handleSelectApp('/')}
+              className="flex items-center gap-3 w-full px-4 py-3 rounded-xl bg-[#13171c] border border-[#1e2125] hover:border-forge-green/40 hover:bg-forge-green/5 transition-all group mb-5"
+            >
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-[#1e2125] group-hover:bg-forge-green/10 transition-colors">
+                <Home size={18} className="text-gunmetal group-hover:text-forge-green transition-colors" />
+              </div>
+              <div className="text-left">
+                <p className="font-semibold text-tech-white text-sm group-hover:text-forge-green transition-colors">
+                  Studio Home
+                </p>
+                <p className="text-xs text-gunmetal">Lanzador de aplicaciones</p>
+              </div>
+            </button>
+
+            <p className="text-xs text-gunmetal uppercase tracking-wider mb-3 px-1">Aplicaciones</p>
             <div className="grid grid-cols-2 gap-4">
               {APPS.map((app) => {
                 const Icon = app.icon;
