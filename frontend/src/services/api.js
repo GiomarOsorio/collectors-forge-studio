@@ -8,11 +8,12 @@
  *
  * Exporta funciones para todas las operaciones del API:
  * - Autenticacion (login, registro, perfil)
- * - CRUD de filamentos
+ * - CRUD de filamentos (legacy)
  * - CRUD de impresoras
- * - CRUD de insumos adicionales
+ * - CRUD de insumos adicionales (legacy)
+ * - Inventario (items de stock, incluyendo filamentos e insumos)
  * - Configuracion de la aplicacion (incluye tasa de cambio y tarifas EPM)
- * - Cotizaciones (calcular, crear, listar, descargar PDF)
+ * - Cotizaciones (calcular con inventory_item_id, crear, listar, descargar PDF)
  *
  * @module services/api
  */
@@ -237,11 +238,15 @@ export const updateSettings = (data) => api.put('/settings/', data);
  * Retorna el desglose completo de costos (material, electricidad,
  * depreciacion, mantenimiento, mano de obra, fallos, margen, total).
  *
+ * El filamento principal y los filamentos adicionales se referencian
+ * mediante inventory_item_id (item de inventario con category="Filamento").
+ * Los insumos adicionales tambien se referencian por inventory_item_id.
+ *
  * @param {Object} data - Datos de la pieza a cotizar
  * @param {string} data.piece_name - Nombre de la pieza
  * @param {string|null} data.description - Descripcion opcional de la pieza
  * @param {string|null} data.client_name - Nombre del cliente opcional
- * @param {number} data.filament_id - ID del filamento a utilizar
+ * @param {string} data.inventory_item_id - UUID del item de inventario (filamento) principal
  * @param {number} data.printer_id - ID de la impresora a utilizar
  * @param {number} data.weight_grams - Peso del filamento en gramos
  * @param {number} data.print_time_hours - Tiempo de impresion en horas
@@ -249,6 +254,8 @@ export const updateSettings = (data) => api.put('/settings/', data);
  * @param {number} data.post_processing_time_hours - Tiempo de post-procesado en horas
  * @param {number} data.quantity - Cantidad de unidades
  * @param {number} data.margin_percent - Porcentaje de margen de ganancia
+ * @param {Array} data.supplies - Insumos adicionales [{inventory_item_id, quantity}]
+ * @param {Array} data.additional_filaments - Filamentos adicionales [{inventory_item_id, weight_grams}]
  * @returns {Promise<import('axios').AxiosResponse>} Respuesta con el desglose de costos
  */
 export const calculateQuote = (data) => api.post('/quotes/calculate', data);
@@ -274,6 +281,9 @@ export const calculateManualQuote = (data) => api.post('/quotes/calculate/manual
 
 /**
  * Crea y guarda una cotizacion en el historial.
+ *
+ * Utiliza inventory_item_id para referenciar el filamento principal y los
+ * filamentos adicionales, asi como los insumos adicionales del inventario.
  *
  * @param {Object} data - Datos de la cotizacion (misma estructura que calculateQuote)
  * @returns {Promise<import('axios').AxiosResponse>} Respuesta con la cotizacion creada
@@ -441,6 +451,22 @@ export const getElectricityTariffs = () => api.get('/settings/electricity-tariff
 
 /** Obtiene todos los ítems de inventario de la empresa. */
 export const getInventoryItems = () => api.get('/inventory/items/');
+
+/**
+ * Obtiene los items de inventario con category="Filamento".
+ * Estos reemplazan a la tabla legacy de filamentos en la calculadora.
+ *
+ * @returns {Promise<import('axios').AxiosResponse>} Array de items de inventario tipo Filamento
+ */
+export const getInventoryFilaments = () => api.get('/inventory/items/?category=Filamento');
+
+/**
+ * Obtiene todos los items de inventario para usarlos como insumos en la calculadora.
+ * El componente debe filtrar los que NO son "Filamento" para mostrar solo insumos.
+ *
+ * @returns {Promise<import('axios').AxiosResponse>} Array de todos los items de inventario
+ */
+export const getInventorySupplies = () => api.get('/inventory/items/');
 
 /** Crea un nuevo ítem de inventario. */
 export const createInventoryItem = (data) => api.post('/inventory/items/', data);

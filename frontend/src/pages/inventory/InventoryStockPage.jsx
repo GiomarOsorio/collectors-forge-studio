@@ -5,6 +5,11 @@
  * banderas de "necesita compra". Permite crear, editar, ajustar cantidades,
  * eliminar ítems y marcar/desmarcar la bandera de compra manual.
  *
+ * Los ítems con category="Filamento" incluyen campos adicionales usados por
+ * la calculadora de costos (price_per_kg, filament_brand, filament_type,
+ * filament_color, filament_diameter, filament_density, weight_per_roll).
+ * Los ítems de otras categorías incluyen price_per_unit para la calculadora.
+ *
  * @module pages/inventory/InventoryStockPage
  */
 
@@ -50,6 +55,16 @@ const EMPTY_FORM = {
   supplier_contact: '',
   supplier_info: '',
   notes: '',
+  // Campos especificos para items de categoria "Filamento" (usados por la calculadora)
+  price_per_kg: '',
+  filament_brand: '',
+  filament_type: '',
+  filament_color: '',
+  filament_diameter: '',
+  filament_density: '',
+  weight_per_roll: '',
+  // Campo para insumos de otras categorias (precio unitario para la calculadora)
+  price_per_unit: '',
 };
 
 /**
