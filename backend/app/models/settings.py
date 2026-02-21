@@ -8,7 +8,7 @@ en esta tabla (relación uno-a-uno con users).
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
@@ -63,5 +63,5 @@ class AppSettings(Base):
     )
     currency: Mapped[str] = mapped_column(server_default=text("'USD'"))
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
     )
