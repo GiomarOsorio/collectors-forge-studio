@@ -54,7 +54,7 @@ class PurchaseOrder(Base):
     arrived_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Timestamp de creación
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     # Relación con los ítems del pedido (cascade: se borran al eliminar la orden)
     items: Mapped[List["PurchaseOrderItem"]] = relationship(
