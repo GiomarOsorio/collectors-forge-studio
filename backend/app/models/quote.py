@@ -14,7 +14,7 @@ from typing import Optional
 
 from sqlalchemy import String, Numeric, DateTime, Text, Integer, ForeignKey, CheckConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB
 
 from app.database import Base
 
@@ -82,11 +82,11 @@ class Quote(Base):
     supplies_cost: Mapped[Decimal] = mapped_column(
         Numeric(12, 4), server_default=text("0.0000")
     )
-    supplies_detail: Mapped[Optional[str]] = mapped_column(
-        Text, server_default=text("'[]'"), nullable=True
+    supplies_detail: Mapped[Optional[list]] = mapped_column(
+        JSONB, server_default=text("'[]'::jsonb"), nullable=True
     )
-    additional_filaments_detail: Mapped[Optional[str]] = mapped_column(
-        Text, server_default=text("'[]'"), nullable=True
+    additional_filaments_detail: Mapped[Optional[list]] = mapped_column(
+        JSONB, server_default=text("'[]'::jsonb"), nullable=True
     )
 
     # Conversión a pesos colombianos (guardada al momento de cotizar)

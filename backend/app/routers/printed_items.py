@@ -39,6 +39,9 @@ from app.services.auth import get_current_user
 # Directorio donde se guardan las imágenes de los ítems de impresión
 PRINTS_IMAGE_DIR = Path("/app/static/prints")
 
+# Límite de tamaño para imágenes subidas (M-06)
+MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10 MB
+
 router = APIRouter(prefix="/api/inventory/prints", tags=["printed_items"])
 
 
@@ -321,6 +324,11 @@ async def upload_printed_item_image(
     # Leer contenido y validar magic bytes reales (segunda línea de defensa)
     # Evita que un atacante suba un archivo ejecutable con Content-Type: image/jpeg
     content = await file.read()
+    if len(content) > MAX_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Imagen demasiado grande (máx. 10 MB)",
+        )
     _MAGIC_CHECKS = {
         "image/jpeg": lambda c: c[:3] == b"\xff\xd8\xff",
         "image/png":  lambda c: c[:4] == b"\x89PNG",

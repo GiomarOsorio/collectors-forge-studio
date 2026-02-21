@@ -19,7 +19,7 @@ from decimal import Decimal
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,6 +39,7 @@ from app.schemas.inventory import (
     InventoryExportResponse,
     InventoryImportResult,
 )
+from app.limiter import limiter
 from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/api/inventory/items", tags=["inventory"])
@@ -200,7 +201,9 @@ async def export_inventory(
 
 
 @router.post("/import", response_model=InventoryImportResult)
+@limiter.limit("60/minute")
 async def import_inventory(
+    request: Request,
     data: InventoryExportResponse,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),

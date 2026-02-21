@@ -39,7 +39,7 @@ class AppSettingsResponse(BaseModel):
     """
 
     id: int
-    user_id: int
+    user_id: Optional[int] = None
     electricity_rate: DecimalAsFloat
     failure_rate_percent: DecimalAsFloat
     labor_cost_per_hour: DecimalAsFloat

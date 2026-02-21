@@ -15,11 +15,10 @@ Endpoints disponibles bajo el prefijo /api/quotes:
 - GET  /{id}/pdf      - Descarga la cotización como archivo PDF.
 """
 
-import json
 import re
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +30,7 @@ from app.models.printer import Printer
 from app.models.settings import AppSettings
 from app.models.quote import Quote
 from app.schemas.quote import QuoteCalculateRequest, QuoteManualRequest, QuoteResponse, QuoteCostBreakdown, QuoteUpdateMeta
+from app.limiter import limiter
 from app.services.auth import get_current_user
 from app.services.calculator import calculate_cost
 from app.services.pdf_generator import generate_quote_pdf
@@ -60,15 +60,10 @@ class _FakeSettings:
             setattr(self, field, v if v is not None else getattr(base_settings, field))
 
 
-def _json_float(obj):
-    """Convierte Decimal a float para serialización JSON en campos TEXT de la DB."""
-    if isinstance(obj, Decimal):
-        return float(obj)
-    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
-
-
 @router.post("/calculate", response_model=QuoteCostBreakdown)
+@limiter.limit("60/minute")
 async def calculate_quote(
+    request: Request,
     data: QuoteCalculateRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -108,7 +103,9 @@ async def calculate_quote(
 
 
 @router.post("/calculate/manual", response_model=QuoteCostBreakdown)
+@limiter.limit("60/minute")
 async def calculate_quote_manual(
+    request: Request,
     data: QuoteManualRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -179,7 +176,9 @@ async def calculate_quote_manual(
 
 
 @router.post("/", response_model=QuoteResponse)
+@limiter.limit("60/minute")
 async def create_quote(
+    request: Request,
     data: QuoteCalculateRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -246,8 +245,11 @@ async def create_quote(
         total_per_unit_cop=breakdown.total_per_unit_cop,
         total_price_cop=breakdown.total_price_cop,
         supplies_cost=breakdown.supplies_cost,
-        supplies_detail=json.dumps(breakdown.supplies_detail, default=_json_float),
-        additional_filaments_detail=json.dumps([
+        supplies_detail=[
+            {k: float(v) if isinstance(v, Decimal) else v for k, v in item.items()}
+            for item in breakdown.supplies_detail
+        ],
+        additional_filaments_detail=[
             {
                 "filament_id": af["filament_id"],
                 "name": af["name"],
@@ -255,7 +257,7 @@ async def create_quote(
                 "material_cost": round(float(af["weight_grams"]) * float(af["price_per_kg"]) / 1000, 4),
             }
             for af in (additional_filaments_data or [])
-        ]),
+        ],
     )
     db.add(quote)
     await db.commit()
@@ -265,8 +267,8 @@ async def create_quote(
 
 @router.get("/", response_model=list[QuoteResponse])
 async def list_quotes(
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
