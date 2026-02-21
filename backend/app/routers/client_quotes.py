@@ -20,7 +20,7 @@ from datetime import timedelta
 from decimal import Decimal
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +29,7 @@ from app.database import get_db
 from app.models.client_quote import ClientQuote
 from app.models.user import User
 from app.schemas.client_quote import ClientQuoteCreate, ClientQuoteResponse
+from app.limiter import limiter
 from app.services.auth import get_current_user
 from app.services.pdf_generator import generate_client_quote_pdf
 
@@ -65,7 +66,9 @@ async def _get_company_client_quote(
 
 
 @router.post("/", response_model=ClientQuoteResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("60/minute")
 async def create_client_quote(
+    request: Request,
     data: ClientQuoteCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -120,8 +123,8 @@ async def create_client_quote(
 
 @router.get("/", response_model=List[ClientQuoteResponse])
 async def list_client_quotes(
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

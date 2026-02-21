@@ -27,6 +27,11 @@ COP_MARKUP = 200.0
 _FALLBACK_RATE = 4200.0
 
 # Caché en memoria: (tasa_con_markup, timestamp_unix)
+# NOTA (M-01): este caché es module-global y vive en el proceso uvicorn.
+# Con --workers 1 (configuración actual) funciona correctamente.
+# Con múltiples workers, cada proceso tiene su propio caché independiente,
+# lo que causaría N llamadas simultáneas a la API externa en vez de una.
+# Si se escala a múltiples workers, migrar a Redis o tabla de BD.
 _cache: Optional[Tuple[float, float]] = None
 
 # Tiempo de vigencia del caché en segundos (1 hora)

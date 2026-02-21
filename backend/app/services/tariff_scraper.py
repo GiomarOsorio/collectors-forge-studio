@@ -30,6 +30,9 @@ EPM_BASE_URL = "https://www.epm.com.co"
 TARIFF_MULTIPLIER = 2.0
 
 # Caché: diccionario con resultado y timestamp
+# NOTA (M-01): caché module-global — válido con --workers 1 (configuración actual).
+# Con múltiples workers, cada proceso descarga el PDF por separado. Migrar a Redis
+# o BD si se escala horizontalmente.
 _cache: Optional[Dict] = None
 _CACHE_TTL = 86400  # 24 horas
 

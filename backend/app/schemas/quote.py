@@ -137,8 +137,8 @@ class QuoteResponse(BaseModel):
     total_per_unit: DecimalAsFloat
     total_price: DecimalAsFloat
     supplies_cost: DecimalAsFloat = Decimal("0")
-    supplies_detail: Optional[str] = "[]"
-    additional_filaments_detail: Optional[str] = "[]"
+    supplies_detail: Optional[list] = []
+    additional_filaments_detail: Optional[list] = []
     usd_to_cop_rate: Optional[DecimalAsFloat] = None
     total_per_unit_cop: Optional[DecimalAsFloat] = None
     total_price_cop: Optional[DecimalAsFloat] = None

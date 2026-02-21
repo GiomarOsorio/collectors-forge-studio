@@ -17,7 +17,7 @@ Endpoints disponibles bajo el prefijo /api/settings:
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +26,7 @@ from app.models.user import User
 from app.models.settings import AppSettings
 from app.models.electricity_tariff import ElectricityTariff
 from app.schemas.settings import AppSettingsUpdate, AppSettingsResponse
+from app.limiter import limiter
 from app.services.auth import get_current_user
 from app.services.exchange_rate import get_usd_to_cop, COP_MARKUP, get_cache_timestamp
 from app.services.tariff_scraper import get_epm_estrato4_tariff, TARIFF_MULTIPLIER
@@ -115,7 +116,9 @@ async def update_settings(
 
 
 @router.get("/electricity-tariff")
+@limiter.limit("10/minute")
 async def get_electricity_tariff(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -214,7 +217,9 @@ async def list_electricity_tariffs(
 
 
 @router.get("/exchange-rate")
+@limiter.limit("10/minute")
 async def get_exchange_rate(
+    request: Request,
     current_user: User = Depends(get_current_user),
 ):
     """

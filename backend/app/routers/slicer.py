@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, File, Query, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,6 +37,7 @@ from app.schemas.slicer import (
     SlicingJobListResponse,
     SlicingJobResponse,
 )
+from app.limiter import limiter
 from app.services.auth import get_current_user
 from app.services.makerworld_fetcher import extract_model_id, fetch_model_data
 from app.services.slicer_parser import parse_gcode_file, parse_3mf_file
@@ -45,7 +46,10 @@ router = APIRouter(prefix="/api/slicer", tags=["slicer"])
 
 # Volumen compartido entre el backend y el contenedor OrcaSlicer
 SLICER_JOBS_DIR = Path("/slicer_jobs")
-SLICER_JOBS_DIR.mkdir(exist_ok=True)
+try:
+    SLICER_JOBS_DIR.mkdir(exist_ok=True)
+except OSError:
+    pass  # El directorio /slicer_jobs no existe en entorno de desarrollo
 
 # URL del microservicio OrcaSlicer en la red interna de Podman
 ORCA_SERVICE_URL = "http://slicer:8001"
@@ -58,6 +62,9 @@ DEFAULT_CONFIG = "0.20mm Standard @BBL P2S"
 # Extensiones permitidas
 ALLOWED_GCODE_EXTENSIONS = {".gcode", ".3mf"}
 ALLOWED_STL_EXTENSIONS = {".stl", ".3mf", ".step", ".stp"}
+
+# Límite de tamaño de archivo (M-06): protección DoS en acceso directo al puerto 8000
+MAX_UPLOAD_BYTES = 250 * 1024 * 1024  # 250 MB, consistente con nginx client_max_body_size
 
 
 def _es_3mf_proyecto(file_path: Path) -> bool:
@@ -231,7 +238,9 @@ async def _run_orca_slicer(
 
 
 @router.post("/upload-gcode", response_model=SlicingJobResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("30/minute")
 async def upload_gcode(
+    request: Request,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -270,6 +279,9 @@ async def upload_gcode(
     job_uuid = str(uuid.uuid4())
     temp_path = SLICER_JOBS_DIR / f"{job_uuid}_{safe_filename}"
     contenido = await file.read()
+    if len(contenido) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                            detail="Archivo demasiado grande (máx. 250 MB)")
     temp_path.write_bytes(contenido)
 
     # Parsear metadatos
@@ -319,7 +331,9 @@ async def upload_gcode(
 
 
 @router.post("/upload-stl", response_model=SlicingJobResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("30/minute")
 async def upload_stl(
+    request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     printer_preset: Optional[str] = Query(default=None),
@@ -362,6 +376,9 @@ async def upload_stl(
     job_uuid = str(uuid.uuid4())
     temp_path = SLICER_JOBS_DIR / f"{job_uuid}_{safe_filename}"
     contenido = await file.read()
+    if len(contenido) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                            detail="Archivo demasiado grande (máx. 250 MB)")
     temp_path.write_bytes(contenido)
 
     # Presets con valores por defecto
@@ -404,8 +421,10 @@ async def upload_stl(
 
 
 @router.post("/makerworld", response_model=SlicingJobResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("30/minute")
 async def fetch_makerworld(
-    request: MakerworldRequest,
+    request: Request,
+    payload: MakerworldRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -425,7 +444,7 @@ async def fetch_makerworld(
         SlicingJobResponse con los datos extraídos (status='done') o
         con status='error' si no fue posible obtener los datos.
     """
-    model_id = extract_model_id(request.url)
+    model_id = extract_model_id(payload.url)
     if not model_id:
         raise HTTPException(
             status_code=400,
@@ -440,7 +459,7 @@ async def fetch_makerworld(
         company_id=current_user.company_id,
         user_id=current_user.id,
         source="makerworld",
-        makerworld_url=request.url,
+        makerworld_url=payload.url,
         makerworld_model_id=model_id,
         original_filename=datos.model_name if datos else None,
     )
