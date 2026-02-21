@@ -80,8 +80,8 @@ function AppRoutes() {
 
   return (
     <Routes>
-      {/* Ruta pública: redirige a /cost/calculator si ya hay sesión */}
-      <Route path="/login" element={user ? <Navigate to="/cost/calculator" /> : <Login />} />
+      {/* Ruta pública: redirige al dashboard si ya hay sesión */}
+      <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
 
       {/* TurtleForge Studio Home: lanzador de aplicaciones */}
       <Route path="/" element={<PrivateRoute><StudioLayout /></PrivateRoute>}>
