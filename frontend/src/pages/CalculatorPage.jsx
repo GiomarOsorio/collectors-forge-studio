@@ -737,7 +737,7 @@ export default function CalculatorPage() {
                 className="tf-btn-primary w-full py-3 text-base mt-4"
               >
                 <Save size={20} />
-                Guardar Cotización
+                Guardar costo de impresión
               </button>
             </div>
           ) : (
