@@ -12,9 +12,9 @@
  */
 
 import { useState, useEffect } from 'react';
-import { getQuotes, deleteQuote } from '../services/api';
+import { getQuotes, deleteQuote, updateQuote, downloadQuotePdf } from '../services/api';
 import toast from 'react-hot-toast';
-import { Trash2, Eye, X } from 'lucide-react';
+import { Trash2, Eye, X, Download, Pencil } from 'lucide-react';
 import { useConfirm } from '../components/ConfirmDialog';
 
 /**
@@ -34,6 +34,9 @@ export default function HistoryPage() {
   /** @type {[Object|null, Function]} Cotizacion seleccionada para ver en detalle (modal) */
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
+  /** @type {[Object|null, Function]} Cotizacion en edicion (modal de edicion) */
+  const [editing, setEditing] = useState(null);
+  const [editForm, setEditForm] = useState({ piece_name: '', description: '', client_name: '', notes: '' });
 
   /**
    * Carga la lista de cotizaciones desde el backend y actualiza el estado.
@@ -56,6 +59,37 @@ export default function HistoryPage() {
    *
    * @param {number} id - ID del registro a eliminar
    */
+  const openEdit = (q) => {
+    setEditing(q);
+    setEditForm({ piece_name: q.piece_name, description: q.description || '', client_name: q.client_name || '', notes: q.notes || '' });
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    try {
+      await updateQuote(editing.id, editForm);
+      toast.success('Cotización actualizada');
+      setEditing(null);
+      load();
+    } catch {
+      toast.error('Error al actualizar');
+    }
+  };
+
+  const handleDownloadPdf = async (id, pieceName) => {
+    try {
+      const res = await downloadQuotePdf(id);
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `costo_${pieceName.replace(/[^\w\-]/g, '_')}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Error al descargar PDF');
+    }
+  };
+
   const handleDelete = async (id) => {
     if (!await confirm('¿Eliminar este registro?', 'Eliminar')) return;
     try {
@@ -138,6 +172,40 @@ export default function HistoryPage() {
         </div>
       )}
 
+      {/* Edit modal */}
+      {editing && (
+        <div className="tf-modal-overlay">
+          <div className="tf-modal max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="tf-section-title">Editar cotización</h3>
+              <button onClick={() => setEditing(null)} className="tf-btn-ghost"><X size={20} /></button>
+            </div>
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div>
+                <label className="tf-label">Nombre de la pieza</label>
+                <input className="tf-input" value={editForm.piece_name} onChange={(e) => setEditForm((p) => ({ ...p, piece_name: e.target.value }))} required />
+              </div>
+              <div>
+                <label className="tf-label">Cliente</label>
+                <input className="tf-input" value={editForm.client_name} onChange={(e) => setEditForm((p) => ({ ...p, client_name: e.target.value }))} />
+              </div>
+              <div>
+                <label className="tf-label">Descripción</label>
+                <input className="tf-input" value={editForm.description} onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))} />
+              </div>
+              <div>
+                <label className="tf-label">Notas</label>
+                <textarea className="tf-input" rows={3} value={editForm.notes} onChange={(e) => setEditForm((p) => ({ ...p, notes: e.target.value }))} />
+              </div>
+              <div className="flex gap-3 justify-end pt-2">
+                <button type="button" onClick={() => setEditing(null)} className="tf-btn-ghost px-4 py-2">Cancelar</button>
+                <button type="submit" className="tf-btn-primary px-4 py-2">Guardar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className="tf-table-wrap">
         <table className="w-full min-w-[600px]">
@@ -165,6 +233,8 @@ export default function HistoryPage() {
                 </td>
                 <td className="tf-td-right">
                   <button onClick={() => setSelected(q)} className="tf-btn-ghost mr-2" title="Ver detalle"><Eye size={16} /></button>
+                  <button onClick={() => openEdit(q)} className="tf-btn-ghost mr-2" title="Editar"><Pencil size={16} /></button>
+                  <button onClick={() => handleDownloadPdf(q.id, q.piece_name)} className="tf-btn-ghost mr-2" title="Descargar PDF"><Download size={16} /></button>
                   <button onClick={() => handleDelete(q.id)} className="tf-btn-danger" title="Eliminar"><Trash2 size={16} /></button>
                 </td>
               </tr>

@@ -18,6 +18,7 @@ Endpoints:
     DELETE /api/slicer/jobs/{id}       — Eliminar trabajo
 """
 
+import asyncio
 import uuid
 import zipfile
 from pathlib import Path
@@ -423,7 +424,9 @@ async def fetch_makerworld(
             detail="URL de MakerWorld no válida. Formato esperado: makerworld.com/en/models/XXXXX",
         )
 
-    datos = fetch_model_data(model_id)
+    # B-03: fetch_model_data usa httpx.Client() síncrono; ejecutar en thread
+    # para no bloquear el event loop de FastAPI.
+    datos = await asyncio.to_thread(fetch_model_data, model_id)
 
     job = SlicingJob(
         company_id=current_user.company_id,

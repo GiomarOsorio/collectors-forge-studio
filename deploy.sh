@@ -110,6 +110,20 @@ fi
 echo "→ Iniciando backend, slicer y frontend..."
 systemctl --user restart calculator3d-slicer calculator3d-backend calculator3d-frontend
 
+echo "→ Verificando que el backend responde (máx. 30s)..."
+for i in $(seq 1 15); do
+    if curl -sf http://localhost:8000/api/health > /dev/null 2>&1; then
+        echo "  Backend listo."
+        break
+    fi
+    if [ "$i" -eq 15 ]; then
+        echo "AVISO: El backend no respondió en 30 segundos."
+        echo "  Revisa los logs: journalctl --user -u calculator3d-backend -n 50"
+    fi
+    echo "  Esperando... ($i/15)"
+    sleep 2
+done
+
 if [ -n "$TUNNEL_TOKEN" ]; then
     systemctl --user restart calculator3d-tunnel
     echo ""

@@ -12,13 +12,13 @@
  * @module pages/slicer/SlicerUploadPage
  */
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Upload, Link, FileCode, CheckCircle, AlertCircle,
   Clock, Loader, Box,
 } from 'lucide-react';
-import api from '../../services/api';
+import api, { getSlicingJob } from '../../services/api';
 import toast from 'react-hot-toast';
 
 /** Presets de filamento de OrcaSlicer para la BambuLab P2S. */
@@ -134,6 +134,18 @@ export default function SlicerUploadPage() {
   const [makerworldUrl, setMakerworldUrl] = useState('');
   const gcodeInputRef = useRef(null);
   const stlInputRef = useRef(null);
+  const pollingRef = useRef(null);
+
+  /** Detiene el polling activo si existe. */
+  const stopPolling = () => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  };
+
+  // Limpia el polling al desmontar el componente
+  useEffect(() => () => stopPolling(), []);
 
   /** Sube un archivo .gcode o .3mf y obtiene los metadatos. */
   const handleGcodeUpload = async (e) => {
@@ -180,7 +192,25 @@ export default function SlicerUploadPage() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setResult(res.data);
-      toast.success('Archivo enviado al laminador. Revisa el Historial para ver el resultado.');
+      if (res.data.status === 'pending' || res.data.status === 'slicing') {
+        const jobId = res.data.id;
+        toast('Laminando en background. Actualizando automáticamente...', { icon: '⏳' });
+        pollingRef.current = setInterval(async () => {
+          try {
+            const poll = await getSlicingJob(jobId);
+            setResult(poll.data);
+            if (poll.data.status === 'done') {
+              stopPolling();
+              toast.success('Laminado completado');
+            } else if (poll.data.status === 'error') {
+              stopPolling();
+              toast.error('Error al laminar el STL');
+            }
+          } catch {
+            stopPolling();
+          }
+        }, 5000);
+      }
     } catch {
       toast.error('Error al subir el archivo');
     } finally {
@@ -223,6 +253,7 @@ export default function SlicerUploadPage() {
   };
 
   const handleTabChange = (tabId) => {
+    stopPolling();
     setActiveTab(tabId);
     setResult(null);
   };
