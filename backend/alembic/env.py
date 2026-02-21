@@ -33,6 +33,7 @@ from app.models import (  # noqa: E402, F401
     Quote,
     Supply,
     ElectricityTariff,
+    PrintedItem,
 )
 
 target_metadata = Base.metadata

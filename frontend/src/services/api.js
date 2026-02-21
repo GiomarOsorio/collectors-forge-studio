@@ -507,6 +507,37 @@ export const deletePurchaseOrder = (id) => api.delete(`/inventory/purchases/${id
 export const arrivePurchaseOrder = (id) => api.post(`/inventory/purchases/${id}/arrive`);
 
 // ============================================================
+// Impresiones (Printed Items)
+// ============================================================
+
+/** Obtiene todos los ítems de impresiones de la empresa. */
+export const getPrintedItems = (params) => api.get('/inventory/prints/', { params });
+
+/** Crea un nuevo ítem de impresión. */
+export const createPrintedItem = (data) => api.post('/inventory/prints/', data);
+
+/** Obtiene un ítem de impresión por ID. */
+export const getPrintedItem = (id) => api.get(`/inventory/prints/${id}`);
+
+/** Actualiza un ítem de impresión. */
+export const updatePrintedItem = (id, data) => api.put(`/inventory/prints/${id}`, data);
+
+/** Elimina un ítem de impresión. */
+export const deletePrintedItem = (id) => api.delete(`/inventory/prints/${id}`);
+
+/** Registra una venta (decrementa el stock). */
+export const sellPrintedItem = (id, quantity) => api.post(`/inventory/prints/${id}/sell`, { quantity });
+
+/** Sube una imagen para un ítem de impresión. */
+export const uploadPrintedItemImage = (id, file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api.post(`/inventory/prints/${id}/image`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+
+// ============================================================
 // Slicer
 // ============================================================
 

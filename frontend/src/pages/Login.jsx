@@ -58,7 +58,7 @@ export default function Login() {
       const userRes = await getMe();
       // Paso 3: Actualizar el contexto global de autenticacion
       loginUser(res.data.access_token, userRes.data);
-      navigate('/cost/calculator');
+      navigate('/');
     } catch {
       toast.error('Usuario o contraseña incorrectos');
     } finally {
@@ -69,10 +69,11 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-forge-black">
       <div className="tf-card rounded-2xl p-8 w-full max-w-md shadow-2xl">
-        {/* Encabezado con el nombre y descripcion de la aplicacion */}
+        {/* Encabezado con logo, nombre y descripcion */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-tech-white tracking-tight">TurtleForge Cost</h1>
-          <p className="text-gunmetal mt-2 text-sm">TurtleForge Studio</p>
+          <img src="/logo.png" alt="TurtleForge" className="h-20 w-20 object-contain mx-auto mb-4" />
+          <h1 className="text-3xl font-bold text-tech-white tracking-tight">TurtleForge Studio</h1>
+          <p className="text-gunmetal mt-2 text-sm">Inicio de sesión</p>
         </div>
         {/* Formulario de autenticacion */}
         <form onSubmit={handleSubmit} className="space-y-5">

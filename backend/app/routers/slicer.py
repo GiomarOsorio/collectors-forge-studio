@@ -19,6 +19,7 @@ Endpoints:
 """
 
 import uuid
+import zipfile
 from pathlib import Path
 from typing import List, Optional
 
@@ -56,6 +57,33 @@ DEFAULT_CONFIG = "0.20mm Standard @BBL P2S"
 # Extensiones permitidas
 ALLOWED_GCODE_EXTENSIONS = {".gcode", ".3mf"}
 ALLOWED_STL_EXTENSIONS = {".stl", ".3mf"}
+
+
+def _es_3mf_proyecto(file_path: Path) -> bool:
+    """
+    Detecta si un .3mf es un proyecto sin laminar (sin G-code embebido).
+
+    Los .3mf de proyecto (exportados desde Bambu Studio sin laminar o
+    descargados de MakerWorld) contienen la geometría 3D pero no el G-code.
+    Los .3mf laminados contienen Metadata/plate_X.gcode dentro del ZIP.
+
+    Args:
+        file_path: Ruta al archivo .3mf.
+
+    Returns:
+        True si es un proyecto sin laminar, False en caso contrario.
+    """
+    try:
+        with zipfile.ZipFile(str(file_path), "r") as zf:
+            nombres = zf.namelist()
+            tiene_modelo = any(
+                n.lower().endswith(".model") or "3dmodel" in n.lower()
+                for n in nombres
+            )
+            tiene_gcode = any(n.lower().endswith(".gcode") for n in nombres)
+            return tiene_modelo and not tiene_gcode
+    except Exception:
+        return False
 
 
 async def _get_company_slicing_job(
@@ -222,13 +250,24 @@ async def upload_gcode(
         resultado = parse_gcode_file(str(dest_path))
 
     # Crear registro en DB
+    if resultado is None and ext == ".3mf" and _es_3mf_proyecto(dest_path):
+        error_msg = (
+            "Este archivo es un proyecto .3mf sin laminar. "
+            "Para usarlo: ábrelo en Bambu Studio, lámínalo y exporta el .3mf laminado. "
+            "O sube el archivo STL en la pestaña 'STL' para laminarlo automáticamente."
+        )
+    elif resultado is None:
+        error_msg = "No se pudieron extraer metadatos. ¿Es un archivo laminado por Bambu Studio u OrcaSlicer?"
+    else:
+        error_msg = None
+
     job = SlicingJob(
         company_id=current_user.company_id,
         user_id=current_user.id,
         source=source,
         original_filename=file.filename,
         status="done" if resultado else "error",
-        error_message=None if resultado else "No se pudieron extraer metadatos del archivo. ¿Es un archivo laminado por Bambu Studio u OrcaSlicer?",
+        error_message=error_msg,
     )
 
     if resultado:
