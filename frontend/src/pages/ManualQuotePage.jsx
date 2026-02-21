@@ -80,13 +80,28 @@ export default function ManualQuotePage() {
     setItems((prev) => [...prev, { name: '', quantity: '1', unit_price: '' }]);
   };
 
-  /** Selecciona una impresión del inventario y pre-llena la línea. */
+  /**
+   * Selecciona una impresión del inventario.
+   * - Si idx es un número, pre-llena esa línea existente.
+   * - Si idx es 'add', agrega una nueva línea con los datos del producto.
+   */
   const selectPrint = (idx, print) => {
-    setItems((prev) => prev.map((it, i) =>
-      i === idx
-        ? { ...it, name: print.name, unit_price: print.unit_price != null ? String(print.unit_price) : it.unit_price }
-        : it
-    ));
+    if (idx === 'add') {
+      setItems((prev) => [
+        ...prev,
+        {
+          name: print.name,
+          quantity: '1',
+          unit_price: print.unit_price != null ? String(print.unit_price) : '',
+        },
+      ]);
+    } else {
+      setItems((prev) => prev.map((it, i) =>
+        i === idx
+          ? { ...it, name: print.name, unit_price: print.unit_price != null ? String(print.unit_price) : it.unit_price }
+          : it
+      ));
+    }
     setSelectorOpen(null);
   };
 
@@ -181,11 +196,26 @@ export default function ManualQuotePage() {
 
         {/* Líneas de producto */}
         <div className="tf-card p-6 space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <h3 className="tf-section-title mb-0">Productos / Servicios</h3>
-            <button type="button" onClick={addItem} className="tf-btn-ghost text-sm gap-1">
-              <Plus size={16} /> Agregar línea
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={addItem}
+                className="inline-flex items-center gap-1 text-sm text-gunmetal hover:text-tech-white transition-colors"
+              >
+                <Plus size={16} /> Agregar línea
+              </button>
+              {prints.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectorOpen('add')}
+                  className="inline-flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  <Package size={16} /> Agregar del inventario
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="space-y-3">
