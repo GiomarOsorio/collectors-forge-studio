@@ -272,7 +272,7 @@ async def mark_order_arrived(
 
     # Actualizar estado y fecha de llegada
     order.status = "llegado"
-    order.arrived_at = datetime.now(timezone.utc)
+    order.arrived_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     # Actualizar stock de los ítems de inventario vinculados
     for order_item in order.items:

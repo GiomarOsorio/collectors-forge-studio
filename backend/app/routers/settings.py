@@ -161,7 +161,7 @@ async def get_electricity_tariff(
                     usd_to_cop=data["usd_to_cop"],
                     multiplier=data["multiplier"],
                     pdf_url=data.get("pdf_url"),
-                    scraped_at=datetime.now(timezone.utc),
+                    scraped_at=datetime.now(timezone.utc).replace(tzinfo=None),
                 )
                 db.add(record)
         await db.commit()

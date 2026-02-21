@@ -52,4 +52,4 @@ class ElectricityTariff(Base):
         Numeric(5, 2), nullable=False, server_default=text("2.00")
     )
     pdf_url: Mapped[str] = mapped_column(String, nullable=True)
-    scraped_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    scraped_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
