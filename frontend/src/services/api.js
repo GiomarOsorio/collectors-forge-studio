@@ -100,6 +100,25 @@ export const getMe = () => api.get('/auth/me');
 export const register = (data) => api.post('/auth/register', data);
 
 // ============================================================================
+// Empresa
+// ============================================================================
+
+export const getCompany = () => api.get('/company/');
+export const updateCompany = (data) => api.put('/company/', data);
+export const uploadCompanyLogo = (file) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  return api.post('/company/logo', fd);
+};
+
+// ============================================================================
+// Usuario actual
+// ============================================================================
+
+export const updateMe = (data) => api.put('/users/me', data);
+export const getUsers = () => api.get('/users/');
+
+// ============================================================================
 // Filamentos
 // ============================================================================
 

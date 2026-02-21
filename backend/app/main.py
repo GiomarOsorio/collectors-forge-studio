@@ -13,6 +13,7 @@ Las tablas de la base de datos se crean y migran a través de Alembic
 
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -31,6 +32,8 @@ from app.routers import (
     auth, printers, settings as settings_router, quotes,
     client_quotes, inventory, purchase_orders, slicer, printed_items,
 )
+from app.routers.company import router as company_router
+from app.routers.users import router as users_router
 
 # UUID fijo de la empresa por defecto — coincide con la migración f4a1b9c2d8e7
 DEFAULT_COMPANY_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
@@ -51,6 +54,8 @@ async def lifespan(app: FastAPI):
     Yields:
         Control al servidor para empezar a atender solicitudes.
     """
+    # Crear directorios estáticos necesarios
+    Path("/app/static/companies").mkdir(parents=True, exist_ok=True)
     await create_default_data()
     yield
 
@@ -90,6 +95,8 @@ app.include_router(inventory.router)
 app.include_router(purchase_orders.router)
 app.include_router(slicer.router)
 app.include_router(printed_items.router)
+app.include_router(company_router)
+app.include_router(users_router)
 
 # Archivos estáticos: imágenes de ítems de impresión y otros recursos subidos
 app.mount("/static", StaticFiles(directory="/app/static", check_dir=False), name="static")

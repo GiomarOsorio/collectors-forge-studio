@@ -92,6 +92,26 @@ class Token(BaseModel):
     token_type: str
 
 
+class UserUpdate(BaseModel):
+    """
+    Esquema para actualizar el perfil del usuario autenticado.
+
+    Todos los campos son opcionales. Para cambiar la contraseña se deben
+    enviar current_password y new_password juntos.
+
+    Atributos:
+        username:         Nuevo nombre de usuario (mín. 3, máx. 50 caracteres).
+        email:            Nueva dirección de correo electrónico válida.
+        current_password: Contraseña actual (requerida si se envía new_password).
+        new_password:     Nueva contraseña en texto plano (mín. 8, máx. 128).
+    """
+
+    username: Optional[str] = None
+    email: Optional[EmailStr] = None
+    current_password: Optional[str] = None
+    new_password: Optional[str] = Field(default=None, min_length=8, max_length=128)
+
+
 class TokenData(BaseModel):
     """
     Esquema interno para los datos extraídos del payload del token JWT.

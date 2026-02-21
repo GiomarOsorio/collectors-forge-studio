@@ -24,10 +24,11 @@ from reportlab.platypus import (
 
 from typing import Optional
 
+from app.models.company import Company
 from app.models.quote import Quote
 from app.models.client_quote import ClientQuote
 
-# Logo: backend/app/static/logo.png (1536×1024 px, aspect 1.5)
+# Logo por defecto: backend/app/static/logo.png (1536×1024 px, aspect 1.5)
 LOGO_PATH = Path(__file__).parent.parent / "static" / "logo.png"
 
 # ── Paleta de colores ─────────────────────────────────────────────────────────
@@ -106,26 +107,43 @@ def _make_styles(suffix: str = "") -> dict:
     }
 
 
-def _build_header(st: dict) -> list:
+def _build_header(st: dict, company: Optional["Company"] = None) -> list:
     """
     Construye el encabezado del PDF: logo (izq.) + empresa (der.).
 
+    Usa los datos del perfil de empresa si están disponibles.
+    Cae al logo estático y nombre genérico si no hay empresa configurada.
+
     Args:
-        st: Diccionario de estilos generado por _make_styles().
+        st:      Diccionario de estilos generado por _make_styles().
+        company: Instancia ORM de Company (opcional).
 
     Returns:
         Lista de elementos ReportLab (tabla + spacer).
     """
+    # Determinar ruta del logo
+    logo_path: Optional[Path] = None
+    if company and company.logo_url:
+        candidate = Path("/app") / company.logo_url.lstrip("/")
+        if candidate.exists():
+            logo_path = candidate
+    if logo_path is None and LOGO_PATH.exists():
+        logo_path = LOGO_PATH
+
     logo_cell = (
-        Image(str(LOGO_PATH), width=1.8 * inch, height=1.2 * inch)
-        if LOGO_PATH.exists()
+        Image(str(logo_path), width=1.8 * inch, height=1.2 * inch)
+        if logo_path
         else Paragraph("<b>TurtleForge</b>", st["base"]["Normal"])
     )
-    company_cell = [
-        Paragraph("TurtleForge Studio", st["sCo"]),
-        Spacer(1, 4),
-        Paragraph("Medellín, Colombia", st["sCoS"]),
-    ]
+
+    company_name = (company.name if company and company.name else "TurtleForge Studio")
+    company_addr = (company.address if company and company.address else "Medellín, Colombia")
+
+    company_cell: list = [Paragraph(company_name, st["sCo"]), Spacer(1, 4)]
+    if company and company.slogan:
+        company_cell += [Paragraph(company.slogan, st["sCoS"]), Spacer(1, 2)]
+    company_cell.append(Paragraph(company_addr, st["sCoS"]))
+
     hdr_tbl = Table(
         [[logo_cell, "", company_cell]],
         colWidths=[1.9 * inch, 2.2 * inch, 2.4 * inch],
@@ -229,7 +247,7 @@ def _build_footer(notes: Optional[str], st: dict) -> list:
     return elems
 
 
-def generate_quote_pdf(quote: Quote) -> bytes:
+def generate_quote_pdf(quote: Quote, company: Optional["Company"] = None) -> bytes:
     """
     Genera el PDF de una cotización en formato profesional TurtleForge Cost.
 
@@ -250,7 +268,7 @@ def generate_quote_pdf(quote: Quote) -> bytes:
     elements: list = []
 
     # ── 1. HEADER ─────────────────────────────────────────────────────────────
-    elements += _build_header(st)
+    elements += _build_header(st, company)
 
     # ── 2. BLOQUE CLIENTE (opcional) ──────────────────────────────────────────
     if quote.client_name:
@@ -319,7 +337,7 @@ def generate_quote_pdf(quote: Quote) -> bytes:
     return buffer.getvalue()
 
 
-def generate_client_quote_pdf(client_quote: ClientQuote) -> bytes:
+def generate_client_quote_pdf(client_quote: ClientQuote, company: Optional["Company"] = None) -> bytes:
     """
     Genera el PDF de una cotización de cliente multi-producto.
 
@@ -339,7 +357,7 @@ def generate_client_quote_pdf(client_quote: ClientQuote) -> bytes:
     elements: list = []
 
     # ── 1. HEADER ─────────────────────────────────────────────────────────────
-    elements += _build_header(st)
+    elements += _build_header(st, company)
 
     # ── 2. BLOQUE CLIENTE ─────────────────────────────────────────────────────
     elements += _build_client_block(client_quote.client_name, client_quote.description, st)

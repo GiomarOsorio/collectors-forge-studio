@@ -24,6 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models.company import Company
 from app.models.user import User
 from app.models.inventory import InventoryItem
 from app.models.printer import Printer
@@ -365,7 +366,10 @@ async def download_quote_pdf(
     """
     quote = await _get_company_quote(db, quote_id, current_user.company_id)
 
-    pdf_bytes = generate_quote_pdf(quote)
+    company_result = await db.execute(select(Company).where(Company.id == current_user.company_id))
+    company = company_result.scalar_one_or_none()
+
+    pdf_bytes = generate_quote_pdf(quote, company)
     safe_name = re.sub(r"[^\w\-]", "_", quote.piece_name)
     filename = f"cotizacion_{safe_name}_{quote.id}.pdf"
 

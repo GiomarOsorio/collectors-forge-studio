@@ -20,6 +20,7 @@ import {
   Printer,
   History,
   Settings,
+  UserCog,
   LogOut,
   Menu,
 } from 'lucide-react';
@@ -34,6 +35,7 @@ const navItems = [
   { to: '/cost/manual', icon: FileEdit, label: 'Nueva Cotización' },
   { to: '/cost/printers', icon: Printer, label: 'Impresoras' },
   { to: '/cost/history', icon: History, label: 'Costos Impresión' },
+  { to: '/cost/account', icon: UserCog, label: 'Mi Cuenta' },
   { to: '/cost/settings', icon: Settings, label: 'Configuración' },
 ];
 
