@@ -10,6 +10,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
+import { useConfirm } from '../../components/ConfirmDialog';
 import {
   Plus, X, Trash2, Pencil, ShoppingBag, Package, ImagePlus,
   Tag, Layers,
@@ -137,6 +138,7 @@ function PrintCard({ item, onEdit, onDelete, onSell }) {
  * @returns {JSX.Element}
  */
 export default function InventoryPrintsPage() {
+  const confirm = useConfirm();
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -243,7 +245,7 @@ export default function InventoryPrintsPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('¿Eliminar esta impresión del inventario?')) return;
+    if (!await confirm('¿Eliminar esta impresión del inventario?', 'Eliminar')) return;
     try {
       await deletePrintedItem(id);
       toast.success('Impresión eliminada');

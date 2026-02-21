@@ -263,6 +263,8 @@ async def create_quote(
 
 @router.get("/", response_model=list[QuoteResponse])
 async def list_quotes(
+    skip: int = 0,
+    limit: int = 100,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -271,11 +273,17 @@ async def list_quotes(
 
     Filtra por company_id para garantizar el aislamiento multi-tenant.
     Los resultados se ordenan de más reciente a más antiguo.
+
+    Args:
+        skip:  Número de registros a omitir (paginación).
+        limit: Máximo de registros a retornar (defecto 100).
     """
     result = await db.execute(
         select(Quote)
         .where(Quote.company_id == current_user.company_id)
         .order_by(Quote.created_at.desc())
+        .offset(skip)
+        .limit(limit)
     )
     return result.scalars().all()
 

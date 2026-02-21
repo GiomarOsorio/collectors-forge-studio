@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { getClientQuotes, deleteClientQuote, downloadClientQuotePdf } from '../services/api';
 import toast from 'react-hot-toast';
 import { FileDown, Trash2, Eye, X, Plus } from 'lucide-react';
+import { useConfirm } from '../components/ConfirmDialog';
 
 /**
  * Formatea una fecha ISO o YYYY-MM-DD a dd/mm/yyyy.
@@ -31,14 +32,24 @@ const fmt = (str) => {
  */
 export default function QuotesPage() {
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const [quotes, setQuotes] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const load = () => getClientQuotes().then((res) => setQuotes(res.data));
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await getClientQuotes();
+      setQuotes(res.data);
+    } finally {
+      setLoading(false);
+    }
+  };
   useEffect(() => { load(); }, []);
 
   const handleDelete = async (id) => {
-    if (!confirm('¿Eliminar esta cotización?')) return;
+    if (!await confirm('¿Eliminar esta cotización?', 'Eliminar')) return;
     try {
       await deleteClientQuote(id);
       toast.success('Cotización eliminada');
@@ -69,6 +80,8 @@ export default function QuotesPage() {
   const parseItems = (itemsStr) => {
     try { return JSON.parse(itemsStr); } catch { return []; }
   };
+
+  if (loading) return <p className="text-center text-gunmetal py-16">Cargando cotizaciones...</p>;
 
   return (
     <div>

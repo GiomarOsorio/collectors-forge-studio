@@ -13,6 +13,7 @@ import { useState, useEffect } from 'react';
 import { getSupplies, createSupply, updateSupply, deleteSupply } from '../services/api';
 import toast from 'react-hot-toast';
 import { Plus, Pencil, Trash2, X, Package } from 'lucide-react';
+import { useConfirm } from '../components/ConfirmDialog';
 
 /**
  * Valores iniciales del formulario de insumo.
@@ -42,6 +43,7 @@ const emptyForm = {
  * @returns {JSX.Element} Pagina de gestion de insumos con tabla y modal de formulario
  */
 export default function SuppliesPage() {
+  const confirm = useConfirm();
   /** @type {[Array, Function]} Lista de insumos cargados desde el backend */
   const [supplies, setSupplies] = useState([]);
   /** @type {[boolean, Function]} Controla la visibilidad del modal de creacion/edicion */
@@ -164,7 +166,7 @@ export default function SuppliesPage() {
    * @returns {Promise<void>}
    */
   const handleDelete = async (id) => {
-    if (!confirm('¿Eliminar este insumo?')) return;
+    if (!await confirm('¿Eliminar este insumo?', 'Eliminar')) return;
     try {
       await deleteSupply(id);
       toast.success('Insumo eliminado');

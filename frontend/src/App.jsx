@@ -30,10 +30,12 @@
  * @module App
  */
 
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DirtyStateProvider } from './context/DirtyStateContext';
+import { ConfirmProvider } from './components/ConfirmDialog';
 import StudioLayout from './components/StudioLayout';
 import CostLayout from './components/CostLayout';
 import InventoryLayout from './components/InventoryLayout';
@@ -75,6 +77,15 @@ function PrivateRoute({ children }) {
  */
 function AppRoutes() {
   const { user, loading } = useAuth();
+  const navigate = useNavigate();
+
+  // M-05: Redirigir via React Router cuando el interceptor de Axios detecta 401.
+  // Así se respeta DirtyStateContext en lugar de hacer un reload completo.
+  useEffect(() => {
+    const handler = () => navigate('/login', { replace: true });
+    window.addEventListener('auth:unauthorized', handler);
+    return () => window.removeEventListener('auth:unauthorized', handler);
+  }, [navigate]);
 
   if (loading) return null;
 
@@ -129,11 +140,13 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <DirtyStateProvider>
-          <AppRoutes />
-          <Toaster position="top-right" toastOptions={{
+          <ConfirmProvider>
+            <AppRoutes />
+            <Toaster position="top-right" toastOptions={{
             style: { background: '#1a1d21', color: '#F2F4F6', border: '1px solid #2a2d31' },
             success: { iconTheme: { primary: '#3FAF4C', secondary: '#F2F4F6' } },
           }} />
+          </ConfirmProvider>
         </DirtyStateProvider>
       </AuthProvider>
     </BrowserRouter>

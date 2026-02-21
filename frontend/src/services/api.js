@@ -53,7 +53,9 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
-      window.location.href = '/login';
+      // M-05: usar evento en lugar de window.location para que React Router
+      // maneje la navegación y DirtyStateContext pueda advertir al usuario.
+      window.dispatchEvent(new CustomEvent('auth:unauthorized'));
     }
     return Promise.reject(error);
   }

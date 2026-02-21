@@ -26,7 +26,7 @@ from app.services.auth import get_current_user
 router = APIRouter(prefix="/api/filaments", tags=["filaments"])
 
 
-@router.get("/", response_model=list[FilamentResponse])
+@router.get("/", response_model=list[FilamentResponse], deprecated=True)
 async def list_filaments(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -45,7 +45,7 @@ async def list_filaments(
     return result.scalars().all()
 
 
-@router.get("/{filament_id}", response_model=FilamentResponse)
+@router.get("/{filament_id}", response_model=FilamentResponse, deprecated=True)
 async def get_filament(
     filament_id: int,
     db: AsyncSession = Depends(get_db),
@@ -69,7 +69,7 @@ async def get_filament(
     return filament
 
 
-@router.post("/", response_model=FilamentResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=FilamentResponse, status_code=status.HTTP_201_CREATED, deprecated=True)
 async def create_filament(
     data: FilamentCreate,
     db: AsyncSession = Depends(get_db),
@@ -87,7 +87,7 @@ async def create_filament(
     return filament
 
 
-@router.put("/{filament_id}", response_model=FilamentResponse)
+@router.put("/{filament_id}", response_model=FilamentResponse, deprecated=True)
 async def update_filament(
     filament_id: int,
     data: FilamentUpdate,
@@ -120,7 +120,7 @@ async def update_filament(
     return filament
 
 
-@router.delete("/{filament_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{filament_id}", status_code=status.HTTP_204_NO_CONTENT, deprecated=True)
 async def delete_filament(
     filament_id: int,
     db: AsyncSession = Depends(get_db),

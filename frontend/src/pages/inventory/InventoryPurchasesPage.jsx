@@ -10,6 +10,7 @@
 
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import { useConfirm } from '../../components/ConfirmDialog';
 import {
   Plus, X, Eye, Trash2, PackageCheck, Truck, Clock, Ban,
   ShoppingCart, Pencil,
@@ -57,6 +58,7 @@ function StatusBadge({ status }) {
  * @returns {JSX.Element}
  */
 export default function InventoryPurchasesPage() {
+  const confirm = useConfirm();
   const [orders, setOrders] = useState([]);
   const [inventoryItems, setInventoryItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -181,7 +183,7 @@ export default function InventoryPurchasesPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('¿Eliminar este pedido?')) return;
+    if (!await confirm('¿Eliminar este pedido?', 'Eliminar')) return;
     try {
       await deletePurchaseOrder(id);
       toast.success('Pedido eliminado');
@@ -193,7 +195,7 @@ export default function InventoryPurchasesPage() {
   };
 
   const handleArrive = async (id) => {
-    if (!confirm('¿Marcar este pedido como llegado? El stock del inventario se actualizará automáticamente.')) return;
+    if (!await confirm('¿Marcar este pedido como llegado? El stock del inventario se actualizará automáticamente.', 'Confirmar')) return;
     try {
       await arrivePurchaseOrder(id);
       toast.success('Pedido marcado como llegado. El inventario fue actualizado.');

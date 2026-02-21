@@ -120,6 +120,8 @@ async def create_client_quote(
 
 @router.get("/", response_model=List[ClientQuoteResponse])
 async def list_client_quotes(
+    skip: int = 0,
+    limit: int = 100,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -127,6 +129,8 @@ async def list_client_quotes(
     Lista todas las cotizaciones de cliente de la empresa, ordenadas por fecha desc.
 
     Args:
+        skip:         Número de registros a omitir (paginación).
+        limit:        Máximo de registros a retornar (defecto 100).
         db:           Sesión de base de datos.
         current_user: Usuario autenticado.
 
@@ -137,6 +141,8 @@ async def list_client_quotes(
         select(ClientQuote)
         .where(ClientQuote.company_id == current_user.company_id)
         .order_by(ClientQuote.created_at.desc())
+        .offset(skip)
+        .limit(limit)
     )
     return result.scalars().all()
 

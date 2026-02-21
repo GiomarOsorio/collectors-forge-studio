@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { useConfirm } from '../../components/ConfirmDialog';
 
 const PER_PAGE = 15;
 
@@ -101,6 +102,7 @@ function sourceLabel(source) {
  */
 export default function SlicerHistoryPage() {
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const [jobs, setJobs] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -139,7 +141,7 @@ export default function SlicerHistoryPage() {
 
   /** Elimina un trabajo y refresca la lista. */
   const handleDelete = async (id) => {
-    if (!confirm('¿Eliminar este trabajo de laminado?')) return;
+    if (!await confirm('¿Eliminar este trabajo de laminado?', 'Eliminar')) return;
     try {
       await api.delete(`/slicer/jobs/${id}`);
       toast.success('Trabajo eliminado');
