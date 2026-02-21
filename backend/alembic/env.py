@@ -72,13 +72,22 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_async_migrations() -> None:
-    """Crea el engine asíncrono y ejecuta las migraciones."""
+    """Crea el engine asíncrono y ejecuta las migraciones.
+
+    Usa engine.begin() en lugar de engine.connect() para envolver TODO
+    (DDL + UPDATE alembic_version) en una sola transacción atómica.
+
+    Con engine.connect(), context.begin_transaction() es un no-op para
+    PostgreSQL (que soporta DDL transaccional), lo que deja cada ALTER
+    TABLE sin transacción explícita y puede causar que el UPDATE de
+    alembic_version falle con "0 found" si el estado es inconsistente.
+    """
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
-    async with connectable.connect() as connection:
+    async with connectable.begin() as connection:
         await connection.run_sync(do_run_migrations)
     await connectable.dispose()
 

@@ -9,15 +9,18 @@ tabla quotes de tipo TEXT a JSONB. Esto permite consultas nativas de
 PostgreSQL sobre los documentos JSON (índices GIN, operadores @>, etc.)
 y elimina la capa de serialización/deserialización manual en el router.
 
-El CAST uses supplies_detail::jsonb es seguro porque los valores existentes
+El CAST USING supplies_detail::jsonb es seguro porque los valores existentes
 ya son JSON válido ('[]' o arrays serializados con json.dumps).
+
+Usa SQL directo (op.execute) en lugar de op.alter_column para garantizar
+que toda la operación ocurra dentro de la misma transacción controlada
+por env.py (engine.begin()), evitando el error "0 found" en alembic_version.
 """
 
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "e2f3a4b5c6d7"
@@ -27,43 +30,32 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.alter_column(
-        "quotes",
-        "supplies_detail",
-        type_=postgresql.JSONB(astext_type=sa.Text()),
-        postgresql_using="supplies_detail::jsonb",
-        existing_nullable=True,
-        existing_server_default=sa.text("'[]'"),
-    )
-    op.alter_column(
-        "quotes",
-        "additional_filaments_detail",
-        type_=postgresql.JSONB(astext_type=sa.Text()),
-        postgresql_using="additional_filaments_detail::jsonb",
-        existing_nullable=True,
-        existing_server_default=sa.text("'[]'"),
-    )
-    # Actualizar server_default al equivalente JSONB
-    op.alter_column("quotes", "supplies_detail", server_default=sa.text("'[]'::jsonb"))
-    op.alter_column("quotes", "additional_filaments_detail", server_default=sa.text("'[]'::jsonb"))
+    # Un solo ALTER TABLE con dos cambios de tipo — más atómico que
+    # cuatro llamadas a op.alter_column separadas.
+    op.execute(sa.text(
+        "ALTER TABLE quotes"
+        " ALTER COLUMN supplies_detail"
+        "   TYPE JSONB USING supplies_detail::jsonb,"
+        " ALTER COLUMN additional_filaments_detail"
+        "   TYPE JSONB USING additional_filaments_detail::jsonb"
+    ))
+    op.execute(sa.text(
+        "ALTER TABLE quotes"
+        " ALTER COLUMN supplies_detail SET DEFAULT '[]'::jsonb,"
+        " ALTER COLUMN additional_filaments_detail SET DEFAULT '[]'::jsonb"
+    ))
 
 
 def downgrade() -> None:
-    op.alter_column(
-        "quotes",
-        "supplies_detail",
-        type_=sa.Text(),
-        postgresql_using="supplies_detail::text",
-        existing_nullable=True,
-        existing_server_default=sa.text("'[]'::jsonb"),
-    )
-    op.alter_column(
-        "quotes",
-        "additional_filaments_detail",
-        type_=sa.Text(),
-        postgresql_using="additional_filaments_detail::text",
-        existing_nullable=True,
-        existing_server_default=sa.text("'[]'::jsonb"),
-    )
-    op.alter_column("quotes", "supplies_detail", server_default=sa.text("'[]'"))
-    op.alter_column("quotes", "additional_filaments_detail", server_default=sa.text("'[]'"))
+    op.execute(sa.text(
+        "ALTER TABLE quotes"
+        " ALTER COLUMN supplies_detail"
+        "   TYPE TEXT USING supplies_detail::text,"
+        " ALTER COLUMN additional_filaments_detail"
+        "   TYPE TEXT USING additional_filaments_detail::text"
+    ))
+    op.execute(sa.text(
+        "ALTER TABLE quotes"
+        " ALTER COLUMN supplies_detail SET DEFAULT '[]',"
+        " ALTER COLUMN additional_filaments_detail SET DEFAULT '[]'"
+    ))
