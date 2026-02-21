@@ -51,6 +51,7 @@ import QuotesPage from './pages/QuotesPage';
 import PrintersPage from './pages/PrintersPage';
 import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
+import AccountPage from './pages/AccountPage';
 import InventoryFilamentsPage from './pages/inventory/InventoryFilamentsPage';
 import InventorySuppliesPage from './pages/inventory/InventorySuppliesPage';
 import InventoryPrintsPage from './pages/inventory/InventoryPrintsPage';
@@ -121,6 +122,7 @@ function AppRoutes() {
         <Route path="printers" element={<PrintersPage />} />
         <Route path="history" element={<HistoryPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="account" element={<AccountPage />} />
       </Route>
 
       {/* Aplicación Slicer: laminado de modelos 3D */}

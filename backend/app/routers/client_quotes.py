@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.client_quote import ClientQuote
+from app.models.company import Company
 from app.models.user import User
 from app.schemas.client_quote import ClientQuoteCreate, ClientQuoteResponse
 from app.limiter import limiter
@@ -216,7 +217,9 @@ async def download_client_quote_pdf(
         HTTPException 404: Si no existe.
     """
     cq = await _get_company_client_quote(db, quote_id, current_user.company_id)
-    pdf_bytes = generate_client_quote_pdf(cq)
+    company_result = await db.execute(select(Company).where(Company.id == current_user.company_id))
+    company = company_result.scalar_one_or_none()
+    pdf_bytes = generate_client_quote_pdf(cq, company)
     safe_client = re.sub(r"[^\w\-]", "_", cq.client_name)
     filename = f"cotizacion_COT-{cq.id:04d}_{safe_client}.pdf"
     return Response(
