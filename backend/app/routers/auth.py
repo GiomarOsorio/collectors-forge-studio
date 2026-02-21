@@ -12,12 +12,13 @@ Todos los endpoints de este router están bajo el prefijo /api/auth y se
 etiquetan como "auth" en la documentación automática de FastAPI.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.limiter import limiter
 from app.models.user import User
 from app.models.settings import AppSettings
 from app.schemas.user import UserCreate, UserResponse, Token
@@ -33,7 +34,9 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @router.post("/login", response_model=Token)
+@limiter.limit("10/minute")
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):

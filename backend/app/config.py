@@ -45,11 +45,11 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = ""
 
-    SECRET_KEY: str = "dev-secret-key-cambiar-en-produccion"
+    SECRET_KEY: str  # Requerida — define en .env o variable de entorno
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
     ADMIN_USERNAME: str = "admin"
-    ADMIN_PASSWORD: str = "admin123"
+    ADMIN_PASSWORD: str  # Requerida — define en .env o variable de entorno
     ADMIN_EMAIL: str = "admin@calculator3d.local"
 
     model_config = {"env_file": ".env"}

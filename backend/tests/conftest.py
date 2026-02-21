@@ -5,6 +5,14 @@ Fixtures con valores Decimal puros — nunca float — para garantizar
 aritmética exacta y que _d() no tenga que hacer conversiones.
 """
 
+import os
+
+# Variables requeridas por app.config.Settings sin default.
+# Se establecen aquí, antes de que pytest importe los módulos de la app,
+# para que Settings() encuentre valores válidos al cargar config.py.
+os.environ.setdefault("SECRET_KEY", "test-secret-key-solo-para-testing")
+os.environ.setdefault("ADMIN_PASSWORD", "test-admin-password-solo-para-testing")
+
 from decimal import Decimal
 
 import pytest
