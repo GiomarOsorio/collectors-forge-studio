@@ -100,10 +100,19 @@ for i in $(seq 1 30); do
 done
 
 echo "→ Aplicando migraciones de base de datos..."
-podman exec calculator3d-backend alembic upgrade head
+# Ejecutar alembic desde un contenedor temporal usando la imagen RECIÉN CONSTRUIDA.
+# Esto garantiza que siempre se usen los archivos de migración más actuales,
+# independientemente de la imagen que tenga el contenedor backend en ejecución.
+podman run --rm \
+    --network calculator3d \
+    --env-file "$ENV_FILE" \
+    -e ALGORITHM=HS256 \
+    -e ACCESS_TOKEN_EXPIRE_MINUTES=1440 \
+    localhost/calculator3d-backend:latest \
+    alembic upgrade head
 if [ $? -ne 0 ]; then
     echo "ERROR: alembic upgrade head falló. Abortando deploy."
-    echo "  Revisa los logs: journalctl --user -u calculator3d-backend -n 50"
+    echo "  Ver versión actual: podman exec calculator3d-postgres psql -U \$POSTGRES_USER \$POSTGRES_DB -c 'SELECT * FROM alembic_version;'"
     exit 1
 fi
 
