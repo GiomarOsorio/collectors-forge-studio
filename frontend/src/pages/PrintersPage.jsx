@@ -17,6 +17,7 @@ import { useState, useEffect } from 'react';
 import { getPrinters, createPrinter, updatePrinter, deletePrinter } from '../services/api';
 import toast from 'react-hot-toast';
 import { Plus, Pencil, Trash2, X } from 'lucide-react';
+import { useConfirm } from '../components/ConfirmDialog';
 
 /**
  * Valores iniciales del formulario de impresora.
@@ -44,6 +45,7 @@ const emptyForm = {
  * @returns {JSX.Element} Pagina completa de gestion de impresoras
  */
 export default function PrintersPage() {
+  const confirm = useConfirm();
   /** @type {[Array, Function]} Lista de impresoras obtenidas del backend */
   const [printers, setPrinters] = useState([]);
   /** @type {[boolean, Function]} Controla la visibilidad del formulario modal */
@@ -128,7 +130,7 @@ export default function PrintersPage() {
    * @param {number} id - ID de la impresora a eliminar
    */
   const handleDelete = async (id) => {
-    if (!confirm('¿Eliminar esta impresora?')) return;
+    if (!await confirm('¿Eliminar esta impresora?', 'Eliminar')) return;
     try {
       await deletePrinter(id);
       toast.success('Impresora eliminada');

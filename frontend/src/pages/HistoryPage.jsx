@@ -15,6 +15,7 @@ import { useState, useEffect } from 'react';
 import { getQuotes, deleteQuote } from '../services/api';
 import toast from 'react-hot-toast';
 import { Trash2, Eye, X } from 'lucide-react';
+import { useConfirm } from '../components/ConfirmDialog';
 
 /**
  * Componente de la pagina de historial de cotizaciones.
@@ -27,15 +28,25 @@ import { Trash2, Eye, X } from 'lucide-react';
  * @returns {JSX.Element} Pagina de historial con tabla y modal de detalle
  */
 export default function HistoryPage() {
+  const confirm = useConfirm();
   /** @type {[Array, Function]} Lista de cotizaciones obtenidas del backend */
   const [quotes, setQuotes] = useState([]);
   /** @type {[Object|null, Function]} Cotizacion seleccionada para ver en detalle (modal) */
   const [selected, setSelected] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   /**
    * Carga la lista de cotizaciones desde el backend y actualiza el estado.
    */
-  const load = () => getQuotes().then((res) => setQuotes(res.data));
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await getQuotes();
+      setQuotes(res.data);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Carga las cotizaciones al montar el componente
   useEffect(() => { load(); }, []);
@@ -46,7 +57,7 @@ export default function HistoryPage() {
    * @param {number} id - ID del registro a eliminar
    */
   const handleDelete = async (id) => {
-    if (!confirm('¿Eliminar este registro?')) return;
+    if (!await confirm('¿Eliminar este registro?', 'Eliminar')) return;
     try {
       await deleteQuote(id);
       toast.success('Registro eliminado');
@@ -66,6 +77,8 @@ export default function HistoryPage() {
     const d = new Date(dateStr);
     return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
+
+  if (loading) return <p className="text-center text-gunmetal py-16">Cargando historial...</p>;
 
   return (
     <div>

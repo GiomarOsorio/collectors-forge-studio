@@ -99,6 +99,14 @@ for i in $(seq 1 30); do
     sleep 2
 done
 
+echo "→ Aplicando migraciones de base de datos..."
+podman exec calculator3d-backend alembic upgrade head
+if [ $? -ne 0 ]; then
+    echo "ERROR: alembic upgrade head falló. Abortando deploy."
+    echo "  Revisa los logs: journalctl --user -u calculator3d-backend -n 50"
+    exit 1
+fi
+
 echo "→ Iniciando backend, slicer y frontend..."
 systemctl --user restart calculator3d-slicer calculator3d-backend calculator3d-frontend
 

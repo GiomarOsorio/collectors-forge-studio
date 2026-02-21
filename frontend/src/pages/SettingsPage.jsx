@@ -264,9 +264,12 @@ export default function SettingsPage() {
                     <span className="text-steel/70">Tarifa mercado</span>
                     <span className="font-medium text-steel">{copMarket?.toLocaleString('es-CO')} COP/kWh</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-steel/70">Factor aplicado</span>
-                    <span className="font-medium text-steel">× {source?.multiplier}</span>
+                  <div className="flex justify-between items-start gap-2">
+                    <span className="text-steel/70" title="Factor de estimación conservadora aplicado a la tarifa de mercado. Cubre pérdidas de red eléctrica, variaciones de voltaje y el mayor consumo real de las impresoras 3D respecto a su potencia nominal.">
+                      Factor aplicado ×{source?.multiplier}
+                      <span className="block text-xs text-steel/50">pérdidas de red + consumo real</span>
+                    </span>
+                    <span className="font-medium text-steel shrink-0">× {source?.multiplier}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-steel/70">Tarifa usada en estimación</span>

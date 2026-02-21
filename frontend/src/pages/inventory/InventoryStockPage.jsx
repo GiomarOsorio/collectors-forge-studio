@@ -18,6 +18,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
+import { useConfirm } from '../../components/ConfirmDialog';
 import {
   Plus, Pencil, Trash2, X, AlertTriangle, ShoppingCart,
   PackageOpen, CheckCircle, ChevronUp, ChevronDown,
@@ -148,6 +149,7 @@ function SortTh({ label, sortKey, sortConfig, onSort, className = 'tf-th' }) {
  * @returns {JSX.Element}
  */
 export default function InventoryStockPage({ categoryFilter = null, excludeCategory = null }) {
+  const confirm = useConfirm();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -269,7 +271,7 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('¿Eliminar este ítem del inventario?')) return;
+    if (!await confirm('¿Eliminar este ítem del inventario?', 'Eliminar')) return;
     try {
       await deleteInventoryItem(id);
       toast.success('Ítem eliminado');

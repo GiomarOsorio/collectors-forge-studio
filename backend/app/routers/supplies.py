@@ -51,7 +51,7 @@ def _compute_price_per_unit(
     raise ValueError("Debes proporcionar pack_qty + pack_price, o price_per_unit")
 
 
-@router.get("/", response_model=list[SupplyResponse])
+@router.get("/", response_model=list[SupplyResponse], deprecated=True)
 async def list_supplies(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -65,7 +65,7 @@ async def list_supplies(
     return result.scalars().all()
 
 
-@router.post("/", response_model=SupplyResponse, status_code=201)
+@router.post("/", response_model=SupplyResponse, status_code=201, deprecated=True)
 async def create_supply(
     data: SupplyCreate,
     db: AsyncSession = Depends(get_db),
@@ -91,7 +91,7 @@ async def create_supply(
     return supply
 
 
-@router.put("/{supply_id}", response_model=SupplyResponse)
+@router.put("/{supply_id}", response_model=SupplyResponse, deprecated=True)
 async def update_supply(
     supply_id: int,
     data: SupplyUpdate,
@@ -132,7 +132,7 @@ async def update_supply(
     return supply
 
 
-@router.delete("/{supply_id}", status_code=204)
+@router.delete("/{supply_id}", status_code=204, deprecated=True)
 async def delete_supply(
     supply_id: int,
     db: AsyncSession = Depends(get_db),

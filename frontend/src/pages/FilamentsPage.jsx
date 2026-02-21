@@ -15,6 +15,7 @@ import { useState, useEffect } from 'react';
 import { getFilaments, createFilament, updateFilament, deleteFilament } from '../services/api';
 import toast from 'react-hot-toast';
 import { Plus, Pencil, Trash2, X } from 'lucide-react';
+import { useConfirm } from '../components/ConfirmDialog';
 
 /**
  * Valores iniciales del formulario de filamento.
@@ -45,6 +46,7 @@ const filamentTypes = ['PLA', 'PETG', 'ABS', 'TPU', 'ASA', 'Nylon', 'PLA+', 'PET
  * @returns {JSX.Element} Pagina completa de gestion de filamentos
  */
 export default function FilamentsPage() {
+  const confirm = useConfirm();
   /** @type {[Array, Function]} Lista de filamentos obtenidos del backend */
   const [filaments, setFilaments] = useState([]);
   /** @type {[boolean, Function]} Controla la visibilidad del formulario modal */
@@ -129,7 +131,7 @@ export default function FilamentsPage() {
    * @param {number} id - ID del filamento a eliminar
    */
   const handleDelete = async (id) => {
-    if (!confirm('¿Eliminar este filamento?')) return;
+    if (!await confirm('¿Eliminar este filamento?', 'Eliminar')) return;
     try {
       await deleteFilament(id);
       toast.success('Filamento eliminado');
