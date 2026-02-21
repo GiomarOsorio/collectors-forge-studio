@@ -8,7 +8,7 @@ usan Decimal internamente y se serializan como float en JSON.
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, Optional
+from typing import Annotated, List, Optional
 
 from pydantic import BaseModel, Field, PlainSerializer, model_validator
 
@@ -191,3 +191,81 @@ class InventoryItemAdjustRequest(BaseModel):
         quantity: Cantidad a sumar (positiva) o restar (negativa) del stock.
     """
     quantity: Decimal
+
+
+class InventoryItemExport(BaseModel):
+    """
+    Datos de un ítem de inventario para exportar (sin id, company_id ni timestamps).
+
+    Se usa tanto para serializar desde el ORM (exportación) como para
+    deserializar desde JSON (importación).
+    """
+    name: str
+    category: str
+    description: Optional[str] = None
+    unit: str
+    quantity: DecimalAsFloat
+    min_quantity: DecimalAsFloat
+    unit_cost: DecimalAsFloat
+    supplier_name: Optional[str] = None
+    supplier_contact: Optional[str] = None
+    supplier_info: Optional[str] = None
+    needs_purchase: bool
+    notes: Optional[str] = None
+    price_per_kg: Optional[DecimalAsFloat] = None
+    filament_brand: Optional[str] = None
+    filament_type: Optional[str] = None
+    filament_color: Optional[str] = None
+    filament_diameter: Optional[DecimalAsFloat] = None
+    filament_density: Optional[DecimalAsFloat] = None
+    weight_per_roll: Optional[DecimalAsFloat] = None
+    price_per_unit: Optional[DecimalAsFloat] = None
+
+    model_config = {"from_attributes": True}
+
+
+class PrintedItemExport(BaseModel):
+    """
+    Datos de un ítem de impresión para exportar (sin id, company_id, image_url ni timestamps).
+    """
+    name: str
+    category: Optional[str] = None
+    description: Optional[str] = None
+    quantity: int
+    unit_price: Optional[DecimalAsFloat] = None
+    material: Optional[str] = None
+    color: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class InventoryExportResponse(BaseModel):
+    """
+    Estructura completa del archivo de exportación de inventario.
+
+    Atributos:
+        exported_at:      Fecha y hora ISO 8601 de la exportación.
+        version:          Versión del formato de exportación.
+        inventory_items:  Lista de ítems de stock exportados.
+        printed_items:    Lista de ítems de impresiones exportados.
+    """
+    exported_at: str
+    version: str = "1"
+    inventory_items: List[InventoryItemExport]
+    printed_items: List[PrintedItemExport]
+
+
+class InventoryImportResult(BaseModel):
+    """
+    Resultado de una operación de importación de inventario.
+
+    Atributos:
+        items_created:  Número de ítems de stock creados.
+        items_merged:   Número de ítems de stock cuya cantidad se sumó.
+        prints_created: Número de ítems de impresiones creados.
+        prints_merged:  Número de ítems de impresiones cuya cantidad se sumó.
+    """
+    items_created: int
+    items_merged: int
+    prints_created: int
+    prints_merged: int

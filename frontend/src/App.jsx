@@ -24,6 +24,7 @@
  * - /inventory/stock          → Todo el stock del inventario (protegida)
  * - /inventory/purchases      → Pedidos de compra (protegida)
  * - /inventory/prints         → Inventario de impresiones 3D (protegida)
+ * - /inventory/io             → Importar / Exportar inventario (protegida)
  * - /slicer/upload            → Subir modelo STL / .gcode / .3mf o URL MakerWorld (protegida)
  * - /slicer/history           → Historial de trabajos de laminado (protegida)
  *
@@ -53,6 +54,7 @@ import SettingsPage from './pages/SettingsPage';
 import InventoryFilamentsPage from './pages/inventory/InventoryFilamentsPage';
 import InventorySuppliesPage from './pages/inventory/InventorySuppliesPage';
 import InventoryPrintsPage from './pages/inventory/InventoryPrintsPage';
+import InventoryImportExportPage from './pages/inventory/InventoryImportExportPage';
 import SlicerUploadPage from './pages/slicer/SlicerUploadPage';
 import SlicerHistoryPage from './pages/slicer/SlicerHistoryPage';
 
@@ -107,6 +109,7 @@ function AppRoutes() {
         <Route path="stock" element={<InventoryStockPage />} />
         <Route path="purchases" element={<InventoryPurchasesPage />} />
         <Route path="prints" element={<InventoryPrintsPage />} />
+        <Route path="io" element={<InventoryImportExportPage />} />
       </Route>
 
       {/* Aplicación Cost: calculadora de costos de impresión 3D */}

@@ -16,14 +16,17 @@ Endpoints:
 """
 
 from decimal import Decimal
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.inventory import InventoryItem
+from app.models.printed_item import PrintedItem
 from app.models.user import User
 from app.schemas.inventory import (
     InventoryItemCreate,
@@ -31,6 +34,10 @@ from app.schemas.inventory import (
     InventoryItemResponse,
     InventoryItemFlagResponse,
     InventoryItemAdjustRequest,
+    InventoryItemExport,
+    PrintedItemExport,
+    InventoryExportResponse,
+    InventoryImportResult,
 )
 from app.services.auth import get_current_user
 
@@ -292,3 +299,147 @@ async def adjust_inventory_quantity(
     await db.commit()
     await db.refresh(item)
     return item
+
+
+@router.get("/export")
+async def export_inventory(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Exporta todo el inventario de la empresa como un archivo JSON descargable.
+
+    Incluye todos los ítems de stock y de impresiones de la empresa. Los campos
+    id, company_id, image_url y timestamps se excluyen del resultado.
+
+    Args:
+        db:           Sesión de base de datos.
+        current_user: Usuario autenticado.
+
+    Returns:
+        JSONResponse con Content-Disposition: attachment para descarga directa.
+    """
+    company_id = current_user.company_id
+
+    items_result = await db.execute(
+        select(InventoryItem).where(InventoryItem.company_id == company_id)
+    )
+    items = items_result.scalars().all()
+
+    prints_result = await db.execute(
+        select(PrintedItem).where(PrintedItem.company_id == company_id)
+    )
+    prints = prints_result.scalars().all()
+
+    exported_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    payload = InventoryExportResponse(
+        exported_at=exported_at,
+        version="1",
+        inventory_items=[InventoryItemExport.model_validate(item) for item in items],
+        printed_items=[PrintedItemExport.model_validate(p) for p in prints],
+    )
+
+    return JSONResponse(
+        content=payload.model_dump(mode="json"),
+        headers={
+            "Content-Disposition": f'attachment; filename="inventario_{date_str}.json"',
+        },
+    )
+
+
+@router.post("/import", response_model=InventoryImportResult)
+async def import_inventory(
+    data: InventoryExportResponse,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Importa inventario desde un archivo JSON exportado previamente.
+
+    Lógica de merge:
+    - inventory_items: match exacto por name + category dentro de la empresa.
+      Si existe → suma la cantidad. Si no existe → crea el ítem completo.
+    - printed_items: match exacto por name dentro de la empresa.
+      Si existe → suma la cantidad. Si no existe → crea el ítem completo.
+
+    Se hace un batch SELECT antes del loop para evitar N+1 queries.
+
+    Args:
+        data:         Cuerpo JSON con la estructura InventoryExportResponse.
+        db:           Sesión de base de datos.
+        current_user: Usuario autenticado.
+
+    Returns:
+        InventoryImportResult con los conteos de ítems creados y fusionados.
+    """
+    company_id = current_user.company_id
+
+    # --- inventory_items ---
+    item_names = [i.name for i in data.inventory_items]
+    items_created = 0
+    items_merged = 0
+
+    if item_names:
+        existing_result = await db.execute(
+            select(InventoryItem).where(
+                InventoryItem.company_id == company_id,
+                InventoryItem.name.in_(item_names),
+            )
+        )
+        existing_map = {
+            (row.name, row.category): row
+            for row in existing_result.scalars().all()
+        }
+    else:
+        existing_map = {}
+
+    for item_data in data.inventory_items:
+        key = (item_data.name, item_data.category)
+        if key in existing_map:
+            existing_map[key].quantity += Decimal(str(item_data.quantity))
+            items_merged += 1
+        else:
+            fields = item_data.model_dump()
+            new_item = InventoryItem(company_id=company_id, **fields)
+            db.add(new_item)
+            items_created += 1
+
+    # --- printed_items ---
+    print_names = [p.name for p in data.printed_items]
+    prints_created = 0
+    prints_merged = 0
+
+    if print_names:
+        existing_prints_result = await db.execute(
+            select(PrintedItem).where(
+                PrintedItem.company_id == company_id,
+                PrintedItem.name.in_(print_names),
+            )
+        )
+        existing_prints_map = {
+            row.name: row
+            for row in existing_prints_result.scalars().all()
+        }
+    else:
+        existing_prints_map = {}
+
+    for print_data in data.printed_items:
+        if print_data.name in existing_prints_map:
+            existing_prints_map[print_data.name].quantity += print_data.quantity
+            prints_merged += 1
+        else:
+            fields = print_data.model_dump()
+            new_print = PrintedItem(company_id=company_id, **fields)
+            db.add(new_print)
+            prints_created += 1
+
+    await db.commit()
+
+    return InventoryImportResult(
+        items_created=items_created,
+        items_merged=items_merged,
+        prints_created=prints_created,
+        prints_merged=prints_merged,
+    )
