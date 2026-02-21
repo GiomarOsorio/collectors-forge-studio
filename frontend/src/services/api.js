@@ -314,6 +314,7 @@ export const getQuote = (id) => api.get(`/quotes/${id}`);
  * @returns {Promise<import('axios').AxiosResponse>} Respuesta de confirmacion
  */
 export const deleteQuote = (id) => api.delete(`/quotes/${id}`);
+export const updateQuote = (id, data) => api.put(`/quotes/${id}`, data);
 
 /**
  * Descarga el PDF de una cotizacion.

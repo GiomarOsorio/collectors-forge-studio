@@ -313,7 +313,12 @@ export default function SettingsPage() {
                 <span className="font-bold text-tech-white text-base">$ {exchangeRate.rate_used?.toLocaleString('es-CO')} COP</span>
               </div>
             </div>
-            <p className="text-xs text-yellow-600/60 mt-3">Actualizado automáticamente cada hora desde open.er-api.com</p>
+            <p className="text-xs text-yellow-600/60 mt-3">
+              Actualizado automáticamente cada hora desde open.er-api.com
+              {exchangeRate.cached_at && (
+                <> · Última actualización: {new Date(exchangeRate.cached_at * 1000).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</>
+              )}
+            </p>
           </div>
         )}
       </div>

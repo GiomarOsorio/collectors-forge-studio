@@ -27,7 +27,7 @@ from app.models.settings import AppSettings
 from app.models.electricity_tariff import ElectricityTariff
 from app.schemas.settings import AppSettingsUpdate, AppSettingsResponse
 from app.services.auth import get_current_user
-from app.services.exchange_rate import get_usd_to_cop, COP_MARKUP
+from app.services.exchange_rate import get_usd_to_cop, COP_MARKUP, get_cache_timestamp
 from app.services.tariff_scraper import get_epm_estrato4_tariff, TARIFF_MULTIPLIER
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -228,9 +228,11 @@ async def get_exchange_rate(
     """
     rate_with_markup = await get_usd_to_cop()
     market_rate = round(rate_with_markup - COP_MARKUP, 2)
+    cached_at = get_cache_timestamp()
     return {
         "market_rate": market_rate,
         "markup": COP_MARKUP,
         "rate_used": rate_with_markup,
+        "cached_at": cached_at,
         "description": f"1 USD = {rate_with_markup:,.0f} COP (mercado {market_rate:,.0f} + {COP_MARKUP:.0f} markup)",
     }

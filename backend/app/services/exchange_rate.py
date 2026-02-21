@@ -33,6 +33,11 @@ _cache: Optional[Tuple[float, float]] = None
 _CACHE_TTL = 3600
 
 
+def get_cache_timestamp() -> Optional[float]:
+    """Devuelve el timestamp Unix de la última actualización del caché, o None si no hay caché."""
+    return _cache[1] if _cache is not None else None
+
+
 async def get_usd_to_cop() -> float:
     """
     Devuelve la tasa de cambio USD → COP con markup incluido.

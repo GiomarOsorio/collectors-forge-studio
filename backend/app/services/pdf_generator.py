@@ -22,6 +22,8 @@ from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image,
 )
 
+from typing import Optional
+
 from app.models.quote import Quote
 from app.models.client_quote import ClientQuote
 
@@ -36,6 +38,15 @@ _ROW_ALT = colors.HexColor("#f9fafb")   # fondo fila de ítem
 _GRN_BG  = colors.HexColor("#f0fdf4")   # fondo fila Total
 _GRN_TXT = colors.HexColor("#166534")   # texto fila Total
 
+# Comandos de estilo comunes para tablas sin padding exterior
+_NO_PAD = [
+    ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+    ("LEFTPADDING",   (0, 0), (-1, -1), 0),
+    ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
+    ("TOPPADDING",    (0, 0), (-1, -1), 0),
+    ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+]
+
 
 def _fmt_cop(value: float) -> str:
     """Formatea como pesos colombianos: $ 1.234.567"""
@@ -45,6 +56,177 @@ def _fmt_cop(value: float) -> str:
 def _fmt_usd(value: float) -> str:
     """Formatea como dólares: $ 1,234.56"""
     return f"$ {value:,.2f}"
+
+
+def _make_doc(buffer: io.BytesIO) -> SimpleDocTemplate:
+    """Crea el documento PDF con márgenes estándar TurtleForge."""
+    return SimpleDocTemplate(
+        buffer, pagesize=letter,
+        topMargin=0.6 * inch, bottomMargin=0.75 * inch,
+        leftMargin=1.0 * inch, rightMargin=1.0 * inch,
+    )
+
+
+def _make_styles(suffix: str = "") -> dict:
+    """
+    Crea los estilos tipográficos comunes para los PDFs.
+
+    Args:
+        suffix: Sufijo para evitar conflictos de nombre entre documentos.
+
+    Returns:
+        dict con los estilos indexados por clave corta.
+    """
+    base = getSampleStyleSheet()
+
+    def ps(name, **kw):
+        return ParagraphStyle(name + suffix, parent=base["Normal"], **kw)
+
+    return {
+        "base":   base,
+        "sCo":    ps("Co",    fontSize=13, fontName="Helvetica-Bold", textColor=_DARK,    alignment=2),
+        "sCoS":   ps("CoS",   fontSize=10, fontName="Helvetica",      textColor=_GRAY,    alignment=2),
+        "sCl":    ps("Cl",    fontSize=11, fontName="Helvetica-Bold", textColor=_DARK,    alignment=2),
+        "sClS":   ps("ClS",   fontSize=9,  fontName="Helvetica",      textColor=_GRAY,    alignment=2),
+        "sTit":   ps("Tit",   fontSize=22, fontName="Helvetica-Bold", textColor=_DARK),
+        "sILab":  ps("ILab",  fontSize=9,  fontName="Helvetica-Bold", textColor=_GRAY),
+        "sIVal":  ps("IVal",  fontSize=10, fontName="Helvetica",      textColor=_DARK),
+        "sTH":    ps("TH",    fontSize=9,  fontName="Helvetica-Bold", textColor=colors.white),
+        "sTHR":   ps("THR",   fontSize=9,  fontName="Helvetica-Bold", textColor=colors.white,   alignment=2),
+        "sTC":    ps("TC",    fontSize=10, fontName="Helvetica",      textColor=_DARK),
+        "sTCR":   ps("TCR",   fontSize=10, fontName="Helvetica",      textColor=_DARK,    alignment=2),
+        "sTotL":  ps("TotL",  fontSize=10, fontName="Helvetica",      textColor=_DARK,    alignment=2),
+        "sTotV":  ps("TotV",  fontSize=10, fontName="Helvetica",      textColor=_DARK,    alignment=2),
+        "sTBL":   ps("TBL",   fontSize=12, fontName="Helvetica-Bold", textColor=_GRN_TXT, alignment=2),
+        "sTBV":   ps("TBV",   fontSize=12, fontName="Helvetica-Bold", textColor=_GRN_TXT, alignment=2),
+        "sNote":  ps("Note",  fontSize=8,  fontName="Helvetica",      textColor=_GRAY),
+        "sNoteR": ps("NoteR", fontSize=8,  fontName="Helvetica",      textColor=_GRAY,    alignment=2),
+        "sTermT": ps("TermT", fontSize=8,  fontName="Helvetica-Bold", textColor=_DARK),
+        "sTermI": ps("TermI", fontSize=8,  fontName="Helvetica",      textColor=_GRAY),
+    }
+
+
+def _build_header(st: dict) -> list:
+    """
+    Construye el encabezado del PDF: logo (izq.) + empresa (der.).
+
+    Args:
+        st: Diccionario de estilos generado por _make_styles().
+
+    Returns:
+        Lista de elementos ReportLab (tabla + spacer).
+    """
+    logo_cell = (
+        Image(str(LOGO_PATH), width=1.8 * inch, height=1.2 * inch)
+        if LOGO_PATH.exists()
+        else Paragraph("<b>TurtleForge</b>", st["base"]["Normal"])
+    )
+    company_cell = [
+        Paragraph("TurtleForge Studio", st["sCo"]),
+        Spacer(1, 4),
+        Paragraph("Medellín, Colombia", st["sCoS"]),
+    ]
+    hdr_tbl = Table(
+        [[logo_cell, "", company_cell]],
+        colWidths=[1.9 * inch, 2.2 * inch, 2.4 * inch],
+    )
+    hdr_tbl.setStyle(TableStyle(_NO_PAD))
+    return [hdr_tbl, Spacer(1, 20)]
+
+
+def _build_client_block(name: str, description: Optional[str], st: dict) -> list:
+    """
+    Construye el bloque de cliente alineado a la derecha.
+
+    Args:
+        name:        Nombre del cliente.
+        description: Descripción opcional.
+        st:          Diccionario de estilos.
+
+    Returns:
+        Lista de elementos ReportLab (tabla + spacer).
+    """
+    client_cell: list = [
+        Paragraph("Cliente:", st["sClS"]),
+        Paragraph(name.upper(), st["sCl"]),
+    ]
+    if description:
+        client_cell += [Spacer(1, 3), Paragraph(description, st["sClS"])]
+    client_tbl = Table(
+        [["", client_cell]],
+        colWidths=[3.3 * inch, 3.2 * inch],
+    )
+    client_tbl.setStyle(TableStyle(_NO_PAD))
+    return [client_tbl, Spacer(1, 18)]
+
+
+def _build_totals(L: float, R1: float, R2: float, subtotal_str: str, st: dict) -> Table:
+    """
+    Construye la tabla de totales (Subtotal / Sin IVA / Total).
+
+    Args:
+        L:           Ancho de la celda vacía izquierda.
+        R1:          Ancho de la columna de etiquetas.
+        R2:          Ancho de la columna de valores.
+        subtotal_str: Valor formateado del subtotal/total.
+        st:          Diccionario de estilos.
+
+    Returns:
+        Tabla de totales ReportLab.
+    """
+    tot_tbl = Table(
+        [
+            ["", Paragraph("Subtotal", st["sTotL"]),  Paragraph(subtotal_str, st["sTotV"])],
+            ["", Paragraph("Sin IVA",  st["sNoteR"]), Paragraph("—",          st["sNoteR"])],
+            ["", Paragraph("Total",    st["sTBL"]),   Paragraph(subtotal_str, st["sTBV"])],
+        ],
+        colWidths=[L, R1, R2],
+    )
+    tot_tbl.setStyle(TableStyle([
+        ("ALIGN",         (1, 0), (-1, -1), "RIGHT"),
+        ("TOPPADDING",    (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING",   (1, 0), (-1, -1), 8),
+        ("RIGHTPADDING",  (1, 0), (-1, -1), 8),
+        ("LEFTPADDING",   (0, 0), (0, -1), 0),
+        ("RIGHTPADDING",  (0, 0), (0, -1), 0),
+        ("GRID",          (1, 0), (-1, 1), 0.5, _BORDER),
+        ("LINEABOVE",     (1, 2), (-1, 2), 0.8, _BORDER),
+        ("BOX",           (1, 2), (-1, 2), 0.5, _BORDER),
+        ("BACKGROUND",    (1, 2), (-1, 2), _GRN_BG),
+    ]))
+    return tot_tbl
+
+
+def _build_footer(notes: Optional[str], st: dict) -> list:
+    """
+    Construye el pie de página: notas, términos de pago y sello de fecha.
+
+    Args:
+        notes: Notas adicionales opcionales.
+        st:    Diccionario de estilos.
+
+    Returns:
+        Lista de elementos ReportLab.
+    """
+    elems: list = [Paragraph("Precios sin IVA.", st["sNote"])]
+    if notes:
+        elems += [Spacer(1, 6), Paragraph(f"Notas: {notes}", st["sNote"])]
+    elems.append(Spacer(1, 14))
+    elems += [
+        Paragraph("Términos de pago y envío:", st["sTermT"]),
+        Spacer(1, 4),
+        Paragraph("• Una vez aprobada la cotización, el cliente debe realizar el pago del 50% del monto total.", st["sTermI"]),
+        Paragraph("• Antes de realizar el envío, el cliente debe cancelar el 50% restante.", st["sTermI"]),
+        Paragraph("• No se despacha ningún pedido sin haber recibido el pago completo correspondiente.", st["sTermI"]),
+        Paragraph("• Los gastos de envío corren por cuenta del cliente.", st["sTermI"]),
+        Spacer(1, 12),
+        Paragraph(
+            f"Cotización generada el {datetime.now(timezone.utc).strftime('%d-%m-%Y')} · TurtleForge Cost · Medellín, Colombia",
+            st["sNote"],
+        ),
+    ]
+    return elems
 
 
 def generate_quote_pdf(quote: Quote) -> bytes:
@@ -63,105 +245,32 @@ def generate_quote_pdf(quote: Quote) -> bytes:
             con Content-Type 'application/pdf'.
     """
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buffer, pagesize=letter,
-        topMargin=0.6 * inch, bottomMargin=0.75 * inch,
-        leftMargin=1.0 * inch, rightMargin=1.0 * inch,
-    )
-    styles = getSampleStyleSheet()
-    elements = []
+    doc = _make_doc(buffer)
+    st = _make_styles("")
+    elements: list = []
 
-    # ── Estilos tipográficos ──────────────────────────────────────────────────
-    def ps(name, **kw):
-        return ParagraphStyle(name, parent=styles["Normal"], **kw)
+    # ── 1. HEADER ─────────────────────────────────────────────────────────────
+    elements += _build_header(st)
 
-    sCo    = ps("Co",    fontSize=13, fontName="Helvetica-Bold", textColor=_DARK,    alignment=2)
-    sCoS   = ps("CoS",   fontSize=10, fontName="Helvetica",      textColor=_GRAY,    alignment=2)
-    sCl    = ps("Cl",    fontSize=11, fontName="Helvetica-Bold", textColor=_DARK,    alignment=2)
-    sClS   = ps("ClS",   fontSize=9,  fontName="Helvetica",      textColor=_GRAY,    alignment=2)
-    sTit   = ps("Tit",   fontSize=22, fontName="Helvetica-Bold", textColor=_DARK)
-    sILab  = ps("ILab",  fontSize=9,  fontName="Helvetica-Bold", textColor=_GRAY)
-    sIVal  = ps("IVal",  fontSize=10, fontName="Helvetica",      textColor=_DARK)
-    sTH    = ps("TH",    fontSize=9,  fontName="Helvetica-Bold", textColor=colors.white)
-    sTHR   = ps("THR",   fontSize=9,  fontName="Helvetica-Bold", textColor=colors.white,   alignment=2)
-    sTC    = ps("TC",    fontSize=10, fontName="Helvetica",      textColor=_DARK)
-    sTCR   = ps("TCR",   fontSize=10, fontName="Helvetica",      textColor=_DARK,    alignment=2)
-    sTotL  = ps("TotL",  fontSize=10, fontName="Helvetica",      textColor=_DARK,    alignment=2)
-    sTotV  = ps("TotV",  fontSize=10, fontName="Helvetica",      textColor=_DARK,    alignment=2)
-    sTBL   = ps("TBL",   fontSize=12, fontName="Helvetica-Bold", textColor=_GRN_TXT, alignment=2)
-    sTBV   = ps("TBV",   fontSize=12, fontName="Helvetica-Bold", textColor=_GRN_TXT, alignment=2)
-    sNote  = ps("Note",  fontSize=8,  fontName="Helvetica",      textColor=_GRAY)
-    sNoteR = ps("NoteR", fontSize=8,  fontName="Helvetica",      textColor=_GRAY,    alignment=2)
-
-    # ── 1. HEADER: logo (izquierda) + empresa (derecha) ───────────────────────
-    # Logo 1536×1024 px → aspect 1.5 → 1.8" × 1.2"
-    logo_cell = (
-        Image(str(LOGO_PATH), width=1.8 * inch, height=1.2 * inch)
-        if LOGO_PATH.exists()
-        else Paragraph("<b>TurtleForge</b>", styles["Normal"])
-    )
-    company_cell = [
-        Paragraph("TurtleForge Studio", sCo),
-        Spacer(1, 4),
-        Paragraph("Medellín, Colombia", sCoS),
-    ]
-    hdr_tbl = Table(
-        [[logo_cell, "", company_cell]],
-        colWidths=[1.9 * inch, 2.2 * inch, 2.4 * inch],
-    )
-    hdr_tbl.setStyle(TableStyle([
-        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
-        ("TOPPADDING",    (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-    ]))
-    elements.append(hdr_tbl)
-    elements.append(Spacer(1, 20))
-
-    # ── 2. BLOQUE CLIENTE (alineado a la derecha) ─────────────────────────────
+    # ── 2. BLOQUE CLIENTE (opcional) ──────────────────────────────────────────
     if quote.client_name:
-        client_cell: list = [
-            Paragraph("Cliente:", sClS),
-            Paragraph(quote.client_name.upper(), sCl),
-        ]
-        if quote.description:
-            client_cell += [Spacer(1, 3), Paragraph(quote.description, sClS)]
-        client_tbl = Table(
-            [["", client_cell]],
-            colWidths=[3.3 * inch, 3.2 * inch],
-        )
-        client_tbl.setStyle(TableStyle([
-            ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
-            ("TOPPADDING",    (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-        ]))
-        elements.append(client_tbl)
-        elements.append(Spacer(1, 18))
+        elements += _build_client_block(quote.client_name, quote.description, st)
 
     # ── 3. TÍTULO ─────────────────────────────────────────────────────────────
-    elements.append(Paragraph(f"Número de cotización  TFC-{quote.id:04d}", sTit))
+    elements.append(Paragraph(f"Número de cotización  TFC-{quote.id:04d}", st["sTit"]))
     elements.append(Spacer(1, 14))
 
-    # ── 4. FILA DE FECHAS: emisión + vencimiento (30 días) ───────────────────
+    # ── 4. FILA DE FECHAS ─────────────────────────────────────────────────────
     fecha_str = quote.created_at.strftime("%d-%m-%Y")
     venc_str  = (quote.created_at + timedelta(days=30)).strftime("%d-%m-%Y")
     info_tbl = Table(
         [[
-            [Paragraph("Fecha de cotización:", sILab), Paragraph(fecha_str, sIVal)],
-            [Paragraph("Vencimiento:", sILab),          Paragraph(venc_str,  sIVal)],
+            [Paragraph("Fecha de cotización:", st["sILab"]), Paragraph(fecha_str, st["sIVal"])],
+            [Paragraph("Vencimiento:", st["sILab"]),          Paragraph(venc_str,  st["sIVal"])],
         ]],
         colWidths=[3.25 * inch, 3.25 * inch],
     )
-    info_tbl.setStyle(TableStyle([
-        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
-        ("TOPPADDING",    (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-    ]))
+    info_tbl.setStyle(TableStyle(_NO_PAD + [("BOTTOMPADDING", (0, 0), (-1, -1), 8)]))
     elements.append(info_tbl)
     elements.append(Spacer(1, 16))
 
@@ -172,16 +281,14 @@ def generate_quote_pdf(quote: Quote) -> bytes:
     t_price = quote.total_price_cop if use_cop else quote.total_price
 
     qty_lbl = f"{quote.quantity} {'Unidad' if quote.quantity == 1 else 'Unidades'}"
-
-    # Anchos: descripción, cantidad, precio unitario, importe
     cols = [2.9 * inch, 1.1 * inch, 1.3 * inch, 1.2 * inch]
 
     items_tbl = Table(
         [
-            [Paragraph("DESCRIPCIÓN",    sTH),  Paragraph("CANTIDAD",        sTH),
-             Paragraph("PRECIO UNITARIO", sTH),  Paragraph("IMPORTE",         sTHR)],
-            [Paragraph(quote.piece_name, sTC),  Paragraph(qty_lbl,           sTC),
-             Paragraph(fmt(u_price),     sTC),  Paragraph(fmt(t_price),      sTCR)],
+            [Paragraph("DESCRIPCIÓN",    st["sTH"]),  Paragraph("CANTIDAD",        st["sTH"]),
+             Paragraph("PRECIO UNITARIO", st["sTH"]),  Paragraph("IMPORTE",         st["sTHR"])],
+            [Paragraph(quote.piece_name, st["sTC"]),  Paragraph(qty_lbl,           st["sTC"]),
+             Paragraph(fmt(u_price),     st["sTC"]),  Paragraph(fmt(t_price),      st["sTCR"])],
         ],
         colWidths=cols,
     )
@@ -198,62 +305,15 @@ def generate_quote_pdf(quote: Quote) -> bytes:
     elements.append(items_tbl)
     elements.append(Spacer(1, 2))
 
-    # ── 6. TOTALES (alineados a la derecha, espejo de columnas de la tabla) ───
-    # Columnas: [espacio izq = desc+cant] [etiqueta = precio unit] [valor = importe]
-    L  = cols[0] + cols[1]   # 4.2"  — celda vacía izquierda
-    R1 = cols[2]              # 1.35" — etiqueta
-    R2 = cols[3]              # 0.95" — valor
-
-    tot_tbl = Table(
-        [
-            ["", Paragraph("Subtotal", sTotL),  Paragraph(fmt(t_price), sTotV)],
-            ["", Paragraph("Sin IVA",  sNoteR), Paragraph("—",           sNoteR)],
-            ["", Paragraph("Total",    sTBL),   Paragraph(fmt(t_price),  sTBV)],
-        ],
-        colWidths=[L, R1, R2],
-    )
-    tot_tbl.setStyle(TableStyle([
-        ("ALIGN",         (1, 0), (-1, -1), "RIGHT"),
-        ("TOPPADDING",    (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ("LEFTPADDING",   (1, 0), (-1, -1), 8),
-        ("RIGHTPADDING",  (1, 0), (-1, -1), 8),
-        ("LEFTPADDING",   (0, 0), (0, -1), 0),
-        ("RIGHTPADDING",  (0, 0), (0, -1), 0),
-        ("GRID",          (1, 0), (-1, 1), 0.5, _BORDER),
-        ("LINEABOVE",     (1, 2), (-1, 2), 0.8, _BORDER),
-        ("BOX",           (1, 2), (-1, 2), 0.5, _BORDER),
-        ("BACKGROUND",    (1, 2), (-1, 2), _GRN_BG),
-    ]))
-    elements.append(tot_tbl)
+    # ── 6. TOTALES ────────────────────────────────────────────────────────────
+    L  = cols[0] + cols[1]
+    R1 = cols[2]
+    R2 = cols[3]
+    elements.append(_build_totals(L, R1, R2, fmt(t_price), st))
     elements.append(Spacer(1, 24))
 
     # ── 7. PIE DE PÁGINA ──────────────────────────────────────────────────────
-    elements.append(Paragraph("Precios sin IVA.", sNote))
-    if quote.notes:
-        elements.append(Spacer(1, 6))
-        elements.append(Paragraph(f"Notas: {quote.notes}", sNote))
-    elements.append(Spacer(1, 14))
-
-    # Términos y condiciones de pago
-    sTermTitle = ps("TermTitle", fontSize=8, fontName="Helvetica-Bold", textColor=_DARK)
-    sTermItem  = ps("TermItem",  fontSize=8, fontName="Helvetica",      textColor=_GRAY)
-    elementos_terminos = [
-        Paragraph("Términos de pago y envío:", sTermTitle),
-        Spacer(1, 4),
-        Paragraph("• Una vez aprobada la cotización, el cliente debe realizar el pago del 50% del monto total.", sTermItem),
-        Paragraph("• Antes de realizar el envío, el cliente debe cancelar el 50% restante.", sTermItem),
-        Paragraph("• No se despacha ningún pedido sin haber recibido el pago completo correspondiente.", sTermItem),
-        Paragraph("• Los gastos de envío corren por cuenta del cliente.", sTermItem),
-    ]
-    for elem in elementos_terminos:
-        elements.append(elem)
-
-    elements.append(Spacer(1, 12))
-    elements.append(Paragraph(
-        f"Cotización generada el {datetime.now(timezone.utc).strftime('%d-%m-%Y')} · TurtleForge Cost · Medellín, Colombia",
-        sNote,
-    ))
+    elements += _build_footer(quote.notes, st)
 
     doc.build(elements)
     return buffer.getvalue()
@@ -274,102 +334,31 @@ def generate_client_quote_pdf(client_quote: ClientQuote) -> bytes:
         bytes: Contenido binario del PDF listo para enviarse como respuesta HTTP.
     """
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buffer, pagesize=letter,
-        topMargin=0.6 * inch, bottomMargin=0.75 * inch,
-        leftMargin=1.0 * inch, rightMargin=1.0 * inch,
-    )
-    styles = getSampleStyleSheet()
-    elements = []
+    doc = _make_doc(buffer)
+    st = _make_styles("_cq")
+    elements: list = []
 
-    # ── Estilos tipográficos ──────────────────────────────────────────────────
-    def ps(name, **kw):
-        return ParagraphStyle(name + "_cq", parent=styles["Normal"], **kw)
+    # ── 1. HEADER ─────────────────────────────────────────────────────────────
+    elements += _build_header(st)
 
-    sCo    = ps("Co",    fontSize=13, fontName="Helvetica-Bold", textColor=_DARK,    alignment=2)
-    sCoS   = ps("CoS",   fontSize=10, fontName="Helvetica",      textColor=_GRAY,    alignment=2)
-    sCl    = ps("Cl",    fontSize=11, fontName="Helvetica-Bold", textColor=_DARK,    alignment=2)
-    sClS   = ps("ClS",   fontSize=9,  fontName="Helvetica",      textColor=_GRAY,    alignment=2)
-    sTit   = ps("Tit",   fontSize=22, fontName="Helvetica-Bold", textColor=_DARK)
-    sILab  = ps("ILab",  fontSize=9,  fontName="Helvetica-Bold", textColor=_GRAY)
-    sIVal  = ps("IVal",  fontSize=10, fontName="Helvetica",      textColor=_DARK)
-    sTH    = ps("TH",    fontSize=9,  fontName="Helvetica-Bold", textColor=colors.white)
-    sTHR   = ps("THR",   fontSize=9,  fontName="Helvetica-Bold", textColor=colors.white,   alignment=2)
-    sTC    = ps("TC",    fontSize=10, fontName="Helvetica",      textColor=_DARK)
-    sTCR   = ps("TCR",   fontSize=10, fontName="Helvetica",      textColor=_DARK,    alignment=2)
-    sTotL  = ps("TotL",  fontSize=10, fontName="Helvetica",      textColor=_DARK,    alignment=2)
-    sTotV  = ps("TotV",  fontSize=10, fontName="Helvetica",      textColor=_DARK,    alignment=2)
-    sTBL   = ps("TBL",   fontSize=12, fontName="Helvetica-Bold", textColor=_GRN_TXT, alignment=2)
-    sTBV   = ps("TBV",   fontSize=12, fontName="Helvetica-Bold", textColor=_GRN_TXT, alignment=2)
-    sNote  = ps("Note",  fontSize=8,  fontName="Helvetica",      textColor=_GRAY)
-
-    # ── 1. HEADER: logo (izquierda) + empresa (derecha) ───────────────────────
-    logo_cell = (
-        Image(str(LOGO_PATH), width=1.8 * inch, height=1.2 * inch)
-        if LOGO_PATH.exists()
-        else Paragraph("<b>TurtleForge</b>", styles["Normal"])
-    )
-    company_cell = [
-        Paragraph("TurtleForge Studio", sCo),
-        Spacer(1, 4),
-        Paragraph("Medellín, Colombia", sCoS),
-    ]
-    hdr_tbl = Table(
-        [[logo_cell, "", company_cell]],
-        colWidths=[1.9 * inch, 2.2 * inch, 2.4 * inch],
-    )
-    hdr_tbl.setStyle(TableStyle([
-        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
-        ("TOPPADDING",    (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-    ]))
-    elements.append(hdr_tbl)
-    elements.append(Spacer(1, 20))
-
-    # ── 2. BLOQUE CLIENTE (alineado a la derecha) ─────────────────────────────
-    client_cell: list = [
-        Paragraph("Cliente:", sClS),
-        Paragraph(client_quote.client_name.upper(), sCl),
-    ]
-    if client_quote.description:
-        client_cell += [Spacer(1, 3), Paragraph(client_quote.description, sClS)]
-    client_tbl = Table(
-        [["", client_cell]],
-        colWidths=[3.3 * inch, 3.2 * inch],
-    )
-    client_tbl.setStyle(TableStyle([
-        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
-        ("TOPPADDING",    (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-    ]))
-    elements.append(client_tbl)
-    elements.append(Spacer(1, 18))
+    # ── 2. BLOQUE CLIENTE ─────────────────────────────────────────────────────
+    elements += _build_client_block(client_quote.client_name, client_quote.description, st)
 
     # ── 3. TÍTULO ─────────────────────────────────────────────────────────────
-    elements.append(Paragraph(f"Número de cotización  COT-{client_quote.id:04d}", sTit))
+    elements.append(Paragraph(f"Número de cotización  COT-{client_quote.id:04d}", st["sTit"]))
     elements.append(Spacer(1, 14))
 
-    # ── 4. FILA DE FECHAS: emisión + vencimiento ──────────────────────────────
+    # ── 4. FILA DE FECHAS ─────────────────────────────────────────────────────
     fecha_str = client_quote.quote_date.strftime("%d-%m-%Y")
     venc_str  = client_quote.expiry_date.strftime("%d-%m-%Y")
     info_tbl = Table(
         [[
-            [Paragraph("Fecha de cotización:", sILab), Paragraph(fecha_str, sIVal)],
-            [Paragraph("Válida hasta:", sILab),        Paragraph(venc_str,  sIVal)],
+            [Paragraph("Fecha de cotización:", st["sILab"]), Paragraph(fecha_str, st["sIVal"])],
+            [Paragraph("Válida hasta:", st["sILab"]),        Paragraph(venc_str,  st["sIVal"])],
         ]],
         colWidths=[3.25 * inch, 3.25 * inch],
     )
-    info_tbl.setStyle(TableStyle([
-        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
-        ("TOPPADDING",    (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-    ]))
+    info_tbl.setStyle(TableStyle(_NO_PAD + [("BOTTOMPADDING", (0, 0), (-1, -1), 8)]))
     elements.append(info_tbl)
     elements.append(Spacer(1, 16))
 
@@ -379,22 +368,21 @@ def generate_client_quote_pdf(client_quote: ClientQuote) -> bytes:
 
     rows = [
         [
-            Paragraph("DESCRIPCIÓN",     sTH),
-            Paragraph("CANTIDAD",        sTH),
-            Paragraph("PRECIO UNITARIO", sTH),
-            Paragraph("IMPORTE",         sTHR),
+            Paragraph("DESCRIPCIÓN",     st["sTH"]),
+            Paragraph("CANTIDAD",        st["sTH"]),
+            Paragraph("PRECIO UNITARIO", st["sTH"]),
+            Paragraph("IMPORTE",         st["sTHR"]),
         ]
     ]
-    for idx, item in enumerate(items):
-        qty       = item["quantity"]
-        unit_p    = item["unit_price"]
-        line_tot  = qty * unit_p
-        bg = _ROW_ALT if idx % 2 == 0 else colors.white
+    for item in items:
+        qty      = item["quantity"]
+        unit_p   = item["unit_price"]
+        line_tot = qty * unit_p
         rows.append([
-            Paragraph(item["name"],           sTC),
-            Paragraph(str(qty),               sTC),
-            Paragraph(_fmt_usd(unit_p),       sTC),
-            Paragraph(_fmt_usd(line_tot),     sTCR),
+            Paragraph(item["name"],        st["sTC"]),
+            Paragraph(str(qty),            st["sTC"]),
+            Paragraph(_fmt_usd(unit_p),    st["sTC"]),
+            Paragraph(_fmt_usd(line_tot),  st["sTCR"]),
         ])
 
     items_tbl = Table(rows, colWidths=cols)
@@ -418,56 +406,12 @@ def generate_client_quote_pdf(client_quote: ClientQuote) -> bytes:
     L  = cols[0] + cols[1]
     R1 = cols[2]
     R2 = cols[3]
-
     subtotal_val = float(client_quote.subtotal)
-    tot_tbl = Table(
-        [
-            ["", Paragraph("Subtotal", sTotL),  Paragraph(_fmt_usd(subtotal_val), sTotV)],
-            ["", Paragraph("Sin IVA",  sNote),   Paragraph("—",                    sNote)],
-            ["", Paragraph("Total",    sTBL),    Paragraph(_fmt_usd(subtotal_val), sTBV)],
-        ],
-        colWidths=[L, R1, R2],
-    )
-    tot_tbl.setStyle(TableStyle([
-        ("ALIGN",         (1, 0), (-1, -1), "RIGHT"),
-        ("TOPPADDING",    (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ("LEFTPADDING",   (1, 0), (-1, -1), 8),
-        ("RIGHTPADDING",  (1, 0), (-1, -1), 8),
-        ("LEFTPADDING",   (0, 0), (0, -1), 0),
-        ("RIGHTPADDING",  (0, 0), (0, -1), 0),
-        ("GRID",          (1, 0), (-1, 1), 0.5, _BORDER),
-        ("LINEABOVE",     (1, 2), (-1, 2), 0.8, _BORDER),
-        ("BOX",           (1, 2), (-1, 2), 0.5, _BORDER),
-        ("BACKGROUND",    (1, 2), (-1, 2), _GRN_BG),
-    ]))
-    elements.append(tot_tbl)
+    elements.append(_build_totals(L, R1, R2, _fmt_usd(subtotal_val), st))
     elements.append(Spacer(1, 24))
 
     # ── 7. PIE DE PÁGINA ──────────────────────────────────────────────────────
-    elements.append(Paragraph("Precios sin IVA.", sNote))
-    if client_quote.notes:
-        elements.append(Spacer(1, 6))
-        elements.append(Paragraph(f"Notas: {client_quote.notes}", sNote))
-    elements.append(Spacer(1, 14))
-
-    sTermTitle = ps("TermTitle", fontSize=8, fontName="Helvetica-Bold", textColor=_DARK)
-    sTermItem  = ps("TermItem",  fontSize=8, fontName="Helvetica",      textColor=_GRAY)
-    for elem in [
-        Paragraph("Términos de pago y envío:", sTermTitle),
-        Spacer(1, 4),
-        Paragraph("• Una vez aprobada la cotización, el cliente debe realizar el pago del 50% del monto total.", sTermItem),
-        Paragraph("• Antes de realizar el envío, el cliente debe cancelar el 50% restante.", sTermItem),
-        Paragraph("• No se despacha ningún pedido sin haber recibido el pago completo correspondiente.", sTermItem),
-        Paragraph("• Los gastos de envío corren por cuenta del cliente.", sTermItem),
-    ]:
-        elements.append(elem)
-
-    elements.append(Spacer(1, 12))
-    elements.append(Paragraph(
-        f"Cotización generada el {datetime.now(timezone.utc).strftime('%d-%m-%Y')} · TurtleForge Cost · Medellín, Colombia",
-        sNote,
-    ))
+    elements += _build_footer(client_quote.notes, st)
 
     doc.build(elements)
     return buffer.getvalue()

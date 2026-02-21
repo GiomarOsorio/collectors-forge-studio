@@ -56,7 +56,7 @@ class QuoteCalculateRequest(BaseModel):
     inventory_item_id: int
     printer_id: int
     weight_grams: Decimal = Field(gt=0)
-    print_time_hours: Decimal = Field(gt=0)
+    print_time_hours: Decimal = Field(gt=0, le=720)  # máx 30 días
     preparation_time_hours: Decimal = Field(default=Decimal("0"), ge=0)
     post_processing_time_hours: Decimal = Field(default=Decimal("0"), ge=0)
     quantity: int = Field(default=1, ge=1)
@@ -146,6 +146,25 @@ class QuoteResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class QuoteUpdateMeta(BaseModel):
+    """
+    Esquema para actualizar los metadatos de una cotización guardada.
+
+    Solo permite editar campos descriptivos; los valores de costo calculados
+    no se modifican para preservar la integridad del historial.
+
+    Atributos:
+        piece_name:  Nombre de la pieza (requerido, no vacío).
+        description: Descripción opcional.
+        client_name: Nombre del cliente opcional.
+        notes:       Notas adicionales opcionales.
+    """
+    piece_name: str = Field(min_length=1)
+    description: Optional[str] = None
+    client_name: Optional[str] = None
+    notes: Optional[str] = None
 
 
 class SupplyItemRef(BaseModel):

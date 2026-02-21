@@ -10,6 +10,7 @@ Endpoints disponibles bajo el prefijo /api/quotes:
 - POST /              - Calcula y guarda la cotización en el historial.
 - GET  /              - Lista el historial de cotizaciones de la empresa.
 - GET  /{id}          - Obtiene una cotización específica de la empresa.
+- PUT  /{id}          - Actualiza metadatos descriptivos de una cotización.
 - DELETE /{id}        - Elimina una cotización del historial.
 - GET  /{id}/pdf      - Descarga la cotización como archivo PDF.
 """
@@ -29,7 +30,7 @@ from app.models.inventory import InventoryItem
 from app.models.printer import Printer
 from app.models.settings import AppSettings
 from app.models.quote import Quote
-from app.schemas.quote import QuoteCalculateRequest, QuoteManualRequest, QuoteResponse, QuoteCostBreakdown
+from app.schemas.quote import QuoteCalculateRequest, QuoteManualRequest, QuoteResponse, QuoteCostBreakdown, QuoteUpdateMeta
 from app.services.auth import get_current_user
 from app.services.calculator import calculate_cost
 from app.services.pdf_generator import generate_quote_pdf
@@ -55,7 +56,8 @@ class _FakeSettings:
     """Portador de configuración para cotización manual con posibles sobreescrituras."""
     def __init__(self, base_settings, overrides: dict):
         for field in ("electricity_rate", "failure_rate_percent", "labor_cost_per_hour", "default_margin_percent"):
-            setattr(self, field, overrides.get(field) or getattr(base_settings, field))
+            v = overrides.get(field)
+            setattr(self, field, v if v is not None else getattr(base_settings, field))
 
 
 def _json_float(obj):
@@ -301,6 +303,32 @@ async def get_quote(
         HTTPException 404: Si la cotización no existe o no pertenece a la empresa.
     """
     quote = await _get_company_quote(db, quote_id, current_user.company_id)
+    return quote
+
+
+@router.put("/{quote_id}", response_model=QuoteResponse)
+async def update_quote_meta(
+    quote_id: int,
+    data: QuoteUpdateMeta,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Actualiza los metadatos descriptivos de una cotización guardada.
+
+    Solo modifica piece_name, description, client_name y notes.
+    Los valores de costo calculados permanecen sin cambios.
+
+    Raises:
+        HTTPException 404: Si la cotización no existe o no pertenece a la empresa.
+    """
+    quote = await _get_company_quote(db, quote_id, current_user.company_id)
+    quote.piece_name = data.piece_name
+    quote.description = data.description
+    quote.client_name = data.client_name
+    quote.notes = data.notes
+    await db.commit()
+    await db.refresh(quote)
     return quote
 
 
