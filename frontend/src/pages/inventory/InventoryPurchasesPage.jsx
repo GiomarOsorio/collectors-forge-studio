@@ -12,11 +12,12 @@ import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import {
   Plus, X, Eye, Trash2, PackageCheck, Truck, Clock, Ban,
-  ExternalLink, ShoppingCart,
+  ShoppingCart, Pencil,
 } from 'lucide-react';
 import {
   getPurchaseOrders,
   createPurchaseOrder,
+  updatePurchaseOrder,
   deletePurchaseOrder,
   arrivePurchaseOrder,
   getInventoryItems,
@@ -61,9 +62,10 @@ export default function InventoryPurchasesPage() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState(null); // null = crear, obj = editar
   const [saving, setSaving] = useState(false);
 
-  /** Estado del formulario de nuevo pedido */
+  /** Estado del formulario de nuevo/editar pedido */
   const [form, setForm] = useState({
     supplier: '',
     tracking_number: '',
@@ -91,8 +93,31 @@ export default function InventoryPurchasesPage() {
   useEffect(() => { load(); }, []);
 
   const openCreate = () => {
+    setEditingOrder(null);
     setForm({ supplier: '', tracking_number: '', carrier: '', estimated_arrival: '', notes: '' });
     setFormItems([{ ...EMPTY_ITEM }]);
+    setModalOpen(true);
+  };
+
+  const openEdit = (order) => {
+    setEditingOrder(order);
+    setForm({
+      supplier: order.supplier || '',
+      tracking_number: order.tracking_number || '',
+      carrier: order.carrier || '',
+      estimated_arrival: order.estimated_arrival ? order.estimated_arrival.split('T')[0] : '',
+      notes: order.notes || '',
+    });
+    setFormItems(
+      (order.items || []).map((it) => ({
+        name: it.name || '',
+        quantity: String(it.quantity ?? 1),
+        unit_cost: String(it.unit_cost ?? 0),
+        inventory_item_id: it.inventory_item_id ? String(it.inventory_item_id) : '',
+        notes: it.notes || '',
+      }))
+    );
+    setSelected(null);
     setModalOpen(true);
   };
 
@@ -124,26 +149,32 @@ export default function InventoryPurchasesPage() {
       if (!it.name.trim()) { toast.error('Cada ítem debe tener un nombre'); return; }
     }
     setSaving(true);
+    const payload = {
+      supplier: form.supplier.trim(),
+      tracking_number: form.tracking_number || null,
+      carrier: form.carrier || null,
+      estimated_arrival: form.estimated_arrival || null,
+      notes: form.notes || null,
+      items: formItems.map((it) => ({
+        name: it.name.trim(),
+        quantity: parseFloat(it.quantity) || 1,
+        unit_cost: parseFloat(it.unit_cost) || 0,
+        inventory_item_id: it.inventory_item_id ? parseInt(it.inventory_item_id) : null,
+        notes: it.notes || null,
+      })),
+    };
     try {
-      await createPurchaseOrder({
-        supplier: form.supplier.trim(),
-        tracking_number: form.tracking_number || null,
-        carrier: form.carrier || null,
-        estimated_arrival: form.estimated_arrival || null,
-        notes: form.notes || null,
-        items: formItems.map((it) => ({
-          name: it.name.trim(),
-          quantity: parseFloat(it.quantity) || 1,
-          unit_cost: parseFloat(it.unit_cost) || 0,
-          inventory_item_id: it.inventory_item_id ? parseInt(it.inventory_item_id) : null,
-          notes: it.notes || null,
-        })),
-      });
-      toast.success('Pedido registrado');
+      if (editingOrder) {
+        await updatePurchaseOrder(editingOrder.id, payload);
+        toast.success('Pedido actualizado');
+      } else {
+        await createPurchaseOrder(payload);
+        toast.success('Pedido registrado');
+      }
       setModalOpen(false);
       load();
     } catch {
-      toast.error('Error al guardar el pedido');
+      toast.error(editingOrder ? 'Error al actualizar el pedido' : 'Error al guardar el pedido');
     } finally {
       setSaving(false);
     }
@@ -227,13 +258,22 @@ export default function InventoryPurchasesPage() {
                       <Eye size={14} />
                     </button>
                     {order.status !== 'llegado' && order.status !== 'cancelado' && (
-                      <button
-                        onClick={() => handleArrive(order.id)}
-                        className="tf-btn-ghost p-1.5 text-green-400 hover:text-green-300"
-                        title="Marcar como llegado"
-                      >
-                        <PackageCheck size={14} />
-                      </button>
+                      <>
+                        <button
+                          onClick={() => openEdit(order)}
+                          className="tf-btn-ghost p-1.5 text-blue-400 hover:text-blue-300"
+                          title="Editar pedido"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleArrive(order.id)}
+                          className="tf-btn-ghost p-1.5 text-green-400 hover:text-green-300"
+                          title="Marcar como llegado"
+                        >
+                          <PackageCheck size={14} />
+                        </button>
+                      </>
                     )}
                     <button onClick={() => handleDelete(order.id)} className="tf-btn-danger p-1.5" title="Eliminar">
                       <Trash2 size={14} />
@@ -317,13 +357,21 @@ export default function InventoryPurchasesPage() {
             )}
 
             {selected.status !== 'llegado' && selected.status !== 'cancelado' && (
-              <button
-                onClick={() => { handleArrive(selected.id); setSelected(null); }}
-                className="tf-btn-primary w-full gap-2"
-                style={{ backgroundColor: '#22c55e', borderColor: '#22c55e' }}
-              >
-                <PackageCheck size={18} /> Marcar como llegado y actualizar stock
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => openEdit(selected)}
+                  className="flex-1 tf-btn-ghost gap-2 text-blue-400 border border-blue-500/30 hover:border-blue-400"
+                >
+                  <Pencil size={16} /> Editar pedido
+                </button>
+                <button
+                  onClick={() => { handleArrive(selected.id); setSelected(null); }}
+                  className="flex-1 tf-btn-primary gap-2"
+                  style={{ backgroundColor: '#22c55e', borderColor: '#22c55e' }}
+                >
+                  <PackageCheck size={16} /> Marcar llegado
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -335,8 +383,10 @@ export default function InventoryPurchasesPage() {
           <div className="tf-modal max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <h3 className="tf-section-title mb-0 flex items-center gap-2">
-                <ShoppingCart size={20} className="text-blue-400" />
-                Nuevo pedido de compra
+                {editingOrder
+                  ? <><Pencil size={20} className="text-blue-400" /> Editar pedido #{String(editingOrder.id).padStart(3, '0')}</>
+                  : <><ShoppingCart size={20} className="text-blue-400" /> Nuevo pedido de compra</>
+                }
               </h3>
               <button onClick={() => setModalOpen(false)} className="tf-btn-ghost"><X size={20} /></button>
             </div>
@@ -444,7 +494,7 @@ export default function InventoryPurchasesPage() {
                 </button>
                 <button type="submit" disabled={saving}
                   className="flex-1 tf-btn-primary" style={{ backgroundColor: '#3B82F6', borderColor: '#3B82F6' }}>
-                  {saving ? 'Guardando...' : 'Registrar pedido'}
+                  {saving ? 'Guardando...' : editingOrder ? 'Guardar cambios' : 'Registrar pedido'}
                 </button>
               </div>
             </form>

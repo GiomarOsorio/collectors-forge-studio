@@ -16,6 +16,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
 from app.config import settings
@@ -24,7 +25,7 @@ from app.models import Company, User, AppSettings, Printer
 from app.services.auth import get_password_hash
 from app.routers import (
     auth, filaments, printers, settings as settings_router, quotes,
-    supplies, client_quotes, inventory, purchase_orders, slicer,
+    supplies, client_quotes, inventory, purchase_orders, slicer, printed_items,
 )
 
 # UUID fijo de la empresa por defecto — coincide con la migración f4a1b9c2d8e7
@@ -82,6 +83,10 @@ app.include_router(supplies.router)
 app.include_router(inventory.router)
 app.include_router(purchase_orders.router)
 app.include_router(slicer.router)
+app.include_router(printed_items.router)
+
+# Archivos estáticos: imágenes de ítems de impresión y otros recursos subidos
+app.mount("/static", StaticFiles(directory="/app/static", check_dir=False), name="static")
 
 
 @app.get("/api/health")

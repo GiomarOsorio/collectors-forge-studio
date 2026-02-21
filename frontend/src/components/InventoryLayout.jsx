@@ -18,6 +18,7 @@ import {
   Package,
   LogOut,
   Menu,
+  Printer,
 } from 'lucide-react';
 
 /**
@@ -28,6 +29,7 @@ const navItems = [
   { to: '/inventory/supplies', icon: Package, label: 'Insumos' },
   { to: '/inventory/stock', icon: PackageOpen, label: 'Todo el stock' },
   { to: '/inventory/purchases', icon: ShoppingCart, label: 'Pedidos' },
+  { to: '/inventory/prints', icon: Printer, label: 'Impresiones' },
 ];
 
 /**
@@ -142,6 +144,11 @@ export default function InventoryLayout() {
             <Outlet />
           </div>
         </main>
+
+        {/* Footer */}
+        <footer className="bg-[#0d1014] border-t border-[#1e2125] py-2 px-6 text-center shrink-0">
+          <p className="text-gunmetal text-xs">TurtleForge Studio · Medellín, Colombia</p>
+        </footer>
       </div>
     </div>
   );

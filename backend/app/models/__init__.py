@@ -19,6 +19,7 @@ Exportaciones:
     PurchaseOrder:      Modelo de orden de compra a proveedores.
     PurchaseOrderItem:  Modelo de línea de ítem de una orden de compra.
     SlicingJob:         Modelo de trabajo de laminado 3D (OrcaSlicer / Bambu Studio).
+    PrintedItem:        Modelo de ítem de impresión 3D del catálogo de productos.
 """
 
 from app.models.company import Company
@@ -33,10 +34,11 @@ from app.models.electricity_tariff import ElectricityTariff
 from app.models.inventory import InventoryItem
 from app.models.purchase_order import PurchaseOrder, PurchaseOrderItem
 from app.models.slicing_job import SlicingJob
+from app.models.printed_item import PrintedItem
 
 __all__ = [
     "Company", "User", "Filament", "Printer", "AppSettings",
     "Quote", "ClientQuote", "Supply", "ElectricityTariff",
     "InventoryItem", "PurchaseOrder", "PurchaseOrderItem",
-    "SlicingJob",
+    "SlicingJob", "PrintedItem",
 ]

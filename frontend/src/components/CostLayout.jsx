@@ -152,6 +152,11 @@ export default function CostLayout() {
             <Outlet />
           </div>
         </main>
+
+        {/* Footer */}
+        <footer className="bg-[#0d1014] border-t border-[#1e2125] py-2 px-6 text-center shrink-0">
+          <p className="text-gunmetal text-xs">TurtleForge Studio · Medellín, Colombia</p>
+        </footer>
       </div>
     </div>
   );

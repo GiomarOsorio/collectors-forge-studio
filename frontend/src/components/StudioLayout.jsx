@@ -52,6 +52,11 @@ export default function StudioLayout() {
       <main className="flex-1">
         <Outlet />
       </main>
+
+      {/* Footer */}
+      <footer className="bg-[#0d1014] border-t border-[#1e2125] py-2 px-6 text-center">
+        <p className="text-gunmetal text-xs">TurtleForge Studio · Medellín, Colombia</p>
+      </footer>
     </div>
   );
 }
