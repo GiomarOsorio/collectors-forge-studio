@@ -310,7 +310,7 @@ export default function CalculatorPage() {
   };
 
   // Filamento actualmente seleccionado (para mostrar advertencia de stock bajo)
-  const selectedFilament = filaments.find((f) => f.id === form.inventory_item_id);
+  const selectedFilament = filaments.find((f) => f.id === parseInt(form.inventory_item_id, 10));
   const filamentLowStock =
     selectedFilament &&
     parseFloat(selectedFilament.min_quantity) > 0 &&

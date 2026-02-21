@@ -11,7 +11,7 @@ El documento se genera en memoria usando un buffer BytesIO.
 
 import io
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from reportlab.lib import colors
@@ -251,7 +251,7 @@ def generate_quote_pdf(quote: Quote) -> bytes:
 
     elements.append(Spacer(1, 12))
     elements.append(Paragraph(
-        f"Cotización generada el {datetime.utcnow().strftime('%d-%m-%Y')} · TurtleForge Cost · Medellín, Colombia",
+        f"Cotización generada el {datetime.now(timezone.utc).strftime('%d-%m-%Y')} · TurtleForge Cost · Medellín, Colombia",
         sNote,
     ))
 
@@ -465,7 +465,7 @@ def generate_client_quote_pdf(client_quote: ClientQuote) -> bytes:
 
     elements.append(Spacer(1, 12))
     elements.append(Paragraph(
-        f"Cotización generada el {datetime.utcnow().strftime('%d-%m-%Y')} · TurtleForge Cost · Medellín, Colombia",
+        f"Cotización generada el {datetime.now(timezone.utc).strftime('%d-%m-%Y')} · TurtleForge Cost · Medellín, Colombia",
         sNote,
     ))
 
