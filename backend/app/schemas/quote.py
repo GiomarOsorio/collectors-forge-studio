@@ -64,6 +64,9 @@ class QuoteCalculateRequest(BaseModel):
     save: bool = True
     supplies: List["SupplyItemRef"] = []
     additional_filaments: List[FilamentItem] = []
+    # Tasa USD/COP ya calculada: si se envía, el backend la reutiliza en lugar de
+    # volver a consultar la API externa. Evita discrepancias entre "Calcular" y "Guardar".
+    usd_to_cop_rate: Optional[Decimal] = None
 
 
 class QuoteCostBreakdown(BaseModel):
