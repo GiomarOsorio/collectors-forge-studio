@@ -194,7 +194,9 @@ async def create_quote(
         db, current_user, data.inventory_item_id, data.printer_id
     )
 
-    cop_rate = await get_usd_to_cop()
+    # Reutilizar la tasa enviada por el frontend (la misma que vio el usuario)
+    # para evitar discrepancias si la tasa cambia entre "Calcular" y "Guardar".
+    cop_rate = data.usd_to_cop_rate if data.usd_to_cop_rate else await get_usd_to_cop()
     supplies_data = await _resolve_supplies(db, current_user, data.supplies)
     additional_filaments_data = await _resolve_additional_filaments(db, current_user, data.additional_filaments)
 

@@ -302,7 +302,13 @@ export default function CalculatorPage() {
    */
   const handleSave = async () => {
     try {
-      await createQuote(buildPayload());
+      const payload = buildPayload();
+      // Incluir la tasa USD/COP ya calculada para que el backend
+      // guarde exactamente lo que el usuario vio (A-05).
+      if (result?.usd_to_cop_rate) {
+        payload.usd_to_cop_rate = result.usd_to_cop_rate;
+      }
+      await createQuote(payload);
       toast.success('Cotización guardada en el historial');
     } catch {
       toast.error('Error al guardar');
