@@ -15,6 +15,7 @@ Endpoints:
 """
 
 import json
+import re
 from datetime import timedelta
 from decimal import Decimal
 from typing import List
@@ -207,7 +208,8 @@ async def download_client_quote_pdf(
     """
     cq = await _get_company_client_quote(db, quote_id, current_user.company_id)
     pdf_bytes = generate_client_quote_pdf(cq)
-    filename = f"cotizacion_COT-{cq.id:04d}_{cq.client_name.replace(' ', '_')}.pdf"
+    safe_client = re.sub(r"[^\w\-]", "_", cq.client_name)
+    filename = f"cotizacion_COT-{cq.id:04d}_{safe_client}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",

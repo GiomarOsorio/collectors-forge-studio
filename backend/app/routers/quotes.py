@@ -15,6 +15,7 @@ Endpoints disponibles bajo el prefijo /api/quotes:
 """
 
 import json
+import re
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -325,7 +326,8 @@ async def download_quote_pdf(
     quote = await _get_company_quote(db, quote_id, current_user.company_id)
 
     pdf_bytes = generate_quote_pdf(quote)
-    filename = f"cotizacion_{quote.piece_name.replace(' ', '_')}_{quote.id}.pdf"
+    safe_name = re.sub(r"[^\w\-]", "_", quote.piece_name)
+    filename = f"cotizacion_{safe_name}_{quote.id}.pdf"
 
     return Response(
         content=pdf_bytes,
@@ -408,28 +410,41 @@ async def _resolve_supplies(db: AsyncSession, current_user: User, supply_items) 
     """
     Carga insumos desde el inventario filtrando por company_id del usuario.
 
-    Los ítems que no existan en la empresa del usuario se omiten silenciosamente.
+    Usa una sola query con WHERE id IN (...) en lugar de N queries individuales.
+    Lanza HTTPException 400 si algún ID no existe o no pertenece a la empresa.
     El precio se toma de price_per_unit si está definido; si no, de unit_cost.
     """
-    result = []
-    for item in (supply_items or []):
-        r = await db.execute(
-            select(InventoryItem).where(
-                InventoryItem.id == item.inventory_item_id,
-                InventoryItem.company_id == current_user.company_id,
-            )
+    if not supply_items:
+        return []
+
+    ids = [item.inventory_item_id for item in supply_items]
+    r = await db.execute(
+        select(InventoryItem).where(
+            InventoryItem.id.in_(ids),
+            InventoryItem.company_id == current_user.company_id,
         )
-        inv = r.scalar_one_or_none()
-        if inv:
-            # price_per_unit: si está definido, úsalo; si no, usa unit_cost
-            price = inv.price_per_unit if inv.price_per_unit is not None else inv.unit_cost
-            result.append({
-                "supply_id": inv.id,
-                "name": inv.name,
-                "unit": inv.unit,
-                "price_per_unit": price,
-                "quantity": item.quantity,
-            })
+    )
+    inv_map = {inv.id: inv for inv in r.scalars().all()}
+
+    # Verificar que todos los IDs solicitados existen en la empresa
+    faltantes = [i for i in ids if i not in inv_map]
+    if faltantes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insumos no encontrados en el inventario: {faltantes}",
+        )
+
+    result = []
+    for item in supply_items:
+        inv = inv_map[item.inventory_item_id]
+        price = inv.price_per_unit if inv.price_per_unit is not None else inv.unit_cost
+        result.append({
+            "supply_id": inv.id,
+            "name": inv.name,
+            "unit": inv.unit,
+            "price_per_unit": price,
+            "quantity": item.quantity,
+        })
     return result
 
 
@@ -437,25 +452,43 @@ async def _resolve_additional_filaments(db: AsyncSession, current_user: User, fi
     """
     Carga filamentos adicionales desde el inventario filtrando por company_id.
 
-    Los ítems que no existan o no tengan price_per_kg se omiten silenciosamente.
+    Usa una sola query con WHERE id IN (...) en lugar de N queries individuales.
+    Lanza HTTPException 400 si algún ID no existe o no pertenece a la empresa.
     El nombre se construye a partir de filament_brand, filament_type y filament_color;
     si no hay datos específicos, se usa el nombre genérico del ítem.
     """
-    result = []
-    for item in (filament_items or []):
-        r = await db.execute(
-            select(InventoryItem).where(
-                InventoryItem.id == item.inventory_item_id,
-                InventoryItem.company_id == current_user.company_id,
-            )
+    if not filament_items:
+        return []
+
+    ids = [item.inventory_item_id for item in filament_items]
+    r = await db.execute(
+        select(InventoryItem).where(
+            InventoryItem.id.in_(ids),
+            InventoryItem.company_id == current_user.company_id,
         )
-        inv = r.scalar_one_or_none()
-        if inv and inv.price_per_kg:
-            name = " ".join(filter(None, [inv.filament_brand, inv.filament_type, inv.filament_color])) or inv.name
-            result.append({
-                "filament_id": inv.id,
-                "name": name,
-                "price_per_kg": inv.price_per_kg,
-                "weight_grams": item.weight_grams,
-            })
+    )
+    inv_map = {inv.id: inv for inv in r.scalars().all()}
+
+    faltantes = [i for i in ids if i not in inv_map]
+    if faltantes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Filamentos adicionales no encontrados en el inventario: {faltantes}",
+        )
+
+    result = []
+    for item in filament_items:
+        inv = inv_map[item.inventory_item_id]
+        if not inv.price_per_kg:
+            raise HTTPException(
+                status_code=400,
+                detail=f"El ítem '{inv.name}' no tiene precio por kg definido.",
+            )
+        name = " ".join(filter(None, [inv.filament_brand, inv.filament_type, inv.filament_color])) or inv.name
+        result.append({
+            "filament_id": inv.id,
+            "name": name,
+            "price_per_kg": inv.price_per_kg,
+            "weight_grams": item.weight_grams,
+        })
     return result

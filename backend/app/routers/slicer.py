@@ -175,7 +175,17 @@ async def _run_orca_slicer(
                 )
                 data = resp.json()
 
-            await db.refresh(job)
+            # Re-fetch para evitar condición de carrera (el job pudo ser eliminado
+            # mientras esperábamos la respuesta del microservicio OrcaSlicer)
+            r2 = await db.execute(
+                select(SlicingJob).where(
+                    SlicingJob.id == job_id,
+                    SlicingJob.company_id == company_id,
+                )
+            )
+            job = r2.scalar_one_or_none()
+            if not job:
+                return
             if data.get("status") == "done":
                 job.status = "done"
                 job.print_time_seconds = data.get("print_time_seconds")
@@ -189,14 +199,30 @@ async def _run_orca_slicer(
                 job.error_message = data.get("error_message", "Error desconocido en OrcaSlicer")
 
         except httpx.ConnectError:
-            await db.refresh(job)
+            r2 = await db.execute(
+                select(SlicingJob).where(
+                    SlicingJob.id == job_id,
+                    SlicingJob.company_id == company_id,
+                )
+            )
+            job = r2.scalar_one_or_none()
+            if not job:
+                return
             job.status = "error"
             job.error_message = (
                 "No se pudo conectar al servicio de laminado (OrcaSlicer). "
                 "Verifica que el contenedor 'slicer' esté corriendo."
             )
         except Exception as e:
-            await db.refresh(job)
+            r2 = await db.execute(
+                select(SlicingJob).where(
+                    SlicingJob.id == job_id,
+                    SlicingJob.company_id == company_id,
+                )
+            )
+            job = r2.scalar_one_or_none()
+            if not job:
+                return
             job.status = "error"
             job.error_message = f"Error inesperado: {str(e)[:200]}"
 

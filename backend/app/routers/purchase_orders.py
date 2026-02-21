@@ -14,7 +14,7 @@ Endpoints:
     POST   /api/inventory/purchases/{id}/arrive   — Marcar como llegado y actualizar stock.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import List
 
@@ -272,7 +272,7 @@ async def mark_order_arrived(
 
     # Actualizar estado y fecha de llegada
     order.status = "llegado"
-    order.arrived_at = datetime.utcnow()
+    order.arrived_at = datetime.now(timezone.utc)
 
     # Actualizar stock de los ítems de inventario vinculados
     for order_item in order.items:
