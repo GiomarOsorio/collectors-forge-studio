@@ -15,7 +15,7 @@ Endpoints disponibles bajo el prefijo /api/settings:
 - PUT /  - Actualiza parcialmente la configuración del usuario autenticado.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -158,7 +158,7 @@ async def get_electricity_tariff(
                     usd_to_cop=data["usd_to_cop"],
                     multiplier=data["multiplier"],
                     pdf_url=data.get("pdf_url"),
-                    scraped_at=datetime.utcnow(),
+                    scraped_at=datetime.now(timezone.utc),
                 )
                 db.add(record)
         await db.commit()

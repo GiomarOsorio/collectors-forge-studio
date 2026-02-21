@@ -264,22 +264,22 @@ async def upload_gcode(
     # Detectar source según extensión
     source = "upload_3mf" if ext == ".3mf" else "upload_gcode"
 
-    # Guardar archivo en disco
+    # Guardar archivo en disco con nombre temporal (UUID) hasta obtener job.id
     # Path(...).name extrae solo el nombre base, eliminando cualquier ../ del path
     safe_filename = Path(file.filename).name
     job_uuid = str(uuid.uuid4())
-    dest_path = SLICER_JOBS_DIR / f"{job_uuid}_{safe_filename}"
+    temp_path = SLICER_JOBS_DIR / f"{job_uuid}_{safe_filename}"
     contenido = await file.read()
-    dest_path.write_bytes(contenido)
+    temp_path.write_bytes(contenido)
 
     # Parsear metadatos
     if ext == ".3mf":
-        resultado = parse_3mf_file(str(dest_path))
+        resultado = parse_3mf_file(str(temp_path))
     else:
-        resultado = parse_gcode_file(str(dest_path))
+        resultado = parse_gcode_file(str(temp_path))
 
     # Crear registro en DB
-    if resultado is None and ext == ".3mf" and _es_3mf_proyecto(dest_path):
+    if resultado is None and ext == ".3mf" and _es_3mf_proyecto(temp_path):
         error_msg = (
             "Este archivo es un proyecto .3mf sin laminar. "
             "Para usarlo: ábrelo en Bambu Studio, lámínalo y exporta el .3mf laminado. "
@@ -310,6 +310,11 @@ async def upload_gcode(
     db.add(job)
     await db.commit()
     await db.refresh(job)
+
+    # Renombrar archivo con job.id para que el glob de eliminación sea preciso (A-01)
+    final_path = SLICER_JOBS_DIR / f"job{job.id}_{safe_filename}"
+    temp_path.rename(final_path)
+
     return SlicingJobResponse.model_validate(job)
 
 
@@ -351,14 +356,13 @@ async def upload_stl(
             detail=f"Extensión no permitida: {ext}. Usa .stl o .3mf",
         )
 
-    # Guardar en volumen compartido
+    # Guardar en volumen compartido con nombre temporal (UUID) hasta obtener job.id
     # Path(...).name extrae solo el nombre base, eliminando cualquier ../ del path
     safe_filename = Path(file.filename).name
     job_uuid = str(uuid.uuid4())
-    stl_filename = f"{job_uuid}_{safe_filename}"
-    dest_path = SLICER_JOBS_DIR / stl_filename
+    temp_path = SLICER_JOBS_DIR / f"{job_uuid}_{safe_filename}"
     contenido = await file.read()
-    dest_path.write_bytes(contenido)
+    temp_path.write_bytes(contenido)
 
     # Presets con valores por defecto
     p_preset = printer_preset or DEFAULT_PRINTER
@@ -379,6 +383,10 @@ async def upload_stl(
     db.add(job)
     await db.commit()
     await db.refresh(job)
+
+    # Renombrar archivo con job.id para que el glob de eliminación sea preciso (A-01)
+    stl_filename = f"job{job.id}_{safe_filename}"
+    temp_path.rename(SLICER_JOBS_DIR / stl_filename)
 
     # Lanzar tarea de fondo
     background_tasks.add_task(
@@ -537,8 +545,8 @@ async def delete_job(
     """
     job = await _get_company_slicing_job(db, job_id, current_user.company_id)
 
-    # Eliminar archivos en disco asociados al job
-    for archivo in SLICER_JOBS_DIR.glob(f"*{job_id}_*"):
+    # Eliminar archivos en disco asociados al job (A-01: patrón preciso con job.id)
+    for archivo in SLICER_JOBS_DIR.glob(f"job{job_id}_*"):
         try:
             archivo.unlink()
         except Exception:

@@ -12,7 +12,7 @@ recibidos en las solicitudes HTTP y de los datos devueltos en las respuestas.
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 class UserCreate(BaseModel):
@@ -31,7 +31,7 @@ class UserCreate(BaseModel):
 
     username: str
     email: EmailStr
-    password: str
+    password: str = Field(..., min_length=8, max_length=128)
 
 
 class UserLogin(BaseModel):

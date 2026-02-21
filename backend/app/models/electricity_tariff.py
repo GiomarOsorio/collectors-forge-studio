@@ -6,7 +6,7 @@ scrapeada del PDF oficial de EPM. Permite consultar históricos y
 elegir la tarifa de cualquier mes guardado sin re-descargar el PDF.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import Integer, String, Numeric, DateTime, UniqueConstraint, text
@@ -52,4 +52,4 @@ class ElectricityTariff(Base):
         Numeric(5, 2), nullable=False, server_default=text("2.00")
     )
     pdf_url: Mapped[str] = mapped_column(String, nullable=True)
-    scraped_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    scraped_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))

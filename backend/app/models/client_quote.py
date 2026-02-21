@@ -9,7 +9,7 @@ precio unitario definido por el usuario.
 """
 
 import uuid
-from datetime import datetime, date
+from datetime import datetime, timezone, date
 from decimal import Decimal
 from typing import Optional
 
@@ -58,4 +58,4 @@ class ClientQuote(Base):
     # Notas opcionales
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
