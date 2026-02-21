@@ -531,6 +531,14 @@ export const deletePrintedItem = (id) => api.delete(`/inventory/prints/${id}`);
 /** Registra una venta (decrementa el stock). */
 export const sellPrintedItem = (id, quantity) => api.post(`/inventory/prints/${id}/sell`, { quantity });
 
+/** Descarga todo el inventario de la empresa como blob JSON. */
+export const exportInventory = () =>
+  api.get('/inventory/items/export', { responseType: 'blob' });
+
+/** Importa inventario desde un objeto JSON exportado previamente. */
+export const importInventory = (data) =>
+  api.post('/inventory/items/import', data);
+
 /** Sube una imagen para un ítem de impresión. */
 export const uploadPrintedItemImage = (id, file) => {
   const formData = new FormData();

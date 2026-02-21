@@ -19,6 +19,7 @@ import {
   LogOut,
   Menu,
   Printer,
+  ArrowLeftRight,
 } from 'lucide-react';
 
 /**
@@ -30,6 +31,7 @@ const navItems = [
   { to: '/inventory/stock', icon: PackageOpen, label: 'Todo el stock' },
   { to: '/inventory/purchases', icon: ShoppingCart, label: 'Pedidos' },
   { to: '/inventory/prints', icon: Printer, label: 'Impresiones' },
+  { to: '/inventory/io', icon: ArrowLeftRight, label: 'Importar / Exportar' },
 ];
 
 /**
