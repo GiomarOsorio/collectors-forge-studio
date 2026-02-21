@@ -1,20 +1,18 @@
 /**
  * @file Pagina de historial de cotizaciones de Calculator3D.
  *
- * Muestra una tabla con todas las cotizaciones guardadas por el usuario.
- * Permite ver el detalle de cada cotizacion en un modal, descargar
- * el PDF de la cotizacion y eliminar cotizaciones del historial.
+ * Muestra una tabla con todos los costos de impresión guardados por el usuario.
+ * Permite ver el detalle en un modal, editar campos descriptivos y eliminar registros.
  *
- * El historial es util para llevar un registro de los trabajos cotizados,
- * generar PDFs para clientes y consultar cotizaciones anteriores.
+ * El PDF es exclusivo de "Historial de Cotizaciones" y "Cotización manual".
  *
  * @module pages/HistoryPage
  */
 
 import { useState, useEffect } from 'react';
-import { getQuotes, deleteQuote, updateQuote, downloadQuotePdf } from '../services/api';
+import { getQuotes, deleteQuote, updateQuote } from '../services/api';
 import toast from 'react-hot-toast';
-import { Trash2, Eye, X, Download, Pencil } from 'lucide-react';
+import { Trash2, Eye, X, Pencil } from 'lucide-react';
 import { useConfirm } from '../components/ConfirmDialog';
 
 /**
@@ -73,20 +71,6 @@ export default function HistoryPage() {
       load();
     } catch {
       toast.error('Error al actualizar');
-    }
-  };
-
-  const handleDownloadPdf = async (id, pieceName) => {
-    try {
-      const res = await downloadQuotePdf(id);
-      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `costo_${pieceName.replace(/[^\w\-]/g, '_')}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      toast.error('Error al descargar PDF');
     }
   };
 
@@ -234,7 +218,6 @@ export default function HistoryPage() {
                 <td className="tf-td-right">
                   <button onClick={() => setSelected(q)} className="tf-btn-ghost mr-2" title="Ver detalle"><Eye size={16} /></button>
                   <button onClick={() => openEdit(q)} className="tf-btn-ghost mr-2" title="Editar"><Pencil size={16} /></button>
-                  <button onClick={() => handleDownloadPdf(q.id, q.piece_name)} className="tf-btn-ghost mr-2" title="Descargar PDF"><Download size={16} /></button>
                   <button onClick={() => handleDelete(q.id)} className="tf-btn-danger" title="Eliminar"><Trash2 size={16} /></button>
                 </td>
               </tr>
