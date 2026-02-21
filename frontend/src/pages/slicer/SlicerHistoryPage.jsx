@@ -41,10 +41,10 @@ function formatTime(seconds) {
 /**
  * Insignia de estado de un trabajo de laminado.
  *
- * @param {{ status: string }} props
+ * @param {{ status: string, errorMessage?: string }} props
  * @returns {JSX.Element}
  */
-function StatusBadge({ status }) {
+function StatusBadge({ status, errorMessage }) {
   const config = {
     done:    { label: 'Listo',     icon: CheckCircle, color: 'text-emerald-400 bg-emerald-400/10', spin: false },
     error:   { label: 'Error',     icon: AlertCircle, color: 'text-red-400 bg-red-400/10',         spin: false },
@@ -53,6 +53,23 @@ function StatusBadge({ status }) {
   };
   const cfg = config[status] || config['pending'];
   const Icon = cfg.icon;
+
+  if (status === 'error' && errorMessage) {
+    return (
+      <span className="relative group inline-flex items-center gap-1">
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium cursor-help ${cfg.color}`}>
+          <Icon size={11} />
+          Error
+        </span>
+        {/* Tooltip con el mensaje de error */}
+        <span className="absolute bottom-full left-0 mb-2 hidden group-hover:block z-50 w-72 bg-[#1a1d21] border border-red-500/30 text-red-300 text-xs rounded-lg px-3 py-2 shadow-xl leading-relaxed pointer-events-none">
+          <span className="font-semibold block mb-1 text-red-400">Detalle del error:</span>
+          {errorMessage}
+        </span>
+      </span>
+    );
+  }
+
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>
       <Icon size={11} className={cfg.spin ? 'animate-spin' : ''} />
@@ -222,7 +239,7 @@ export default function SlicerHistoryPage() {
                       <span className="text-steel text-sm">{sourceLabel(job.source)}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <StatusBadge status={job.status} />
+                      <StatusBadge status={job.status} errorMessage={job.error_message} />
                     </td>
                     <td className="px-4 py-3 text-right text-steel text-sm">
                       {formatTime(job.print_time_seconds)}

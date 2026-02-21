@@ -9,11 +9,11 @@
  * @module pages/ManualQuotePage
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createClientQuote } from '../services/api';
+import { createClientQuote, getPrintedItems } from '../services/api';
 import toast from 'react-hot-toast';
-import { FileEdit, Plus, Trash2 } from 'lucide-react';
+import { FileEdit, Plus, Trash2, Package, X } from 'lucide-react';
 
 /**
  * Retorna la fecha de hoy en formato YYYY-MM-DD para el input type="date".
@@ -43,6 +43,14 @@ const calcExpiry = (dateStr, days) => {
 export default function ManualQuotePage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [prints, setPrints] = useState([]);
+  const [selectorOpen, setSelectorOpen] = useState(null); // idx de la línea que abrió el selector
+
+  useEffect(() => {
+    getPrintedItems({ limit: 100 })
+      .then((res) => setPrints(res.data.items || []))
+      .catch(() => {}); // silencioso si no hay impresiones
+  }, []);
 
   /** @type {[Object, Function]} Datos principales de la cotización */
   const [form, setForm] = useState({
@@ -70,6 +78,16 @@ export default function ManualQuotePage() {
   /** Agrega una nueva línea vacía. */
   const addItem = () => {
     setItems((prev) => [...prev, { name: '', quantity: '1', unit_price: '' }]);
+  };
+
+  /** Selecciona una impresión del inventario y pre-llena la línea. */
+  const selectPrint = (idx, print) => {
+    setItems((prev) => prev.map((it, i) =>
+      i === idx
+        ? { ...it, name: print.name, unit_price: print.unit_price != null ? String(print.unit_price) : it.unit_price }
+        : it
+    ));
+    setSelectorOpen(null);
   };
 
   /** Elimina una línea (mínimo 1). */
@@ -182,10 +200,20 @@ export default function ManualQuotePage() {
 
             {items.map((it, idx) => (
               <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                <div className="col-span-12 sm:col-span-5">
+                <div className="col-span-12 sm:col-span-5 flex gap-1">
                   <input
                     value={it.name} onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
-                    className="tf-input text-sm" placeholder="Nombre del producto o servicio" required />
+                    className="tf-input text-sm flex-1" placeholder="Nombre del producto o servicio" required />
+                  {prints.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectorOpen(idx)}
+                      className="tf-btn-ghost p-2 text-blue-400 hover:text-blue-300 shrink-0"
+                      title="Seleccionar del inventario de impresiones"
+                    >
+                      <Package size={16} />
+                    </button>
+                  )}
                 </div>
                 <div className="col-span-4 sm:col-span-2">
                   <input
@@ -237,6 +265,56 @@ export default function ManualQuotePage() {
           {loading ? 'Guardando...' : 'Guardar Cotización'}
         </button>
       </form>
+
+      {/* Mini-modal selector de impresiones del inventario */}
+      {selectorOpen !== null && (
+        <div className="tf-modal-overlay" onClick={() => setSelectorOpen(null)}>
+          <div className="tf-modal max-w-sm max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-tech-white font-semibold flex items-center gap-2">
+                <Package size={18} className="text-blue-400" />
+                Seleccionar impresión
+              </h3>
+              <button onClick={() => setSelectorOpen(null)} className="tf-btn-ghost p-1">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-xs text-gunmetal mb-3">
+              Se pre-llenará el nombre y el precio de venta.
+            </p>
+            <div className="overflow-y-auto space-y-1">
+              {prints.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => selectPrint(selectorOpen, p)}
+                  className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-[#1e2125] transition-colors group"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-tech-white text-sm font-medium group-hover:text-blue-400 transition-colors">
+                      {p.name}
+                    </span>
+                    <span className="text-forge-green text-sm font-bold ml-2 shrink-0">
+                      {p.unit_price != null ? `$ ${parseFloat(p.unit_price).toFixed(2)}` : '—'}
+                    </span>
+                  </div>
+                  <div className="flex gap-2 mt-0.5">
+                    {p.category && <span className="text-xs text-gunmetal">{p.category}</span>}
+                    <span className={`text-xs ${p.quantity > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {p.quantity} en stock
+                    </span>
+                  </div>
+                </button>
+              ))}
+              {prints.length === 0 && (
+                <p className="text-gunmetal text-sm text-center py-4">
+                  No hay impresiones en el inventario.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

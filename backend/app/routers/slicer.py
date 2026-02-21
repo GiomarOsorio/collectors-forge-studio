@@ -56,7 +56,7 @@ DEFAULT_CONFIG = "0.20mm Standard @BBL P2S"
 
 # Extensiones permitidas
 ALLOWED_GCODE_EXTENSIONS = {".gcode", ".3mf"}
-ALLOWED_STL_EXTENSIONS = {".stl", ".3mf"}
+ALLOWED_STL_EXTENSIONS = {".stl", ".3mf", ".step", ".stp"}
 
 
 def _es_3mf_proyecto(file_path: Path) -> bool:
