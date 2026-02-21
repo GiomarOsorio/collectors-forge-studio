@@ -21,6 +21,59 @@ import {
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 
+/** Presets de filamento de OrcaSlicer para la BambuLab P2S. */
+const FILAMENT_PRESETS = [
+  { label: 'PLA',     value: 'Bambu PLA Basic @BBL P2S' },
+  { label: 'PETG',    value: 'Bambu PETG Basic @BBL P2S' },
+  { label: 'ABS',     value: 'Bambu ABS @BBL P2S' },
+  { label: 'ASA',     value: 'Bambu ASA @BBL P2S' },
+  { label: 'TPU',     value: 'Bambu TPU 95A @BBL P2S' },
+  { label: 'PLA-CF',  value: 'Bambu PLA-CF @BBL P2S' },
+  { label: 'PETG-CF', value: 'Bambu PETG-CF @BBL P2S' },
+];
+
+/** Configuraciones por tamaño de boquilla para la BambuLab P2S. */
+const NOZZLE_CONFIGS = {
+  '0.4': {
+    printerPreset: 'Bambu Lab P2S 0.4 nozzle',
+    qualities: [
+      { label: 'Fino (0.12mm)',          value: '0.12mm Fine @BBL P2S' },
+      { label: 'Óptimo (0.16mm)',        value: '0.16mm Optimal @BBL P2S' },
+      { label: 'Estándar (0.20mm)',      value: '0.20mm Standard @BBL P2S' },
+      { label: 'Borrador (0.24mm)',      value: '0.24mm Draft @BBL P2S' },
+      { label: 'Extra borrador (0.28mm)',value: '0.28mm Extra Draft @BBL P2S' },
+    ],
+    defaultQuality: '0.20mm Standard @BBL P2S',
+  },
+  '0.2': {
+    printerPreset: 'Bambu Lab P2S 0.2 nozzle',
+    qualities: [
+      { label: 'Extra fino (0.08mm)', value: '0.08mm Extra Fine @BBL P2S' },
+      { label: 'Fino (0.12mm)',       value: '0.12mm Fine @BBL P2S' },
+      { label: 'Estándar (0.15mm)',   value: '0.15mm Standard @BBL P2S' },
+    ],
+    defaultQuality: '0.12mm Fine @BBL P2S',
+  },
+  '0.6': {
+    printerPreset: 'Bambu Lab P2S 0.6 nozzle',
+    qualities: [
+      { label: 'Fino (0.20mm)',     value: '0.20mm Fine @BBL P2S' },
+      { label: 'Estándar (0.30mm)',value: '0.30mm Standard @BBL P2S' },
+      { label: 'Borrador (0.45mm)',value: '0.45mm Draft @BBL P2S' },
+    ],
+    defaultQuality: '0.30mm Standard @BBL P2S',
+  },
+  '0.8': {
+    printerPreset: 'Bambu Lab P2S 0.8 nozzle',
+    qualities: [
+      { label: 'Fino (0.30mm)',     value: '0.30mm Fine @BBL P2S' },
+      { label: 'Estándar (0.40mm)',value: '0.40mm Standard @BBL P2S' },
+      { label: 'Borrador (0.60mm)',value: '0.60mm Draft @BBL P2S' },
+    ],
+    defaultQuality: '0.40mm Standard @BBL P2S',
+  },
+};
+
 /** Definición de las pestañas de entrada. */
 const TABS = [
   {
@@ -68,6 +121,14 @@ export default function SlicerUploadPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('gcode');
   const [loading, setLoading] = useState(false);
+  const [filamentPreset, setFilamentPreset] = useState(FILAMENT_PRESETS[0].value);
+  const [nozzleSize, setNozzleSize] = useState('0.4');
+  const [configPreset, setConfigPreset] = useState(NOZZLE_CONFIGS['0.4'].defaultQuality);
+
+  const handleNozzleChange = (size) => {
+    setNozzleSize(size);
+    setConfigPreset(NOZZLE_CONFIGS[size].defaultQuality);
+  };
   /** @type {[Object|null, Function]} Resultado del trabajo de laminado */
   const [result, setResult] = useState(null);
   const [makerworldUrl, setMakerworldUrl] = useState('');
@@ -101,7 +162,7 @@ export default function SlicerUploadPage() {
     }
   };
 
-  /** Sube un archivo STL al laminador OrcaSlicer (proceso en background). */
+  /** Sube un archivo STL/STEP al laminador OrcaSlicer (proceso en background). */
   const handleStlUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -110,13 +171,18 @@ export default function SlicerUploadPage() {
     try {
       const form = new FormData();
       form.append('file', file);
-      const res = await api.post('/slicer/upload-stl', form, {
+      const params = new URLSearchParams({
+        printer_preset: NOZZLE_CONFIGS[nozzleSize].printerPreset,
+        filament_preset: filamentPreset,
+        config_preset: configPreset,
+      });
+      const res = await api.post(`/slicer/upload-stl?${params}`, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setResult(res.data);
-      toast.success('STL enviado al laminador. Revisa el Historial para ver el resultado.');
+      toast.success('Archivo enviado al laminador. Revisa el Historial para ver el resultado.');
     } catch {
-      toast.error('Error al subir el STL');
+      toast.error('Error al subir el archivo');
     } finally {
       setLoading(false);
       if (stlInputRef.current) stlInputRef.current.value = '';
@@ -232,26 +298,75 @@ export default function SlicerUploadPage() {
         {/* Pestaña: STL */}
         {activeTab === 'stl' && (
           <div>
-            <h2 className="text-tech-white font-semibold mb-1">Modelo STL</h2>
+            <h2 className="text-tech-white font-semibold mb-1">Modelo STL / STEP</h2>
             <p className="text-gunmetal text-sm mb-6">
               Sube un archivo{' '}
               <code className="text-amber-400 bg-amber-400/10 px-1 rounded">.stl</code>{' '}
+              o{' '}
+              <code className="text-amber-400 bg-amber-400/10 px-1 rounded">.step</code>{' '}
               para laminarlo automáticamente con OrcaSlicer usando el perfil de la BambuLab P2S.
               El proceso se ejecuta en background — revisa el{' '}
               <a href="/slicer/history" className="text-amber-400 hover:underline">Historial</a>{' '}
               para ver el resultado.
             </p>
+            {/* Configuración de laminado */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+              <div>
+                <label className="block text-xs text-gunmetal font-medium mb-1">Boquilla</label>
+                <div className="flex gap-1">
+                  {Object.keys(NOZZLE_CONFIGS).map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => handleNozzleChange(size)}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                        nozzleSize === size
+                          ? 'bg-amber-400/20 text-amber-400 border-amber-400/40'
+                          : 'text-steel border-[#2a2d31] hover:border-amber-400/30'
+                      }`}
+                    >
+                      {size}mm
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gunmetal font-medium mb-1">Material</label>
+                <select
+                  value={filamentPreset}
+                  onChange={(e) => setFilamentPreset(e.target.value)}
+                  className="tf-input text-sm py-1.5"
+                >
+                  {FILAMENT_PRESETS.map((p) => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gunmetal font-medium mb-1">Calidad</label>
+                <select
+                  value={configPreset}
+                  onChange={(e) => setConfigPreset(e.target.value)}
+                  className="tf-input text-sm py-1.5"
+                >
+                  {NOZZLE_CONFIGS[nozzleSize].qualities.map((q) => (
+                    <option key={q.value} value={q.value}>{q.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
             <input
               ref={stlInputRef}
               type="file"
-              accept=".stl"
+              accept=".stl,.step,.stp"
               className="hidden"
               onChange={handleStlUpload}
             />
             <button
               onClick={() => stlInputRef.current?.click()}
               disabled={loading}
-              className="w-full border-2 border-dashed border-[#2a2d31] rounded-xl p-12 text-center hover:border-amber-400/40 hover:bg-amber-400/5 transition-all group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full border-2 border-dashed border-[#2a2d31] rounded-xl p-10 text-center hover:border-amber-400/40 hover:bg-amber-400/5 transition-all group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <Loader size={36} className="mx-auto mb-3 text-amber-400 animate-spin" />
@@ -259,10 +374,10 @@ export default function SlicerUploadPage() {
                 <Upload size={36} className="mx-auto mb-3 text-gunmetal group-hover:text-amber-400 transition-colors" />
               )}
               <p className="text-steel group-hover:text-tech-white transition-colors font-medium text-sm">
-                {loading ? 'Enviando al laminador...' : 'Haz clic para seleccionar el archivo .stl'}
+                {loading ? 'Enviando al laminador...' : 'Haz clic para seleccionar el archivo'}
               </p>
-              <p className="text-gunmetal text-xs mt-2 leading-relaxed">
-                Perfil: Bambu Lab P2S · 0.4 mm · PLA
+              <p className="text-gunmetal text-xs mt-2">
+                Formatos: .stl · .step · .stp
               </p>
             </button>
           </div>
