@@ -307,7 +307,7 @@ async def upload_printed_item_image(
         HTTPException 404: Si el ítem no existe.
         HTTPException 400: Si el tipo de archivo no es una imagen permitida.
     """
-    # Validar que sea un tipo de imagen permitido
+    # Validar content-type declarado (primera línea de defensa)
     allowed_content_types = {"image/jpeg", "image/png", "image/webp", "image/gif"}
     if file.content_type not in allowed_content_types:
         raise HTTPException(
@@ -318,6 +318,22 @@ async def upload_printed_item_image(
 
     item = await _get_company_printed_item(db, item_id, current_user.company_id)
 
+    # Leer contenido y validar magic bytes reales (segunda línea de defensa)
+    # Evita que un atacante suba un archivo ejecutable con Content-Type: image/jpeg
+    content = await file.read()
+    _MAGIC_CHECKS = {
+        "image/jpeg": lambda c: c[:3] == b"\xff\xd8\xff",
+        "image/png":  lambda c: c[:4] == b"\x89PNG",
+        "image/webp": lambda c: c[:4] == b"RIFF" and len(c) >= 12 and c[8:12] == b"WEBP",
+        "image/gif":  lambda c: c[:6] in (b"GIF87a", b"GIF89a"),
+    }
+    check = _MAGIC_CHECKS.get(file.content_type)
+    if not content or (check and not check(content)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El contenido del archivo no corresponde a una imagen válida.",
+        )
+
     # Crear el directorio de imágenes si no existe
     PRINTS_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -326,8 +342,7 @@ async def upload_printed_item_image(
     filename = f"{uuid.uuid4()}{extension}"
     file_path = PRINTS_IMAGE_DIR / filename
 
-    # Guardar el archivo en disco
-    content = await file.read()
+    # Guardar el archivo en disco (content ya leído arriba)
     file_path.write_bytes(content)
 
     # Actualizar la URL de la imagen en el registro

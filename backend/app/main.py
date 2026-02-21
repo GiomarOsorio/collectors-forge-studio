@@ -18,9 +18,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
 from app.database import async_session
+from app.limiter import limiter
 from app.models import Company, User, AppSettings, Printer
 from app.services.auth import get_password_hash
 from app.routers import (
@@ -58,6 +62,10 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Rate limiting: registrar el limiter y el handler de errores 429
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS: permite el frontend local (Vite/CRA) y el dominio de producción
 app.add_middleware(
@@ -141,7 +149,12 @@ async def create_default_data():
             company_id=DEFAULT_COMPANY_ID,
         )
         db.add(admin)
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError:
+            # Otra instancia creó el usuario entre la verificación y el INSERT
+            await db.rollback()
+            return
         await db.refresh(admin)
 
         # Crear configuración de la empresa con valores por defecto razonables

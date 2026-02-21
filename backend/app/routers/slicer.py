@@ -238,8 +238,10 @@ async def upload_gcode(
     source = "upload_3mf" if ext == ".3mf" else "upload_gcode"
 
     # Guardar archivo en disco
+    # Path(...).name extrae solo el nombre base, eliminando cualquier ../ del path
+    safe_filename = Path(file.filename).name
     job_uuid = str(uuid.uuid4())
-    dest_path = SLICER_JOBS_DIR / f"{job_uuid}_{file.filename}"
+    dest_path = SLICER_JOBS_DIR / f"{job_uuid}_{safe_filename}"
     contenido = await file.read()
     dest_path.write_bytes(contenido)
 
@@ -323,8 +325,10 @@ async def upload_stl(
         )
 
     # Guardar en volumen compartido
+    # Path(...).name extrae solo el nombre base, eliminando cualquier ../ del path
+    safe_filename = Path(file.filename).name
     job_uuid = str(uuid.uuid4())
-    stl_filename = f"{job_uuid}_{file.filename}"
+    stl_filename = f"{job_uuid}_{safe_filename}"
     dest_path = SLICER_JOBS_DIR / stl_filename
     contenido = await file.read()
     dest_path.write_bytes(contenido)
