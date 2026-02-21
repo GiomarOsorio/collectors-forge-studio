@@ -74,20 +74,21 @@ def do_run_migrations(connection: Connection) -> None:
 async def run_async_migrations() -> None:
     """Crea el engine asíncrono y ejecuta las migraciones.
 
-    Usa engine.begin() en lugar de engine.connect() para envolver TODO
-    (DDL + UPDATE alembic_version) en una sola transacción atómica.
+    Usa engine.connect() (patrón canónico de Alembic) junto con
+    context.begin_transaction() dentro de do_run_migrations.
 
-    Con engine.connect(), context.begin_transaction() es un no-op para
-    PostgreSQL (que soporta DDL transaccional), lo que deja cada ALTER
-    TABLE sin transacción explícita y puede causar que el UPDATE de
-    alembic_version falle con "0 found" si el estado es inconsistente.
+    Con engine.begin() + context.begin_transaction(), SQLAlchemy crea un
+    SAVEPOINT anidado. asyncpg tiene un comportamiento conocido donde DDL
+    dentro de un SAVEPOINT puede dejar el UPDATE de alembic_version sin
+    filas visibles ("0 found"). Con engine.connect(), context.begin_transaction()
+    emite un BEGIN real (no un SAVEPOINT), evitando el problema.
     """
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
-    async with connectable.begin() as connection:
+    async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
     await connectable.dispose()
 
