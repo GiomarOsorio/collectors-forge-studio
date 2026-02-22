@@ -117,6 +117,17 @@ function formatTime(seconds) {
  *
  * @returns {JSX.Element}
  */
+/**
+ * Formatea bytes en una cadena legible (KB / MB).
+ *
+ * @param {number} bytes
+ * @returns {string}
+ */
+function formatFileSize(bytes) {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function SlicerUploadPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('gcode');
@@ -132,6 +143,10 @@ export default function SlicerUploadPage() {
   /** @type {[Object|null, Function]} Resultado del trabajo de laminado */
   const [result, setResult] = useState(null);
   const [makerworldUrl, setMakerworldUrl] = useState('');
+  /** Archivo seleccionado pero aún no enviado (gcode/3mf). */
+  const [selectedGcodeFile, setSelectedGcodeFile] = useState(null);
+  /** Archivo seleccionado pero aún no enviado (STL/STEP). */
+  const [selectedStlFile, setSelectedStlFile] = useState(null);
   const gcodeInputRef = useRef(null);
   const stlInputRef = useRef(null);
   const pollingRef = useRef(null);
@@ -147,19 +162,28 @@ export default function SlicerUploadPage() {
   // Limpia el polling al desmontar el componente
   useEffect(() => () => stopPolling(), []);
 
-  /** Sube un archivo .gcode o .3mf y obtiene los metadatos. */
-  const handleGcodeUpload = async (e) => {
+  /** Guarda el archivo .gcode/.3mf seleccionado sin enviarlo aún. */
+  const handleGcodeFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setSelectedGcodeFile(file);
+    setResult(null);
+    if (gcodeInputRef.current) gcodeInputRef.current.value = '';
+  };
+
+  /** Envía el archivo .gcode/.3mf seleccionado al backend para extraer metadatos. */
+  const handleGcodeSubmit = async () => {
+    if (!selectedGcodeFile) return;
     setLoading(true);
     setResult(null);
     try {
       const form = new FormData();
-      form.append('file', file);
+      form.append('file', selectedGcodeFile);
       const res = await api.post('/slicer/upload-gcode', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setResult(res.data);
+      setSelectedGcodeFile(null);
       if (res.data.status === 'done') {
         toast.success('Archivo procesado correctamente');
       } else {
@@ -169,20 +193,26 @@ export default function SlicerUploadPage() {
       toast.error('Error al subir el archivo');
     } finally {
       setLoading(false);
-      // Limpiar input para permitir subir el mismo archivo de nuevo
-      if (gcodeInputRef.current) gcodeInputRef.current.value = '';
     }
   };
 
-  /** Sube un archivo STL/STEP al laminador OrcaSlicer (proceso en background). */
-  const handleStlUpload = async (e) => {
+  /** Guarda el archivo STL/STEP seleccionado sin enviarlo aún. */
+  const handleStlFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setSelectedStlFile(file);
+    setResult(null);
+    if (stlInputRef.current) stlInputRef.current.value = '';
+  };
+
+  /** Envía el archivo STL/STEP al laminador OrcaSlicer (proceso en background). */
+  const handleStlSubmit = async () => {
+    if (!selectedStlFile) return;
     setLoading(true);
     setResult(null);
     try {
       const form = new FormData();
-      form.append('file', file);
+      form.append('file', selectedStlFile);
       const params = new URLSearchParams({
         printer_preset: NOZZLE_CONFIGS[nozzleSize].printerPreset,
         filament_preset: filamentPreset,
@@ -191,6 +221,7 @@ export default function SlicerUploadPage() {
       const res = await api.post(`/slicer/upload-stl?${params}`, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
+      setSelectedStlFile(null);
       setResult(res.data);
       if (res.data.status === 'pending' || res.data.status === 'slicing') {
         const jobId = res.data.id;
@@ -215,7 +246,6 @@ export default function SlicerUploadPage() {
       toast.error('Error al subir el archivo');
     } finally {
       setLoading(false);
-      if (stlInputRef.current) stlInputRef.current.value = '';
     }
   };
 
@@ -256,6 +286,8 @@ export default function SlicerUploadPage() {
     stopPolling();
     setActiveTab(tabId);
     setResult(null);
+    setSelectedGcodeFile(null);
+    setSelectedStlFile(null);
   };
 
   return (
@@ -306,23 +338,50 @@ export default function SlicerUploadPage() {
               type="file"
               accept=".gcode,.3mf"
               className="hidden"
-              onChange={handleGcodeUpload}
+              onChange={handleGcodeFileSelect}
             />
-            <button
-              onClick={() => gcodeInputRef.current?.click()}
-              disabled={loading}
-              className="w-full border-2 border-dashed border-[#2a2d31] rounded-xl p-12 text-center hover:border-amber-400/40 hover:bg-amber-400/5 transition-all group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <Loader size={36} className="mx-auto mb-3 text-amber-400 animate-spin" />
-              ) : (
+
+            {/* Zona de selección / vista previa del archivo */}
+            {!selectedGcodeFile ? (
+              <button
+                onClick={() => gcodeInputRef.current?.click()}
+                disabled={loading}
+                className="w-full border-2 border-dashed border-[#2a2d31] rounded-xl p-12 text-center hover:border-amber-400/40 hover:bg-amber-400/5 transition-all group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 <FileCode size={36} className="mx-auto mb-3 text-gunmetal group-hover:text-amber-400 transition-colors" />
-              )}
-              <p className="text-steel group-hover:text-tech-white transition-colors font-medium text-sm">
-                {loading ? 'Procesando...' : 'Haz clic para seleccionar el archivo'}
-              </p>
-              <p className="text-gunmetal text-xs mt-1">Máximo 250 MB</p>
-            </button>
+                <p className="text-steel group-hover:text-tech-white transition-colors font-medium text-sm">
+                  Haz clic para seleccionar el archivo
+                </p>
+                <p className="text-gunmetal text-xs mt-1">Máximo 250 MB</p>
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 bg-[#0d1014] border border-[#2a2d31] rounded-xl px-4 py-3">
+                  <FileCode size={22} className="text-amber-400 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-tech-white text-sm font-medium truncate">{selectedGcodeFile.name}</p>
+                    <p className="text-gunmetal text-xs">{formatFileSize(selectedGcodeFile.size)}</p>
+                  </div>
+                  <button
+                    onClick={() => gcodeInputRef.current?.click()}
+                    className="text-xs text-steel hover:text-tech-white transition-colors shrink-0"
+                  >
+                    Cambiar
+                  </button>
+                </div>
+                <button
+                  onClick={handleGcodeSubmit}
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-amber-400/15 text-amber-400 border border-amber-400/30 hover:bg-amber-400/25 transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? (
+                    <><Loader size={16} className="animate-spin" /> Procesando...</>
+                  ) : (
+                    <><Upload size={16} /> Enviar</>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -392,25 +451,52 @@ export default function SlicerUploadPage() {
               type="file"
               accept=".stl,.step,.stp"
               className="hidden"
-              onChange={handleStlUpload}
+              onChange={handleStlFileSelect}
             />
-            <button
-              onClick={() => stlInputRef.current?.click()}
-              disabled={loading}
-              className="w-full border-2 border-dashed border-[#2a2d31] rounded-xl p-10 text-center hover:border-amber-400/40 hover:bg-amber-400/5 transition-all group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <Loader size={36} className="mx-auto mb-3 text-amber-400 animate-spin" />
-              ) : (
+
+            {/* Zona de selección / vista previa del archivo */}
+            {!selectedStlFile ? (
+              <button
+                onClick={() => stlInputRef.current?.click()}
+                disabled={loading}
+                className="w-full border-2 border-dashed border-[#2a2d31] rounded-xl p-10 text-center hover:border-amber-400/40 hover:bg-amber-400/5 transition-all group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 <Upload size={36} className="mx-auto mb-3 text-gunmetal group-hover:text-amber-400 transition-colors" />
-              )}
-              <p className="text-steel group-hover:text-tech-white transition-colors font-medium text-sm">
-                {loading ? 'Enviando al laminador...' : 'Haz clic para seleccionar el archivo'}
-              </p>
-              <p className="text-gunmetal text-xs mt-2">
-                Formatos: .stl · .step · .stp
-              </p>
-            </button>
+                <p className="text-steel group-hover:text-tech-white transition-colors font-medium text-sm">
+                  Haz clic para seleccionar el archivo
+                </p>
+                <p className="text-gunmetal text-xs mt-2">
+                  Formatos: .stl · .step · .stp
+                </p>
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 bg-[#0d1014] border border-[#2a2d31] rounded-xl px-4 py-3">
+                  <Box size={22} className="text-amber-400 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-tech-white text-sm font-medium truncate">{selectedStlFile.name}</p>
+                    <p className="text-gunmetal text-xs">{formatFileSize(selectedStlFile.size)}</p>
+                  </div>
+                  <button
+                    onClick={() => stlInputRef.current?.click()}
+                    className="text-xs text-steel hover:text-tech-white transition-colors shrink-0"
+                  >
+                    Cambiar
+                  </button>
+                </div>
+                <button
+                  onClick={handleStlSubmit}
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-amber-400/15 text-amber-400 border border-amber-400/30 hover:bg-amber-400/25 transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? (
+                    <><Loader size={16} className="animate-spin" /> Enviando al laminador...</>
+                  ) : (
+                    <><Upload size={16} /> Enviar al laminador</>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
