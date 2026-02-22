@@ -10,39 +10,9 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, Calculator, Package, Home, Cpu } from 'lucide-react';
+import { X, Home } from 'lucide-react';
 import { useDirtyState } from '../context/DirtyStateContext';
-
-/**
- * Definición de las aplicaciones disponibles en TurtleForge Studio.
- * Cada app tiene un id, nombre, descripción, ícono y ruta de entrada.
- */
-const APPS = [
-  {
-    id: 'cost',
-    name: 'Cost',
-    description: 'Calculadora de costos de impresión 3D',
-    icon: Calculator,
-    route: '/cost/calculator',
-    color: '#3FAF4C',
-  },
-  {
-    id: 'inventory',
-    name: 'Inventario',
-    description: 'Stock, alertas y seguimiento de compras',
-    icon: Package,
-    route: '/inventory/stock',
-    color: '#3B82F6',
-  },
-  {
-    id: 'slicer',
-    name: 'Slicer',
-    description: 'Laminar modelos y calcular tiempos',
-    icon: Cpu,
-    route: '/slicer/upload',
-    color: '#F59E0B',
-  },
-];
+import { APPS } from '../config/apps';
 
 /**
  * Cajón lateral de cambio de aplicaciones.
@@ -155,7 +125,7 @@ export default function AppSwitcherDrawer({ isOpen, onClose }) {
                       <p className="font-semibold text-tech-white text-sm group-hover:text-forge-green transition-colors">
                         {app.name}
                       </p>
-                      <p className="text-xs text-gunmetal mt-0.5 leading-tight">{app.description}</p>
+                      <p className="text-xs text-gunmetal mt-0.5 leading-tight">{app.shortDescription}</p>
                     </div>
                   </button>
                 );
