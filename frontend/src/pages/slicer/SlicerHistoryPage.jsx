@@ -55,19 +55,19 @@ function StatusBadge({ status, errorMessage }) {
   const cfg = config[status] || config['pending'];
   const Icon = cfg.icon;
 
-  if (status === 'error' && errorMessage) {
+  if (status === 'error') {
     return (
-      <span className="relative group inline-flex items-center gap-1">
-        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium cursor-help ${cfg.color}`}>
+      <div className="space-y-1">
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>
           <Icon size={11} />
           Error
         </span>
-        {/* Tooltip con el mensaje de error */}
-        <span className="absolute bottom-full left-0 mb-2 hidden group-hover:block z-50 w-72 bg-[#1a1d21] border border-red-500/30 text-red-300 text-xs rounded-lg px-3 py-2 shadow-xl leading-relaxed pointer-events-none">
-          <span className="font-semibold block mb-1 text-red-400">Detalle del error:</span>
-          {errorMessage}
-        </span>
-      </span>
+        {errorMessage && (
+          <p className="text-red-300/80 text-xs leading-snug max-w-[220px] break-words">
+            {errorMessage}
+          </p>
+        )}
+      </div>
     );
   }
 
