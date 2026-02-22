@@ -112,6 +112,22 @@ class UserUpdate(BaseModel):
     new_password: Optional[str] = Field(default=None, min_length=8, max_length=128)
 
 
+class UserAdminUpdate(BaseModel):
+    """
+    Esquema para que un administrador actualice datos de otro usuario.
+
+    Solo los administradores pueden usar este schema. Todos los campos son
+    opcionales; solo se aplican los que se incluyan en la petición.
+
+    Atributos:
+        new_password: Nueva contraseña en texto plano (mín. 8, máx. 128).
+        is_admin:     Nuevo valor para el rol de administrador.
+    """
+
+    new_password: Optional[str] = Field(default=None, min_length=8, max_length=128)
+    is_admin: Optional[bool] = None
+
+
 class TokenData(BaseModel):
     """
     Esquema interno para los datos extraídos del payload del token JWT.

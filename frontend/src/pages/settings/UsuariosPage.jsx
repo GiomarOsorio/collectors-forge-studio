@@ -8,10 +8,10 @@
  */
 
 import { useState, useEffect } from 'react';
-import { getUsers, register } from '../../services/api';
+import { getUsers, register, updateUser } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
-import { Users, X } from 'lucide-react';
+import { Users, X, Pencil } from 'lucide-react';
 import { apiErrorMsg } from '../../utils/apiError';
 
 export default function UsuariosPage() {
@@ -23,6 +23,17 @@ export default function UsuariosPage() {
   });
   const [creating, setCreating] = useState(false);
 
+  const [editModal, setEditModal] = useState(false);
+  const [editTarget, setEditTarget] = useState(null);
+  const [editForm, setEditForm] = useState({ new_password: '', confirm: '', is_admin: false });
+  const [saving, setSaving] = useState(false);
+
+  const openEdit = (u) => {
+    setEditTarget(u);
+    setEditForm({ new_password: '', confirm: '', is_admin: u.is_admin });
+    setEditModal(true);
+  };
+
   const loadUsers = async () => {
     try {
       const res = await getUsers();
@@ -33,6 +44,29 @@ export default function UsuariosPage() {
   };
 
   useEffect(() => { loadUsers(); }, []);
+
+  const handleEdit = async (e) => {
+    e.preventDefault();
+    const payload = { is_admin: editForm.is_admin };
+    if (editForm.new_password) {
+      if (editForm.new_password !== editForm.confirm) {
+        toast.error('Las contraseñas no coinciden');
+        return;
+      }
+      payload.new_password = editForm.new_password;
+    }
+    setSaving(true);
+    try {
+      await updateUser(editTarget.id, payload);
+      toast.success('Usuario actualizado');
+      setEditModal(false);
+      loadUsers();
+    } catch (err) {
+      toast.error(apiErrorMsg(err, 'Error al actualizar usuario'));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -59,6 +93,71 @@ export default function UsuariosPage() {
           <button onClick={() => setNewUserModal(true)} className="tf-btn-primary gap-2">
             <Users size={16} /> Agregar usuario
           </button>
+        </div>
+      )}
+
+      {/* Modal editar usuario */}
+      {editModal && editTarget && (
+        <div className="tf-modal-overlay">
+          <div className="tf-modal max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="tf-section-title">Editar — {editTarget.username}</h3>
+              <button onClick={() => setEditModal(false)} className="tf-btn-ghost">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleEdit} className="space-y-4">
+              <div>
+                <label className="tf-label">Nueva contraseña</label>
+                <input
+                  type="password"
+                  className="tf-input"
+                  value={editForm.new_password}
+                  onChange={(e) => setEditForm((p) => ({ ...p, new_password: e.target.value }))}
+                  minLength={8}
+                  maxLength={128}
+                  placeholder="Dejar vacío para no cambiar"
+                />
+              </div>
+              {editForm.new_password && (
+                <div>
+                  <label className="tf-label">Confirmar contraseña</label>
+                  <input
+                    type="password"
+                    className="tf-input"
+                    value={editForm.confirm}
+                    onChange={(e) => setEditForm((p) => ({ ...p, confirm: e.target.value }))}
+                    placeholder="Repetir nueva contraseña"
+                  />
+                </div>
+              )}
+              <label className="flex items-center gap-2 cursor-pointer text-sm text-steel">
+                <input
+                  type="checkbox"
+                  checked={editForm.is_admin}
+                  onChange={(e) => setEditForm((p) => ({ ...p, is_admin: e.target.checked }))}
+                  className="rounded"
+                />
+                Administrador
+              </label>
+              <div className="flex gap-3 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditModal(false)}
+                  className="tf-btn-ghost px-4 py-2"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="tf-btn-primary px-4 py-2"
+                >
+                  {saving ? 'Guardando...' : 'Guardar cambios'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
@@ -144,6 +243,7 @@ export default function UsuariosPage() {
               <th className="tf-th">Email</th>
               <th className="tf-th-right">Admin</th>
               <th className="tf-th-right">Estado</th>
+              <th className="tf-th-right">Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -169,6 +269,15 @@ export default function UsuariosPage() {
                   ) : (
                     <span className="text-xs text-red-400">Inactivo</span>
                   )}
+                </td>
+                <td className="tf-td-right">
+                  <button
+                    onClick={() => openEdit(u)}
+                    className="text-gunmetal hover:text-tech-white transition-colors"
+                    title="Editar usuario"
+                  >
+                    <Pencil size={15} />
+                  </button>
                 </td>
               </tr>
             ))}

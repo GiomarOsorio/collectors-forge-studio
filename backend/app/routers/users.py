@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.user import User
-from app.schemas.user import UserResponse, UserUpdate
+from app.schemas.user import UserResponse, UserUpdate, UserAdminUpdate
 from app.services.auth import get_current_admin, get_current_user, verify_password, get_password_hash
 
 router = APIRouter(prefix="/api/users", tags=["users"])
@@ -115,3 +115,56 @@ async def update_me(
     await db.commit()
     await db.refresh(current_user)
     return current_user
+
+
+@router.patch("/{user_id}", response_model=UserResponse)
+async def admin_update_user(
+    user_id: int,
+    data: UserAdminUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin),
+):
+    """
+    Actualiza la contraseña y/o el rol de administrador de otro usuario.
+
+    Solo los administradores pueden usar este endpoint. El usuario objetivo
+    debe pertenecer a la misma empresa. Un administrador no puede quitarse
+    su propio rol de administrador para evitar quedarse sin acceso.
+
+    Args:
+        user_id:      ID del usuario a modificar.
+        data:         Campos a actualizar (new_password y/o is_admin).
+        db:           Sesión de base de datos.
+        current_user: Administrador autenticado.
+
+    Returns:
+        UserResponse con los datos actualizados.
+
+    Raises:
+        HTTPException 400: Si el admin intenta quitarse su propio rol.
+        HTTPException 404: Si el usuario no existe en la empresa.
+    """
+    result = await db.execute(
+        select(User).where(
+            User.id == user_id,
+            User.company_id == current_user.company_id,
+        )
+    )
+    target = result.scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+
+    if data.new_password is not None:
+        target.hashed_password = get_password_hash(data.new_password)
+
+    if data.is_admin is not None:
+        if target.id == current_user.id and not data.is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No puedes quitarte tu propio rol de administrador",
+            )
+        target.is_admin = data.is_admin
+
+    await db.commit()
+    await db.refresh(target)
+    return target

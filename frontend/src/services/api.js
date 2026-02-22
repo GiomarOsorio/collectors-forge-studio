@@ -115,8 +115,9 @@ export const uploadCompanyLogo = (file) => {
 // Usuario actual
 // ============================================================================
 
-export const updateMe = (data) => api.put('/users/me', data);
-export const getUsers = () => api.get('/users/');
+export const updateMe       = (data)         => api.put('/users/me', data);
+export const getUsers       = ()              => api.get('/users/');
+export const updateUser     = (id, data)     => api.patch(`/users/${id}`, data);
 
 // ============================================================================
 // Filamentos
