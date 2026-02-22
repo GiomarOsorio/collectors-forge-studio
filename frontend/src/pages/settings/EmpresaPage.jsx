@@ -13,6 +13,7 @@ import { getCompany, updateCompany, uploadCompanyLogo } from '../../services/api
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 import { Upload } from 'lucide-react';
+import { apiErrorMsg } from '../../utils/apiError';
 
 export default function EmpresaPage() {
   const { user } = useAuth();
@@ -52,7 +53,7 @@ export default function EmpresaPage() {
       setCompany(res.data);
       toast.success('Empresa actualizada');
     } catch (err) {
-      toast.error(err?.response?.data?.detail || 'Error al guardar');
+      toast.error(apiErrorMsg(err, 'Error al guardar'));
     } finally {
       setSaving(false);
     }
@@ -67,7 +68,7 @@ export default function EmpresaPage() {
       setCompany(res.data);
       toast.success('Logo actualizado');
     } catch (err) {
-      toast.error(err?.response?.data?.detail || 'Error al subir logo');
+      toast.error(apiErrorMsg(err, 'Error al subir logo'));
     } finally {
       setUploadingLogo(false);
       if (logoInputRef.current) logoInputRef.current.value = '';

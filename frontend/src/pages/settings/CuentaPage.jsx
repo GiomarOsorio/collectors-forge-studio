@@ -12,6 +12,7 @@ import { updateMe } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 import { Eye, EyeOff } from 'lucide-react';
+import { apiErrorMsg } from '../../utils/apiError';
 
 export default function CuentaPage() {
   const { user } = useAuth();
@@ -50,7 +51,7 @@ export default function CuentaPage() {
       toast.success('Perfil actualizado');
       setPwForm({ current_password: '', new_password: '', confirm: '' });
     } catch (err) {
-      toast.error(err?.response?.data?.detail || 'Error al guardar');
+      toast.error(apiErrorMsg(err, 'Error al guardar'));
     } finally {
       setSaving(false);
     }

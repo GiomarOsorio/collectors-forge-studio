@@ -12,6 +12,7 @@ import { getUsers, register } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 import { Users, X } from 'lucide-react';
+import { apiErrorMsg } from '../../utils/apiError';
 
 export default function UsuariosPage() {
   const { user } = useAuth();
@@ -43,7 +44,7 @@ export default function UsuariosPage() {
       setNewUserForm({ username: '', email: '', password: '', is_admin: false });
       loadUsers();
     } catch (err) {
-      toast.error(err?.response?.data?.detail || 'Error al crear usuario');
+      toast.error(apiErrorMsg(err, 'Error al crear usuario'));
     } finally {
       setCreating(false);
     }
