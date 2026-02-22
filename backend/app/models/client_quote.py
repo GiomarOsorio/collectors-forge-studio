@@ -52,8 +52,11 @@ class ClientQuote(Base):
     # Líneas de producto (JSON: [{name, quantity, unit_price}])
     items: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'[]'"))
 
-    # Subtotal calculado
+    # Subtotal calculado (en USD, moneda de entrada del usuario)
     subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+
+    # Tasa USD→COP vigente al momento de crear la cotización
+    usd_to_cop_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
 
     # Notas opcionales
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

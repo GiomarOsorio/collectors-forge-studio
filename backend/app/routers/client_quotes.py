@@ -32,6 +32,7 @@ from app.models.user import User
 from app.schemas.client_quote import ClientQuoteCreate, ClientQuoteResponse
 from app.limiter import limiter
 from app.services.auth import get_current_user
+from app.services.exchange_rate import get_usd_to_cop
 from app.services.pdf_generator import generate_client_quote_pdf
 
 router = APIRouter(prefix="/api/client-quotes", tags=["client-quotes"])
@@ -89,6 +90,7 @@ async def create_client_quote(
         ClientQuoteResponse con todos los datos de la cotización creada.
     """
     expiry_date = data.quote_date + timedelta(days=data.expiry_days)
+    cop_rate = await get_usd_to_cop()
 
     subtotal = sum(
         Decimal(str(item.quantity)) * Decimal(str(item.unit_price))
@@ -114,6 +116,7 @@ async def create_client_quote(
         expiry_date=expiry_date,
         items=items_json,
         subtotal=subtotal,
+        usd_to_cop_rate=Decimal(str(cop_rate)),
         notes=data.notes,
     )
     db.add(cq)
@@ -219,7 +222,10 @@ async def download_client_quote_pdf(
     cq = await _get_company_client_quote(db, quote_id, current_user.company_id)
     company_result = await db.execute(select(Company).where(Company.id == current_user.company_id))
     company = company_result.scalar_one_or_none()
-    pdf_bytes = generate_client_quote_pdf(cq, company)
+    # Usar tasa guardada al crear; si la cotización es anterior a este campo,
+    # obtener la tasa actual como respaldo.
+    usd_rate = float(cq.usd_to_cop_rate) if cq.usd_to_cop_rate else await get_usd_to_cop()
+    pdf_bytes = generate_client_quote_pdf(cq, company, usd_rate)
     safe_client = re.sub(r"[^\w\-]", "_", cq.client_name)
     filename = f"cotizacion_COT-{cq.id:04d}_{safe_client}.pdf"
     return Response(

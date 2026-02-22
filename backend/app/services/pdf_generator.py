@@ -337,7 +337,7 @@ def generate_quote_pdf(quote: Quote, company: Optional["Company"] = None) -> byt
     return buffer.getvalue()
 
 
-def generate_client_quote_pdf(client_quote: ClientQuote, company: Optional["Company"] = None) -> bytes:
+def generate_client_quote_pdf(client_quote: ClientQuote, company: Optional["Company"] = None, usd_rate: float = 1.0) -> bytes:
     """
     Genera el PDF de una cotización de cliente multi-producto.
 
@@ -394,13 +394,13 @@ def generate_client_quote_pdf(client_quote: ClientQuote, company: Optional["Comp
     ]
     for item in items:
         qty      = item["quantity"]
-        unit_p   = item["unit_price"]
+        unit_p   = item["unit_price"] * usd_rate
         line_tot = qty * unit_p
         rows.append([
             Paragraph(item["name"],        st["sTC"]),
             Paragraph(str(qty),            st["sTC"]),
-            Paragraph(_fmt_usd(unit_p),    st["sTC"]),
-            Paragraph(_fmt_usd(line_tot),  st["sTCR"]),
+            Paragraph(_fmt_cop(unit_p),    st["sTC"]),
+            Paragraph(_fmt_cop(line_tot),  st["sTCR"]),
         ])
 
     items_tbl = Table(rows, colWidths=cols)
@@ -424,8 +424,8 @@ def generate_client_quote_pdf(client_quote: ClientQuote, company: Optional["Comp
     L  = cols[0] + cols[1]
     R1 = cols[2]
     R2 = cols[3]
-    subtotal_val = float(client_quote.subtotal)
-    elements.append(_build_totals(L, R1, R2, _fmt_usd(subtotal_val), st))
+    subtotal_val = float(client_quote.subtotal) * usd_rate
+    elements.append(_build_totals(L, R1, R2, _fmt_cop(subtotal_val), st))
     elements.append(Spacer(1, 24))
 
     # ── 7. PIE DE PÁGINA ──────────────────────────────────────────────────────
