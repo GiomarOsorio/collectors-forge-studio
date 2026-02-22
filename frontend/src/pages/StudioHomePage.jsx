@@ -9,41 +9,7 @@
  */
 
 import { useNavigate } from 'react-router-dom';
-import { Calculator, Package, Cpu } from 'lucide-react';
-
-/**
- * Definición de las aplicaciones disponibles.
- * Se mantiene sincronizada con AppSwitcherDrawer.
- */
-const APPS = [
-  {
-    id: 'cost',
-    name: 'Cost',
-    description: 'Calculadora de costos de impresión 3D. Gestiona filamentos, impresoras, insumos y genera cotizaciones.',
-    icon: Calculator,
-    route: '/cost/calculator',
-    color: '#3FAF4C',
-    badge: null,
-  },
-  {
-    id: 'inventory',
-    name: 'Inventario',
-    description: 'Gestión de stock, alertas de mínimos y seguimiento de compras con tracking internacional.',
-    icon: Package,
-    route: '/inventory/stock',
-    color: '#3B82F6',
-    badge: null,
-  },
-  {
-    id: 'slicer',
-    name: 'Slicer',
-    description: 'Lamina modelos STL con OrcaSlicer o sube archivos .gcode/.3mf para extraer datos de impresión.',
-    icon: Cpu,
-    route: '/slicer/upload',
-    color: '#F59E0B',
-    badge: null,
-  },
-];
+import { APPS } from '../config/apps';
 
 /**
  * Página de inicio de TurtleForge Studio con launcher de aplicaciones.
