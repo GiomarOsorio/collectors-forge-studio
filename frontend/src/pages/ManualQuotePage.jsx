@@ -113,7 +113,7 @@ export default function ManualQuotePage() {
 
   /** Calcula el subtotal en tiempo real. */
   const subtotal = items.reduce((sum, it) => {
-    const qty = parseFloat(it.quantity) || 0;
+    const qty = parseInt(it.quantity) || 0;
     const price = parseFloat(it.unit_price) || 0;
     return sum + qty * price;
   }, 0);
@@ -135,7 +135,7 @@ export default function ManualQuotePage() {
         expiry_days: parseInt(form.expiry_days) || 15,
         items: items.map((it) => ({
           name: it.name,
-          quantity: parseFloat(it.quantity) || 1,
+          quantity: parseInt(it.quantity) || 1,
           unit_price: parseFloat(it.unit_price) || 0,
         })),
         notes: form.notes || null,
@@ -247,7 +247,7 @@ export default function ManualQuotePage() {
                 </div>
                 <div className="col-span-4 sm:col-span-2">
                   <input
-                    type="number" min="0.01" step="0.01" value={it.quantity}
+                    type="number" min="1" step="1" value={it.quantity}
                     onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
                     className="tf-input text-sm text-right" placeholder="1" required />
                 </div>
