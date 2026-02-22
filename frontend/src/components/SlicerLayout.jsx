@@ -70,10 +70,7 @@ export default function SlicerLayout() {
             aria-label="Abrir menú de aplicaciones"
           >
             <img src="/logo.png" alt="TurtleForge" className="h-10 w-10 object-contain group-hover:scale-105 transition-transform" />
-            <div>
-              <h1 className="text-xl font-bold text-tech-white">TurtleForge Slicer</h1>
-              <p className="text-gunmetal text-xs group-hover:text-amber-400 transition-colors">TurtleForge Studio ↗</p>
-            </div>
+            <h1 className="text-xl font-bold text-tech-white">Slicer</h1>
           </button>
         </div>
 
@@ -102,7 +99,7 @@ export default function SlicerLayout() {
         <div className="p-4 border-t border-[#1e2125]">
           <div className="flex items-center justify-between">
             <NavLink
-              to="/cost/account"
+              to="/settings/account"
               onClick={closeSidebar}
               className="text-gunmetal hover:text-tech-white text-sm transition-colors"
               title="Mi cuenta"
@@ -137,7 +134,7 @@ export default function SlicerLayout() {
             title="Cambiar de aplicación"
           >
             <img src="/logo.png" alt="TurtleForge" className="h-7 w-7 object-contain" />
-            <h1 className="text-lg font-bold text-tech-white">TurtleForge Slicer</h1>
+            <h1 className="text-lg font-bold text-tech-white">Slicer</h1>
           </button>
         </header>
 

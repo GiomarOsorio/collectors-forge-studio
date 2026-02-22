@@ -38,7 +38,7 @@ export default function StudioLayout() {
         </Link>
         <div className="flex items-center gap-4">
           <Link
-            to="/cost/account"
+            to="/settings/account"
             className="text-gunmetal hover:text-tech-white text-sm hidden sm:block transition-colors"
             title="Mi cuenta"
           >

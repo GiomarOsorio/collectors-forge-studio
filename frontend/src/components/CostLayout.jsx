@@ -20,7 +20,6 @@ import {
   Printer,
   History,
   Settings,
-  UserCog,
   LogOut,
   Menu,
 } from 'lucide-react';
@@ -35,7 +34,6 @@ const navItems = [
   { to: '/cost/manual', icon: FileEdit, label: 'Nueva Cotización' },
   { to: '/cost/printers', icon: Printer, label: 'Impresoras' },
   { to: '/cost/history', icon: History, label: 'Costos Impresión' },
-  { to: '/cost/account', icon: UserCog, label: 'Mi Cuenta' },
   { to: '/cost/settings', icon: Settings, label: 'Configuración' },
 ];
 
@@ -84,10 +82,7 @@ export default function CostLayout() {
             aria-label="Abrir menú de aplicaciones"
           >
             <img src="/logo.png" alt="TurtleForge" className="h-10 w-10 object-contain group-hover:scale-105 transition-transform" />
-            <div>
-              <h1 className="text-xl font-bold text-tech-white">TurtleForge Cost</h1>
-              <p className="text-gunmetal text-xs group-hover:text-forge-green transition-colors">TurtleForge Studio ↗</p>
-            </div>
+            <h1 className="text-xl font-bold text-tech-white">Cost</h1>
           </button>
         </div>
 
@@ -116,7 +111,7 @@ export default function CostLayout() {
         <div className="p-4 border-t border-[#1e2125]">
           <div className="flex items-center justify-between">
             <NavLink
-              to="/cost/account"
+              to="/settings/account"
               onClick={closeSidebar}
               className="text-gunmetal hover:text-tech-white text-sm transition-colors"
               title="Mi cuenta"
@@ -151,7 +146,7 @@ export default function CostLayout() {
             title="Cambiar de aplicación"
           >
             <img src="/logo.png" alt="TurtleForge" className="h-7 w-7 object-contain" />
-            <h1 className="text-lg font-bold text-tech-white">TurtleForge Cost</h1>
+            <h1 className="text-lg font-bold text-tech-white">Cost</h1>
           </button>
         </header>
 
