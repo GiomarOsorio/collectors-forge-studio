@@ -220,7 +220,7 @@ export default function CalculatorPage() {
   const addSupply = () => {
     if (!supplyToAdd.inventory_item_id) return;
     const id = parseInt(supplyToAdd.inventory_item_id);
-    const qty = parseFloat(supplyToAdd.quantity) || 1;
+    const qty = Math.max(1, parseInt(supplyToAdd.quantity) || 1);
     const existing = selectedSupplies.find((s) => s.inventory_item_id === id);
     if (existing) {
       setSelectedSupplies(
@@ -627,8 +627,8 @@ export default function CalculatorPage() {
                   </select>
                   <input
                     type="number"
-                    step="0.01"
-                    min="0.01"
+                    step="1"
+                    min="1"
                     placeholder="Cant."
                     value={supplyToAdd.quantity}
                     onChange={(e) =>
