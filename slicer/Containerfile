@@ -15,7 +15,8 @@ RUN apt-get update && apt-get install -y \
     libgtk-3-0 libgdk-pixbuf-2.0-0 \
     libatk1.0-0 libpango-1.0-0 libcairo2 \
     libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
-    ca-certificates \
+    ca-certificates libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 \
+    libwebkit2gtk-4.1-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Descargar y extraer OrcaSlicer nightly (AppImage Ubuntu 24.04)
