@@ -37,7 +37,13 @@ export default function StudioLayout() {
           </div>
         </Link>
         <div className="flex items-center gap-4">
-          <span className="text-gunmetal text-sm hidden sm:block">{user?.username}</span>
+          <Link
+            to="/cost/account"
+            className="text-gunmetal hover:text-tech-white text-sm hidden sm:block transition-colors"
+            title="Mi cuenta"
+          >
+            {user?.username}
+          </Link>
           <button
             onClick={handleLogout}
             className="text-gunmetal hover:text-tech-white transition-colors"

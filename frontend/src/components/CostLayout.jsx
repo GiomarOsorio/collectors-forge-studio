@@ -115,7 +115,14 @@ export default function CostLayout() {
         {/* Pie: usuario y logout */}
         <div className="p-4 border-t border-[#1e2125]">
           <div className="flex items-center justify-between">
-            <span className="text-gunmetal text-sm">{user?.username}</span>
+            <NavLink
+              to="/cost/account"
+              onClick={closeSidebar}
+              className="text-gunmetal hover:text-tech-white text-sm transition-colors"
+              title="Mi cuenta"
+            >
+              {user?.username}
+            </NavLink>
             <button
               onClick={handleLogout}
               className="text-gunmetal hover:text-tech-white transition-colors"
