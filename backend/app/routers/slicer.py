@@ -52,7 +52,7 @@ except OSError:
     pass  # El directorio /slicer_jobs no existe en entorno de desarrollo
 
 # URL del microservicio OrcaSlicer en la red interna de Podman
-ORCA_SERVICE_URL = "http://slicer:8001"
+ORCA_SERVICE_URL = "http://calculator3d-slicer:8001"
 
 # Presets por defecto para la BambuLab P2S
 DEFAULT_PRINTER = "Bambu Lab P2S 0.4 nozzle"
