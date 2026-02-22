@@ -19,6 +19,9 @@
  * - /cost/printers            → Gestión de impresoras (protegida)
  * - /cost/history             → Historial de costos de impresión (protegida)
  * - /cost/settings            → Configuración de la aplicación (protegida)
+ * - /settings/account         → Configuración de cuenta (protegida)
+ * - /settings/company         → Perfil de empresa (protegida)
+ * - /settings/users           → Gestión de usuarios (protegida)
  * - /inventory/filaments      → Filamentos del inventario (protegida)
  * - /inventory/supplies       → Insumos y accesorios del inventario (protegida)
  * - /inventory/stock          → Todo el stock del inventario (protegida)
@@ -41,6 +44,7 @@ import StudioLayout from './components/StudioLayout';
 import CostLayout from './components/CostLayout';
 import InventoryLayout from './components/InventoryLayout';
 import SlicerLayout from './components/SlicerLayout';
+import SettingsLayout from './components/SettingsLayout';
 import Login from './pages/Login';
 import StudioHomePage from './pages/StudioHomePage';
 import InventoryStockPage from './pages/inventory/InventoryStockPage';
@@ -51,7 +55,9 @@ import QuotesPage from './pages/QuotesPage';
 import PrintersPage from './pages/PrintersPage';
 import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
-import AccountPage from './pages/AccountPage';
+import CuentaPage from './pages/settings/CuentaPage';
+import EmpresaPage from './pages/settings/EmpresaPage';
+import UsuariosPage from './pages/settings/UsuariosPage';
 import InventoryFilamentsPage from './pages/inventory/InventoryFilamentsPage';
 import InventorySuppliesPage from './pages/inventory/InventorySuppliesPage';
 import InventoryPrintsPage from './pages/inventory/InventoryPrintsPage';
@@ -122,7 +128,14 @@ function AppRoutes() {
         <Route path="printers" element={<PrintersPage />} />
         <Route path="history" element={<HistoryPage />} />
         <Route path="settings" element={<SettingsPage />} />
-        <Route path="account" element={<AccountPage />} />
+      </Route>
+
+      {/* Aplicación Configuración: cuenta, empresa y usuarios */}
+      <Route path="/settings" element={<PrivateRoute><SettingsLayout /></PrivateRoute>}>
+        <Route index element={<Navigate to="/settings/account" replace />} />
+        <Route path="account" element={<CuentaPage />} />
+        <Route path="company" element={<EmpresaPage />} />
+        <Route path="users" element={<UsuariosPage />} />
       </Route>
 
       {/* Aplicación Slicer: laminado de modelos 3D */}
