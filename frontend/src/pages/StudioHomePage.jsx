@@ -70,10 +70,6 @@ export default function StudioHomePage() {
         </div>
       </div>
 
-      {/* Footer decorativo */}
-      <div className="mt-16 text-center">
-        <p className="text-xs text-gunmetal">TurtleForge Studio · Medellín, Colombia</p>
-      </div>
-    </div>
+</div>
   );
 }
