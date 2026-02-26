@@ -304,14 +304,63 @@ export default function SlicerUploadPage() {
 
         {/* Pestaña: Archivo único */}
         {activeTab === 'file' && (
-          <div>
-            <h2 className="text-tech-white font-semibold mb-1">Subir archivo</h2>
-            <p className="text-gunmetal text-sm mb-5">
-              Formatos soportados:{' '}
-              {['.gcode', '.3mf', '.stl', '.step', '.stp', '.obj', '.amf'].map((ext) => (
-                <code key={ext} className="text-amber-400 bg-amber-400/10 px-1 rounded mx-0.5">{ext}</code>
-              ))}
-            </p>
+          <div className="space-y-5">
+            <div>
+              <h2 className="text-tech-white font-semibold mb-1">Subir archivo</h2>
+              <p className="text-gunmetal text-sm">
+                Formatos soportados:{' '}
+                {['.gcode', '.3mf', '.stl', '.step', '.stp', '.obj', '.amf'].map((ext) => (
+                  <code key={ext} className="text-amber-400 bg-amber-400/10 px-1 rounded mx-0.5">{ext}</code>
+                ))}
+              </p>
+            </div>
+
+            {/* Configuración de laminado — siempre visible, se usa para STL/OBJ/AMF/STEP */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs text-gunmetal font-medium mb-1">Boquilla</label>
+                <div className="flex gap-1">
+                  {Object.keys(NOZZLE_CONFIGS).map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => handleNozzleChange(size)}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                        nozzleSize === size
+                          ? 'bg-amber-400/20 text-amber-400 border-amber-400/40'
+                          : 'text-steel border-[#2a2d31] hover:border-amber-400/30'
+                      }`}
+                    >
+                      {size}mm
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gunmetal font-medium mb-1">Material</label>
+                <select
+                  value={filamentPreset}
+                  onChange={(e) => setFilamentPreset(e.target.value)}
+                  className="tf-input text-sm py-1.5"
+                >
+                  {FILAMENT_PRESETS.map((p) => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gunmetal font-medium mb-1">Calidad</label>
+                <select
+                  value={configPreset}
+                  onChange={(e) => setConfigPreset(e.target.value)}
+                  className="tf-input text-sm py-1.5"
+                >
+                  {NOZZLE_CONFIGS[nozzleSize].qualities.map((q) => (
+                    <option key={q.value} value={q.value}>{q.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
             <input
               ref={fileInputRef}
@@ -326,7 +375,7 @@ export default function SlicerUploadPage() {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={loading}
-                className="w-full border-2 border-dashed border-[#2a2d31] rounded-xl p-12 text-center hover:border-amber-400/40 hover:bg-amber-400/5 transition-all group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full border-2 border-dashed border-[#2a2d31] rounded-xl p-10 text-center hover:border-amber-400/40 hover:bg-amber-400/5 transition-all group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Upload size={36} className="mx-auto mb-3 text-gunmetal group-hover:text-amber-400 transition-colors" />
                 <p className="text-steel group-hover:text-tech-white transition-colors font-medium text-sm">
@@ -335,7 +384,7 @@ export default function SlicerUploadPage() {
                 <p className="text-gunmetal text-xs mt-1">Máximo 250 MB</p>
               </button>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {/* Info del archivo */}
                 <div className="flex items-center gap-3 bg-[#0d1014] border border-[#2a2d31] rounded-xl px-4 py-3">
                   {needsSlicing
@@ -357,59 +406,6 @@ export default function SlicerUploadPage() {
                     Cambiar
                   </button>
                 </div>
-
-                {/* Configuración de laminado — solo para formatos que requieren slicing */}
-                {needsSlicing && (
-                  <div className="bg-[#0d1014] border border-[#2a2d31] rounded-xl p-4">
-                    <p className="text-xs text-gunmetal font-medium mb-3">Configuración de laminado</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div>
-                        <label className="block text-xs text-gunmetal mb-1">Boquilla</label>
-                        <div className="flex gap-1">
-                          {Object.keys(NOZZLE_CONFIGS).map((size) => (
-                            <button
-                              key={size}
-                              type="button"
-                              onClick={() => handleNozzleChange(size)}
-                              className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
-                                nozzleSize === size
-                                  ? 'bg-amber-400/20 text-amber-400 border-amber-400/40'
-                                  : 'text-steel border-[#2a2d31] hover:border-amber-400/30'
-                              }`}
-                            >
-                              {size}mm
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gunmetal mb-1">Material</label>
-                        <select
-                          value={filamentPreset}
-                          onChange={(e) => setFilamentPreset(e.target.value)}
-                          className="tf-input text-sm py-1.5"
-                        >
-                          {FILAMENT_PRESETS.map((p) => (
-                            <option key={p.value} value={p.value}>{p.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gunmetal mb-1">Calidad</label>
-                        <select
-                          value={configPreset}
-                          onChange={(e) => setConfigPreset(e.target.value)}
-                          className="tf-input text-sm py-1.5"
-                        >
-                          {NOZZLE_CONFIGS[nozzleSize].qualities.map((q) => (
-                            <option key={q.value} value={q.value}>{q.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
                 {/* Botón Enviar */}
                 <button
                   onClick={handleFileSubmit}
