@@ -174,13 +174,15 @@ async def slice_model(request: SliceRequest):
         raise HTTPException(status_code=503, detail="OrcaSlicer no disponible en el contenedor")
 
     # OrcaSlicer 2.3.x CLI flags correctos (verificados en --help):
-    #   --slice 0       → lamina todas las placas (0=all, N=placa N)
-    #   --outputdir     → directorio de salida (NO es -o)
-    #   --load-settings → archivos JSON de proceso/máquina (para presets futuros)
-    #   --load-filaments→ archivos JSON de filamento (para presets futuros)
+    #   --slice 0             → lamina todas las placas (0=all, N=placa N)
+    #   --outputdir           → directorio de salida (NO es -o)
+    #   --allow-newer-file 1  → acepta 3MF creados con versiones más recientes
+    #   --load-settings       → archivos JSON de proceso/máquina (para presets futuros)
+    #   --load-filaments      → archivos JSON de filamento (para presets futuros)
     cmd = [
         str(ORCA_BIN),
         "--slice", "0",
+        "--allow-newer-file", "1",
         "--outputdir", str(JOBS_DIR),
         str(stl_path),
     ]
