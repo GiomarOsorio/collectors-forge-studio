@@ -173,12 +173,15 @@ async def slice_model(request: SliceRequest):
     if not ORCA_BIN.exists():
         raise HTTPException(status_code=503, detail="OrcaSlicer no disponible en el contenedor")
 
-    # OrcaSlicer 2.3.x nightly CLI: invocación mínima para verificar pipeline.
-    # --slice 1 tampoco es reconocido en esta versión nightly.
-    # OrcaSlicer lamina automáticamente al recibir un archivo STL/3MF.
+    # OrcaSlicer 2.3.x CLI flags correctos (verificados en --help):
+    #   --slice 0       → lamina todas las placas (0=all, N=placa N)
+    #   --outputdir     → directorio de salida (NO es -o)
+    #   --load-settings → archivos JSON de proceso/máquina (para presets futuros)
+    #   --load-filaments→ archivos JSON de filamento (para presets futuros)
     cmd = [
         str(ORCA_BIN),
-        "-o", str(JOBS_DIR),
+        "--slice", "0",
+        "--outputdir", str(JOBS_DIR),
         str(stl_path),
     ]
 
