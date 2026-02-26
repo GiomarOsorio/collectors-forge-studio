@@ -237,6 +237,17 @@ async def _run_orca_slicer(
         await db.commit()
 
 
+@router.get("/cli-help")
+async def slicer_cli_help(current_user: User = Depends(get_current_user)):
+    """Proxea el output de OrcaSlicer --help desde el microservicio para depuración."""
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(f"{ORCA_SERVICE_URL}/cli-help")
+            return resp.json()
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @router.post("/upload-gcode", response_model=SlicingJobResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("30/minute")
 async def upload_gcode(
