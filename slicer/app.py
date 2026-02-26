@@ -173,14 +173,13 @@ async def slice_model(request: SliceRequest):
     if not ORCA_BIN.exists():
         raise HTTPException(status_code=503, detail="OrcaSlicer no disponible en el contenedor")
 
-    # Flags cortas: -p printer, -m filament/material, -q quality/process.
-    # Las flags largas (--printer-preset, etc.) no son reconocidas por OrcaSlicer nightly.
+    # OrcaSlicer 2.3.x nightly no acepta flags de preset por nombre (-p/-m/-q ni
+    # --printer-preset/--filament-preset). Usa --load-settings y --load-filaments
+    # con archivos JSON; se cargan desde los perfiles bundleados en el AppImage.
+    # Por ahora se lamina sin presets (settings por defecto) para verificar pipeline.
     cmd = [
         str(ORCA_BIN),
         "--slice", "1",
-        "-p", request.printer_preset,
-        "-m", request.filament_preset,
-        "-q", request.config_preset,
         "-o", str(JOBS_DIR),
         str(stl_path),
     ]
