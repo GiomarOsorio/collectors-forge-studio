@@ -89,7 +89,10 @@ function sourceLabel(source) {
   const labels = {
     upload_gcode: '.gcode',
     upload_3mf:   '.3mf',
-    upload_stl:   'STL',
+    upload_stl:   '.stl',
+    upload_step:  '.step',
+    upload_obj:   '.obj',
+    upload_amf:   '.amf',
     makerworld:   'MakerWorld',
   };
   return labels[source] || source;
