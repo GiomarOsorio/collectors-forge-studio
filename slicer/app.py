@@ -173,13 +173,11 @@ async def slice_model(request: SliceRequest):
     if not ORCA_BIN.exists():
         raise HTTPException(status_code=503, detail="OrcaSlicer no disponible en el contenedor")
 
-    # OrcaSlicer 2.3.x nightly no acepta flags de preset por nombre (-p/-m/-q ni
-    # --printer-preset/--filament-preset). Usa --load-settings y --load-filaments
-    # con archivos JSON; se cargan desde los perfiles bundleados en el AppImage.
-    # Por ahora se lamina sin presets (settings por defecto) para verificar pipeline.
+    # OrcaSlicer 2.3.x nightly CLI: invocación mínima para verificar pipeline.
+    # --slice 1 tampoco es reconocido en esta versión nightly.
+    # OrcaSlicer lamina automáticamente al recibir un archivo STL/3MF.
     cmd = [
         str(ORCA_BIN),
-        "--slice", "1",
         "-o", str(JOBS_DIR),
         str(stl_path),
     ]
@@ -201,7 +199,7 @@ async def slice_model(request: SliceRequest):
             combined = (stdout.decode(errors="replace") + stderr.decode(errors="replace")).strip()
             return SliceResponse(
                 status="error",
-                error_message=f"OrcaSlicer error (codigo {proc.returncode}): {combined[:2000]}",
+                error_message=f"OrcaSlicer error (codigo {proc.returncode}): {combined[:5000]}",
             )
 
         # Buscar el gcode generado (OrcaSlicer nombra el output)
