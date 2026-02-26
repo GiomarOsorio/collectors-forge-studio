@@ -61,7 +61,7 @@ DEFAULT_CONFIG = "0.20mm Standard @BBL P2S"
 
 # Extensiones permitidas
 ALLOWED_GCODE_EXTENSIONS = {".gcode", ".3mf"}
-ALLOWED_STL_EXTENSIONS = {".stl", ".3mf", ".step", ".stp"}
+ALLOWED_STL_EXTENSIONS = {".stl", ".3mf", ".step", ".stp", ".obj", ".amf"}
 
 # Límite de tamaño de archivo (M-06): protección DoS en acceso directo al puerto 8000
 MAX_UPLOAD_BYTES = 250 * 1024 * 1024  # 250 MB, consistente con nginx client_max_body_size
@@ -367,7 +367,7 @@ async def upload_stl(
     if ext not in ALLOWED_STL_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"Extensión no permitida: {ext}. Usa .stl o .3mf",
+            detail=f"Extensión no permitida: {ext}. Formatos aceptados: .stl .3mf .step .stp .obj .amf",
         )
 
     # Guardar en volumen compartido con nombre temporal (UUID) hasta obtener job.id

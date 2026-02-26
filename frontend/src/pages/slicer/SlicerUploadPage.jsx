@@ -1,13 +1,10 @@
 /**
  * @file Página principal del Slicer: subir archivos o URL de MakerWorld.
  *
- * Presenta tres flujos de entrada:
- * 1. Archivo ya laminado (.gcode / .3mf) — parsea metadatos inmediatamente.
- * 2. Modelo STL — se envía al contenedor OrcaSlicer para laminar en background.
- * 3. URL de MakerWorld — extrae estimados del perfil de impresión del modelo.
- *
- * Tras el procesamiento muestra los metadatos extraídos y un botón para
- * pre-llenar la Calculadora de Costos vía URL params.
+ * Un solo dropzone acepta todos los formatos compatibles con OrcaSlicer.
+ * El formato se detecta por extensión y se enruta automáticamente:
+ * - .gcode / .3mf (laminado) → parseo inmediato de metadatos.
+ * - .stl / .step / .stp / .obj / .amf → laminado con OrcaSlicer en background.
  *
  * @module pages/slicer/SlicerUploadPage
  */
@@ -74,19 +71,19 @@ const NOZZLE_CONFIGS = {
   },
 };
 
+/** Extensiones que requieren laminado con OrcaSlicer. */
+const SLICEABLE_EXTS = new Set(['.stl', '.step', '.stp', '.obj', '.amf']);
+
+/** Todas las extensiones aceptadas (para el atributo accept del input). */
+const ACCEPTED_EXTS = '.gcode,.3mf,.stl,.step,.stp,.obj,.amf';
+
 /** Definición de las pestañas de entrada. */
 const TABS = [
   {
-    id: 'gcode',
-    label: 'Archivo laminado',
-    icon: FileCode,
-    description: '.gcode o .3mf ya procesado',
-  },
-  {
-    id: 'stl',
-    label: 'Modelo STL',
-    icon: Box,
-    description: 'Laminar con OrcaSlicer',
+    id: 'file',
+    label: 'Subir archivo',
+    icon: Upload,
+    description: 'Todos los formatos soportados',
   },
   {
     id: 'makerworld',
@@ -130,7 +127,7 @@ function formatFileSize(bytes) {
 
 export default function SlicerUploadPage() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('gcode');
+  const [activeTab, setActiveTab] = useState('file');
   const [loading, setLoading] = useState(false);
   const [filamentPreset, setFilamentPreset] = useState(FILAMENT_PRESETS[0].value);
   const [nozzleSize, setNozzleSize] = useState('0.4');
@@ -143,13 +140,18 @@ export default function SlicerUploadPage() {
   /** @type {[Object|null, Function]} Resultado del trabajo de laminado */
   const [result, setResult] = useState(null);
   const [makerworldUrl, setMakerworldUrl] = useState('');
-  /** Archivo seleccionado pero aún no enviado (gcode/3mf). */
-  const [selectedGcodeFile, setSelectedGcodeFile] = useState(null);
-  /** Archivo seleccionado pero aún no enviado (STL/STEP). */
-  const [selectedStlFile, setSelectedStlFile] = useState(null);
-  const gcodeInputRef = useRef(null);
-  const stlInputRef = useRef(null);
+  /** Archivo seleccionado pero aún no enviado. */
+  const [selectedFile, setSelectedFile] = useState(null);
+  const fileInputRef = useRef(null);
   const pollingRef = useRef(null);
+
+  /** Extensión del archivo seleccionado (en minúsculas, con punto). */
+  const fileExt = selectedFile
+    ? selectedFile.name.slice(selectedFile.name.lastIndexOf('.')).toLowerCase()
+    : null;
+
+  /** True si el archivo seleccionado requiere laminado con OrcaSlicer. */
+  const needsSlicing = fileExt !== null && SLICEABLE_EXTS.has(fileExt);
 
   /** Detiene el polling activo si existe. */
   const stopPolling = () => {
@@ -162,67 +164,43 @@ export default function SlicerUploadPage() {
   // Limpia el polling al desmontar el componente
   useEffect(() => () => stopPolling(), []);
 
-  /** Guarda el archivo .gcode/.3mf seleccionado sin enviarlo aún. */
-  const handleGcodeFileSelect = (e) => {
+  /** Guarda el archivo seleccionado sin enviarlo aún. */
+  const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setSelectedGcodeFile(file);
+    setSelectedFile(file);
     setResult(null);
-    if (gcodeInputRef.current) gcodeInputRef.current.value = '';
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  /** Envía el archivo .gcode/.3mf seleccionado al backend para extraer metadatos. */
-  const handleGcodeSubmit = async () => {
-    if (!selectedGcodeFile) return;
+  /** Envía el archivo al endpoint correcto según su extensión. */
+  const handleFileSubmit = async () => {
+    if (!selectedFile) return;
     setLoading(true);
     setResult(null);
     try {
       const form = new FormData();
-      form.append('file', selectedGcodeFile);
-      const res = await api.post('/slicer/upload-gcode', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      setResult(res.data);
-      setSelectedGcodeFile(null);
-      if (res.data.status === 'done') {
-        toast.success('Archivo procesado correctamente');
+      form.append('file', selectedFile);
+      let res;
+
+      if (needsSlicing) {
+        const params = new URLSearchParams({
+          printer_preset: NOZZLE_CONFIGS[nozzleSize].printerPreset,
+          filament_preset: filamentPreset,
+          config_preset: configPreset,
+        });
+        res = await api.post(`/slicer/upload-stl?${params}`, form, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
       } else {
-        toast.error('No se pudieron extraer datos del archivo');
+        res = await api.post('/slicer/upload-gcode', form, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
       }
-    } catch {
-      toast.error('Error al subir el archivo');
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  /** Guarda el archivo STL/STEP seleccionado sin enviarlo aún. */
-  const handleStlFileSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setSelectedStlFile(file);
-    setResult(null);
-    if (stlInputRef.current) stlInputRef.current.value = '';
-  };
-
-  /** Envía el archivo STL/STEP al laminador OrcaSlicer (proceso en background). */
-  const handleStlSubmit = async () => {
-    if (!selectedStlFile) return;
-    setLoading(true);
-    setResult(null);
-    try {
-      const form = new FormData();
-      form.append('file', selectedStlFile);
-      const params = new URLSearchParams({
-        printer_preset: NOZZLE_CONFIGS[nozzleSize].printerPreset,
-        filament_preset: filamentPreset,
-        config_preset: configPreset,
-      });
-      const res = await api.post(`/slicer/upload-stl?${params}`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      setSelectedStlFile(null);
+      setSelectedFile(null);
       setResult(res.data);
+
       if (res.data.status === 'pending' || res.data.status === 'slicing') {
         const jobId = res.data.id;
         toast('Laminando en background. Actualizando automáticamente...', { icon: '⏳' });
@@ -235,12 +213,16 @@ export default function SlicerUploadPage() {
               toast.success('Laminado completado');
             } else if (poll.data.status === 'error') {
               stopPolling();
-              toast.error('Error al laminar el STL');
+              toast.error('Error al laminar');
             }
           } catch {
             stopPolling();
           }
         }, 5000);
+      } else if (res.data.status === 'done') {
+        toast.success('Archivo procesado correctamente');
+      } else if (res.data.status === 'error') {
+        toast.error('No se pudieron extraer datos del archivo');
       }
     } catch {
       toast.error('Error al subir el archivo');
@@ -286,8 +268,7 @@ export default function SlicerUploadPage() {
     stopPolling();
     setActiveTab(tabId);
     setResult(null);
-    setSelectedGcodeFile(null);
-    setSelectedStlFile(null);
+    setSelectedFile(null);
   };
 
   return (
@@ -321,178 +302,124 @@ export default function SlicerUploadPage() {
       {/* Panel de contenido de la pestaña activa */}
       <div className="bg-[#13171c] border border-[#1e2125] rounded-xl p-6">
 
-        {/* Pestaña: Gcode / 3MF */}
-        {activeTab === 'gcode' && (
+        {/* Pestaña: Archivo único */}
+        {activeTab === 'file' && (
           <div>
-            <h2 className="text-tech-white font-semibold mb-1">Archivo ya laminado</h2>
-            <p className="text-gunmetal text-sm mb-6">
-              Sube un archivo{' '}
-              <code className="text-amber-400 bg-amber-400/10 px-1 rounded">.gcode</code>{' '}
-              o{' '}
-              <code className="text-amber-400 bg-amber-400/10 px-1 rounded">.3mf</code>{' '}
-              generado por Bambu Studio u OrcaSlicer.
-              Se extraerán tiempo de impresión, peso y tipo de filamento.
+            <h2 className="text-tech-white font-semibold mb-1">Subir archivo</h2>
+            <p className="text-gunmetal text-sm mb-5">
+              Formatos soportados:{' '}
+              {['.gcode', '.3mf', '.stl', '.step', '.stp', '.obj', '.amf'].map((ext) => (
+                <code key={ext} className="text-amber-400 bg-amber-400/10 px-1 rounded mx-0.5">{ext}</code>
+              ))}
             </p>
+
             <input
-              ref={gcodeInputRef}
+              ref={fileInputRef}
               type="file"
-              accept=".gcode,.3mf"
+              accept={ACCEPTED_EXTS}
               className="hidden"
-              onChange={handleGcodeFileSelect}
+              onChange={handleFileSelect}
             />
 
-            {/* Zona de selección / vista previa del archivo */}
-            {!selectedGcodeFile ? (
+            {/* Sin archivo seleccionado: dropzone */}
+            {!selectedFile ? (
               <button
-                onClick={() => gcodeInputRef.current?.click()}
+                onClick={() => fileInputRef.current?.click()}
                 disabled={loading}
                 className="w-full border-2 border-dashed border-[#2a2d31] rounded-xl p-12 text-center hover:border-amber-400/40 hover:bg-amber-400/5 transition-all group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <FileCode size={36} className="mx-auto mb-3 text-gunmetal group-hover:text-amber-400 transition-colors" />
+                <Upload size={36} className="mx-auto mb-3 text-gunmetal group-hover:text-amber-400 transition-colors" />
                 <p className="text-steel group-hover:text-tech-white transition-colors font-medium text-sm">
                   Haz clic para seleccionar el archivo
                 </p>
                 <p className="text-gunmetal text-xs mt-1">Máximo 250 MB</p>
               </button>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
+                {/* Info del archivo */}
                 <div className="flex items-center gap-3 bg-[#0d1014] border border-[#2a2d31] rounded-xl px-4 py-3">
-                  <FileCode size={22} className="text-amber-400 shrink-0" />
+                  {needsSlicing
+                    ? <Box size={22} className="text-amber-400 shrink-0" />
+                    : <FileCode size={22} className="text-amber-400 shrink-0" />
+                  }
                   <div className="min-w-0 flex-1">
-                    <p className="text-tech-white text-sm font-medium truncate">{selectedGcodeFile.name}</p>
-                    <p className="text-gunmetal text-xs">{formatFileSize(selectedGcodeFile.size)}</p>
+                    <p className="text-tech-white text-sm font-medium truncate">{selectedFile.name}</p>
+                    <p className="text-gunmetal text-xs">
+                      {formatFileSize(selectedFile.size)}
+                      {' · '}
+                      {needsSlicing ? 'Se laminará con OrcaSlicer' : 'Se extraerán metadatos'}
+                    </p>
                   </div>
                   <button
-                    onClick={() => gcodeInputRef.current?.click()}
+                    onClick={() => fileInputRef.current?.click()}
                     className="text-xs text-steel hover:text-tech-white transition-colors shrink-0"
                   >
                     Cambiar
                   </button>
                 </div>
-                <button
-                  onClick={handleGcodeSubmit}
-                  disabled={loading}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-amber-400/15 text-amber-400 border border-amber-400/30 hover:bg-amber-400/25 transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? (
-                    <><Loader size={16} className="animate-spin" /> Procesando...</>
-                  ) : (
-                    <><Upload size={16} /> Enviar</>
-                  )}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
 
-        {/* Pestaña: STL */}
-        {activeTab === 'stl' && (
-          <div>
-            <h2 className="text-tech-white font-semibold mb-1">Modelo STL / STEP</h2>
-            <p className="text-gunmetal text-sm mb-6">
-              Sube un archivo{' '}
-              <code className="text-amber-400 bg-amber-400/10 px-1 rounded">.stl</code>{' '}
-              o{' '}
-              <code className="text-amber-400 bg-amber-400/10 px-1 rounded">.step</code>{' '}
-              para laminarlo automáticamente con OrcaSlicer usando el perfil de la BambuLab P2S.
-              El proceso se ejecuta en background — revisa el{' '}
-              <a href="/slicer/history" className="text-amber-400 hover:underline">Historial</a>{' '}
-              para ver el resultado.
-            </p>
-            {/* Configuración de laminado */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
-              <div>
-                <label className="block text-xs text-gunmetal font-medium mb-1">Boquilla</label>
-                <div className="flex gap-1">
-                  {Object.keys(NOZZLE_CONFIGS).map((size) => (
-                    <button
-                      key={size}
-                      type="button"
-                      onClick={() => handleNozzleChange(size)}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
-                        nozzleSize === size
-                          ? 'bg-amber-400/20 text-amber-400 border-amber-400/40'
-                          : 'text-steel border-[#2a2d31] hover:border-amber-400/30'
-                      }`}
-                    >
-                      {size}mm
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs text-gunmetal font-medium mb-1">Material</label>
-                <select
-                  value={filamentPreset}
-                  onChange={(e) => setFilamentPreset(e.target.value)}
-                  className="tf-input text-sm py-1.5"
-                >
-                  {FILAMENT_PRESETS.map((p) => (
-                    <option key={p.value} value={p.value}>{p.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-gunmetal font-medium mb-1">Calidad</label>
-                <select
-                  value={configPreset}
-                  onChange={(e) => setConfigPreset(e.target.value)}
-                  className="tf-input text-sm py-1.5"
-                >
-                  {NOZZLE_CONFIGS[nozzleSize].qualities.map((q) => (
-                    <option key={q.value} value={q.value}>{q.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <input
-              ref={stlInputRef}
-              type="file"
-              accept=".stl,.step,.stp"
-              className="hidden"
-              onChange={handleStlFileSelect}
-            />
-
-            {/* Zona de selección / vista previa del archivo */}
-            {!selectedStlFile ? (
-              <button
-                onClick={() => stlInputRef.current?.click()}
-                disabled={loading}
-                className="w-full border-2 border-dashed border-[#2a2d31] rounded-xl p-10 text-center hover:border-amber-400/40 hover:bg-amber-400/5 transition-all group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Upload size={36} className="mx-auto mb-3 text-gunmetal group-hover:text-amber-400 transition-colors" />
-                <p className="text-steel group-hover:text-tech-white transition-colors font-medium text-sm">
-                  Haz clic para seleccionar el archivo
-                </p>
-                <p className="text-gunmetal text-xs mt-2">
-                  Formatos: .stl · .step · .stp
-                </p>
-              </button>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 bg-[#0d1014] border border-[#2a2d31] rounded-xl px-4 py-3">
-                  <Box size={22} className="text-amber-400 shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-tech-white text-sm font-medium truncate">{selectedStlFile.name}</p>
-                    <p className="text-gunmetal text-xs">{formatFileSize(selectedStlFile.size)}</p>
+                {/* Configuración de laminado — solo para formatos que requieren slicing */}
+                {needsSlicing && (
+                  <div className="bg-[#0d1014] border border-[#2a2d31] rounded-xl p-4">
+                    <p className="text-xs text-gunmetal font-medium mb-3">Configuración de laminado</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs text-gunmetal mb-1">Boquilla</label>
+                        <div className="flex gap-1">
+                          {Object.keys(NOZZLE_CONFIGS).map((size) => (
+                            <button
+                              key={size}
+                              type="button"
+                              onClick={() => handleNozzleChange(size)}
+                              className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                                nozzleSize === size
+                                  ? 'bg-amber-400/20 text-amber-400 border-amber-400/40'
+                                  : 'text-steel border-[#2a2d31] hover:border-amber-400/30'
+                              }`}
+                            >
+                              {size}mm
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gunmetal mb-1">Material</label>
+                        <select
+                          value={filamentPreset}
+                          onChange={(e) => setFilamentPreset(e.target.value)}
+                          className="tf-input text-sm py-1.5"
+                        >
+                          {FILAMENT_PRESETS.map((p) => (
+                            <option key={p.value} value={p.value}>{p.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gunmetal mb-1">Calidad</label>
+                        <select
+                          value={configPreset}
+                          onChange={(e) => setConfigPreset(e.target.value)}
+                          className="tf-input text-sm py-1.5"
+                        >
+                          {NOZZLE_CONFIGS[nozzleSize].qualities.map((q) => (
+                            <option key={q.value} value={q.value}>{q.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
                   </div>
-                  <button
-                    onClick={() => stlInputRef.current?.click()}
-                    className="text-xs text-steel hover:text-tech-white transition-colors shrink-0"
-                  >
-                    Cambiar
-                  </button>
-                </div>
+                )}
+
+                {/* Botón Enviar */}
                 <button
-                  onClick={handleStlSubmit}
+                  onClick={handleFileSubmit}
                   disabled={loading}
                   className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-amber-400/15 text-amber-400 border border-amber-400/30 hover:bg-amber-400/25 transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? (
-                    <><Loader size={16} className="animate-spin" /> Enviando al laminador...</>
+                    <><Loader size={16} className="animate-spin" /> {needsSlicing ? 'Enviando al laminador...' : 'Procesando...'}</>
                   ) : (
-                    <><Upload size={16} /> Enviar al laminador</>
+                    <><Upload size={16} /> {needsSlicing ? 'Enviar al laminador' : 'Enviar'}</>
                   )}
                 </button>
               </div>

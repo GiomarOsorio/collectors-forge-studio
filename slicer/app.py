@@ -145,10 +145,10 @@ async def slice_model(request: SliceRequest):
     cmd = [
         str(ORCA_BIN),
         "--slice", "1",
-        "--printer", request.printer_preset,
-        "--filament", request.filament_preset,
-        "--config", request.config_preset,
-        "--outputdir", str(JOBS_DIR),
+        "--printer-preset", request.printer_preset,
+        "--filament-preset", request.filament_preset,
+        "--print-preset", request.config_preset,
+        "-o", str(JOBS_DIR),
         str(stl_path),
     ]
 
@@ -157,7 +157,11 @@ async def slice_model(request: SliceRequest):
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env={"DISPLAY": "", "HOME": "/tmp"},
+            env={
+                "DISPLAY": "",
+                "HOME": "/tmp",
+                "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            },
         )
         _, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
 
