@@ -12,6 +12,7 @@ Endpoints:
 
 import asyncio
 import re
+import zipfile
 from pathlib import Path
 from typing import Optional
 
@@ -112,6 +113,56 @@ def parse_gcode_metadata(gcode_path: Path) -> dict:
     return result
 
 
+def _patch_3mf_params(src_path: Path) -> Optional[Path]:
+    """
+    Corrige valores centinela fuera de rango en config de 3MF de Bambu Studio/OrcaSlicer 2.5+.
+
+    OrcaSlicer 2.3.x rechaza valores como -1 y 0 que en versiones 2.5+ significan
+    "heredar de preset". Crea un archivo temporal con los valores corregidos.
+
+    Args:
+        src_path: Ruta al archivo .3mf original.
+
+    Returns:
+        Ruta al .3mf corregido, o None si falla la operacion.
+    """
+    # (param, valor_centinela, valor_valido_por_defecto)
+    FIXES = [
+        (b"raft_first_layer_expansion", b"-1", b"0"),
+        (b"solid_infill_filament",      b"0",  b"1"),
+        (b"sparse_infill_filament",     b"0",  b"1"),
+        (b"tree_support_wall_count",    b"-1", b"0"),
+        (b"wall_filament",              b"0",  b"1"),
+    ]
+    BINARY_EXTS = {".png", ".jpg", ".jpeg", ".stl", ".obj", ".bin", ".ttf"}
+
+    dst_path = src_path.with_name(f"patched_{src_path.name}")
+    try:
+        with zipfile.ZipFile(src_path, "r") as zin, \
+             zipfile.ZipFile(dst_path, "w", zipfile.ZIP_DEFLATED) as zout:
+            for item in zin.infolist():
+                data = zin.read(item.filename)
+                if Path(item.filename).suffix.lower() not in BINARY_EXTS:
+                    for param, bad, good in FIXES:
+                        # XML: key="param" value="-1" o param="-1"
+                        data = data.replace(param + b'" value="' + bad + b'"',
+                                            param + b'" value="' + good + b'"')
+                        data = data.replace(param + b'="' + bad + b'"',
+                                            param + b'="' + good + b'"')
+                        # JSON: "param": -1
+                        data = data.replace(b'"' + param + b'": ' + bad,
+                                            b'"' + param + b'": ' + good)
+                        # INI: param = -1
+                        data = data.replace(param + b" = " + bad,
+                                            param + b" = " + good)
+                zout.writestr(item, data)
+        return dst_path
+    except Exception:
+        if dst_path.exists():
+            dst_path.unlink()
+        return None
+
+
 @app.get("/health")
 async def health():
     """Verifica que el servicio esta activo y OrcaSlicer accesible."""
@@ -173,10 +224,20 @@ async def slice_model(request: SliceRequest):
     if not ORCA_BIN.exists():
         raise HTTPException(status_code=503, detail="OrcaSlicer no disponible en el contenedor")
 
+    # Para archivos .3mf de Bambu Studio 2.5+, parchear params centinela fuera
+    # de rango antes de pasar a OrcaSlicer 2.3.x (raft_first_layer_expansion=-1, etc.)
+    effective_path = stl_path
+    patched_path: Optional[Path] = None
+    if stl_path.suffix.lower() == ".3mf":
+        patched = _patch_3mf_params(stl_path)
+        if patched:
+            patched_path = patched
+            effective_path = patched_path
+
     # OrcaSlicer 2.3.x CLI flags correctos (verificados en --help):
     #   --slice 0             → lamina todas las placas (0=all, N=placa N)
     #   --outputdir           → directorio de salida (NO es -o)
-    #   --allow-newer-file 1  → acepta 3MF creados con versiones más recientes
+    #   --allow-newer-file    → acepta 3MF creados con versiones más recientes
     #   --load-settings       → archivos JSON de proceso/máquina (para presets futuros)
     #   --load-filaments      → archivos JSON de filamento (para presets futuros)
     cmd = [
@@ -185,7 +246,7 @@ async def slice_model(request: SliceRequest):
         "--allow-newer-file",
         "--no-check",
         "--outputdir", str(JOBS_DIR),
-        str(stl_path),
+        str(effective_path),
     ]
 
     try:
@@ -224,3 +285,9 @@ async def slice_model(request: SliceRequest):
         return SliceResponse(status="error", error_message="Tiempo de laminado agotado (>5 minutos)")
     except Exception as e:
         return SliceResponse(status="error", error_message=str(e))
+    finally:
+        if patched_path and patched_path.exists():
+            try:
+                patched_path.unlink()
+            except Exception:
+                pass
