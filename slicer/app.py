@@ -182,7 +182,7 @@ async def slice_model(request: SliceRequest):
     cmd = [
         str(ORCA_BIN),
         "--slice", "0",
-        "--allow-newer-file", "1",
+        "--allow-newer-file",
         "--outputdir", str(JOBS_DIR),
         str(stl_path),
     ]
