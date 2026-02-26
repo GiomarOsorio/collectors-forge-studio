@@ -183,6 +183,7 @@ async def slice_model(request: SliceRequest):
         str(ORCA_BIN),
         "--slice", "0",
         "--allow-newer-file",
+        "--no-check",
         "--outputdir", str(JOBS_DIR),
         str(stl_path),
     ]
