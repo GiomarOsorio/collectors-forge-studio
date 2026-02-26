@@ -72,7 +72,7 @@ const NOZZLE_CONFIGS = {
 };
 
 /** Extensiones que requieren laminado con OrcaSlicer. */
-const SLICEABLE_EXTS = new Set(['.stl', '.step', '.stp', '.obj', '.amf']);
+const SLICEABLE_EXTS = new Set(['.3mf', '.stl', '.step', '.stp', '.obj', '.amf']);
 
 /** Todas las extensiones aceptadas (para el atributo accept del input). */
 const ACCEPTED_EXTS = '.gcode,.3mf,.stl,.step,.stp,.obj,.amf';
@@ -308,8 +308,9 @@ export default function SlicerUploadPage() {
             <div>
               <h2 className="text-tech-white font-semibold mb-1">Subir archivo</h2>
               <p className="text-gunmetal text-sm">
-                Formatos soportados:{' '}
-                {['.gcode', '.3mf', '.stl', '.step', '.stp', '.obj', '.amf'].map((ext) => (
+                <code className="text-amber-400 bg-amber-400/10 px-1 rounded">.gcode</code>{' '}
+                extrae metadatos · el resto se lamina con OrcaSlicer:{' '}
+                {['.3mf', '.stl', '.step', '.stp', '.obj', '.amf'].map((ext) => (
                   <code key={ext} className="text-amber-400 bg-amber-400/10 px-1 rounded mx-0.5">{ext}</code>
                 ))}
               </p>
