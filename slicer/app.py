@@ -121,6 +121,37 @@ async def health():
     }
 
 
+@app.get("/cli-help")
+async def cli_help():
+    """
+    Retorna el output de OrcaSlicer --help para depurar flags disponibles.
+
+    Util para confirmar los nombres exactos de las flags CLI en la version
+    nightly instalada en el contenedor.
+    """
+    if not ORCA_BIN.exists():
+        return {"error": "OrcaSlicer no encontrado"}
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            str(ORCA_BIN), "--help",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env={
+                "DISPLAY": "",
+                "HOME": "/tmp",
+                "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            },
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+        return {
+            "returncode": proc.returncode,
+            "stdout": stdout.decode(errors="replace"),
+            "stderr": stderr.decode(errors="replace"),
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @app.post("/slice", response_model=SliceResponse)
 async def slice_model(request: SliceRequest):
     """
@@ -142,12 +173,14 @@ async def slice_model(request: SliceRequest):
     if not ORCA_BIN.exists():
         raise HTTPException(status_code=503, detail="OrcaSlicer no disponible en el contenedor")
 
+    # Flags cortas: -p printer, -m filament/material, -q quality/process.
+    # Las flags largas (--printer-preset, etc.) no son reconocidas por OrcaSlicer nightly.
     cmd = [
         str(ORCA_BIN),
         "--slice", "1",
-        "--printer-preset", request.printer_preset,
-        "--filament-preset", request.filament_preset,
-        "--print-preset", request.config_preset,
+        "-p", request.printer_preset,
+        "-m", request.filament_preset,
+        "-q", request.config_preset,
         "-o", str(JOBS_DIR),
         str(stl_path),
     ]
@@ -163,12 +196,13 @@ async def slice_model(request: SliceRequest):
                 "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
             },
         )
-        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
 
         if proc.returncode != 0:
+            combined = (stdout.decode(errors="replace") + stderr.decode(errors="replace")).strip()
             return SliceResponse(
                 status="error",
-                error_message=f"OrcaSlicer error (codigo {proc.returncode}): {stderr.decode()[:500]}",
+                error_message=f"OrcaSlicer error (codigo {proc.returncode}): {combined[:2000]}",
             )
 
         # Buscar el gcode generado (OrcaSlicer nombra el output)

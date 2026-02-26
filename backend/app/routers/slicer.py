@@ -295,7 +295,7 @@ async def upload_gcode(
         error_msg = (
             "Este archivo es un proyecto .3mf sin laminar. "
             "Para usarlo: ábrelo en Bambu Studio, lámínalo y exporta el .3mf laminado. "
-            "O sube el archivo STL en la pestaña 'STL' para laminarlo automáticamente."
+            "O sube el archivo directamente para laminarlo automáticamente con OrcaSlicer."
         )
     elif resultado is None:
         error_msg = "No se pudieron extraer metadatos. ¿Es un archivo laminado por Bambu Studio u OrcaSlicer?"
@@ -386,11 +386,21 @@ async def upload_stl(
     f_preset = filament_preset or DEFAULT_FILAMENT
     c_preset = config_preset or DEFAULT_CONFIG
 
+    # Fuente según extensión del archivo
+    source_map = {
+        ".3mf":  "upload_3mf",
+        ".step": "upload_step",
+        ".stp":  "upload_step",
+        ".obj":  "upload_obj",
+        ".amf":  "upload_amf",
+    }
+    source = source_map.get(ext, "upload_stl")
+
     # Crear job en DB
     job = SlicingJob(
         company_id=current_user.company_id,
         user_id=current_user.id,
-        source="upload_stl",
+        source=source,
         original_filename=file.filename,
         status="pending",
         printer_preset=p_preset,
