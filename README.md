@@ -310,6 +310,103 @@ podman rm -f calculator3d-backend calculator3d-frontend calculator3d-tunnel
 
 ---
 
+## Debugging y Pruebas del Slicer
+
+El microservicio slicer corre dentro de un contenedor Podman (Ubuntu 24.04 + OrcaSlicer AppImage). Para iterar rápido sin desplegar, hay tres formas de probarlo.
+
+### 1. Probar la función de parche de 3MF en cualquier máquina
+
+La función `_patch_3mf_params` solo requiere Python 3.8+ y stdlib. No necesita el contenedor.
+
+```python
+# test_patch.py  — copia la función desde slicer/app.py y agrega:
+import zipfile, re
+from pathlib import Path
+
+# [pega aquí la función _patch_3mf_params]
+
+path, debug = _patch_3mf_params(Path("mi_archivo.3mf"))
+print(debug)
+
+# Ver el resultado directamente
+if path:
+    with zipfile.ZipFile(path) as zf:
+        with zf.open("Metadata/project_settings.config") as f:
+            print(f.read().decode()[:600])
+    path.unlink()
+```
+
+```bash
+python3 test_patch.py
+# parche OK: 5 cambios en 14 archivos (...)
+```
+
+### 2. Probar OrcaSlicer directamente en el servidor
+
+```bash
+# Entrar al contenedor
+podman exec -it calculator3d-slicer bash
+
+# Ver archivos en el volumen compartido
+ls /slicer_jobs/
+
+# Ver versión instalada
+/usr/local/bin/OrcaSlicer --help 2>&1 | head -1
+
+# Laminar un archivo manualmente
+/usr/local/bin/OrcaSlicer \
+    --slice 0 \
+    --allow-newer-file \
+    --no-check \
+    --outputdir /slicer_jobs \
+    /slicer_jobs/job123_archivo.3mf
+
+# Ver logs del servicio FastAPI del slicer
+podman logs calculator3d-slicer --tail 50
+```
+
+### 3. Probar la API con curl (sin abrir el frontend)
+
+```bash
+# 1. Obtener token
+TOKEN=$(curl -s -X POST https://3d.turtlenode.dev/api/auth/login \
+    -H "Content-Type: application/json" \
+    -d '{"username":"tu_usuario","password":"tu_password"}' \
+    | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+# 2. Ver el CLI help completo de OrcaSlicer (útil para depurar flags)
+curl -s -H "Authorization: Bearer $TOKEN" \
+    https://3d.turtlenode.dev/api/slicer/cli-help | python3 -m json.tool
+
+# 3. Subir y laminar un archivo
+curl -X POST https://3d.turtlenode.dev/api/slicer/upload-stl \
+    -H "Authorization: Bearer $TOKEN" \
+    -F "file=@/ruta/archivo.3mf" | python3 -m json.tool
+
+# 4. Ver historial de trabajos
+curl -s -H "Authorization: Bearer $TOKEN" \
+    https://3d.turtlenode.dev/api/slicer/jobs | python3 -m json.tool
+```
+
+### 4. Llamar al slicer directamente desde el servidor (sin auth)
+
+```bash
+# El microservicio escucha en el puerto 8001 de la red interna
+curl http://localhost:8001/health
+curl http://localhost:8001/cli-help | python3 -m json.tool
+```
+
+### Errores conocidos del slicer
+
+| Código | Causa | Solución |
+|--------|-------|----------|
+| `-11` (SIGSEGV) | OrcaSlicer 2.3.x crashea con geometrías complejas | Reconstruir el contenedor para obtener nightly más reciente |
+| `238` (return -18) | Parámetros fuera de rango en 3MF de Bambu Studio 2.5+ | El parche `_patch_3mf_params` corrige esto automáticamente |
+| `232` (return -24) | Versión del 3MF más nueva que OrcaSlicer instalado | `--allow-newer-file` + rebuild del contenedor |
+| `205` (return -51) | Config inválida en el 3MF (extrusión relativa sin G92 E0) | Abrir en Bambu Studio → Process → Layer change G-code → agregar `G92 E0` |
+
+---
+
 ## CI/CD con GitHub Actions
 
 El proyecto incluye un pipeline de despliegue automático basado en un **self-hosted runner** de GitHub Actions instalado en la laptop de producción.

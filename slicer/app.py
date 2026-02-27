@@ -304,6 +304,19 @@ async def slice_model(request: SliceRequest):
 
         if proc.returncode != 0:
             combined = (stdout.decode(errors="replace") + stderr.decode(errors="replace")).strip()
+            # Crash por señal (SIGSEGV=-11, SIGABRT=-6): mensaje específico
+            if proc.returncode in (-11, -6):
+                signal_name = "SIGSEGV (segfault)" if proc.returncode == -11 else "SIGABRT"
+                return SliceResponse(
+                    status="error",
+                    error_message=(
+                        f"OrcaSlicer crasheó ({signal_name}) al procesar el modelo. "
+                        f"Posiblemente la geometría tiene problemas (manifold, triángulos degenerados) "
+                        f"o hay un bug en esta versión de OrcaSlicer con este tipo de archivo. "
+                        f"Prueba exportar el modelo desde el slicer de origen antes de subirlo.\n"
+                        f"Detalle: {combined[:1000]}\n[debug parche: {patch_debug}]"
+                    ),
+                )
             return SliceResponse(
                 status="error",
                 error_message=f"OrcaSlicer error (codigo {proc.returncode}): {combined[:4000]}\n[debug parche: {patch_debug}]",
