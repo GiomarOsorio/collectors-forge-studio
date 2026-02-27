@@ -1,52 +1,23 @@
 """
 Esquemas Pydantic para la app de Mantenimiento de Impresoras.
 
-Define los modelos de validación y serialización para crear, actualizar
-y retornar impresoras de mantenimiento, registros de mantenimiento,
-ítems de mantenimiento y el resumen del dashboard.
+Las impresoras usan directamente PrinterResponse del schema de la
+app Cost; no hay schemas separados para impresoras de mantenimiento.
 """
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, List, Optional, Dict, Any
+from typing import Annotated, List, Optional, Dict
 
 from pydantic import BaseModel, Field, PlainSerializer
+
+from app.schemas.printer import PrinterResponse
 
 # Decimal internamente -> float en JSON
 DecimalAsFloat = Annotated[
     Decimal,
     PlainSerializer(float, return_type=float, when_used="json"),
 ]
-
-
-# ─── MaintenancePrinter ──────────────────────────────────────────────────────
-
-class MaintenancePrinterCreate(BaseModel):
-    """Datos para crear una impresora en el módulo de mantenimiento."""
-    name: str = Field(min_length=1, max_length=100)
-    model: Optional[str] = Field(default=None, max_length=100)
-    current_hours: DecimalAsFloat = Field(default=Decimal("0"), ge=0)
-    notes: Optional[str] = Field(default=None, max_length=500)
-
-
-class MaintenancePrinterUpdate(BaseModel):
-    """Datos para actualizar una impresora (todos opcionales)."""
-    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
-    model: Optional[str] = Field(default=None, max_length=100)
-    current_hours: Optional[DecimalAsFloat] = Field(default=None, ge=0)
-    notes: Optional[str] = Field(default=None, max_length=500)
-
-
-class MaintenancePrinterResponse(BaseModel):
-    """Respuesta de impresora de mantenimiento."""
-    id: int
-    name: str
-    model: Optional[str]
-    current_hours: DecimalAsFloat
-    notes: Optional[str]
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
 # ─── MaintenanceLogItem ───────────────────────────────────────────────────────
@@ -85,7 +56,7 @@ class MaintenanceLogCreate(BaseModel):
 
 
 class MaintenanceLogResponse(BaseModel):
-    """Respuesta de registro de mantenimiento con ítems y printer."""
+    """Respuesta de registro de mantenimiento con ítems e impresora."""
     id: int
     printer_id: int
     hours_at_maintenance: DecimalAsFloat
@@ -94,7 +65,7 @@ class MaintenanceLogResponse(BaseModel):
     performed_at: datetime
     created_at: datetime
     items: List[MaintenanceLogItemResponse] = []
-    printer: Optional[MaintenancePrinterResponse] = None
+    printer: Optional[PrinterResponse] = None
 
     model_config = {"from_attributes": True}
 
@@ -106,10 +77,10 @@ class MaintenanceLastEntry(BaseModel):
     log_id: int
     performed_at: datetime
     hours_at_maintenance: DecimalAsFloat
-    hours_since: Optional[DecimalAsFloat]  # horas desde el último mantenimiento
+    hours_since: Optional[DecimalAsFloat]
 
 
 class MaintenancePrinterSummary(BaseModel):
     """Resumen de una impresora con el último mantenimiento por tipo."""
-    printer: MaintenancePrinterResponse
+    printer: PrinterResponse
     last_per_type: Dict[str, MaintenanceLastEntry]

@@ -1,16 +1,13 @@
 """
 Router de mantenimiento de impresoras para TurtleForge.
 
-Gestiona el registro de mantenimientos realizados sobre impresoras 3D.
+Las impresoras se gestionan en la app Cost (GET/PUT /api/printers/).
+Este router solo gestiona registros de mantenimiento y el resumen del dashboard.
+
 Al crear un registro de mantenimiento, descuenta automáticamente los ítems
 de inventario vinculados (transacción atómica).
 
 Endpoints:
-    GET    /api/maintenance/printers/          — Listar impresoras.
-    POST   /api/maintenance/printers/          — Crear impresora.
-    PUT    /api/maintenance/printers/{id}      — Actualizar impresora (incl. horas).
-    DELETE /api/maintenance/printers/{id}      — Eliminar impresora (cascade logs).
-
     GET    /api/maintenance/logs/              — Listar registros (filtrar por printer_id).
     POST   /api/maintenance/logs/              — Crear registro + descontar inventario.
     GET    /api/maintenance/logs/{id}          — Obtener detalle del registro.
@@ -30,55 +27,22 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.inventory import InventoryItem
-from app.models.maintenance import MaintenancePrinter, MaintenanceLog, MaintenanceLogItem
+from app.models.maintenance import MaintenanceLog, MaintenanceLogItem
+from app.models.printer import Printer
 from app.models.user import User
 from app.schemas.maintenance import (
-    MaintenancePrinterCreate,
-    MaintenancePrinterUpdate,
-    MaintenancePrinterResponse,
     MaintenanceLogCreate,
     MaintenanceLogResponse,
     MaintenancePrinterSummary,
     MaintenanceLastEntry,
 )
+from app.schemas.printer import PrinterResponse
 from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/api/maintenance", tags=["maintenance"])
 
 
-# ─── Helpers privados ──────────────────────────────────────────────────────────
-
-async def _get_printer(
-    db: AsyncSession, printer_id: int, company_id
-) -> MaintenancePrinter:
-    """
-    Obtiene una impresora de mantenimiento verificando que pertenezca a la empresa.
-
-    Args:
-        db:         Sesión de base de datos.
-        printer_id: ID de la impresora.
-        company_id: UUID de la empresa del usuario autenticado.
-
-    Returns:
-        Instancia de MaintenancePrinter.
-
-    Raises:
-        HTTPException 404: Si no existe o no pertenece a la empresa.
-    """
-    result = await db.execute(
-        select(MaintenancePrinter).where(
-            MaintenancePrinter.id == printer_id,
-            MaintenancePrinter.company_id == company_id,
-        )
-    )
-    printer = result.scalar_one_or_none()
-    if not printer:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Impresora de mantenimiento no encontrada",
-        )
-    return printer
-
+# ─── Helper privado ────────────────────────────────────────────────────────────
 
 async def _get_log(
     db: AsyncSession, log_id: int, company_id
@@ -117,114 +81,36 @@ async def _get_log(
     return log
 
 
-# ─── Printers ──────────────────────────────────────────────────────────────────
-
-@router.get("/printers/", response_model=List[MaintenancePrinterResponse])
-async def list_printers(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
+async def _get_company_printer(
+    db: AsyncSession, printer_id: int, company_id
+) -> Printer:
     """
-    Lista las impresoras registradas en el módulo de mantenimiento.
+    Obtiene una impresora verificando que pertenezca a la empresa.
 
     Args:
-        db:           Sesión de base de datos.
-        current_user: Usuario autenticado.
+        db:         Sesión de base de datos.
+        printer_id: ID de la impresora.
+        company_id: UUID de la empresa.
 
     Returns:
-        Lista de MaintenancePrinterResponse ordenada por nombre.
+        Instancia de Printer.
+
+    Raises:
+        HTTPException 404: Si no existe o no pertenece a la empresa.
     """
     result = await db.execute(
-        select(MaintenancePrinter)
-        .where(MaintenancePrinter.company_id == current_user.company_id)
-        .order_by(MaintenancePrinter.name)
+        select(Printer).where(
+            Printer.id == printer_id,
+            Printer.company_id == company_id,
+        )
     )
-    return result.scalars().all()
-
-
-@router.post("/printers/", response_model=MaintenancePrinterResponse, status_code=status.HTTP_201_CREATED)
-async def create_printer(
-    data: MaintenancePrinterCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Crea una nueva impresora en el módulo de mantenimiento.
-
-    Args:
-        data:         Datos de la impresora.
-        db:           Sesión de base de datos.
-        current_user: Usuario autenticado.
-
-    Returns:
-        MaintenancePrinterResponse con los datos creados.
-    """
-    printer = MaintenancePrinter(
-        company_id=current_user.company_id,
-        name=data.name,
-        model=data.model,
-        current_hours=data.current_hours,
-        notes=data.notes,
-    )
-    db.add(printer)
-    await db.commit()
-    await db.refresh(printer)
+    printer = result.scalar_one_or_none()
+    if not printer:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Impresora no encontrada",
+        )
     return printer
-
-
-@router.put("/printers/{printer_id}", response_model=MaintenancePrinterResponse)
-async def update_printer(
-    printer_id: int,
-    data: MaintenancePrinterUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Actualiza una impresora de mantenimiento.
-
-    Solo actualiza los campos enviados (exclude_unset). Permite actualizar
-    las horas actuales (current_hours) enviando solo ese campo.
-
-    Args:
-        printer_id:   ID de la impresora a actualizar.
-        data:         Campos a actualizar.
-        db:           Sesión de base de datos.
-        current_user: Usuario autenticado.
-
-    Returns:
-        MaintenancePrinterResponse actualizada.
-
-    Raises:
-        HTTPException 404: Si no existe.
-    """
-    printer = await _get_printer(db, printer_id, current_user.company_id)
-    for field, value in data.model_dump(exclude_unset=True).items():
-        setattr(printer, field, value)
-    await db.commit()
-    await db.refresh(printer)
-    return printer
-
-
-@router.delete("/printers/{printer_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_printer(
-    printer_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Elimina una impresora y todos sus registros de mantenimiento (cascade).
-
-    Args:
-        printer_id:   ID de la impresora.
-        db:           Sesión de base de datos.
-        current_user: Usuario autenticado.
-
-    Raises:
-        HTTPException 404: Si no existe.
-    """
-    printer = await _get_printer(db, printer_id, current_user.company_id)
-    await db.delete(printer)
-    await db.commit()
 
 
 # ─── Logs ──────────────────────────────────────────────────────────────────────
@@ -296,7 +182,7 @@ async def create_log(
         HTTPException 400: Si stock insuficiente para algún ítem.
     """
     # Verificar que la impresora pertenece a la empresa
-    await _get_printer(db, data.printer_id, current_user.company_id)
+    await _get_company_printer(db, data.printer_id, current_user.company_id)
 
     # Determinar fecha de realización
     performed_at = data.performed_at
@@ -427,11 +313,11 @@ async def get_summary(
     """
     company_id = current_user.company_id
 
-    # Cargar todas las impresoras
+    # Cargar todas las impresoras de la empresa (fuente: app Cost)
     printers_result = await db.execute(
-        select(MaintenancePrinter)
-        .where(MaintenancePrinter.company_id == company_id)
-        .order_by(MaintenancePrinter.name)
+        select(Printer)
+        .where(Printer.company_id == company_id)
+        .order_by(Printer.name)
     )
     printers = printers_result.scalars().all()
 
@@ -440,7 +326,7 @@ async def get_summary(
 
     printer_ids = [p.id for p in printers]
 
-    # Cargar todos los logs de esas impresoras (sin ítems para eficiencia)
+    # Cargar todos los logs de esas impresoras
     logs_result = await db.execute(
         select(MaintenanceLog)
         .where(
@@ -460,11 +346,10 @@ async def get_summary(
     for printer in printers:
         printer_logs = logs_by_printer.get(printer.id, [])
 
-        # Para cada tipo, tomar el log más reciente (los logs ya están ordenados desc)
+        # Para cada tipo, tomar el log más reciente (ya están ordenados desc)
         last_per_type: dict = {}
         for log in printer_logs:
             if log.maintenance_type not in last_per_type:
-                # Calcular horas desde el último mantenimiento
                 hours_since = None
                 if printer.current_hours is not None:
                     hours_since = float(printer.current_hours) - float(log.hours_at_maintenance)
@@ -479,14 +364,7 @@ async def get_summary(
                 )
 
         summaries.append(MaintenancePrinterSummary(
-            printer=MaintenancePrinterResponse(
-                id=printer.id,
-                name=printer.name,
-                model=printer.model,
-                current_hours=printer.current_hours,
-                notes=printer.notes,
-                created_at=printer.created_at,
-            ),
+            printer=PrinterResponse.model_validate(printer),
             last_per_type=last_per_type,
         ))
 

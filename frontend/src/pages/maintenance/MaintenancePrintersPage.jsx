@@ -1,45 +1,37 @@
 /**
- * @file Página de gestión de impresoras del módulo de mantenimiento.
+ * @file Página de impresoras en el módulo de mantenimiento.
  *
- * Permite crear, editar y eliminar impresoras. También permite
- * actualizar las horas actuales mediante un modal dedicado.
+ * Muestra las impresoras registradas en la app Cost (fuente única de verdad).
+ * Permite actualizar las horas actuales directamente desde aquí, lo que
+ * impacta tanto la calculadora de costos como el dashboard de mantenimiento.
+ *
+ * Para crear o eliminar impresoras, ir a Cost → Impresoras.
  *
  * @module pages/maintenance/MaintenancePrintersPage
  */
 
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { useConfirm } from '../../components/ConfirmDialog';
-import { Plus, Pencil, Trash2, Clock, X, Printer } from 'lucide-react';
-import {
-  getMaintenancePrinters,
-  createMaintenancePrinter,
-  updateMaintenancePrinter,
-  deleteMaintenancePrinter,
-} from '../../services/api';
-
-/** Estado vacío del formulario de impresora */
-const EMPTY_FORM = { name: '', model: '', current_hours: '0', notes: '' };
+import { Clock, X, Printer, ExternalLink } from 'lucide-react';
+import { getPrinters, updatePrinter } from '../../services/api';
 
 /**
- * Página de gestión de impresoras de mantenimiento.
+ * Página de impresoras del módulo de mantenimiento.
  * @returns {JSX.Element}
  */
 export default function MaintenancePrintersPage() {
-  const confirm = useConfirm();
+  const navigate = useNavigate();
   const [printers, setPrinters] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
   const [hoursModalOpen, setHoursModalOpen] = useState(false);
-  const [editing, setEditing] = useState(null); // null = crear, obj = editar
   const [hoursTarget, setHoursTarget] = useState(null);
-  const [form, setForm] = useState({ ...EMPTY_FORM });
   const [hoursValue, setHoursValue] = useState('');
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
     try {
-      const res = await getMaintenancePrinters();
+      const res = await getPrinters();
       setPrinters(res.data);
     } catch {
       toast.error('Error al cargar las impresoras');
@@ -50,62 +42,17 @@ export default function MaintenancePrintersPage() {
 
   useEffect(() => { load(); }, []);
 
-  const openCreate = () => {
-    setEditing(null);
-    setForm({ ...EMPTY_FORM });
-    setModalOpen(true);
-  };
-
-  const openEdit = (printer) => {
-    setEditing(printer);
-    setForm({
-      name: printer.name,
-      model: printer.model ?? '',
-      current_hours: String(printer.current_hours),
-      notes: printer.notes ?? '',
-    });
-    setModalOpen(true);
-  };
-
   const openHoursModal = (printer) => {
     setHoursTarget(printer);
     setHoursValue(String(printer.current_hours));
     setHoursModalOpen(true);
   };
 
-  const handleSave = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      const payload = {
-        name: form.name.trim(),
-        model: form.model.trim() || null,
-        current_hours: parseFloat(form.current_hours) || 0,
-        notes: form.notes.trim() || null,
-      };
-      if (editing) {
-        await updateMaintenancePrinter(editing.id, payload);
-        toast.success('Impresora actualizada');
-      } else {
-        await createMaintenancePrinter(payload);
-        toast.success('Impresora creada');
-      }
-      setModalOpen(false);
-      load();
-    } catch (err) {
-      toast.error(err.response?.data?.detail ?? 'Error al guardar la impresora');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleSaveHours = async (e) => {
     e.preventDefault();
     setSaving(true);
     try {
-      await updateMaintenancePrinter(hoursTarget.id, {
-        current_hours: parseFloat(hoursValue) || 0,
-      });
+      await updatePrinter(hoursTarget.id, { current_hours: parseFloat(hoursValue) || 0 });
       toast.success('Horas actualizadas');
       setHoursModalOpen(false);
       load();
@@ -116,35 +63,21 @@ export default function MaintenancePrintersPage() {
     }
   };
 
-  const handleDelete = async (printer) => {
-    const ok = await confirm({
-      title: 'Eliminar impresora',
-      message: `¿Eliminar "${printer.name}"? Se eliminarán también todos sus registros de mantenimiento.`,
-      confirmLabel: 'Eliminar',
-      danger: true,
-    });
-    if (!ok) return;
-    try {
-      await deleteMaintenancePrinter(printer.id);
-      toast.success('Impresora eliminada');
-      load();
-    } catch {
-      toast.error('Error al eliminar la impresora');
-    }
-  };
-
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-tech-white">Impresoras</h1>
-          <p className="text-steel text-sm mt-1">Gestiona las impresoras registradas en el módulo de mantenimiento.</p>
+          <p className="text-steel text-sm mt-1">
+            Las impresoras se gestionan en la app Cost. Aquí puedes actualizar las horas acumuladas.
+          </p>
         </div>
         <button
-          onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-violet-600 hover:bg-violet-500 text-white"
+          onClick={() => navigate('/cost/printers')}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#2a2d31] text-steel hover:text-tech-white hover:border-violet-500/50 text-sm transition-colors shrink-0"
+          title="Gestionar impresoras en Cost"
         >
-          <Plus size={16} /> Nueva impresora
+          <ExternalLink size={14} /> Gestionar en Cost
         </button>
       </div>
 
@@ -153,9 +86,12 @@ export default function MaintenancePrintersPage() {
       ) : printers.length === 0 ? (
         <div className="text-center py-16">
           <Printer size={48} className="mx-auto text-gunmetal mb-4" />
-          <p className="text-steel">No hay impresoras registradas.</p>
-          <button onClick={openCreate} className="mt-4 text-violet-400 hover:text-violet-300 text-sm">
-            + Agregar primera impresora
+          <p className="text-steel mb-4">No hay impresoras registradas.</p>
+          <button
+            onClick={() => navigate('/cost/printers')}
+            className="text-violet-400 hover:text-violet-300 text-sm"
+          >
+            Agregar impresora en Cost →
           </button>
         </div>
       ) : (
@@ -166,122 +102,43 @@ export default function MaintenancePrintersPage() {
                 <th className="text-left px-4 py-3 text-gunmetal font-medium">Nombre</th>
                 <th className="text-left px-4 py-3 text-gunmetal font-medium">Modelo</th>
                 <th className="text-right px-4 py-3 text-gunmetal font-medium">Horas actuales</th>
-                <th className="text-left px-4 py-3 text-gunmetal font-medium">Notas</th>
+                <th className="text-right px-4 py-3 text-gunmetal font-medium">Vida útil</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody>
-              {printers.map((p) => (
-                <tr key={p.id} className="border-b border-[#1e2125] hover:bg-[#1a1d21] transition-colors">
-                  <td className="px-4 py-3 text-tech-white font-medium">{p.name}</td>
-                  <td className="px-4 py-3 text-steel">{p.model ?? '—'}</td>
-                  <td className="px-4 py-3 text-right">
-                    <span className="text-violet-400 font-mono font-semibold">{Number(p.current_hours).toFixed(1)} h</span>
-                  </td>
-                  <td className="px-4 py-3 text-steel text-xs max-w-xs truncate">{p.notes ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-2">
+              {printers.map((p) => {
+                const pct = p.estimated_lifespan_hours > 0
+                  ? Math.min(100, (p.current_hours / p.estimated_lifespan_hours) * 100)
+                  : 0;
+                const pctColor = pct >= 80 ? 'text-red-400' : pct >= 60 ? 'text-amber-400' : 'text-violet-400';
+
+                return (
+                  <tr key={p.id} className="border-b border-[#1e2125] hover:bg-[#1a1d21] transition-colors">
+                    <td className="px-4 py-3 text-tech-white font-medium">{p.name}</td>
+                    <td className="px-4 py-3 text-steel">{p.model}</td>
+                    <td className="px-4 py-3 text-right">
+                      <span className={`font-mono font-semibold ${pctColor}`}>
+                        {Number(p.current_hours).toFixed(1)} h
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right text-steel">
+                      {Number(p.estimated_lifespan_hours).toLocaleString()} h
+                    </td>
+                    <td className="px-4 py-3">
                       <button
                         onClick={() => openHoursModal(p)}
-                        className="p-1.5 rounded text-steel hover:text-violet-400 hover:bg-violet-500/10 transition-colors"
+                        className="flex items-center gap-1.5 ml-auto px-3 py-1.5 rounded-lg text-xs border border-[#2a2d31] text-steel hover:text-violet-400 hover:border-violet-500/50 transition-colors"
                         title="Actualizar horas"
                       >
-                        <Clock size={15} />
+                        <Clock size={13} /> Actualizar horas
                       </button>
-                      <button
-                        onClick={() => openEdit(p)}
-                        className="p-1.5 rounded text-steel hover:text-tech-white hover:bg-[#1e2125] transition-colors"
-                        title="Editar"
-                      >
-                        <Pencil size={15} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(p)}
-                        className="p-1.5 rounded text-steel hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                        title="Eliminar"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
-        </div>
-      )}
-
-      {/* Modal crear/editar impresora */}
-      {modalOpen && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0d1014] border border-[#1e2125] rounded-xl w-full max-w-md">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#1e2125]">
-              <h2 className="text-tech-white font-semibold">
-                {editing ? 'Editar impresora' : 'Nueva impresora'}
-              </h2>
-              <button onClick={() => setModalOpen(false)} className="text-steel hover:text-tech-white">
-                <X size={20} />
-              </button>
-            </div>
-            <form onSubmit={handleSave} className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs text-gunmetal mb-1">Nombre *</label>
-                <input
-                  className="w-full bg-[#1a1d21] border border-[#2a2d31] rounded-lg px-3 py-2 text-tech-white text-sm focus:outline-none focus:border-violet-500"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="Mi BambuLab P2S Combo"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gunmetal mb-1">Modelo</label>
-                <input
-                  className="w-full bg-[#1a1d21] border border-[#2a2d31] rounded-lg px-3 py-2 text-tech-white text-sm focus:outline-none focus:border-violet-500"
-                  value={form.model}
-                  onChange={(e) => setForm({ ...form, model: e.target.value })}
-                  placeholder="P2S Combo"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gunmetal mb-1">Horas actuales</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  className="w-full bg-[#1a1d21] border border-[#2a2d31] rounded-lg px-3 py-2 text-tech-white text-sm focus:outline-none focus:border-violet-500"
-                  value={form.current_hours}
-                  onChange={(e) => setForm({ ...form, current_hours: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gunmetal mb-1">Notas</label>
-                <textarea
-                  rows={3}
-                  className="w-full bg-[#1a1d21] border border-[#2a2d31] rounded-lg px-3 py-2 text-tech-white text-sm focus:outline-none focus:border-violet-500 resize-none"
-                  value={form.notes}
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  placeholder="Observaciones opcionales..."
-                />
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="flex-1 px-4 py-2 rounded-lg border border-[#2a2d31] text-steel hover:text-tech-white text-sm transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium transition-colors"
-                >
-                  {saving ? 'Guardando...' : editing ? 'Actualizar' : 'Crear'}
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
       )}
 
@@ -297,6 +154,9 @@ export default function MaintenancePrintersPage() {
             </div>
             <form onSubmit={handleSaveHours} className="p-6 space-y-4">
               <p className="text-steel text-sm">{hoursTarget.name}</p>
+              <p className="text-xs text-gunmetal">
+                Este valor se usa en el cálculo de depreciación de la Calculadora de Costos.
+              </p>
               <div>
                 <label className="block text-xs text-gunmetal mb-1">Horas actuales *</label>
                 <input
