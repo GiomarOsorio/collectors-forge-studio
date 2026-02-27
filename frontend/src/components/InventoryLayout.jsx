@@ -20,6 +20,7 @@ import {
   Menu,
   Printer,
   ArrowLeftRight,
+  Wrench,
 } from 'lucide-react';
 
 /**
@@ -28,6 +29,7 @@ import {
 const navItems = [
   { to: '/inventory/filaments', icon: Layers, label: 'Filamentos' },
   { to: '/inventory/supplies', icon: Package, label: 'Insumos' },
+  { to: '/inventory/tools', icon: Wrench, label: 'Herramientas' },
   { to: '/inventory/stock', icon: PackageOpen, label: 'Todo el stock' },
   { to: '/inventory/purchases', icon: ShoppingCart, label: 'Pedidos' },
   { to: '/inventory/prints', icon: Printer, label: 'Impresiones' },

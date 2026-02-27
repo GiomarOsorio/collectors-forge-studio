@@ -24,6 +24,7 @@
  * - /settings/users           → Gestión de usuarios (protegida)
  * - /inventory/filaments      → Filamentos del inventario (protegida)
  * - /inventory/supplies       → Insumos y accesorios del inventario (protegida)
+ * - /inventory/tools          → Herramientas y suplementos del inventario (protegida)
  * - /inventory/stock          → Todo el stock del inventario (protegida)
  * - /inventory/purchases      → Pedidos de compra (protegida)
  * - /inventory/prints         → Inventario de impresiones 3D (protegida)
@@ -60,6 +61,7 @@ import EmpresaPage from './pages/settings/EmpresaPage';
 import UsuariosPage from './pages/settings/UsuariosPage';
 import InventoryFilamentsPage from './pages/inventory/InventoryFilamentsPage';
 import InventorySuppliesPage from './pages/inventory/InventorySuppliesPage';
+import InventoryToolsPage from './pages/inventory/InventoryToolsPage';
 import InventoryPrintsPage from './pages/inventory/InventoryPrintsPage';
 import InventoryImportExportPage from './pages/inventory/InventoryImportExportPage';
 import SlicerUploadPage from './pages/slicer/SlicerUploadPage';
@@ -113,6 +115,7 @@ function AppRoutes() {
         <Route index element={<Navigate to="/inventory/stock" replace />} />
         <Route path="filaments" element={<InventoryFilamentsPage />} />
         <Route path="supplies" element={<InventorySuppliesPage />} />
+        <Route path="tools" element={<InventoryToolsPage />} />
         <Route path="stock" element={<InventoryStockPage />} />
         <Route path="purchases" element={<InventoryPurchasesPage />} />
         <Route path="prints" element={<InventoryPrintsPage />} />

@@ -144,11 +144,12 @@ function SortTh({ label, sortKey, sortConfig, onSort, className = 'tf-th' }) {
  * Página de stock del inventario.
  *
  * @param {Object} props
- * @param {string|null} [props.categoryFilter] - Si se pasa, solo muestra ítems de esa categoría
- * @param {string|null} [props.excludeCategory] - Si se pasa, excluye ítems de esa categoría
+ * @param {string|null}   [props.categoryFilter]    - Si se pasa, solo muestra ítems de esa categoría
+ * @param {string|null}   [props.excludeCategory]   - Si se pasa, excluye ítems de esa categoría (singular)
+ * @param {string[]|null} [props.excludeCategories] - Si se pasa, excluye ítems de esas categorías (plural)
  * @returns {JSX.Element}
  */
-export default function InventoryStockPage({ categoryFilter = null, excludeCategory = null }) {
+export default function InventoryStockPage({ categoryFilter = null, excludeCategory = null, excludeCategories = null }) {
   const confirm = useConfirm();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -314,6 +315,7 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
     return items.filter((item) => {
       if (categoryFilter && item.category !== categoryFilter) return false;
       if (excludeCategory && item.category === excludeCategory) return false;
+      if (excludeCategories && excludeCategories.includes(item.category)) return false;
       if (filterCategory && item.category !== filterCategory) return false;
       if (filterStatus === 'bajo') {
         const low = parseFloat(item.min_quantity) > 0 && parseFloat(item.quantity) < parseFloat(item.min_quantity);
@@ -325,7 +327,7 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
       }
       return true;
     });
-  }, [items, categoryFilter, excludeCategory, filterCategory, filterStatus]);
+  }, [items, categoryFilter, excludeCategory, excludeCategories, filterCategory, filterStatus]);
 
   // Ordenamiento
   const sorted = useMemo(() => {
@@ -361,9 +363,11 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
   // Título adaptado según props
   const pageTitle = categoryFilter === 'Filamento'
     ? 'Filamentos'
-    : excludeCategory === 'Filamento'
-      ? 'Insumos y Accesorios'
-      : 'Todo el stock';
+    : categoryFilter === 'Herramienta'
+      ? 'Herramientas'
+      : excludeCategory === 'Filamento' || (excludeCategories && excludeCategories.includes('Filamento'))
+        ? 'Insumos y Accesorios'
+        : 'Todo el stock';
 
   const isFilamentForm = form.category === 'Filamento';
 
@@ -372,7 +376,7 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="tf-page-title mb-0">{pageTitle}</h2>
-          {alertCount > 0 && !categoryFilter && !excludeCategory && (
+          {alertCount > 0 && !categoryFilter && !excludeCategory && !excludeCategories && (
             <p className="text-sm text-orange-400 mt-1 flex items-center gap-1">
               <AlertTriangle size={14} />
               {alertCount} ítem{alertCount > 1 ? 's' : ''} requiere{alertCount === 1 ? '' : 'n'} atención
@@ -386,7 +390,7 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
 
       {/* Filtros — se ocultan cuando la página ya filtra por categoría fija */}
       <div className="flex flex-wrap gap-3 mb-4">
-        {!categoryFilter && !excludeCategory && (
+        {!categoryFilter && !excludeCategory && !excludeCategories && (
           <select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
@@ -591,7 +595,11 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
                       />
                       <datalist id="categories-list">
                         {CATEGORIES
-                          .filter((c) => !excludeCategory || c !== excludeCategory)
+                          .filter((c) => {
+                            if (excludeCategory && c === excludeCategory) return false;
+                            if (excludeCategories && excludeCategories.includes(c)) return false;
+                            return true;
+                          })
                           .map((c) => <option key={c} value={c} />)}
                       </datalist>
                     </div>
