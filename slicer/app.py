@@ -113,54 +113,80 @@ def parse_gcode_metadata(gcode_path: Path) -> dict:
     return result
 
 
-def _patch_3mf_params(src_path: Path) -> Optional[Path]:
+def _patch_3mf_params(src_path: Path) -> tuple:
     """
     Corrige valores centinela fuera de rango en config de 3MF de Bambu Studio/OrcaSlicer 2.5+.
 
-    OrcaSlicer 2.3.x rechaza valores como -1 y 0 que en versiones 2.5+ significan
-    "heredar de preset". Crea un archivo temporal con los valores corregidos.
+    Usa regex para cubrir variaciones de formato (XML, JSON, INI) y retorna
+    informacion de depuracion sobre cuantos cambios se aplicaron.
 
     Args:
         src_path: Ruta al archivo .3mf original.
 
     Returns:
-        Ruta al .3mf corregido, o None si falla la operacion.
+        Tupla (ruta_parcheada_o_None, mensaje_debug).
     """
-    # (param, valor_centinela, valor_valido_por_defecto)
+    # (param, valor_centinela_invalido, valor_valido_por_defecto)
     FIXES = [
-        (b"raft_first_layer_expansion", b"-1", b"0"),
-        (b"solid_infill_filament",      b"0",  b"1"),
-        (b"sparse_infill_filament",     b"0",  b"1"),
-        (b"tree_support_wall_count",    b"-1", b"0"),
-        (b"wall_filament",              b"0",  b"1"),
+        ("raft_first_layer_expansion", "-1", "0"),
+        ("solid_infill_filament",      "0",  "1"),
+        ("sparse_infill_filament",     "0",  "1"),
+        ("tree_support_wall_count",    "-1", "0"),
+        ("wall_filament",              "0",  "1"),
     ]
-    BINARY_EXTS = {".png", ".jpg", ".jpeg", ".stl", ".obj", ".bin", ".ttf"}
+    BINARY_EXTS = {".png", ".jpg", ".jpeg", ".stl", ".obj", ".bin", ".ttf", ".gcode"}
 
     dst_path = src_path.with_name(f"patched_{src_path.name}")
+    total_changes = 0
+    files_text = []
+
     try:
         with zipfile.ZipFile(src_path, "r") as zin, \
              zipfile.ZipFile(dst_path, "w", zipfile.ZIP_DEFLATED) as zout:
             for item in zin.infolist():
-                data = zin.read(item.filename)
-                if Path(item.filename).suffix.lower() not in BINARY_EXTS:
-                    for param, bad, good in FIXES:
-                        # XML: key="param" value="-1" o param="-1"
-                        data = data.replace(param + b'" value="' + bad + b'"',
-                                            param + b'" value="' + good + b'"')
-                        data = data.replace(param + b'="' + bad + b'"',
-                                            param + b'="' + good + b'"')
-                        # JSON: "param": -1
-                        data = data.replace(b'"' + param + b'": ' + bad,
-                                            b'"' + param + b'": ' + good)
-                        # INI: param = -1
-                        data = data.replace(param + b" = " + bad,
-                                            param + b" = " + good)
-                zout.writestr(item, data)
-        return dst_path
-    except Exception:
+                raw = zin.read(item.filename)
+                ext = Path(item.filename).suffix.lower()
+
+                if ext not in BINARY_EXTS:
+                    try:
+                        text = raw.decode("utf-8")
+                        files_text.append(item.filename)
+                        for param, bad, good in FIXES:
+                            p = re.escape(param)
+                            b = re.escape(bad)
+                            # XML value attr: param" value="bad" (con o sin espacio)
+                            text, n = re.subn(
+                                p + r'("\s+value\s*=\s*")' + b + r'"',
+                                param + r'\g<1>' + good + '"', text)
+                            total_changes += n
+                            # XML direct attr: param="bad"
+                            text, n = re.subn(
+                                p + r'(\s*=\s*")' + b + r'"',
+                                param + r'\g<1>' + good + '"', text)
+                            total_changes += n
+                            # JSON: "param": bad  (con o sin espacio, sin comillas en valor)
+                            text, n = re.subn(
+                                r'"' + p + r'"(\s*:\s*)' + b + r'(?=[,}\s\n])',
+                                '"' + param + r'"\g<1>' + good, text)
+                            total_changes += n
+                            # INI: param = bad  o  param=bad
+                            text, n = re.subn(
+                                r'(\b' + p + r'\s*=\s*)' + b + r'(\s*(?:#|$|\n))',
+                                r'\g<1>' + good + r'\2', text)
+                            total_changes += n
+                        raw = text.encode("utf-8")
+                    except (UnicodeDecodeError, TypeError):
+                        pass
+
+                zout.writestr(item, raw)
+
+        debug = f"parche OK: {total_changes} cambios en {len(files_text)} archivos ({', '.join(files_text)})"
+        return dst_path, debug
+
+    except Exception as e:
         if dst_path.exists():
             dst_path.unlink()
-        return None
+        return None, f"parche falló: {e}"
 
 
 @app.get("/health")
@@ -228,8 +254,9 @@ async def slice_model(request: SliceRequest):
     # de rango antes de pasar a OrcaSlicer 2.3.x (raft_first_layer_expansion=-1, etc.)
     effective_path = stl_path
     patched_path: Optional[Path] = None
+    patch_debug = "sin parche (no es .3mf)"
     if stl_path.suffix.lower() == ".3mf":
-        patched = _patch_3mf_params(stl_path)
+        patched, patch_debug = _patch_3mf_params(stl_path)
         if patched:
             patched_path = patched
             effective_path = patched_path
@@ -266,7 +293,7 @@ async def slice_model(request: SliceRequest):
             combined = (stdout.decode(errors="replace") + stderr.decode(errors="replace")).strip()
             return SliceResponse(
                 status="error",
-                error_message=f"OrcaSlicer error (codigo {proc.returncode}): {combined[:5000]}",
+                error_message=f"OrcaSlicer error (codigo {proc.returncode}): {combined[:4000]}\n[debug parche: {patch_debug}]",
             )
 
         # Buscar el gcode generado (OrcaSlicer nombra el output)
