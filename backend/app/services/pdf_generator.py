@@ -56,7 +56,7 @@ try:
 except Exception:
     pass
 
-# ── Paleta de marca The Collector's Forge ─────────────────────────────────────
+# ── Paleta de marca The Collector's Forge (defaults) ──────────────────────────
 _CARBON    = colors.HexColor("#1A1A1A")   # Negro Carbón     — fondo oscuro, texto principal
 _IRON      = colors.HexColor("#3C3C3C")   # Hierro Oscuro    — texto secundario
 _BRONZE    = colors.HexColor("#B67E3A")   # Bronce Envejecido — líneas decorativas, acentos
@@ -65,6 +65,69 @@ _GOLD      = colors.HexColor("#D1A054")   # Dorado Tenue     — texto en cabece
 _CREAM     = colors.HexColor("#FDF8F0")   # Crema            — fondo alterno de filas
 _SEPARATOR = colors.HexColor("#E8E4DF")   # Separador suave  — bordes de tabla
 _WHITE     = colors.white
+
+# Términos de pago por defecto (usados si company.pdf_terms está vacío)
+_DEFAULT_TERMS = [
+    "• Una vez aprobada la cotización, el cliente debe realizar el pago del 50% del monto total.",
+    "• Antes de realizar el envío, el cliente debe cancelar el 50% restante.",
+    "• No se despacha ningún pedido sin haber recibido el pago completo correspondiente.",
+    "• Los gastos de envío corren por cuenta del cliente.",
+]
+
+
+def _palette_dict(company: Optional["Company"]) -> dict:
+    """
+    Convierte la lista pdf_palette de la empresa en un dict {name: hex}.
+
+    Usa nombres canónicos para mapear los 4 roles fijos de la paleta ReportLab:
+        primary    → fondo cabecera tabla (_CARBON)
+        accent     → líneas decorativas  (_BRONZE)
+        highlight  → fila Total          (_FORGE_RED)
+        table_text → texto cabecera      (_GOLD)
+
+    Los colores extra definidos por la empresa se incluyen igualmente en el dict
+    pero no afectan a ReportLab (solo están disponibles en templates Liquid).
+
+    Args:
+        company: Instancia ORM de Company (puede ser None).
+
+    Returns:
+        dict {name_lower: hex_string}.
+    """
+    palette_list = getattr(company, "pdf_palette", None) or []
+    return {
+        entry["name"].lower(): entry["hex"]
+        for entry in palette_list
+        if isinstance(entry, dict) and entry.get("name") and entry.get("hex")
+    }
+
+
+def _resolve_colors(company: Optional["Company"]) -> dict:
+    """
+    Resuelve los colores de marca desde la paleta dinámica de la empresa.
+
+    Lee pdf_palette (JSONB [{name, hex}]) y mapea los nombres canónicos:
+        primary → _CARBON, accent → _BRONZE, highlight → _FORGE_RED,
+        table_text → _GOLD.
+    Si faltan, usa los defaults de la paleta de marca.
+
+    Args:
+        company: Instancia ORM de Company (puede ser None).
+
+    Returns:
+        dict con claves _CARBON, _BRONZE, _FORGE_RED, _GOLD (ReportLab colors).
+    """
+    p = _palette_dict(company)
+    return {
+        "_CARBON":    colors.HexColor(p.get("primary",    "#1A1A1A")),
+        "_BRONZE":    colors.HexColor(p.get("accent",     "#B67E3A")),
+        "_FORGE_RED": colors.HexColor(p.get("highlight",  "#A33221")),
+        "_GOLD":      colors.HexColor(p.get("table_text", "#D1A054")),
+        # Colores fijos no personalizables por la empresa
+        "_IRON":  _IRON,
+        "_CREAM": _CREAM,
+        "_WHITE": _WHITE,
+    }
 
 # Padding nulo para tablas de layout sin sangría
 _NO_PAD = [
@@ -95,16 +158,20 @@ def _make_doc(buffer: io.BytesIO) -> SimpleDocTemplate:
     )
 
 
-def _make_styles(suffix: str = "") -> dict:
+def _make_styles(suffix: str = "", c: Optional[dict] = None) -> dict:
     """
     Crea los estilos tipográficos con la paleta de marca The Collector's Forge.
 
     Args:
         suffix: Sufijo para evitar conflictos de nombre entre documentos.
+        c:      dict de colores resueltos (_resolve_colors). Si None usa defaults.
 
     Returns:
         dict con los estilos indexados por clave corta.
     """
+    if c is None:
+        c = {"_CARBON": _CARBON, "_BRONZE": _BRONZE, "_FORGE_RED": _FORGE_RED, "_GOLD": _GOLD}
+
     base = getSampleStyleSheet()
 
     def ps(name, **kw):
@@ -113,22 +180,22 @@ def _make_styles(suffix: str = "") -> dict:
     return {
         "base":   base,
         # Encabezado empresa
-        "sCo":    ps("Co",    fontSize=14, fontName=_FONT_BOLD,        textColor=_CARBON,    alignment=2),
-        "sCoS":   ps("CoS",   fontSize=9,  fontName="Helvetica",       textColor=_IRON,      alignment=2),
+        "sCo":    ps("Co",    fontSize=14, fontName=_FONT_BOLD,        textColor=c["_CARBON"], alignment=2),
+        "sCoS":   ps("CoS",   fontSize=9,  fontName="Helvetica",       textColor=_IRON,        alignment=2),
         # Bloque cliente
-        "sCl":    ps("Cl",    fontSize=11, fontName=_FONT_BOLD,        textColor=_CARBON,    alignment=2),
-        "sClS":   ps("ClS",   fontSize=9,  fontName="Helvetica",       textColor=_IRON,      alignment=2),
+        "sCl":    ps("Cl",    fontSize=11, fontName=_FONT_BOLD,        textColor=c["_CARBON"], alignment=2),
+        "sClS":   ps("ClS",   fontSize=9,  fontName="Helvetica",       textColor=_IRON,        alignment=2),
         # Título cotización
-        "sTit":   ps("Tit",   fontSize=20, fontName=_FONT_BOLD,        textColor=_CARBON),
+        "sTit":   ps("Tit",   fontSize=20, fontName=_FONT_BOLD,        textColor=c["_CARBON"]),
         # Bloque fechas
         "sILab":  ps("ILab",  fontSize=8,  fontName="Helvetica-Bold",  textColor=_IRON),
-        "sIVal":  ps("IVal",  fontSize=10, fontName="Helvetica",       textColor=_CARBON),
+        "sIVal":  ps("IVal",  fontSize=10, fontName="Helvetica",       textColor=c["_CARBON"]),
         # Cabecera tabla ítems (texto dorado sobre fondo carbón)
-        "sTH":    ps("TH",    fontSize=9,  fontName=_FONT_BOLD,        textColor=_GOLD),
-        "sTHR":   ps("THR",   fontSize=9,  fontName=_FONT_BOLD,        textColor=_GOLD,      alignment=2),
+        "sTH":    ps("TH",    fontSize=9,  fontName=_FONT_BOLD,        textColor=c["_GOLD"]),
+        "sTHR":   ps("THR",   fontSize=9,  fontName=_FONT_BOLD,        textColor=c["_GOLD"],   alignment=2),
         # Celdas de datos
-        "sTC":    ps("TC",    fontSize=9,  fontName="Helvetica",       textColor=_CARBON),
-        "sTCR":   ps("TCR",   fontSize=9,  fontName="Helvetica",       textColor=_CARBON,    alignment=2),
+        "sTC":    ps("TC",    fontSize=9,  fontName="Helvetica",       textColor=c["_CARBON"]),
+        "sTCR":   ps("TCR",   fontSize=9,  fontName="Helvetica",       textColor=c["_CARBON"], alignment=2),
         # Totales — fila subtotal
         "sTotL":  ps("TotL",  fontSize=9,  fontName="Helvetica",       textColor=_CARBON,    alignment=2),
         "sTotV":  ps("TotV",  fontSize=9,  fontName="Helvetica",       textColor=_CARBON,    alignment=2),
@@ -187,10 +254,11 @@ def _build_header(st: dict, company: Optional["Company"] = None) -> list:
         colWidths=[_LOGO_W + 0.1 * inch, 2.5 * inch, 2.4 * inch],
     )
     hdr_tbl.setStyle(TableStyle(_NO_PAD))
+    bronze = _resolve_colors(company)["_BRONZE"]
     return [
         hdr_tbl,
         Spacer(1, 10),
-        HRFlowable(width="100%", thickness=1.5, color=_BRONZE, spaceAfter=10),
+        HRFlowable(width="100%", thickness=1.5, color=bronze, spaceAfter=10),
     ]
 
 
@@ -225,6 +293,7 @@ def _build_totals(
     subtotal_str: str, st: dict,
     iva_str: str = "No Aplica",
     total_str: Optional[str] = None,
+    c: Optional[dict] = None,
 ) -> Table:
     """
     Construye la tabla de totales (Subtotal / IVA / Total).
@@ -237,12 +306,15 @@ def _build_totals(
         st:           Diccionario de estilos.
         iva_str:      Texto del IVA: "No Aplica" o valor formateado.
         total_str:    Valor formateado del total. Si None, usa subtotal_str.
+        c:            dict de colores resueltos (_resolve_colors). Si None usa defaults.
 
     Returns:
         Tabla de totales ReportLab.
     """
     if total_str is None:
         total_str = subtotal_str
+    if c is None:
+        c = {"_BRONZE": _BRONZE, "_FORGE_RED": _FORGE_RED}
 
     tot_tbl = Table(
         [
@@ -261,49 +333,51 @@ def _build_totals(
         ("LEFTPADDING",   (0, 0), (0, -1),  0),
         ("RIGHTPADDING",  (0, 0), (0, -1),  0),
         ("GRID",          (1, 0), (-1, 1), 0.5, _SEPARATOR),
-        ("LINEABOVE",     (1, 2), (-1, 2), 1.0, _BRONZE),
+        ("LINEABOVE",     (1, 2), (-1, 2), 1.0, c["_BRONZE"]),
         ("BOX",           (1, 2), (-1, 2), 0.5, _SEPARATOR),
-        ("BACKGROUND",    (1, 2), (-1, 2), _FORGE_RED),
+        ("BACKGROUND",    (1, 2), (-1, 2), c["_FORGE_RED"]),
     ]))
     return tot_tbl
 
 
-def _build_footer(notes: Optional[str], st: dict) -> list:
+def _build_footer(notes: Optional[str], st: dict, company: Optional["Company"] = None, c: Optional[dict] = None) -> list:
     """
     Construye el pie de página: notas, términos de pago y sello de fecha.
 
     Args:
-        notes: Notas adicionales opcionales.
-        st:    Diccionario de estilos.
+        notes:   Notas adicionales opcionales.
+        st:      Diccionario de estilos.
+        company: Instancia ORM de Company para leer pdf_terms (opcional).
+        c:       dict de colores resueltos (_resolve_colors). Si None usa defaults.
 
     Returns:
         Lista de elementos ReportLab.
     """
+    if c is None:
+        c = {"_BRONZE": _BRONZE}
+
     elems: list = [Paragraph("Precios sin IVA.", st["sNote"])]
     if notes:
         elems += [Spacer(1, 6), Paragraph(f"Notas: {notes}", st["sNote"])]
     elems.append(Spacer(1, 14))
+
+    pdf_terms = getattr(company, "pdf_terms", None) if company else None
+    elems.append(Paragraph("Términos de pago y envío:", st["sTermT"]))
+    elems.append(Spacer(1, 4))
+
+    if pdf_terms:
+        # Términos personalizados: separar por salto de línea
+        for line in pdf_terms.splitlines():
+            line = line.strip()
+            if line:
+                elems.append(Paragraph(line, st["sTermI"]))
+    else:
+        for term in _DEFAULT_TERMS:
+            elems.append(Paragraph(term, st["sTermI"]))
+
     elems += [
-        Paragraph("Términos de pago y envío:", st["sTermT"]),
-        Spacer(1, 4),
-        Paragraph(
-            "• Una vez aprobada la cotización, el cliente debe realizar el pago del 50% del monto total.",
-            st["sTermI"],
-        ),
-        Paragraph(
-            "• Antes de realizar el envío, el cliente debe cancelar el 50% restante.",
-            st["sTermI"],
-        ),
-        Paragraph(
-            "• No se despacha ningún pedido sin haber recibido el pago completo correspondiente.",
-            st["sTermI"],
-        ),
-        Paragraph(
-            "• Los gastos de envío corren por cuenta del cliente.",
-            st["sTermI"],
-        ),
         Spacer(1, 12),
-        HRFlowable(width="100%", thickness=0.5, color=_BRONZE, spaceAfter=6),
+        HRFlowable(width="100%", thickness=0.5, color=c["_BRONZE"], spaceAfter=6),
         Paragraph(
             f"Cotización generada el {datetime.now(timezone.utc).strftime('%d-%m-%Y')}"
             f" · TurtleForge Cost · Medellín, Colombia",
@@ -332,7 +406,8 @@ def generate_quote_pdf(quote: Quote, company: Optional["Company"] = None) -> byt
     """
     buffer = io.BytesIO()
     doc = _make_doc(buffer)
-    st = _make_styles("")
+    c = _resolve_colors(company)
+    st = _make_styles("", c)
     elements: list = []
 
     # ── 1. HEADER ─────────────────────────────────────────────────────────────
@@ -387,7 +462,7 @@ def generate_quote_pdf(quote: Quote, company: Optional["Company"] = None) -> byt
         colWidths=cols,
     )
     items_tbl.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, 0), _CARBON),
+        ("BACKGROUND",    (0, 0), (-1, 0), c["_CARBON"]),
         ("ALIGN",         (2, 0), (-1, -1), "RIGHT"),
         ("BACKGROUND",    (0, 1), (-1, 1), _CREAM),
         ("GRID",          (0, 0), (-1, -1), 0.5, _SEPARATOR),
@@ -403,11 +478,11 @@ def generate_quote_pdf(quote: Quote, company: Optional["Company"] = None) -> byt
     L  = cols[0] + cols[1]
     R1 = cols[2]
     R2 = cols[3]
-    elements.append(_build_totals(L, R1, R2, fmt(t_price), st, "No Aplica", fmt(t_price)))
+    elements.append(_build_totals(L, R1, R2, fmt(t_price), st, "No Aplica", fmt(t_price), c))
     elements.append(Spacer(1, 24))
 
     # ── 7. PIE DE PÁGINA ──────────────────────────────────────────────────────
-    elements += _build_footer(quote.notes, st)
+    elements += _build_footer(quote.notes, st, company, c)
 
     doc.build(elements)
     return buffer.getvalue()
@@ -435,7 +510,8 @@ def generate_client_quote_pdf(
     """
     buffer = io.BytesIO()
     doc = _make_doc(buffer)
-    st = _make_styles("_cq")
+    c = _resolve_colors(company)
+    st = _make_styles("_cq", c)
     elements: list = []
 
     # ── 1. HEADER ─────────────────────────────────────────────────────────────
@@ -487,7 +563,7 @@ def generate_client_quote_pdf(
 
     items_tbl = Table(rows, colWidths=cols)
     style_cmds = [
-        ("BACKGROUND",    (0, 0), (-1, 0), _CARBON),
+        ("BACKGROUND",    (0, 0), (-1, 0), c["_CARBON"]),
         ("ALIGN",         (1, 0), (-1, -1), "RIGHT"),
         ("GRID",          (0, 0), (-1, -1), 0.5, _SEPARATOR),
         ("TOPPADDING",    (0, 0), (-1, -1), 8),
@@ -519,11 +595,11 @@ def generate_client_quote_pdf(
         iva_str   = "No Aplica"
         total_str = _fmt_cop(subtotal_val)
 
-    elements.append(_build_totals(L, R1, R2, _fmt_cop(subtotal_val), st, iva_str, total_str))
+    elements.append(_build_totals(L, R1, R2, _fmt_cop(subtotal_val), st, iva_str, total_str, c))
     elements.append(Spacer(1, 24))
 
     # ── 7. PIE DE PÁGINA ──────────────────────────────────────────────────────
-    elements += _build_footer(client_quote.notes, st)
+    elements += _build_footer(client_quote.notes, st, company, c)
 
     doc.build(elements)
     return buffer.getvalue()

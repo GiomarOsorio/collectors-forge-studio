@@ -7,6 +7,7 @@ acceso a todos los modelos sin necesidad de conocer su ubicación exacta.
 
 Exportaciones:
     Company:            Modelo de empresa (unidad de aislamiento multi-tenant).
+    CompanyTemplate:    Modelo de template Liquid de cotización por empresa.
     User:               Modelo de usuario del sistema.
     Filament:           Modelo de filamento de impresión 3D.
     Printer:            Modelo de impresora 3D.
@@ -23,6 +24,7 @@ Exportaciones:
 """
 
 from app.models.company import Company
+from app.models.company_template import CompanyTemplate
 from app.models.user import User
 from app.models.filament import Filament
 from app.models.printer import Printer
@@ -39,7 +41,7 @@ from app.models.maintenance import MaintenanceLog, MaintenanceLogItem
 from app.models.queue import PrintQueueItem
 
 __all__ = [
-    "Company", "User", "Filament", "Printer", "AppSettings",
+    "Company", "CompanyTemplate", "User", "Filament", "Printer", "AppSettings",
     "Quote", "ClientQuote", "Supply", "ElectricityTariff",
     "InventoryItem", "PurchaseOrder", "PurchaseOrderItem",
     "SlicingJob", "PrintedItem",

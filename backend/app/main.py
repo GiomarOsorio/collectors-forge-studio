@@ -33,6 +33,7 @@ from app.routers import (
     client_quotes, inventory, purchase_orders, slicer, printed_items,
 )
 from app.routers.company import router as company_router
+from app.routers.company_templates import router as company_templates_router
 from app.routers.users import router as users_router
 from app.routers.maintenance import router as maintenance_router
 from app.routers.queue import router as queue_router
@@ -98,6 +99,7 @@ app.include_router(purchase_orders.router)
 app.include_router(slicer.router)
 app.include_router(printed_items.router)
 app.include_router(company_router)
+app.include_router(company_templates_router)
 app.include_router(users_router)
 app.include_router(maintenance_router)
 app.include_router(queue_router)

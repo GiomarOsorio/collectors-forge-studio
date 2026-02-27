@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.client_quote import ClientQuote
 from app.models.company import Company
+from app.models.company_template import CompanyTemplate
 from app.models.user import User
 from app.schemas.client_quote import ClientQuoteCreate, ClientQuoteResponse
 from app.limiter import limiter
@@ -227,7 +228,27 @@ async def download_client_quote_pdf(
     # Usar tasa guardada al crear; si la cotización es anterior a este campo,
     # obtener la tasa actual como respaldo.
     usd_rate = float(cq.usd_to_cop_rate) if cq.usd_to_cop_rate else await get_usd_to_cop()
-    pdf_bytes = generate_client_quote_pdf(cq, company, usd_rate)
+
+    # Buscar template activo (Liquid + WeasyPrint) si existe
+    tpl_result = await db.execute(
+        select(CompanyTemplate).where(
+            CompanyTemplate.company_id == current_user.company_id,
+            CompanyTemplate.template_type.in_(["cot", "all"]),
+            CompanyTemplate.is_default.is_(True),
+        )
+    )
+    active_tpl = tpl_result.scalar_one_or_none()
+
+    if active_tpl:
+        try:
+            from app.services.liquid_pdf import render_client_quote_pdf
+            pdf_bytes = render_client_quote_pdf(active_tpl.content, cq, company, usd_rate)
+        except Exception:
+            # Fallback a ReportLab si WeasyPrint no está disponible o falla
+            pdf_bytes = generate_client_quote_pdf(cq, company, usd_rate)
+    else:
+        pdf_bytes = generate_client_quote_pdf(cq, company, usd_rate)
+
     safe_client = re.sub(r"[^\w\-]", "_", cq.client_name)
     filename = f"cotizacion_COT-{cq.id:04d}_{safe_client}.pdf"
     return Response(

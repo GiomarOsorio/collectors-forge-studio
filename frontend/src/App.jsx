@@ -36,6 +36,11 @@
  * - /maintenance/printers     → Gestión de impresoras de mantenimiento (protegida)
  * - /queue/                   → Cola de impresión activa (protegida)
  * - /queue/history            → Historial de trabajos completados/cancelados (protegida)
+ * - /company/profile          → Perfil de empresa (protegida)
+ * - /company/branding         → Marca y colores PDF (protegida)
+ * - /company/templates        → Lista de templates Liquid (protegida)
+ * - /company/templates/new    → Crear template (protegida)
+ * - /company/templates/:id    → Editar template (protegida)
  *
  * @module App
  */
@@ -78,6 +83,11 @@ import MaintenancePrintersPage from './pages/maintenance/MaintenancePrintersPage
 import QueueLayout from './components/QueueLayout';
 import QueuePage from './pages/queue/QueuePage';
 import QueueHistoryPage from './pages/queue/QueueHistoryPage';
+import CompanyLayout from './components/CompanyLayout';
+import CompanyProfilePage from './pages/company/CompanyProfilePage';
+import CompanyBrandingPage from './pages/company/CompanyBrandingPage';
+import CompanyTemplatesPage from './pages/company/CompanyTemplatesPage';
+import CompanyTemplateEditorPage from './pages/company/CompanyTemplateEditorPage';
 
 /**
  * Componente guardia de ruta privada.
@@ -172,6 +182,16 @@ function AppRoutes() {
       <Route path="/queue" element={<PrivateRoute><QueueLayout /></PrivateRoute>}>
         <Route index element={<QueuePage />} />
         <Route path="history" element={<QueueHistoryPage />} />
+      </Route>
+
+      {/* Aplicación Compañía: perfil, marca y templates PDF */}
+      <Route path="/company" element={<PrivateRoute><CompanyLayout /></PrivateRoute>}>
+        <Route index element={<Navigate to="/company/profile" replace />} />
+        <Route path="profile"       element={<CompanyProfilePage />} />
+        <Route path="branding"      element={<CompanyBrandingPage />} />
+        <Route path="templates"     element={<CompanyTemplatesPage />} />
+        <Route path="templates/new" element={<CompanyTemplateEditorPage />} />
+        <Route path="templates/:id" element={<CompanyTemplateEditorPage />} />
       </Route>
     </Routes>
   );
