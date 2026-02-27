@@ -26,7 +26,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from reportlab.platypus import Paragraph, Table
 
-from app.services.pdf_generator import generate_quote_pdf
+from app.services.pdf_generator import generate_quote_pdf, generate_client_quote_pdf
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -308,4 +308,100 @@ class TestGeneracionRealPDF:
         """El PDF se genera correctamente con quantity > 1."""
         quote  = _make_quote(quantity=5)
         result = generate_quote_pdf(quote)
+        assert result[:4] == b"%PDF"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TestClienteQuotePDF
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _make_client_quote(**overrides):
+    """
+    Crea un mock de ClientQuote con los atributos mínimos requeridos por
+    generate_client_quote_pdf. Cualquier atributo puede sobreescribirse.
+    """
+    import json as _json
+    from datetime import date
+
+    cq = MagicMock(spec=[
+        "id", "client_name", "description", "quote_date", "expiry_date",
+        "items", "subtotal", "include_iva", "iva_percent", "notes",
+    ])
+    cq.id           = 1
+    cq.client_name  = "Empresa de Prueba"
+    cq.description  = None
+    cq.quote_date   = date(2024, 6, 15)
+    cq.expiry_date  = date(2024, 6, 30)
+    cq.items        = _json.dumps([{"name": "Figura Dragon", "quantity": 2, "unit_price": 15.0}])
+    cq.subtotal     = Decimal("30.00")
+    cq.include_iva  = False
+    cq.iva_percent  = Decimal("19.00")
+    cq.notes        = None
+    for k, v in overrides.items():
+        setattr(cq, k, v)
+    return cq
+
+
+class TestClienteQuotePDF:
+    """Verifica la generación de PDFs COT-XXXX con generate_client_quote_pdf."""
+
+    def test_retorna_bytes(self):
+        """generate_client_quote_pdf retorna bytes."""
+        result = generate_client_quote_pdf(_make_client_quote())
+        assert isinstance(result, bytes)
+
+    def test_encabezado_pdf_valido(self):
+        """El PDF generado debe comenzar con '%PDF'."""
+        result = generate_client_quote_pdf(_make_client_quote())
+        assert result[:4] == b"%PDF"
+
+    def test_numero_cot_en_pdf(self):
+        """El número COT-0001 debe aparecer en el PDF."""
+        cq = _make_client_quote(id=1)
+        with patch("app.services.pdf_generator.SimpleDocTemplate") as MockDoc:
+            capturados = []
+            instancia  = MagicMock()
+            MockDoc.return_value = instancia
+            instancia.build.side_effect = lambda elems: capturados.extend(elems)
+            generate_client_quote_pdf(cq)
+        paras = [e for e in capturados if isinstance(e, Paragraph)]
+        assert any("COT-0001" in p.text for p in paras)
+
+    def test_iva_no_aplica_por_defecto(self):
+        """Con include_iva=False, la fila IVA debe mostrar 'No Aplica'."""
+        cq = _make_client_quote(include_iva=False)
+        with patch("app.services.pdf_generator.SimpleDocTemplate") as MockDoc:
+            capturados = []
+            instancia  = MagicMock()
+            MockDoc.return_value = instancia
+            instancia.build.side_effect = lambda elems: capturados.extend(elems)
+            generate_client_quote_pdf(cq)
+        textos = _extraer_textos(capturados)
+        assert any("No Aplica" in t for t in textos), (
+            f"'No Aplica' no encontrado en textos: {textos}"
+        )
+
+    def test_iva_aplicado_cuando_activo(self):
+        """Con include_iva=True, la fila IVA debe mostrar un valor calculado (no 'No Aplica')."""
+        cq = _make_client_quote(include_iva=True, iva_percent=Decimal("19.00"))
+        with patch("app.services.pdf_generator.SimpleDocTemplate") as MockDoc:
+            capturados = []
+            instancia  = MagicMock()
+            MockDoc.return_value = instancia
+            instancia.build.side_effect = lambda elems: capturados.extend(elems)
+            # subtotal=30 USD, rate=4000 → subtotal_cop=120000, IVA=22800
+            generate_client_quote_pdf(cq, usd_rate=4000.0)
+        textos = _extraer_textos(capturados)
+        assert not any(t == "No Aplica" for t in textos), (
+            "Con IVA activo no debe aparecer 'No Aplica'"
+        )
+        # El IVA calculado (19% de 120000 = 22800) debe estar formateado en COP
+        assert any("22.800" in t or "22800" in t for t in textos), (
+            f"Valor de IVA no encontrado en textos: {textos}"
+        )
+
+    def test_pdf_con_iva_activo_retorna_bytes(self):
+        """El PDF se genera sin errores con include_iva=True."""
+        cq     = _make_client_quote(include_iva=True)
+        result = generate_client_quote_pdf(cq, usd_rate=4200.0)
         assert result[:4] == b"%PDF"

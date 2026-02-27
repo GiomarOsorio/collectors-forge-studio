@@ -117,6 +117,8 @@ async def create_client_quote(
         items=items_json,
         subtotal=subtotal,
         usd_to_cop_rate=Decimal(str(cop_rate)),
+        include_iva=data.include_iva,
+        iva_percent=Decimal(str(data.iva_percent)),
         notes=data.notes,
     )
     db.add(cq)

@@ -13,7 +13,7 @@ from datetime import datetime, timezone, date
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import String, Numeric, DateTime, Date, Text, Integer, ForeignKey, text
+from sqlalchemy import String, Numeric, DateTime, Date, Text, Integer, ForeignKey, Boolean, text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
@@ -57,6 +57,10 @@ class ClientQuote(Base):
 
     # Tasa USD→COP vigente al momento de crear la cotización
     usd_to_cop_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
+
+    # IVA — opcional, por defecto no aplica
+    include_iva: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    iva_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, server_default=text("19.00"))
 
     # Notas opcionales
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
