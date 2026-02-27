@@ -33,7 +33,7 @@ export default function StudioHomePage() {
           Mis aplicaciones
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-          {APPS.map((app) => {
+          {APPS.filter((app) => !app.hidden).map((app) => {
             const Icon = app.icon;
             return (
               <button
