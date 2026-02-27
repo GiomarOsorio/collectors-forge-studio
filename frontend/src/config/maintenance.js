@@ -87,7 +87,7 @@ export const MAINTENANCE_TYPES = [
     value: 'limpieza_general',
     label: 'Limpieza general',
     interval_hours: 300,
-    description: 'Limpiar el interior de la cámara, la placa de impresión (isopropanol 95%), los sensores ópticos de filamento, las toberas de enfriamiento del cabezal y el exterior de la impresora.',
+    description: 'Limpiar el interior de la cámara, la placa de impresión PEI (agua tibia con jabón — nunca alcohol, daña el recubrimiento), los sensores ópticos de filamento, las toberas de enfriamiento del cabezal y el exterior de la impresora.',
     wiki_url: 'https://wiki.bambulab.com/en/p2s/maintenance/period-maintenance',
   },
   {
