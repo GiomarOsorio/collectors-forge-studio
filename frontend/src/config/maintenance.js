@@ -72,7 +72,7 @@ export const MAINTENANCE_TYPES = [
   {
     value: 'sustitucion_nozzle',
     label: 'Sustitución de nozzle',
-    interval_hours: 500,
+    interval_hours: null,
     description: 'Reemplazar la boquilla cuando haya desgaste visible, impresión irregular o atascos frecuentes. El hotend de la P2S es de herramienta libre — se extrae el conjunto completo. Usar guantes de protección térmica.',
     wiki_url: 'https://wiki.bambulab.com/en/p2s/maintenance/replace-hotend-and-silicone-sock',
   },
