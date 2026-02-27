@@ -187,6 +187,17 @@ def _patch_3mf_params(src_path: Path) -> tuple:
                                 r'(\b' + p + r'\s*=\s*)' + b + r'(\s*(?:#|$|\n))',
                                 r'\g<1>' + good + r'\2', text)
                             total_changes += n
+
+                        # Eliminar anotaciones de pintura de triángulos (support/seam/color)
+                        # almacenadas como blobs base64 en archivos .model del 3MF.
+                        # OrcaSlicer 2.3.x no puede parsear el formato binario de
+                        # Bambu Studio/OrcaSlicer 2.5.x y crashea en calc_exclude_triangles.
+                        text, n = re.subn(
+                            r'<(?:\w+:)?custom_(?:supports|seam|color)\b[^/]*'
+                            r'(?:/>|>[\s\S]*?</[^>]+>)',
+                            '', text, flags=re.IGNORECASE)
+                        total_changes += n
+
                         raw = text.encode("utf-8")
                     except (UnicodeDecodeError, TypeError):
                         pass
