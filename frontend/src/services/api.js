@@ -629,18 +629,7 @@ export const deleteSlicingJob = (id) => api.delete(`/slicer/jobs/${id}`);
 // ============================================================================
 // Mantenimiento de impresoras
 // ============================================================================
-
-/** Lista las impresoras registradas en el módulo de mantenimiento. */
-export const getMaintenancePrinters = () => api.get('/maintenance/printers/');
-
-/** Crea una impresora en el módulo de mantenimiento. */
-export const createMaintenancePrinter = (data) => api.post('/maintenance/printers/', data);
-
-/** Actualiza una impresora de mantenimiento (incluye current_hours). */
-export const updateMaintenancePrinter = (id, data) => api.put(`/maintenance/printers/${id}`, data);
-
-/** Elimina una impresora de mantenimiento y todos sus registros. */
-export const deleteMaintenancePrinter = (id) => api.delete(`/maintenance/printers/${id}`);
+// Las impresoras se gestionan con getPrinters() / updatePrinter() de la app Cost.
 
 /**
  * Lista los registros de mantenimiento.

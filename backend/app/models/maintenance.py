@@ -1,13 +1,13 @@
 """
 Modelos ORM para la app de Mantenimiento de Impresoras.
 
-Define tres entidades:
-- MaintenancePrinter: impresora registrada con contador acumulado de horas.
-- MaintenanceLog: registro de un mantenimiento realizado.
+Define dos entidades:
+- MaintenanceLog: registro de un mantenimiento realizado sobre una impresora.
 - MaintenanceLogItem: ítem (repuesto/insumo) usado en ese mantenimiento.
 
-Cada registro de mantenimiento puede descontar automáticamente ítems del
-inventario de la empresa (ver router maintenance.py).
+Las impresoras se gestionan en la app Cost (modelo Printer). El campo
+printer_id referencia directamente a printers.id, de modo que ambas
+apps comparten la misma fuente de verdad para las impresoras.
 """
 
 import uuid
@@ -16,7 +16,7 @@ from decimal import Decimal
 from typing import Optional, List, TYPE_CHECKING
 
 from sqlalchemy import (
-    String, Numeric, DateTime, Integer, ForeignKey, Text,
+    String, Numeric, DateTime, Integer, ForeignKey,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
@@ -24,47 +24,8 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from app.database import Base
 
 if TYPE_CHECKING:
+    from app.models.printer import Printer
     from app.models.inventory import InventoryItem
-
-
-class MaintenancePrinter(Base):
-    """
-    Impresora registrada en el módulo de mantenimiento.
-
-    Lleva el contador acumulado de horas de uso. Es diferente al modelo
-    Printer de la calculadora (ese tiene costos de depreciación); este
-    modelo es exclusivo para el historial de mantenimiento.
-
-    Atributos:
-        id:            PK autoincremental.
-        company_id:    UUID de la empresa (multi-tenant).
-        name:          Nombre descriptivo de la impresora.
-        model:         Modelo comercial (ej. "P2S Combo").
-        current_hours: Horas actuales acumuladas (actualizable).
-        notes:         Notas adicionales.
-        created_at:    Timestamp UTC de creación.
-        logs:          Relación inversa con los registros de mantenimiento.
-    """
-
-    __tablename__ = "maintenance_printers"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True
-    )
-    name: Mapped[str] = mapped_column(String(100), nullable=False)
-    model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    current_hours: Mapped[Decimal] = mapped_column(
-        Numeric(8, 1), nullable=False, default=Decimal("0")
-    )
-    notes: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
-    )
-
-    logs: Mapped[List["MaintenanceLog"]] = relationship(
-        "MaintenanceLog", back_populates="printer", cascade="all, delete-orphan"
-    )
 
 
 class MaintenanceLog(Base):
@@ -73,17 +34,18 @@ class MaintenanceLog(Base):
 
     Captura el tipo de mantenimiento, las horas de la impresora al momento
     de realizarlo y una lista de ítems (repuestos/insumos) utilizados.
+    Referencia directamente al modelo Printer de la app Cost.
 
     Atributos:
         id:                   PK autoincremental.
         company_id:           UUID de la empresa (multi-tenant).
-        printer_id:           FK a maintenance_printers.
+        printer_id:           FK a printers.id (modelo Printer de Cost).
         hours_at_maintenance: Horas de la impresora cuando se realizó el mantenimiento.
         maintenance_type:     Tipo de mantenimiento (valores en MAINTENANCE_TYPES frontend).
         description:          Descripción libre del mantenimiento realizado.
         performed_at:         Fecha y hora en que se realizó el mantenimiento.
         created_at:           Timestamp UTC de creación del registro.
-        printer:              Relación con MaintenancePrinter.
+        printer:              Relación con Printer.
         items:                Ítems usados en este mantenimiento.
     """
 
@@ -94,7 +56,7 @@ class MaintenanceLog(Base):
         PGUUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True
     )
     printer_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("maintenance_printers.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("printers.id", ondelete="CASCADE"), nullable=False
     )
     hours_at_maintenance: Mapped[Decimal] = mapped_column(Numeric(8, 1), nullable=False)
     maintenance_type: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -107,9 +69,7 @@ class MaintenanceLog(Base):
         DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
     )
 
-    printer: Mapped["MaintenancePrinter"] = relationship(
-        "MaintenancePrinter", back_populates="logs"
-    )
+    printer: Mapped["Printer"] = relationship("Printer")
     items: Mapped[List["MaintenanceLogItem"]] = relationship(
         "MaintenanceLogItem", back_populates="log", cascade="all, delete-orphan"
     )

@@ -16,7 +16,7 @@ import {
   getMaintenanceLogs,
   createMaintenanceLog,
   deleteMaintenanceLog,
-  getMaintenancePrinters,
+  getPrinters,
   getInventoryItems,
 } from '../../services/api';
 import { MAINTENANCE_TYPES, getMaintenanceType } from '../../config/maintenance';
@@ -132,7 +132,7 @@ export default function MaintenanceLogsPage() {
     try {
       const [logsRes, printersRes, invRes] = await Promise.all([
         getMaintenanceLogs(printerId || null),
-        getMaintenancePrinters(),
+        getPrinters(),
         getInventoryItems(),
       ]);
       setLogs(logsRes.data);
