@@ -11,7 +11,7 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../../components/ConfirmDialog';
-import { Plus, X, Trash2, ChevronDown, ChevronUp, ClipboardList } from 'lucide-react';
+import { Plus, X, Trash2, ChevronDown, ChevronUp, ClipboardList, ExternalLink } from 'lucide-react';
 import {
   getMaintenanceLogs,
   createMaintenanceLog,
@@ -336,7 +336,23 @@ export default function MaintenanceLogsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-gunmetal mb-1">Tipo de mantenimiento *</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-gunmetal">Tipo de mantenimiento *</label>
+                    {(() => {
+                      const selected = MAINTENANCE_TYPES.find((t) => t.value === form.maintenance_type);
+                      return selected?.wiki_url ? (
+                        <a
+                          href={selected.wiki_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 transition-colors"
+                          title="Ver cómo se hace en el wiki de BambuLab"
+                        >
+                          <ExternalLink size={11} /> Wiki
+                        </a>
+                      ) : null;
+                    })()}
+                  </div>
                   <select
                     required
                     className="w-full bg-[#1a1d21] border border-[#2a2d31] rounded-lg px-3 py-2 text-tech-white text-sm focus:outline-none focus:border-violet-500"
@@ -344,9 +360,15 @@ export default function MaintenanceLogsPage() {
                     onChange={(e) => setForm({ ...form, maintenance_type: e.target.value })}
                   >
                     {MAINTENANCE_TYPES.map((t) => (
-                      <option key={t.value} value={t.value}>{t.label}</option>
+                      <option key={t.value} value={t.value} title={t.description}>{t.label}</option>
                     ))}
                   </select>
+                  {(() => {
+                    const selected = MAINTENANCE_TYPES.find((t) => t.value === form.maintenance_type);
+                    return selected?.description ? (
+                      <p className="text-xs text-gunmetal mt-1 leading-relaxed">{selected.description}</p>
+                    ) : null;
+                  })()}
                 </div>
               </div>
 
