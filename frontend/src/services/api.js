@@ -626,5 +626,42 @@ export const getSlicingJob = (id) => api.get(`/slicer/jobs/${id}`);
 /** Elimina un trabajo de laminado por su ID. */
 export const deleteSlicingJob = (id) => api.delete(`/slicer/jobs/${id}`);
 
+// ============================================================================
+// Mantenimiento de impresoras
+// ============================================================================
+
+/** Lista las impresoras registradas en el módulo de mantenimiento. */
+export const getMaintenancePrinters = () => api.get('/maintenance/printers/');
+
+/** Crea una impresora en el módulo de mantenimiento. */
+export const createMaintenancePrinter = (data) => api.post('/maintenance/printers/', data);
+
+/** Actualiza una impresora de mantenimiento (incluye current_hours). */
+export const updateMaintenancePrinter = (id, data) => api.put(`/maintenance/printers/${id}`, data);
+
+/** Elimina una impresora de mantenimiento y todos sus registros. */
+export const deleteMaintenancePrinter = (id) => api.delete(`/maintenance/printers/${id}`);
+
+/**
+ * Lista los registros de mantenimiento.
+ * @param {number|null} printerId - Filtrar por impresora (opcional)
+ */
+export const getMaintenanceLogs = (printerId = null) => {
+  const params = printerId != null ? { printer_id: printerId } : {};
+  return api.get('/maintenance/logs/', { params });
+};
+
+/** Crea un registro de mantenimiento (descuenta inventario automáticamente). */
+export const createMaintenanceLog = (data) => api.post('/maintenance/logs/', data);
+
+/** Obtiene el detalle de un registro de mantenimiento. */
+export const getMaintenanceLog = (id) => api.get(`/maintenance/logs/${id}`);
+
+/** Elimina un registro de mantenimiento. */
+export const deleteMaintenanceLog = (id) => api.delete(`/maintenance/logs/${id}`);
+
+/** Obtiene el resumen de mantenimiento por impresora (dashboard). */
+export const getMaintenanceSummary = () => api.get('/maintenance/summary/');
+
 export default api;
 

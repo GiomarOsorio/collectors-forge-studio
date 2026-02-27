@@ -7,7 +7,7 @@
  * @module config/apps
  */
 
-import { Calculator, Package, Cpu } from 'lucide-react';
+import { Calculator, Package, Cpu, Wrench } from 'lucide-react';
 
 /**
  * @typedef {Object} AppDefinition
@@ -53,5 +53,15 @@ export const APPS = [
     color: '#F59E0B',
     badge: null,
     hidden: true,
+  },
+  {
+    id: 'maintenance',
+    name: 'Mantenimiento',
+    shortDescription: 'Historial de mantenimiento de impresoras',
+    description: 'Registra mantenimientos realizados, items usados y monitorea el estado de salud de tus impresoras.',
+    icon: Wrench,
+    route: '/maintenance/dashboard',
+    color: '#8B5CF6',
+    badge: null,
   },
 ];
