@@ -18,6 +18,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -65,7 +66,7 @@ DATABASE_URL = os.environ.get(
 )
 
 # Intervalo de escaneo automático en minutos (0 = desactivado)
-SCAN_INTERVAL_MINUTES = int(os.environ.get("SCAN_INTERVAL_MINUTES", "60"))
+SCAN_INTERVAL_MINUTES = int(os.environ.get("SCAN_INTERVAL_MINUTES", "300"))
 
 # Mapeo de palabras clave de parcelsapp.com a estados internos
 # Orden importa: se evalúa de más específico a más general
@@ -79,6 +80,63 @@ _STATUS_MAP = [
     # Despachado / etiqueta creada / enviado
     (r"shipped|dispatched|label created|picked up|collected|departure|origin", "despachado"),
 ]
+
+
+async def _human_pause(min_ms: int, max_ms: int) -> None:
+    """
+    Pausa aleatoria dentro del rango dado, simulando tiempos de reacción humanos.
+
+    Rangos de referencia basados en investigación de UX / HCI:
+      - Tiempo de movimiento de mouse (Fitts' Law, promedio 1660ms SD=480ms)
+      - Pausa de lectura antes de scroll (Nielsen/NN Group: 1.5–5s)
+      - Tiempo de reacción antes de un click: 200–500ms
+
+    Args:
+        min_ms: Mínimo en milisegundos.
+        max_ms: Máximo en milisegundos.
+    """
+    delay_s = random.uniform(min_ms, max_ms) / 1000.0
+    await asyncio.sleep(delay_s)
+
+
+async def _simulate_human_browsing(page) -> None:
+    """
+    Simula el comportamiento humano típico al revisar una página de tracking.
+
+    Secuencia:
+      1. Pausa inicial leyendo el encabezado (2–5 s, tiempo de decisión según NNG).
+      2. Movimiento del mouse a zona de contenido (600–2400 ms, Fitts' Law).
+      3. Primer scroll para ver los eventos de tracking (pausa 1.5–4 s).
+      4. 60% de probabilidad de un segundo scroll menor (pausa 0.8–2.5 s).
+      5. Movimiento final del mouse simulando salida de la zona (400–1200 ms).
+
+    Args:
+        page: Instancia de página de Playwright.
+    """
+    # 1. Leer encabezado — tiempo de decisión: 2–5 s (Nielsen NN Group)
+    await _human_pause(2000, 5000)
+
+    # 2. Mover mouse hacia la zona de eventos de tracking
+    #    Fitts' Law: movimiento deliberado a objetivo promedio 1660ms SD=480ms
+    #    → simulamos 600–2400ms
+    target_x = random.randint(300, 900)
+    target_y = random.randint(280, 520)
+    await page.mouse.move(target_x, target_y)
+    await _human_pause(600, 2400)
+
+    # 3. Scroll hacia los eventos (usuario busca la línea de tiempo)
+    scroll_px = random.randint(280, 480)
+    await page.evaluate(f"window.scrollBy(0, {scroll_px})")
+    await _human_pause(1500, 4000)   # lectura activa: 1.5–4 s
+
+    # 4. Segundo scroll opcional (60% de probabilidad)
+    if random.random() < 0.60:
+        await page.evaluate(f"window.scrollBy(0, {random.randint(80, 220)})")
+        await _human_pause(800, 2500)
+
+    # 5. Movimiento final del mouse (salida visual de la zona)
+    await page.mouse.move(random.randint(100, 400), random.randint(100, 300))
+    await _human_pause(400, 1200)
 
 
 def _infer_status(text: str) -> Optional[str]:
@@ -157,6 +215,8 @@ async def _scrape_tracking(tracking_number: str) -> dict:
                 wait_until="networkidle",
                 timeout=30000,
             )
+            # Simular comportamiento humano mientras la página carga el tracking
+            await _simulate_human_browsing(page)
         except Exception:
             pass
 
