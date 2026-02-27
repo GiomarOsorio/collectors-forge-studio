@@ -7,7 +7,7 @@
  * @module config/apps
  */
 
-import { Calculator, Package, Cpu, Wrench } from 'lucide-react';
+import { Calculator, Package, Cpu, Wrench, ListOrdered } from 'lucide-react';
 
 /**
  * @typedef {Object} AppDefinition
@@ -62,6 +62,16 @@ export const APPS = [
     icon: Wrench,
     route: '/maintenance/dashboard',
     color: '#8B5CF6',
+    badge: null,
+  },
+  {
+    id: 'queue',
+    name: 'Queue',
+    shortDescription: 'Cola de impresión',
+    description: 'Gestiona la cola de trabajos de impresión. Marca como impreso para descontar inventario y actualizar horas de impresora.',
+    icon: ListOrdered,
+    route: '/queue/',
+    color: '#14B8A6',
     badge: null,
   },
 ];

@@ -34,6 +34,8 @@
  * - /maintenance/dashboard    → Estado general de mantenimiento (protegida)
  * - /maintenance/logs         → Historial de registros de mantenimiento (protegida)
  * - /maintenance/printers     → Gestión de impresoras de mantenimiento (protegida)
+ * - /queue/                   → Cola de impresión activa (protegida)
+ * - /queue/history            → Historial de trabajos completados/cancelados (protegida)
  *
  * @module App
  */
@@ -73,6 +75,9 @@ import MaintenanceLayout from './components/MaintenanceLayout';
 import MaintenanceDashboardPage from './pages/maintenance/MaintenanceDashboardPage';
 import MaintenanceLogsPage from './pages/maintenance/MaintenanceLogsPage';
 import MaintenancePrintersPage from './pages/maintenance/MaintenancePrintersPage';
+import QueueLayout from './components/QueueLayout';
+import QueuePage from './pages/queue/QueuePage';
+import QueueHistoryPage from './pages/queue/QueueHistoryPage';
 
 /**
  * Componente guardia de ruta privada.
@@ -161,6 +166,12 @@ function AppRoutes() {
         <Route path="dashboard" element={<MaintenanceDashboardPage />} />
         <Route path="logs" element={<MaintenanceLogsPage />} />
         <Route path="printers" element={<MaintenancePrintersPage />} />
+      </Route>
+
+      {/* Aplicación Queue: cola de impresión */}
+      <Route path="/queue" element={<PrivateRoute><QueueLayout /></PrivateRoute>}>
+        <Route index element={<QueuePage />} />
+        <Route path="history" element={<QueueHistoryPage />} />
       </Route>
     </Routes>
   );
