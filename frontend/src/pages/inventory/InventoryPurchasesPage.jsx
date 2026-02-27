@@ -280,7 +280,14 @@ export default function InventoryPurchasesPage() {
             {orders.map((order) => (
               <tr key={order.id} className="tf-tr">
                 <td className="tf-td text-gunmetal font-mono text-sm">#{String(order.id).padStart(3, '0')}</td>
-                <td className="tf-td font-medium text-tech-white">{order.supplier}</td>
+                <td className="tf-td">
+                  <p className="font-medium text-tech-white">{order.supplier}</p>
+                  {order.items?.length > 0 && (
+                    <p className="text-xs text-gunmetal mt-0.5 truncate max-w-[200px]">
+                      {order.items.map((it) => it.name).join(' · ')}
+                    </p>
+                  )}
+                </td>
                 <td className="tf-td hidden sm:table-cell">
                   {order.tracking_number
                     ? <span className="font-mono text-sm text-blue-400">{order.tracking_number}</span>
