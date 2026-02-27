@@ -1,10 +1,15 @@
 """
 Servicio de generación de PDFs de cotización para TurtleForge Cost.
 
-Genera un documento PDF orientado al cliente con formato profesional:
-encabezado con logo, bloque de cliente, número de cotización, fechas de
-emisión y vencimiento (30 días), tabla de ítems con precio unitario e
-importe en COP (o USD como respaldo) y sección de totales.
+Genera documentos PDF con diseño de marca The Collector's Forge: tipografía
+Trajan Pro, paleta Carbón / Hierro / Bronce / Rojo Forja / Dorado, encabezado
+con logo y línea decorativa bronce, tabla de ítems con cabecera oscura y fila
+de total en rojo forja.
+
+Soporta dos tipos de cotización:
+    - TFC-XXXX: cotizaciones de costo de impresión (generate_quote_pdf).
+    - COT-XXXX: cotizaciones de cliente multi-producto (generate_client_quote_pdf),
+                con soporte opcional de IVA (include_iva / iva_percent).
 
 El documento se genera en memoria usando un buffer BytesIO.
 """
@@ -12,34 +17,56 @@ El documento se genera en memoria usando un buffer BytesIO.
 import io
 import json
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
+from typing import Optional
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
-    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image,
+    HRFlowable, Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
 )
-
-from typing import Optional
 
 from app.models.company import Company
 from app.models.quote import Quote
 from app.models.client_quote import ClientQuote
 
-# Logo por defecto: backend/app/static/logo.png (1536×1024 px, aspect 1.5)
-LOGO_PATH = Path(__file__).parent.parent / "static" / "logo.png"
+# ── Rutas de recursos estáticos ───────────────────────────────────────────────
+LOGO_PATH  = Path(__file__).parent.parent / "static" / "logo.png"
+_FONTS_DIR = Path(__file__).parent.parent / "static" / "fonts"
 
-# ── Paleta de colores ─────────────────────────────────────────────────────────
-_DARK    = colors.HexColor("#1f2937")   # texto / fondo header de tabla
-_GRAY    = colors.HexColor("#6b7280")   # texto secundario
-_BORDER  = colors.HexColor("#d1d5db")   # bordes
-_ROW_ALT = colors.HexColor("#f9fafb")   # fondo fila de ítem
-_GRN_BG  = colors.HexColor("#f0fdf4")   # fondo fila Total
-_GRN_TXT = colors.HexColor("#166534")   # texto fila Total
+# ── Registro de fuentes Trajan Pro ────────────────────────────────────────────
+# Fallback a Helvetica si los archivos no están disponibles.
+_FONT_REGULAR = "Helvetica"
+_FONT_BOLD    = "Helvetica-Bold"
 
-# Comandos de estilo comunes para tablas sin padding exterior
+try:
+    pdfmetrics.registerFont(TTFont("Trajan", str(_FONTS_DIR / "TrajanPro-Regular.ttf")))
+    _FONT_REGULAR = "Trajan"
+except Exception:
+    pass
+
+try:
+    pdfmetrics.registerFont(TTFont("Trajan-Bold", str(_FONTS_DIR / "TrajanPro-Bold.otf")))
+    _FONT_BOLD = "Trajan-Bold"
+except Exception:
+    pass
+
+# ── Paleta de marca The Collector's Forge ─────────────────────────────────────
+_CARBON    = colors.HexColor("#1A1A1A")   # Negro Carbón     — fondo oscuro, texto principal
+_IRON      = colors.HexColor("#3C3C3C")   # Hierro Oscuro    — texto secundario
+_BRONZE    = colors.HexColor("#B67E3A")   # Bronce Envejecido — líneas decorativas, acentos
+_FORGE_RED = colors.HexColor("#A33221")   # Rojo Forja       — fila total
+_GOLD      = colors.HexColor("#D1A054")   # Dorado Tenue     — texto en cabecera tabla
+_CREAM     = colors.HexColor("#FDF8F0")   # Crema            — fondo alterno de filas
+_SEPARATOR = colors.HexColor("#E8E4DF")   # Separador suave  — bordes de tabla
+_WHITE     = colors.white
+
+# Padding nulo para tablas de layout sin sangría
 _NO_PAD = [
     ("VALIGN",        (0, 0), (-1, -1), "TOP"),
     ("LEFTPADDING",   (0, 0), (-1, -1), 0),
@@ -70,7 +97,7 @@ def _make_doc(buffer: io.BytesIO) -> SimpleDocTemplate:
 
 def _make_styles(suffix: str = "") -> dict:
     """
-    Crea los estilos tipográficos comunes para los PDFs.
+    Crea los estilos tipográficos con la paleta de marca The Collector's Forge.
 
     Args:
         suffix: Sufijo para evitar conflictos de nombre entre documentos.
@@ -85,43 +112,51 @@ def _make_styles(suffix: str = "") -> dict:
 
     return {
         "base":   base,
-        "sCo":    ps("Co",    fontSize=13, fontName="Helvetica-Bold", textColor=_DARK,    alignment=2),
-        "sCoS":   ps("CoS",   fontSize=10, fontName="Helvetica",      textColor=_GRAY,    alignment=2),
-        "sCl":    ps("Cl",    fontSize=11, fontName="Helvetica-Bold", textColor=_DARK,    alignment=2),
-        "sClS":   ps("ClS",   fontSize=9,  fontName="Helvetica",      textColor=_GRAY,    alignment=2),
-        "sTit":   ps("Tit",   fontSize=22, fontName="Helvetica-Bold", textColor=_DARK),
-        "sILab":  ps("ILab",  fontSize=9,  fontName="Helvetica-Bold", textColor=_GRAY),
-        "sIVal":  ps("IVal",  fontSize=10, fontName="Helvetica",      textColor=_DARK),
-        "sTH":    ps("TH",    fontSize=9,  fontName="Helvetica-Bold", textColor=colors.white),
-        "sTHR":   ps("THR",   fontSize=9,  fontName="Helvetica-Bold", textColor=colors.white,   alignment=2),
-        "sTC":    ps("TC",    fontSize=10, fontName="Helvetica",      textColor=_DARK),
-        "sTCR":   ps("TCR",   fontSize=10, fontName="Helvetica",      textColor=_DARK,    alignment=2),
-        "sTotL":  ps("TotL",  fontSize=10, fontName="Helvetica",      textColor=_DARK,    alignment=2),
-        "sTotV":  ps("TotV",  fontSize=10, fontName="Helvetica",      textColor=_DARK,    alignment=2),
-        "sTBL":   ps("TBL",   fontSize=12, fontName="Helvetica-Bold", textColor=_GRN_TXT, alignment=2),
-        "sTBV":   ps("TBV",   fontSize=12, fontName="Helvetica-Bold", textColor=_GRN_TXT, alignment=2),
-        "sNote":  ps("Note",  fontSize=8,  fontName="Helvetica",      textColor=_GRAY),
-        "sNoteR": ps("NoteR", fontSize=8,  fontName="Helvetica",      textColor=_GRAY,    alignment=2),
-        "sTermT": ps("TermT", fontSize=8,  fontName="Helvetica-Bold", textColor=_DARK),
-        "sTermI": ps("TermI", fontSize=8,  fontName="Helvetica",      textColor=_GRAY),
+        # Encabezado empresa
+        "sCo":    ps("Co",    fontSize=14, fontName=_FONT_BOLD,        textColor=_CARBON,    alignment=2),
+        "sCoS":   ps("CoS",   fontSize=9,  fontName="Helvetica",       textColor=_IRON,      alignment=2),
+        # Bloque cliente
+        "sCl":    ps("Cl",    fontSize=11, fontName=_FONT_BOLD,        textColor=_CARBON,    alignment=2),
+        "sClS":   ps("ClS",   fontSize=9,  fontName="Helvetica",       textColor=_IRON,      alignment=2),
+        # Título cotización
+        "sTit":   ps("Tit",   fontSize=20, fontName=_FONT_BOLD,        textColor=_CARBON),
+        # Bloque fechas
+        "sILab":  ps("ILab",  fontSize=8,  fontName="Helvetica-Bold",  textColor=_IRON),
+        "sIVal":  ps("IVal",  fontSize=10, fontName="Helvetica",       textColor=_CARBON),
+        # Cabecera tabla ítems (texto dorado sobre fondo carbón)
+        "sTH":    ps("TH",    fontSize=9,  fontName=_FONT_BOLD,        textColor=_GOLD),
+        "sTHR":   ps("THR",   fontSize=9,  fontName=_FONT_BOLD,        textColor=_GOLD,      alignment=2),
+        # Celdas de datos
+        "sTC":    ps("TC",    fontSize=9,  fontName="Helvetica",       textColor=_CARBON),
+        "sTCR":   ps("TCR",   fontSize=9,  fontName="Helvetica",       textColor=_CARBON,    alignment=2),
+        # Totales — fila subtotal
+        "sTotL":  ps("TotL",  fontSize=9,  fontName="Helvetica",       textColor=_CARBON,    alignment=2),
+        "sTotV":  ps("TotV",  fontSize=9,  fontName="Helvetica",       textColor=_CARBON,    alignment=2),
+        # Totales — fila IVA
+        "sIvaL":  ps("IvaL",  fontSize=9,  fontName="Helvetica",       textColor=_IRON,      alignment=2),
+        "sIvaV":  ps("IvaV",  fontSize=9,  fontName="Helvetica",       textColor=_IRON,      alignment=2),
+        # Totales — fila Total (fondo rojo forja, texto blanco)
+        "sTBL":   ps("TBL",   fontSize=11, fontName=_FONT_BOLD,        textColor=_WHITE,     alignment=2),
+        "sTBV":   ps("TBV",   fontSize=11, fontName=_FONT_BOLD,        textColor=_WHITE,     alignment=2),
+        # Notas y pie de página
+        "sNote":  ps("Note",  fontSize=8,  fontName="Helvetica",       textColor=_IRON),
+        "sNoteR": ps("NoteR", fontSize=8,  fontName="Helvetica",       textColor=_IRON,      alignment=2),
+        "sTermT": ps("TermT", fontSize=8,  fontName="Helvetica-Bold",  textColor=_CARBON),
+        "sTermI": ps("TermI", fontSize=8,  fontName="Helvetica",       textColor=_IRON),
     }
 
 
 def _build_header(st: dict, company: Optional["Company"] = None) -> list:
     """
-    Construye el encabezado del PDF: logo (izq.) + empresa (der.).
-
-    Usa los datos del perfil de empresa si están disponibles.
-    Cae al logo estático y nombre genérico si no hay empresa configurada.
+    Construye el encabezado del PDF: logo (izq.) + empresa (der.) + línea bronce.
 
     Args:
         st:      Diccionario de estilos generado por _make_styles().
         company: Instancia ORM de Company (opcional).
 
     Returns:
-        Lista de elementos ReportLab (tabla + spacer).
+        Lista de elementos ReportLab (tabla + separador + spacer).
     """
-    # Determinar ruta del logo
     logo_path: Optional[Path] = None
     if company and company.logo_url:
         candidate = Path("/app") / company.logo_url.lstrip("/")
@@ -149,7 +184,11 @@ def _build_header(st: dict, company: Optional["Company"] = None) -> list:
         colWidths=[1.9 * inch, 2.2 * inch, 2.4 * inch],
     )
     hdr_tbl.setStyle(TableStyle(_NO_PAD))
-    return [hdr_tbl, Spacer(1, 20)]
+    return [
+        hdr_tbl,
+        Spacer(1, 10),
+        HRFlowable(width="100%", thickness=1.5, color=_BRONZE, spaceAfter=10),
+    ]
 
 
 def _build_client_block(name: str, description: Optional[str], st: dict) -> list:
@@ -178,25 +217,35 @@ def _build_client_block(name: str, description: Optional[str], st: dict) -> list
     return [client_tbl, Spacer(1, 18)]
 
 
-def _build_totals(L: float, R1: float, R2: float, subtotal_str: str, st: dict) -> Table:
+def _build_totals(
+    L: float, R1: float, R2: float,
+    subtotal_str: str, st: dict,
+    iva_str: str = "No Aplica",
+    total_str: Optional[str] = None,
+) -> Table:
     """
-    Construye la tabla de totales (Subtotal / Sin IVA / Total).
+    Construye la tabla de totales (Subtotal / IVA / Total).
 
     Args:
-        L:           Ancho de la celda vacía izquierda.
-        R1:          Ancho de la columna de etiquetas.
-        R2:          Ancho de la columna de valores.
-        subtotal_str: Valor formateado del subtotal/total.
-        st:          Diccionario de estilos.
+        L:            Ancho de la celda vacía izquierda.
+        R1:           Ancho de la columna de etiquetas.
+        R2:           Ancho de la columna de valores.
+        subtotal_str: Valor formateado del subtotal.
+        st:           Diccionario de estilos.
+        iva_str:      Texto del IVA: "No Aplica" o valor formateado.
+        total_str:    Valor formateado del total. Si None, usa subtotal_str.
 
     Returns:
         Tabla de totales ReportLab.
     """
+    if total_str is None:
+        total_str = subtotal_str
+
     tot_tbl = Table(
         [
-            ["", Paragraph("Subtotal", st["sTotL"]),  Paragraph(subtotal_str, st["sTotV"])],
-            ["", Paragraph("Sin IVA",  st["sNoteR"]), Paragraph("—",          st["sNoteR"])],
-            ["", Paragraph("Total",    st["sTBL"]),   Paragraph(subtotal_str, st["sTBV"])],
+            ["", Paragraph("Subtotal",  st["sTotL"]), Paragraph(subtotal_str, st["sTotV"])],
+            ["", Paragraph("IVA",       st["sIvaL"]), Paragraph(iva_str,      st["sIvaV"])],
+            ["", Paragraph("Total",     st["sTBL"]),  Paragraph(total_str,    st["sTBV"])],
         ],
         colWidths=[L, R1, R2],
     )
@@ -204,14 +253,14 @@ def _build_totals(L: float, R1: float, R2: float, subtotal_str: str, st: dict) -
         ("ALIGN",         (1, 0), (-1, -1), "RIGHT"),
         ("TOPPADDING",    (0, 0), (-1, -1), 5),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ("LEFTPADDING",   (1, 0), (-1, -1), 8),
-        ("RIGHTPADDING",  (1, 0), (-1, -1), 8),
-        ("LEFTPADDING",   (0, 0), (0, -1), 0),
-        ("RIGHTPADDING",  (0, 0), (0, -1), 0),
-        ("GRID",          (1, 0), (-1, 1), 0.5, _BORDER),
-        ("LINEABOVE",     (1, 2), (-1, 2), 0.8, _BORDER),
-        ("BOX",           (1, 2), (-1, 2), 0.5, _BORDER),
-        ("BACKGROUND",    (1, 2), (-1, 2), _GRN_BG),
+        ("LEFTPADDING",   (1, 0), (-1, -1), 10),
+        ("RIGHTPADDING",  (1, 0), (-1, -1), 10),
+        ("LEFTPADDING",   (0, 0), (0, -1),  0),
+        ("RIGHTPADDING",  (0, 0), (0, -1),  0),
+        ("GRID",          (1, 0), (-1, 1), 0.5, _SEPARATOR),
+        ("LINEABOVE",     (1, 2), (-1, 2), 1.0, _BRONZE),
+        ("BOX",           (1, 2), (-1, 2), 0.5, _SEPARATOR),
+        ("BACKGROUND",    (1, 2), (-1, 2), _FORGE_RED),
     ]))
     return tot_tbl
 
@@ -234,13 +283,27 @@ def _build_footer(notes: Optional[str], st: dict) -> list:
     elems += [
         Paragraph("Términos de pago y envío:", st["sTermT"]),
         Spacer(1, 4),
-        Paragraph("• Una vez aprobada la cotización, el cliente debe realizar el pago del 50% del monto total.", st["sTermI"]),
-        Paragraph("• Antes de realizar el envío, el cliente debe cancelar el 50% restante.", st["sTermI"]),
-        Paragraph("• No se despacha ningún pedido sin haber recibido el pago completo correspondiente.", st["sTermI"]),
-        Paragraph("• Los gastos de envío corren por cuenta del cliente.", st["sTermI"]),
-        Spacer(1, 12),
         Paragraph(
-            f"Cotización generada el {datetime.now(timezone.utc).strftime('%d-%m-%Y')} · TurtleForge Cost · Medellín, Colombia",
+            "• Una vez aprobada la cotización, el cliente debe realizar el pago del 50% del monto total.",
+            st["sTermI"],
+        ),
+        Paragraph(
+            "• Antes de realizar el envío, el cliente debe cancelar el 50% restante.",
+            st["sTermI"],
+        ),
+        Paragraph(
+            "• No se despacha ningún pedido sin haber recibido el pago completo correspondiente.",
+            st["sTermI"],
+        ),
+        Paragraph(
+            "• Los gastos de envío corren por cuenta del cliente.",
+            st["sTermI"],
+        ),
+        Spacer(1, 12),
+        HRFlowable(width="100%", thickness=0.5, color=_BRONZE, spaceAfter=6),
+        Paragraph(
+            f"Cotización generada el {datetime.now(timezone.utc).strftime('%d-%m-%Y')}"
+            f" · TurtleForge Cost · Medellín, Colombia",
             st["sNote"],
         ),
     ]
@@ -249,14 +312,16 @@ def _build_footer(notes: Optional[str], st: dict) -> list:
 
 def generate_quote_pdf(quote: Quote, company: Optional["Company"] = None) -> bytes:
     """
-    Genera el PDF de una cotización en formato profesional TurtleForge Cost.
+    Genera el PDF de una cotización TFC-XXXX con diseño de marca The Collector's Forge.
 
-    El documento incluye: encabezado con logo, bloque de cliente (si aplica),
-    número de cotización TFC-XXXX, fechas de emisión y vencimiento, tabla de
-    ítems con precio unitario e importe, y sección de totales con nota sin IVA.
+    El documento incluye: encabezado con logo y línea bronce, bloque de cliente
+    (si aplica), número TFC-XXXX en Trajan Pro, fechas de emisión y vencimiento,
+    tabla de ítems con cabecera dorada sobre carbón, y sección de totales con
+    IVA "No Aplica" en fila rojo forja.
 
     Args:
-        quote: Instancia ORM de la cotización con todos los costos calculados.
+        quote:   Instancia ORM de Quote con todos los costos calculados.
+        company: Instancia ORM de Company (opcional, para logo y datos de empresa).
 
     Returns:
         bytes: Contenido binario del PDF listo para enviarse como respuesta HTTP
@@ -284,7 +349,7 @@ def generate_quote_pdf(quote: Quote, company: Optional["Company"] = None) -> byt
     info_tbl = Table(
         [[
             [Paragraph("Fecha de cotización:", st["sILab"]), Paragraph(fecha_str, st["sIVal"])],
-            [Paragraph("Vencimiento:", st["sILab"]),          Paragraph(venc_str,  st["sIVal"])],
+            [Paragraph("Vencimiento:", st["sILab"]),         Paragraph(venc_str,  st["sIVal"])],
         ]],
         colWidths=[3.25 * inch, 3.25 * inch],
     )
@@ -303,18 +368,26 @@ def generate_quote_pdf(quote: Quote, company: Optional["Company"] = None) -> byt
 
     items_tbl = Table(
         [
-            [Paragraph("DESCRIPCIÓN",    st["sTH"]),  Paragraph("CANTIDAD",        st["sTH"]),
-             Paragraph("PRECIO UNITARIO", st["sTH"]),  Paragraph("IMPORTE",         st["sTHR"])],
-            [Paragraph(quote.piece_name, st["sTC"]),  Paragraph(qty_lbl,           st["sTC"]),
-             Paragraph(fmt(u_price),     st["sTC"]),  Paragraph(fmt(t_price),      st["sTCR"])],
+            [
+                Paragraph("DESCRIPCIÓN",     st["sTH"]),
+                Paragraph("CANTIDAD",         st["sTH"]),
+                Paragraph("PRECIO UNITARIO",  st["sTH"]),
+                Paragraph("IMPORTE",          st["sTHR"]),
+            ],
+            [
+                Paragraph(quote.piece_name, st["sTC"]),
+                Paragraph(qty_lbl,          st["sTC"]),
+                Paragraph(fmt(u_price),     st["sTC"]),
+                Paragraph(fmt(t_price),     st["sTCR"]),
+            ],
         ],
         colWidths=cols,
     )
     items_tbl.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, 0), _DARK),
+        ("BACKGROUND",    (0, 0), (-1, 0), _CARBON),
         ("ALIGN",         (2, 0), (-1, -1), "RIGHT"),
-        ("BACKGROUND",    (0, 1), (-1, 1), _ROW_ALT),
-        ("GRID",          (0, 0), (-1, -1), 0.5, _BORDER),
+        ("BACKGROUND",    (0, 1), (-1, 1), _CREAM),
+        ("GRID",          (0, 0), (-1, -1), 0.5, _SEPARATOR),
         ("TOPPADDING",    (0, 0), (-1, -1), 8),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
         ("LEFTPADDING",   (0, 0), (-1, -1), 8),
@@ -327,7 +400,7 @@ def generate_quote_pdf(quote: Quote, company: Optional["Company"] = None) -> byt
     L  = cols[0] + cols[1]
     R1 = cols[2]
     R2 = cols[3]
-    elements.append(_build_totals(L, R1, R2, fmt(t_price), st))
+    elements.append(_build_totals(L, R1, R2, fmt(t_price), st, "No Aplica", fmt(t_price)))
     elements.append(Spacer(1, 24))
 
     # ── 7. PIE DE PÁGINA ──────────────────────────────────────────────────────
@@ -337,16 +410,22 @@ def generate_quote_pdf(quote: Quote, company: Optional["Company"] = None) -> byt
     return buffer.getvalue()
 
 
-def generate_client_quote_pdf(client_quote: ClientQuote, company: Optional["Company"] = None, usd_rate: float = 1.0) -> bytes:
+def generate_client_quote_pdf(
+    client_quote: ClientQuote,
+    company: Optional["Company"] = None,
+    usd_rate: float = 1.0,
+) -> bytes:
     """
-    Genera el PDF de una cotización de cliente multi-producto.
+    Genera el PDF de una cotización de cliente multi-producto COT-XXXX.
 
-    El documento incluye: encabezado con logo, bloque de cliente, número COT-XXXX,
-    fechas de emisión y vencimiento, tabla de ítems con cantidad, precio unitario
-    e importe, sección de totales y términos de pago.
+    Soporta IVA opcional: si client_quote.include_iva es True, calcula el
+    importe de IVA usando client_quote.iva_percent y lo muestra en la fila IVA;
+    de lo contrario muestra "No Aplica".
 
     Args:
         client_quote: Instancia ORM de ClientQuote con los datos de la cotización.
+        company:      Instancia ORM de Company (opcional, para logo y empresa).
+        usd_rate:     Tasa USD→COP para convertir precios de ítems.
 
     Returns:
         bytes: Contenido binario del PDF listo para enviarse como respuesta HTTP.
@@ -397,17 +476,17 @@ def generate_client_quote_pdf(client_quote: ClientQuote, company: Optional["Comp
         unit_p   = item["unit_price"] * usd_rate
         line_tot = qty * unit_p
         rows.append([
-            Paragraph(item["name"],        st["sTC"]),
-            Paragraph(str(qty),            st["sTC"]),
-            Paragraph(_fmt_cop(unit_p),    st["sTC"]),
-            Paragraph(_fmt_cop(line_tot),  st["sTCR"]),
+            Paragraph(item["name"],       st["sTC"]),
+            Paragraph(str(qty),           st["sTC"]),
+            Paragraph(_fmt_cop(unit_p),   st["sTC"]),
+            Paragraph(_fmt_cop(line_tot), st["sTCR"]),
         ])
 
     items_tbl = Table(rows, colWidths=cols)
     style_cmds = [
-        ("BACKGROUND",    (0, 0), (-1, 0), _DARK),
+        ("BACKGROUND",    (0, 0), (-1, 0), _CARBON),
         ("ALIGN",         (1, 0), (-1, -1), "RIGHT"),
-        ("GRID",          (0, 0), (-1, -1), 0.5, _BORDER),
+        ("GRID",          (0, 0), (-1, -1), 0.5, _SEPARATOR),
         ("TOPPADDING",    (0, 0), (-1, -1), 8),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
         ("LEFTPADDING",   (0, 0), (-1, -1), 8),
@@ -415,17 +494,29 @@ def generate_client_quote_pdf(client_quote: ClientQuote, company: Optional["Comp
     ]
     for idx in range(len(items)):
         if idx % 2 == 0:
-            style_cmds.append(("BACKGROUND", (0, idx + 1), (-1, idx + 1), _ROW_ALT))
+            style_cmds.append(("BACKGROUND", (0, idx + 1), (-1, idx + 1), _CREAM))
     items_tbl.setStyle(TableStyle(style_cmds))
     elements.append(items_tbl)
     elements.append(Spacer(1, 2))
 
-    # ── 6. TOTALES ────────────────────────────────────────────────────────────
+    # ── 6. TOTALES con IVA opcional ───────────────────────────────────────────
     L  = cols[0] + cols[1]
     R1 = cols[2]
     R2 = cols[3]
     subtotal_val = float(client_quote.subtotal) * usd_rate
-    elements.append(_build_totals(L, R1, R2, _fmt_cop(subtotal_val), st))
+    include_iva  = bool(getattr(client_quote, "include_iva", False))
+    iva_percent  = float(getattr(client_quote, "iva_percent", Decimal("19.00")))
+
+    if include_iva:
+        iva_amount = subtotal_val * iva_percent / 100
+        iva_str    = _fmt_cop(iva_amount)
+        total_val  = subtotal_val + iva_amount
+        total_str  = _fmt_cop(total_val)
+    else:
+        iva_str   = "No Aplica"
+        total_str = _fmt_cop(subtotal_val)
+
+    elements.append(_build_totals(L, R1, R2, _fmt_cop(subtotal_val), st, iva_str, total_str))
     elements.append(Spacer(1, 24))
 
     # ── 7. PIE DE PÁGINA ──────────────────────────────────────────────────────

@@ -13,7 +13,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createClientQuote, getPrintedItems } from '../services/api';
 import toast from 'react-hot-toast';
-import { FileEdit, Plus, Trash2, Package, X } from 'lucide-react';
+import { FileEdit, Plus, Trash2, Package, X, ToggleLeft, ToggleRight } from 'lucide-react';
 
 /**
  * Retorna la fecha de hoy en formato YYYY-MM-DD para el input type="date".
@@ -60,6 +60,11 @@ export default function ManualQuotePage() {
     expiry_days: '15',
     notes: '',
   });
+
+  /** @type {[boolean, Function]} Activar IVA en la cotización */
+  const [includeIva, setIncludeIva] = useState(false);
+  /** @type {[string, Function]} Porcentaje de IVA */
+  const [ivaPercent, setIvaPercent] = useState('19.00');
 
   /** @type {[Array, Function]} Líneas de producto */
   const [items, setItems] = useState([
@@ -118,6 +123,9 @@ export default function ManualQuotePage() {
     return sum + qty * price;
   }, 0);
 
+  const ivaAmount = includeIva ? subtotal * (parseFloat(ivaPercent) || 0) / 100 : 0;
+  const totalConIva = subtotal + ivaAmount;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -138,6 +146,8 @@ export default function ManualQuotePage() {
           quantity: parseInt(it.quantity) || 1,
           unit_price: parseFloat(it.unit_price) || 0,
         })),
+        include_iva: includeIva,
+        iva_percent: parseFloat(ivaPercent) || 19.0,
         notes: form.notes || null,
       });
       toast.success('Cotización guardada');
@@ -272,12 +282,61 @@ export default function ManualQuotePage() {
             ))}
           </div>
 
-          {/* Subtotal */}
-          <div className="flex justify-end border-t border-dark-border pt-4">
-            <div className="text-right">
-              <p className="text-sm text-gunmetal">Total cotización (USD)</p>
-              <p className="text-2xl font-bold text-forge-green">$ {subtotal.toFixed(2)}</p>
-              <p className="text-xs text-gunmetal mt-1">Sin IVA</p>
+          {/* Subtotal + IVA toggle */}
+          <div className="border-t border-dark-border pt-4 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+            {/* Toggle IVA */}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setIncludeIva((v) => !v)}
+                className="flex items-center gap-2 text-sm text-gunmetal hover:text-tech-white transition-colors"
+                aria-pressed={includeIva}
+              >
+                {includeIva
+                  ? <ToggleRight size={26} className="text-forge-green" />
+                  : <ToggleLeft size={26} className="text-gunmetal" />}
+                Aplicar IVA
+              </button>
+              {includeIva && (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={ivaPercent}
+                    onChange={(e) => setIvaPercent(e.target.value)}
+                    className="tf-input w-20 text-sm text-right"
+                    aria-label="Porcentaje de IVA"
+                  />
+                  <span className="text-sm text-gunmetal">%</span>
+                </div>
+              )}
+            </div>
+
+            {/* Resumen de totales */}
+            <div className="text-right space-y-1">
+              <div className="flex items-center justify-end gap-4">
+                <p className="text-sm text-gunmetal">Subtotal</p>
+                <p className="text-lg font-semibold text-tech-white w-28">$ {subtotal.toFixed(2)}</p>
+              </div>
+              {includeIva ? (
+                <>
+                  <div className="flex items-center justify-end gap-4">
+                    <p className="text-sm text-gunmetal">IVA ({parseFloat(ivaPercent) || 0}%)</p>
+                    <p className="text-lg font-semibold text-tech-white w-28">$ {ivaAmount.toFixed(2)}</p>
+                  </div>
+                  <div className="flex items-center justify-end gap-4 border-t border-dark-border pt-1 mt-1">
+                    <p className="text-sm text-gunmetal font-medium">Total (USD)</p>
+                    <p className="text-2xl font-bold text-forge-green w-28">$ {totalConIva.toFixed(2)}</p>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-end gap-4">
+                  <p className="text-sm text-gunmetal">IVA</p>
+                  <p className="text-sm text-gunmetal w-28">No Aplica</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

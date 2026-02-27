@@ -41,6 +41,8 @@ class ClientQuoteCreate(BaseModel):
         quote_date:   Fecha de emisión. Si se omite, se usa la fecha actual.
         expiry_days:  Días de vigencia desde quote_date (default 15).
         items:        Lista de líneas de producto (al menos 1).
+        include_iva:  Si se debe incluir IVA en el total (default False).
+        iva_percent:  Porcentaje de IVA (default 19.00). Solo aplica si include_iva=True.
         notes:        Notas adicionales (opcional).
     """
     client_name: str = Field(min_length=1, max_length=200)
@@ -48,6 +50,8 @@ class ClientQuoteCreate(BaseModel):
     quote_date: Optional[date] = None
     expiry_days: int = Field(default=15, ge=1)
     items: List[ClientQuoteLineItem] = Field(min_length=1)
+    include_iva: bool = False
+    iva_percent: DecimalAsFloat = Field(default=Decimal("19.00"), ge=0, le=100)
     notes: Optional[str] = None
 
     @model_validator(mode="after")
@@ -71,6 +75,8 @@ class ClientQuoteResponse(BaseModel):
         expiry_date: Fecha de vencimiento (quote_date + expiry_days).
         items:       Líneas de producto en formato JSON string.
         subtotal:    Suma de (quantity × unit_price) de todos los ítems.
+        include_iva: Si el PDF incluye IVA.
+        iva_percent: Porcentaje de IVA aplicado.
         notes:       Notas adicionales.
         created_at:  Fecha y hora de creación del registro.
     """
@@ -82,6 +88,8 @@ class ClientQuoteResponse(BaseModel):
     expiry_date: date
     items: str
     subtotal: DecimalAsFloat
+    include_iva: bool
+    iva_percent: DecimalAsFloat
     notes: Optional[str]
     created_at: datetime
 
