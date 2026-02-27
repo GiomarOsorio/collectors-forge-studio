@@ -172,7 +172,12 @@ def _patch_3mf_params(src_path: Path) -> tuple:
                                 p + r'(\s*=\s*")' + b + r'"',
                                 param + r'\g<1>' + good + '"', text)
                             total_changes += n
-                            # JSON: "param": bad  (con o sin espacio, sin comillas en valor)
+                            # JSON valor string: "param": "bad"  ← formato real de project_settings.config
+                            text, n = re.subn(
+                                r'"' + p + r'"(\s*:\s*)"' + b + r'"',
+                                '"' + param + r'"\g<1>"' + good + '"', text)
+                            total_changes += n
+                            # JSON valor entero: "param": bad
                             text, n = re.subn(
                                 r'"' + p + r'"(\s*:\s*)' + b + r'(?=[,}\s\n])',
                                 '"' + param + r'"\g<1>' + good, text)
