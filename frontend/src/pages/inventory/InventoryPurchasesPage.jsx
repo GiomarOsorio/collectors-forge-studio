@@ -13,7 +13,7 @@ import toast from 'react-hot-toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import {
   Plus, X, Eye, Trash2, PackageCheck, Truck, Clock, Ban,
-  ShoppingCart, Pencil,
+  ShoppingCart, Pencil, RefreshCw, Loader, SendHorizonal,
 } from 'lucide-react';
 import {
   getPurchaseOrders,
@@ -22,14 +22,17 @@ import {
   deletePurchaseOrder,
   arrivePurchaseOrder,
   getInventoryItems,
+  scanTracking,
 } from '../../services/api';
 
 /** Mapa de colores y etiquetas por estado del pedido */
 const STATUS_CONFIG = {
-  pendiente:   { label: 'Pendiente',    color: 'text-gunmetal',  bg: 'bg-gunmetal/20',   border: 'border-gunmetal/30',   icon: Clock },
-  en_transito: { label: 'En tránsito',  color: 'text-blue-400',  bg: 'bg-blue-500/20',   border: 'border-blue-500/30',   icon: Truck },
-  llegado:     { label: 'Llegado',      color: 'text-green-400', bg: 'bg-green-500/20',  border: 'border-green-500/30',  icon: PackageCheck },
-  cancelado:   { label: 'Cancelado',    color: 'text-red-400',   bg: 'bg-red-500/20',    border: 'border-red-500/30',    icon: Ban },
+  pendiente:   { label: 'No despachado', color: 'text-gunmetal',    bg: 'bg-gunmetal/20',    border: 'border-gunmetal/30',    icon: Clock },
+  despachado:  { label: 'Despachado',    color: 'text-amber-400',   bg: 'bg-amber-400/10',   border: 'border-amber-400/30',   icon: SendHorizonal },
+  en_transito: { label: 'En tránsito',   color: 'text-blue-400',    bg: 'bg-blue-500/20',    border: 'border-blue-500/30',    icon: Truck },
+  entregado:   { label: 'Entregado',     color: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'border-emerald-400/30', icon: PackageCheck },
+  llegado:     { label: 'Recibido',      color: 'text-green-400',   bg: 'bg-green-500/20',   border: 'border-green-500/30',   icon: PackageCheck },
+  cancelado:   { label: 'Cancelado',     color: 'text-red-400',     bg: 'bg-red-500/20',     border: 'border-red-500/30',     icon: Ban },
 };
 
 /** Estado vacío de un ítem del pedido */
@@ -66,6 +69,7 @@ export default function InventoryPurchasesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null); // null = crear, obj = editar
   const [saving, setSaving] = useState(false);
+  const [scanning, setScanning] = useState(false);
 
   /** Estado del formulario de nuevo/editar pedido */
   const [form, setForm] = useState({
@@ -206,16 +210,46 @@ export default function InventoryPurchasesPage() {
     }
   };
 
+  const handleScanTracking = async () => {
+    setScanning(true);
+    const tid = toast.loading('Consultando tracking en parcelsapp.com… (puede tardar varios minutos)');
+    try {
+      const res = await scanTracking();
+      const { scanned, updated, errors } = res.data;
+      toast.dismiss(tid);
+      toast.success(`Tracking actualizado: ${scanned} pedidos revisados, ${updated} actualizados${errors ? `, ${errors} errores` : ''}`);
+      load();
+    } catch {
+      toast.dismiss(tid);
+      toast.error('Error al actualizar tracking. ¿Está el servicio activo?');
+    } finally {
+      setScanning(false);
+    }
+  };
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h2 className="tf-page-title mb-0">Pedidos de Compra</h2>
           <p className="text-sm text-gunmetal mt-1">Tracking de compras en Amazon, Delbex y otros</p>
         </div>
-        <button onClick={openCreate} className="tf-btn-primary gap-2" style={{ backgroundColor: '#3B82F6', borderColor: '#3B82F6' }}>
-          <Plus size={18} /> Nuevo pedido
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleScanTracking}
+            disabled={scanning}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#2a2d31] text-steel hover:text-tech-white hover:border-[#3a3d41] transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Consulta parcelsapp.com para todos los pedidos activos"
+          >
+            {scanning
+              ? <Loader size={14} className="animate-spin" />
+              : <RefreshCw size={14} />}
+            Actualizar tracking
+          </button>
+          <button onClick={openCreate} className="tf-btn-primary gap-2" style={{ backgroundColor: '#3B82F6', borderColor: '#3B82F6' }}>
+            <Plus size={18} /> Nuevo pedido
+          </button>
+        </div>
       </div>
 
       {/* Tabla de pedidos */}
@@ -306,13 +340,53 @@ export default function InventoryPurchasesPage() {
                 {selected.carrier && <span className="text-steel">{selected.carrier}</span>}
               </div>
               {selected.tracking_number && (
-                <div className="bg-[#0d1014] rounded-lg px-3 py-2 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-gunmetal">Número de tracking</p>
-                    <p className="font-mono text-blue-400 font-medium">{selected.tracking_number}</p>
-                  </div>
+                <div className="bg-[#0d1014] rounded-lg px-3 py-2">
+                  <p className="text-xs text-gunmetal mb-0.5">Número de tracking</p>
+                  <p className="font-mono text-blue-400 font-medium">{selected.tracking_number}</p>
+                  {selected.tracking_checked_at && (
+                    <p className="text-xs text-gunmetal mt-1">
+                      Última consulta: {new Date(selected.tracking_checked_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}
+                    </p>
+                  )}
                 </div>
               )}
+              {selected.tracking_data && (() => {
+                try {
+                  const data = JSON.parse(selected.tracking_data);
+                  const events = data.events || data.checkpoints || data.states || [];
+                  const rawText = data.raw_text;
+                  if (events.length > 0) {
+                    return (
+                      <div>
+                        <p className="text-xs text-gunmetal font-medium uppercase tracking-wider mb-2">Eventos de tracking</p>
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                          {events.slice(0, 10).map((ev, i) => (
+                            <div key={i} className="flex gap-2 text-xs">
+                              <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 shrink-0" />
+                              <div>
+                                <p className="text-tech-white">{ev.description || ev.message || ev.title || ev.status || JSON.stringify(ev)}</p>
+                                {(ev.date || ev.time || ev.timestamp) && (
+                                  <p className="text-gunmetal">{ev.date || ev.time || ev.timestamp}</p>
+                                )}
+                                {ev.location && <p className="text-gunmetal">{ev.location}</p>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+                  if (rawText) {
+                    return (
+                      <div>
+                        <p className="text-xs text-gunmetal font-medium uppercase tracking-wider mb-2">Info de tracking</p>
+                        <pre className="text-xs text-steel bg-[#0d1014] rounded-lg p-3 max-h-40 overflow-y-auto whitespace-pre-wrap">{rawText.slice(0, 1500)}</pre>
+                      </div>
+                    );
+                  }
+                } catch { /* JSON inválido, ignorar */ }
+                return null;
+              })()}
               <div className="flex gap-4 text-xs text-gunmetal">
                 <span>Creado: <span className="text-tech-white">{fmt(selected.created_at)}</span></span>
                 {selected.estimated_arrival && (

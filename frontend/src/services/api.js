@@ -529,6 +529,9 @@ export const deletePurchaseOrder = (id) => api.delete(`/inventory/purchases/${id
 /** Marca un pedido como llegado y actualiza el stock de inventario. */
 export const arrivePurchaseOrder = (id) => api.post(`/inventory/purchases/${id}/arrive`);
 
+/** Lanza el escaneo masivo de tracking en el microservicio tracker. */
+export const scanTracking = () => api.post('/inventory/purchases/scan-tracking');
+
 // ============================================================
 // Impresiones (Printed Items)
 // ============================================================

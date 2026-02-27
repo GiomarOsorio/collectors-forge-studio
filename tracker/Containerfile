@@ -1,0 +1,17 @@
+FROM python:3.11-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Instalar Chromium para Playwright (headless scraping)
+RUN python3 -m playwright install chromium --with-deps
+
+COPY app.py .
+
+EXPOSE 8002
+
+CMD ["python3", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8002"]
