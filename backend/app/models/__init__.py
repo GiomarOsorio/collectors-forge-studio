@@ -35,10 +35,12 @@ from app.models.inventory import InventoryItem
 from app.models.purchase_order import PurchaseOrder, PurchaseOrderItem
 from app.models.slicing_job import SlicingJob
 from app.models.printed_item import PrintedItem
+from app.models.maintenance import MaintenancePrinter, MaintenanceLog, MaintenanceLogItem
 
 __all__ = [
     "Company", "User", "Filament", "Printer", "AppSettings",
     "Quote", "ClientQuote", "Supply", "ElectricityTariff",
     "InventoryItem", "PurchaseOrder", "PurchaseOrderItem",
     "SlicingJob", "PrintedItem",
+    "MaintenancePrinter", "MaintenanceLog", "MaintenanceLogItem",
 ]

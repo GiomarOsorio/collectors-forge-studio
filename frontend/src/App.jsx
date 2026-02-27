@@ -31,6 +31,9 @@
  * - /inventory/io             → Importar / Exportar inventario (protegida)
  * - /slicer/upload            → Subir modelo STL / .gcode / .3mf o URL MakerWorld (protegida)
  * - /slicer/history           → Historial de trabajos de laminado (protegida)
+ * - /maintenance/dashboard    → Estado general de mantenimiento (protegida)
+ * - /maintenance/logs         → Historial de registros de mantenimiento (protegida)
+ * - /maintenance/printers     → Gestión de impresoras de mantenimiento (protegida)
  *
  * @module App
  */
@@ -66,6 +69,10 @@ import InventoryPrintsPage from './pages/inventory/InventoryPrintsPage';
 import InventoryImportExportPage from './pages/inventory/InventoryImportExportPage';
 import SlicerUploadPage from './pages/slicer/SlicerUploadPage';
 import SlicerHistoryPage from './pages/slicer/SlicerHistoryPage';
+import MaintenanceLayout from './components/MaintenanceLayout';
+import MaintenanceDashboardPage from './pages/maintenance/MaintenanceDashboardPage';
+import MaintenanceLogsPage from './pages/maintenance/MaintenanceLogsPage';
+import MaintenancePrintersPage from './pages/maintenance/MaintenancePrintersPage';
 
 /**
  * Componente guardia de ruta privada.
@@ -146,6 +153,14 @@ function AppRoutes() {
         <Route index element={<Navigate to="/slicer/upload" replace />} />
         <Route path="upload" element={<SlicerUploadPage />} />
         <Route path="history" element={<SlicerHistoryPage />} />
+      </Route>
+
+      {/* Aplicación Mantenimiento: historial de mantenimiento de impresoras */}
+      <Route path="/maintenance" element={<PrivateRoute><MaintenanceLayout /></PrivateRoute>}>
+        <Route index element={<Navigate to="/maintenance/dashboard" replace />} />
+        <Route path="dashboard" element={<MaintenanceDashboardPage />} />
+        <Route path="logs" element={<MaintenanceLogsPage />} />
+        <Route path="printers" element={<MaintenancePrintersPage />} />
       </Route>
     </Routes>
   );

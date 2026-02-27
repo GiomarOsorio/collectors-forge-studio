@@ -34,6 +34,7 @@ from app.routers import (
 )
 from app.routers.company import router as company_router
 from app.routers.users import router as users_router
+from app.routers.maintenance import router as maintenance_router
 
 # UUID fijo de la empresa por defecto — coincide con la migración f4a1b9c2d8e7
 DEFAULT_COMPANY_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
@@ -97,6 +98,7 @@ app.include_router(slicer.router)
 app.include_router(printed_items.router)
 app.include_router(company_router)
 app.include_router(users_router)
+app.include_router(maintenance_router)
 
 # Archivos estáticos: imágenes de ítems de impresión y otros recursos subidos
 app.mount("/static", StaticFiles(directory="/app/static", check_dir=False), name="static")
