@@ -55,11 +55,15 @@ const STATUS_CONFIG = {
 
 /**
  * Chip de tipo de mantenimiento con estado visual.
+ * Si el tipo tiene wiki_url, el chip es un enlace que abre el wiki en nueva pestaña.
+ * La descripción del tipo se muestra como tooltip (title).
  */
 function MaintenanceTypeChip({ typeValue, lastEntry, currentHours }) {
   const typeDef = getMaintenanceType(typeValue);
   const label = typeDef?.label ?? typeValue;
   const intervalHours = typeDef?.interval_hours ?? null;
+  const wikiUrl = typeDef?.wiki_url ?? null;
+  const description = typeDef?.description ?? null;
 
   const hoursSince = lastEntry?.hours_since ?? null;
   const status = getStatus(hoursSince, intervalHours, currentHours);
@@ -76,8 +80,8 @@ function MaintenanceTypeChip({ typeValue, lastEntry, currentHours }) {
     detail = d.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: '2-digit' });
   }
 
-  return (
-    <div className={`flex items-start gap-2 p-2.5 rounded-lg border ${cfg.bg} ${cfg.border} min-w-0`}>
+  const inner = (
+    <>
       <Icon size={14} className={`mt-0.5 shrink-0 ${cfg.color}`} />
       <div className="min-w-0">
         <p className={`text-xs font-medium leading-tight ${cfg.color}`}>{label}</p>
@@ -85,6 +89,29 @@ function MaintenanceTypeChip({ typeValue, lastEntry, currentHours }) {
           <p className="text-xs text-gunmetal mt-0.5 truncate">{detail}</p>
         )}
       </div>
+    </>
+  );
+
+  const baseClass = `flex items-start gap-2 p-2.5 rounded-lg border ${cfg.bg} ${cfg.border} min-w-0`;
+  const tooltip = description ?? undefined;
+
+  if (wikiUrl) {
+    return (
+      <a
+        href={wikiUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={tooltip}
+        className={`${baseClass} hover:brightness-125 transition-all cursor-pointer`}
+      >
+        {inner}
+      </a>
+    );
+  }
+
+  return (
+    <div title={tooltip} className={baseClass}>
+      {inner}
     </div>
   );
 }
