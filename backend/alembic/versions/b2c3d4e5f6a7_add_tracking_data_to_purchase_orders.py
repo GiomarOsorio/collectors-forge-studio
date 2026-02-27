@@ -1,7 +1,7 @@
 """Agrega tracking_data y tracking_checked_at a purchase_orders.
 
-Revision ID: a1b2c3d4e5f6
-Revises: f5a6b7c8d9e0
+Revision ID: b2c3d4e5f6a7
+Revises: a1b2c3d4e5f6
 Create Date: 2026-02-27
 """
 
@@ -9,8 +9,8 @@ from typing import Union
 from alembic import op
 import sqlalchemy as sa
 
-revision: str = "a1b2c3d4e5f6"
-down_revision: Union[str, None] = "f5a6b7c8d9e0"
+revision: str = "b2c3d4e5f6a7"
+down_revision: Union[str, None] = "a1b2c3d4e5f6"
 branch_labels = None
 depends_on = None
 
