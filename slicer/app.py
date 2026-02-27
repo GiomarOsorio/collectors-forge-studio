@@ -150,7 +150,15 @@ def _patch_3mf_params(src_path: Path) -> tuple:
                 if ext not in BINARY_EXTS:
                     try:
                         text = raw.decode("utf-8")
-                        files_text.append(item.filename)
+                        # Captura snippet de contexto alrededor del primer param para debug
+                        for param, _, _ in FIXES:
+                            idx = text.find(param)
+                            if idx >= 0:
+                                snip = text[max(0, idx - 10):idx + len(param) + 50]
+                                files_text.append(f"{item.filename}→{repr(snip)}")
+                                break
+                        else:
+                            files_text.append(item.filename)
                         for param, bad, good in FIXES:
                             p = re.escape(param)
                             b = re.escape(bad)
