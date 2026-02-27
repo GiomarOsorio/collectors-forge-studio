@@ -107,7 +107,7 @@ export default function AppSwitcherDrawer({ isOpen, onClose }) {
 
             <p className="text-xs text-gunmetal uppercase tracking-wider mb-3 px-1">Aplicaciones</p>
             <div className="grid grid-cols-2 gap-4">
-              {APPS.map((app) => {
+              {APPS.filter((app) => !app.hidden).map((app) => {
                 const Icon = app.icon;
                 return (
                   <button
