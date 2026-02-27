@@ -7,7 +7,7 @@
  * @module config/apps
  */
 
-import { Calculator, Package, Cpu, Wrench, ListOrdered } from 'lucide-react';
+import { Building2, Calculator, Package, Cpu, Wrench, ListOrdered } from 'lucide-react';
 
 /**
  * @typedef {Object} AppDefinition
@@ -72,6 +72,16 @@ export const APPS = [
     icon: ListOrdered,
     route: '/queue/',
     color: '#14B8A6',
+    badge: null,
+  },
+  {
+    id: 'company',
+    name: 'Compañía',
+    shortDescription: 'Perfil, marca y templates PDF',
+    description: 'Configura el perfil de empresa, la paleta de colores del PDF de cotización y los templates Liquid personalizados.',
+    icon: Building2,
+    route: '/company/profile',
+    color: '#6366F1',
     badge: null,
   },
 ];

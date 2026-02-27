@@ -10,9 +10,9 @@ solo ve y gestiona sus propios datos.
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, DateTime
+from sqlalchemy import String, Text, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB
 
 from app.database import Base
 
@@ -40,6 +40,10 @@ class Company(Base):
     contact_email: Mapped[str] = mapped_column(String(100), nullable=True)
     nit: Mapped[str] = mapped_column(String(50), nullable=True)
     logo_url: Mapped[str] = mapped_column(String(500), nullable=True)
+    # Paleta de colores dinámica para PDF: [{name: str, hex: str}, ...]
+    # Accesible en templates Liquid como {{ palette.nombre }}
+    pdf_palette: Mapped[list] = mapped_column(JSONB, nullable=True)
+    pdf_terms:   Mapped[str]  = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None)

@@ -653,6 +653,37 @@ export const deleteMaintenanceLog = (id) => api.delete(`/maintenance/logs/${id}`
 export const getMaintenanceSummary = () => api.get('/maintenance/summary/');
 
 // ============================================================================
+// Empresa — Templates de cotización (Liquid + WeasyPrint)
+// ============================================================================
+
+/** Obtiene todos los templates de cotización de la empresa. */
+export const getCompanyTemplates = () => api.get('/company/templates/');
+
+/** Obtiene un template por ID. */
+export const getCompanyTemplate = (id) => api.get(`/company/templates/${id}`);
+
+/** Crea un nuevo template de cotización. */
+export const createCompanyTemplate = (data) => api.post('/company/templates/', data);
+
+/** Actualiza un template existente. */
+export const updateCompanyTemplate = (id, data) => api.put(`/company/templates/${id}`, data);
+
+/** Elimina un template. */
+export const deleteCompanyTemplate = (id) => api.delete(`/company/templates/${id}`);
+
+/** Marca un template como default para su tipo. */
+export const setDefaultTemplate = (id) => api.post(`/company/templates/${id}/set-default`);
+
+/** Valida el contenido Liquid de un template. Retorna {ok, errors, warnings, preview_pdf_b64}. */
+export const validateTemplate = (data) => api.post('/company/templates/validate', data);
+
+/** Descarga un PDF de muestra del template indicado. */
+export const previewTemplate = (id) => api.get(`/company/templates/${id}/preview`, { responseType: 'blob' });
+
+/** Obtiene el contenido del template Liquid por defecto del sistema. */
+export const getDefaultTemplateContent = () => api.get('/company/templates/default-template');
+
+// ============================================================================
 // Cola de impresión (Queue)
 // ============================================================================
 
