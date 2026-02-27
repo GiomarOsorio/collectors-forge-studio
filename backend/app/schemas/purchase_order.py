@@ -129,5 +129,7 @@ class PurchaseOrderResponse(BaseModel):
     arrived_at: Optional[datetime]
     created_at: datetime
     items: List[PurchaseOrderItemResponse] = []
+    tracking_data: Optional[str] = None
+    tracking_checked_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}

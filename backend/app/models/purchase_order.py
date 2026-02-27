@@ -53,6 +53,10 @@ class PurchaseOrder(Base):
     # Fecha real de llegada (se llena al marcar como "llegado")
     arrived_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
+    # Tracking scrapeado por el microservicio tracker (JSON serializado como texto)
+    tracking_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    tracking_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
     # Timestamp de creación
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
