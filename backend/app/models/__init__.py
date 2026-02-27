@@ -36,6 +36,7 @@ from app.models.purchase_order import PurchaseOrder, PurchaseOrderItem
 from app.models.slicing_job import SlicingJob
 from app.models.printed_item import PrintedItem
 from app.models.maintenance import MaintenanceLog, MaintenanceLogItem
+from app.models.queue import PrintQueueItem
 
 __all__ = [
     "Company", "User", "Filament", "Printer", "AppSettings",
@@ -43,4 +44,5 @@ __all__ = [
     "InventoryItem", "PurchaseOrder", "PurchaseOrderItem",
     "SlicingJob", "PrintedItem",
     "MaintenanceLog", "MaintenanceLogItem",
+    "PrintQueueItem",
 ]

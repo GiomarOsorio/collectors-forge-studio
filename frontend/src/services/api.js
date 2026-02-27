@@ -652,5 +652,24 @@ export const deleteMaintenanceLog = (id) => api.delete(`/maintenance/logs/${id}`
 /** Obtiene el resumen de mantenimiento por impresora (dashboard). */
 export const getMaintenanceSummary = () => api.get('/maintenance/summary/');
 
+// ============================================================================
+// Cola de impresión (Queue)
+// ============================================================================
+
+/** Lista los ítems activos de la cola (pending + printing), ordenados por posición. */
+export const getQueue = () => api.get('/queue/');
+
+/** Lista los últimos 50 ítems completados o cancelados. */
+export const getQueueHistory = () => api.get('/queue/history');
+
+/** Agrega una cotización guardada a la cola de impresión. */
+export const addToQueue = (data) => api.post('/queue/', data);
+
+/** Cambia el estado de un ítem de la cola (printing | done | cancelled). */
+export const updateQueueStatus = (id, data) => api.put(`/queue/${id}/status`, data);
+
+/** Elimina un ítem de la cola (solo si pending o cancelled). */
+export const deleteQueueItem = (id) => api.delete(`/queue/${id}`);
+
 export default api;
 
