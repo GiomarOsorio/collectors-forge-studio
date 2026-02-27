@@ -165,8 +165,11 @@ def _build_header(st: dict, company: Optional["Company"] = None) -> list:
     if logo_path is None and LOGO_PATH.exists():
         logo_path = LOGO_PATH
 
+    # Dimensiones respetando aspect ratio del PNG (344×386 ≈ 0.891 ancho/alto)
+    _LOGO_H = 1.2 * inch
+    _LOGO_W = _LOGO_H * (344 / 386)
     logo_cell = (
-        Image(str(logo_path), width=1.8 * inch, height=1.2 * inch)
+        Image(str(logo_path), width=_LOGO_W, height=_LOGO_H)
         if logo_path
         else Paragraph("<b>TurtleForge</b>", st["base"]["Normal"])
     )
@@ -181,7 +184,7 @@ def _build_header(st: dict, company: Optional["Company"] = None) -> list:
 
     hdr_tbl = Table(
         [[logo_cell, "", company_cell]],
-        colWidths=[1.9 * inch, 2.2 * inch, 2.4 * inch],
+        colWidths=[_LOGO_W + 0.1 * inch, 2.5 * inch, 2.4 * inch],
     )
     hdr_tbl.setStyle(TableStyle(_NO_PAD))
     return [
