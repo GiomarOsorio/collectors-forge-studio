@@ -299,9 +299,7 @@ DEFAULT_COT_TEMPLATE = """\
 _REQUIRED_VARS = ["quote_number", "items", "total_fmt"]
 
 
-def _fmt_cop(value: float) -> str:
-    """Formatea como pesos colombianos: $ 1.234.567"""
-    return "$ " + f"{round(value):,}".replace(",", ".")
+from app.services.formatters import _fmt_cop  # centralizado en formatters.py
 
 
 def _build_palette(company) -> tuple:

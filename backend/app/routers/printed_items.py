@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.printed_item import PrintedItem
 from app.models.user import User
+from app.services.formatters import IMAGE_MAGIC_CHECKS, IMAGE_EXT_MAP
 from app.schemas.printed_item import (
     PrintedItemCreate,
     PrintedItemImageResponse,
@@ -329,13 +330,7 @@ async def upload_printed_item_image(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail="Imagen demasiado grande (máx. 10 MB)",
         )
-    _MAGIC_CHECKS = {
-        "image/jpeg": lambda c: c[:3] == b"\xff\xd8\xff",
-        "image/png":  lambda c: c[:4] == b"\x89PNG",
-        "image/webp": lambda c: c[:4] == b"RIFF" and len(c) >= 12 and c[8:12] == b"WEBP",
-        "image/gif":  lambda c: c[:6] in (b"GIF87a", b"GIF89a"),
-    }
-    check = _MAGIC_CHECKS.get(file.content_type)
+    check = IMAGE_MAGIC_CHECKS.get(file.content_type)
     if not content or (check and not check(content)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -347,8 +342,7 @@ async def upload_printed_item_image(
 
     # Generar nombre único con UUID usando extensión basada en content-type
     # (ignoramos file.filename para evitar path traversal o extensiones arbitrarias)
-    _EXT_MAP = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
-    extension = _EXT_MAP.get(file.content_type, ".jpg")
+    extension = IMAGE_EXT_MAP.get(file.content_type, ".jpg")
     filename = f"{uuid.uuid4()}{extension}"
     file_path = PRINTS_IMAGE_DIR / filename
 

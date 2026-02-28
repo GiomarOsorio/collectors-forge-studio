@@ -11,9 +11,13 @@ Las tablas de la base de datos se crean y migran a través de Alembic
 (alembic upgrade head) ANTES de arrancar el servidor, no en tiempo de ejecución.
 """
 
+import asyncio
+import logging
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,9 +41,27 @@ from app.routers.company_templates import router as company_templates_router
 from app.routers.users import router as users_router
 from app.routers.maintenance import router as maintenance_router
 from app.routers.queue import router as queue_router
+from app.routers.slicer import cleanup_old_slicer_files
 
 # UUID fijo de la empresa por defecto — coincide con la migración f4a1b9c2d8e7
 DEFAULT_COMPANY_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+
+async def _periodic_slicer_cleanup() -> None:
+    """
+    Tarea de fondo que elimina archivos slicer antiguos cada 24 horas.
+
+    Corre en bucle infinito mientras la aplicación está activa. Se cancela
+    limpiamente al apagar el servidor (CancelledError en el await).
+    """
+    while True:
+        try:
+            await asyncio.sleep(24 * 3600)
+            await cleanup_old_slicer_files()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error("Error en tarea de limpieza de slicer: %s", e)
 
 
 @asynccontextmanager
@@ -60,7 +82,15 @@ async def lifespan(app: FastAPI):
     # Crear directorios estáticos necesarios
     Path("/app/static/companies").mkdir(parents=True, exist_ok=True)
     await create_default_data()
+    # Ejecutar limpieza de slicer al inicio y luego cada 24h en background
+    await cleanup_old_slicer_files()
+    cleanup_task = asyncio.create_task(_periodic_slicer_cleanup())
     yield
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
 
 
 # Instancia principal de la aplicación FastAPI con metadatos para la documentación

@@ -80,6 +80,8 @@ async def _get_company_inventory_item(
 @router.get("/", response_model=List[InventoryItemResponse])
 async def list_inventory_items(
     category: Optional[str] = Query(None),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=200, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -90,6 +92,8 @@ async def list_inventory_items(
 
     Args:
         category:     Categoría para filtrar (opcional). Ej: "Filamento", "Insumo".
+        skip:         Registros a omitir (paginación).
+        limit:        Máximo de registros a retornar (default 200, máx. 1000).
         db:           Sesión de base de datos.
         current_user: Usuario autenticado.
 
@@ -99,7 +103,7 @@ async def list_inventory_items(
     query = select(InventoryItem).where(InventoryItem.company_id == current_user.company_id)
     if category:
         query = query.where(InventoryItem.category == category)
-    query = query.order_by(InventoryItem.created_at.desc())
+    query = query.order_by(InventoryItem.created_at.desc()).offset(skip).limit(limit)
     result = await db.execute(query)
     return result.scalars().all()
 

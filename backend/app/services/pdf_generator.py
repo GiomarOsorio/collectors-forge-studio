@@ -139,9 +139,7 @@ _NO_PAD = [
 ]
 
 
-def _fmt_cop(value: float) -> str:
-    """Formatea como pesos colombianos: $ 1.234.567"""
-    return "$ " + f"{round(value):,}".replace(",", ".")
+from app.services.formatters import _fmt_cop  # centralizado en formatters.py
 
 
 def _fmt_usd(value: float) -> str:
