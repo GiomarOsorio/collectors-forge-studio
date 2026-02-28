@@ -24,7 +24,7 @@ import {
   createQuote,
 } from '../services/api';
 import toast from 'react-hot-toast';
-import { Calculator, Save, Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { Calculator, Save, Plus, Trash2, AlertTriangle, RotateCcw } from 'lucide-react';
 
 /**
  * Componente de la pagina de calculadora de costos.
@@ -293,6 +293,29 @@ export default function CalculatorPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  /**
+   * Limpia el formulario, los insumos y el resultado, volviendo al estado inicial.
+   * Conserva filamento, impresora y margen por defecto para mayor comodidad.
+   */
+  const handleClear = () => {
+    setForm({
+      piece_name: '',
+      description: '',
+      client_name: '',
+      inventory_item_id: filaments.length > 0 ? filaments[0].id : '',
+      printer_id: printers.length > 0 ? printers[0].id : '',
+      weight_grams: '',
+      print_time_minutes: '',
+      preparation_time_minutes: '0',
+      post_processing_time_minutes: '0',
+      quantity: '1',
+      margin_percent: settings?.default_margin_percent ?? '',
+    });
+    setSelectedSupplies([]);
+    setAdditionalFilaments([]);
+    setResult(null);
   };
 
   /**
@@ -648,14 +671,25 @@ export default function CalculatorPage() {
             </>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="tf-btn-primary w-full py-3 text-base mt-4"
-          >
-            <Calculator size={20} />
-            {loading ? 'Calculando...' : 'Calcular Costo'}
-          </button>
+          <div className="flex gap-3 mt-4">
+            <button
+              type="submit"
+              disabled={loading}
+              className="tf-btn-primary flex-1 py-3 text-base"
+            >
+              <Calculator size={20} />
+              {loading ? 'Calculando...' : 'Calcular Costo'}
+            </button>
+            <button
+              type="button"
+              onClick={handleClear}
+              className="tf-btn-ghost px-4 py-3 text-sm"
+              title="Limpiar formulario"
+            >
+              <RotateCcw size={16} />
+              Limpiar
+            </button>
+          </div>
         </form>
 
         {/* Panel de resultados */}
@@ -732,13 +766,23 @@ export default function CalculatorPage() {
               )}
               <p className="text-xs text-gunmetal mt-4">* Precios sin IVA</p>
 
-              <button
-                onClick={handleSave}
-                className="tf-btn-primary w-full py-3 text-base mt-4"
-              >
-                <Save size={20} />
-                Guardar costo de impresión
-              </button>
+              <div className="flex gap-3 mt-4">
+                <button
+                  onClick={handleSave}
+                  className="tf-btn-primary flex-1 py-3 text-base"
+                >
+                  <Save size={20} />
+                  Guardar
+                </button>
+                <button
+                  onClick={handleClear}
+                  className="tf-btn-ghost px-4 py-3 text-sm"
+                  title="Limpiar y calcular otra pieza"
+                >
+                  <RotateCcw size={16} />
+                  Limpiar
+                </button>
+              </div>
             </div>
           ) : (
             <div className="tf-card p-12 text-center">
