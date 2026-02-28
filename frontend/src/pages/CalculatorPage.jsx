@@ -333,7 +333,6 @@ export default function CalculatorPage() {
       }
       await createQuote(payload);
       toast.success('Cotización guardada en el historial');
-      handleClear();
     } catch {
       toast.error('Error al guardar');
     }
@@ -772,7 +771,7 @@ export default function CalculatorPage() {
                 className="tf-btn-primary w-full py-3 text-base mt-4"
               >
                 <Save size={20} />
-                Guardar Cotización y Limpiar formulario
+                Guardar costo de impresión
               </button>
             </div>
           ) : (
