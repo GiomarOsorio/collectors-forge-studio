@@ -15,6 +15,7 @@ Endpoints disponibles bajo el prefijo /api/quotes:
 - GET  /{id}/pdf      - Descarga la cotización como archivo PDF.
 """
 
+import asyncio
 import re
 from decimal import Decimal
 
@@ -369,7 +370,7 @@ async def download_quote_pdf(
     company_result = await db.execute(select(Company).where(Company.id == current_user.company_id))
     company = company_result.scalar_one_or_none()
 
-    pdf_bytes = generate_quote_pdf(quote, company)
+    pdf_bytes = await asyncio.to_thread(generate_quote_pdf, quote, company)
     safe_name = re.sub(r"[^\w\-]", "_", quote.piece_name)
     filename = f"cotizacion_{safe_name}_{quote.id}.pdf"
 

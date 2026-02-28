@@ -775,11 +775,10 @@ class TestDefaultTemplateContent:
     importando DEFAULT_COT_TEMPLATE del servicio.
     """
 
-    async def test_ruta_default_template_produce_422_por_orden_de_rutas(self):
+    async def test_ruta_default_template_retorna_200_con_contenido(self):
         """
-        GET /default-template con token válido retorna 422 porque FastAPI
-        lo evalúa contra /{template_id} (int) antes de llegar a la ruta estática.
-        Esto documenta el comportamiento real del router.
+        GET /default-template con token válido retorna 200 con el template base del sistema.
+        La ruta fue movida antes de /{template_id} para corregir el conflicto de orden (CAL-M04).
         """
         _set_overrides({
             get_current_user: lambda: _fake_user(),
@@ -790,8 +789,10 @@ class TestDefaultTemplateContent:
                 r = await c.get("/api/company/templates/default-template")
         finally:
             _clear_overrides()
-        # 422 porque "default-template" no es int válido para {template_id}
-        assert r.status_code == 422
+        assert r.status_code == 200
+        body = r.json()
+        assert "content" in body
+        assert len(body["content"]) > 100  # el template por defecto no está vacío
 
     async def test_sin_token_retorna_401_o_422(self):
         """

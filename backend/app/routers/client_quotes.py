@@ -14,13 +14,17 @@ Endpoints:
     GET    /api/client-quotes/{id}/pdf  — Descargar PDF de la cotización.
 """
 
+import asyncio
 import json
+import logging
 import re
 from datetime import timedelta
 from decimal import Decimal
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+
+logger = logging.getLogger(__name__)
 from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -242,12 +246,22 @@ async def download_client_quote_pdf(
     if active_tpl:
         try:
             from app.services.liquid_pdf import render_client_quote_pdf
-            pdf_bytes = render_client_quote_pdf(active_tpl.content, cq, company, usd_rate)
-        except Exception:
-            # Fallback a ReportLab si WeasyPrint no está disponible o falla
-            pdf_bytes = generate_client_quote_pdf(cq, company, usd_rate)
+            pdf_bytes = await asyncio.to_thread(
+                render_client_quote_pdf, active_tpl.content, cq, company, usd_rate
+            )
+        except Exception as exc:
+            # Fallback a ReportLab si WeasyPrint no está disponible o falla.
+            # Se registra el error para que los fallos de templates sean visibles en logs.
+            logger.error(
+                "WeasyPrint falló al renderizar template %s (empresa %s): %s",
+                active_tpl.id,
+                current_user.company_id,
+                exc,
+                exc_info=True,
+            )
+            pdf_bytes = await asyncio.to_thread(generate_client_quote_pdf, cq, company, usd_rate)
     else:
-        pdf_bytes = generate_client_quote_pdf(cq, company, usd_rate)
+        pdf_bytes = await asyncio.to_thread(generate_client_quote_pdf, cq, company, usd_rate)
 
     safe_client = re.sub(r"[^\w\-]", "_", cq.client_name)
     filename = f"cotizacion_COT-{cq.id:04d}_{safe_client}.pdf"

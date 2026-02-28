@@ -9,7 +9,7 @@ services:
     environment:
       - POSTGRES_DB=turtleforge
       - POSTGRES_USER=turtleforge
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme_in_production}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     restart: unless-stopped
     networks:
       - calculator3d
@@ -28,12 +28,12 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      - DATABASE_URL=postgresql+asyncpg://turtleforge:${POSTGRES_PASSWORD:-changeme_in_production}@postgres:5432/turtleforge
-      - SECRET_KEY=${SECRET_KEY:-cambiar-esta-clave-en-produccion-xyz789}
+      - DATABASE_URL=postgresql+asyncpg://turtleforge:${POSTGRES_PASSWORD}@postgres:5432/turtleforge
+      - SECRET_KEY=${SECRET_KEY}
       - ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=1440
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@calculator3d.local}
       - TRACKER_URL=http://tracker:8002
     volumes:
@@ -51,7 +51,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      - DATABASE_URL=postgresql+asyncpg://turtleforge:${POSTGRES_PASSWORD:-changeme_in_production}@postgres:5432/turtleforge
+      - DATABASE_URL=postgresql+asyncpg://turtleforge:${POSTGRES_PASSWORD}@postgres:5432/turtleforge
       - SCAN_INTERVAL_MINUTES=${SCAN_INTERVAL_MINUTES:-300}
     restart: unless-stopped
     networks:

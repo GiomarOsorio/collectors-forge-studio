@@ -1,0 +1,34 @@
+# Archivos sensibles — nunca deben entrar al contenedor
+.env
+.env.*
+*.env
+
+# Entorno virtual de desarrollo
+venv/
+.venv/
+
+# Tests y cobertura — no necesarios en producción
+tests/
+.coveragerc
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Cache de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Git
+.git/
+.gitignore
+
+# Documentación
+docs/
+*.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
