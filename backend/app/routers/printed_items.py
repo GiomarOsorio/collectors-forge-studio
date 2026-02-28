@@ -345,8 +345,10 @@ async def upload_printed_item_image(
     # Crear el directorio de imágenes si no existe
     PRINTS_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Generar nombre único con UUID conservando la extensión original
-    extension = Path(file.filename).suffix.lower() if file.filename else ".jpg"
+    # Generar nombre único con UUID usando extensión basada en content-type
+    # (ignoramos file.filename para evitar path traversal o extensiones arbitrarias)
+    _EXT_MAP = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
+    extension = _EXT_MAP.get(file.content_type, ".jpg")
     filename = f"{uuid.uuid4()}{extension}"
     file_path = PRINTS_IMAGE_DIR / filename
 

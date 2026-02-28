@@ -71,6 +71,8 @@ async def _build_response(
     Construye la respuesta enriquecida con el snapshot de la cotización.
 
     Si la cotización fue eliminada (quote_id es None), el campo quote queda None.
+    Úsese para ítems individuales (add_to_queue, update_queue_status).
+    Para listas usar _build_responses_bulk para evitar N+1.
     """
     quote_snapshot: Optional[QueueQuoteSnapshot] = None
 
@@ -113,6 +115,73 @@ async def _build_response(
     )
 
 
+async def _build_responses_bulk(
+    items: list, db: AsyncSession
+) -> list:
+    """
+    Construye respuestas enriquecidas para una lista de ítems con solo 2 queries.
+
+    Evita el problema N+1: carga todas las cotizaciones en un IN(...) y todas
+    las impresoras en otro IN(...), luego construye las respuestas en memoria.
+
+    Args:
+        items: Lista de PrintQueueItem.
+        db:    Sesión de base de datos.
+
+    Returns:
+        Lista de PrintQueueItemResponse en el mismo orden que items.
+    """
+    if not items:
+        return []
+
+    # Batch 1: cargar todas las cotizaciones referenciadas
+    quote_ids = {item.quote_id for item in items if item.quote_id is not None}
+    quotes_by_id: dict = {}
+    if quote_ids:
+        q_result = await db.execute(select(Quote).where(Quote.id.in_(quote_ids)))
+        quotes_by_id = {q.id: q for q in q_result.scalars().all()}
+
+    # Batch 2: cargar todas las impresoras referenciadas por esas cotizaciones
+    printer_ids = {q.printer_id for q in quotes_by_id.values()}
+    printers_by_id: dict = {}
+    if printer_ids:
+        p_result = await db.execute(select(Printer).where(Printer.id.in_(printer_ids)))
+        printers_by_id = {p.id: p for p in p_result.scalars().all()}
+
+    # Construir respuestas en memoria (0 queries adicionales)
+    responses = []
+    for item in items:
+        quote_snapshot: Optional[QueueQuoteSnapshot] = None
+        if item.quote_id is not None:
+            quote = quotes_by_id.get(item.quote_id)
+            if quote is not None:
+                printer = printers_by_id.get(quote.printer_id)
+                printer_name = printer.name if printer else f"Impresora #{quote.printer_id}"
+                quote_snapshot = QueueQuoteSnapshot(
+                    id=quote.id,
+                    piece_name=quote.piece_name,
+                    printer_id=quote.printer_id,
+                    printer_name=printer_name,
+                    weight_grams=float(quote.weight_grams),
+                    print_time_hours=float(quote.print_time_hours),
+                    quantity=int(quote.quantity),
+                    total_price=float(quote.total_price),
+                )
+        responses.append(PrintQueueItemResponse(
+            id=item.id,
+            company_id=item.company_id,
+            quote_id=item.quote_id,
+            status=item.status,
+            position=item.position,
+            started_at=item.started_at,
+            completed_at=item.completed_at,
+            notes=item.notes,
+            created_at=item.created_at,
+            quote=quote_snapshot,
+        ))
+    return responses
+
+
 async def _deduct_inventory_and_update_printer(
     db: AsyncSession, quote: Quote
 ) -> None:
@@ -131,7 +200,10 @@ async def _deduct_inventory_and_update_printer(
 
     # 1. Filamento principal
     if quote.inventory_item_id is not None:
-        inv = await db.get(InventoryItem, quote.inventory_item_id)
+        inv_result = await db.execute(
+            select(InventoryItem).where(InventoryItem.id == quote.inventory_item_id).with_for_update()
+        )
+        inv = inv_result.scalar_one_or_none()
         if inv is not None:
             deduct = Decimal(str(quote.weight_grams)) * multiplier
             inv.quantity = (inv.quantity or Decimal("0")) - deduct
@@ -147,7 +219,10 @@ async def _deduct_inventory_and_update_printer(
     for af in (quote.additional_filaments_detail or []):
         iid = af.get("filament_id")
         if iid is not None:
-            inv = await db.get(InventoryItem, int(iid))
+            inv_result = await db.execute(
+                select(InventoryItem).where(InventoryItem.id == int(iid)).with_for_update()
+            )
+            inv = inv_result.scalar_one_or_none()
             if inv is not None:
                 deduct = Decimal(str(af["weight_grams"])) * multiplier
                 inv.quantity = (inv.quantity or Decimal("0")) - deduct
@@ -163,7 +238,10 @@ async def _deduct_inventory_and_update_printer(
     for s in (quote.supplies_detail or []):
         iid = s.get("supply_id")
         if iid is not None:
-            inv = await db.get(InventoryItem, int(iid))
+            inv_result = await db.execute(
+                select(InventoryItem).where(InventoryItem.id == int(iid)).with_for_update()
+            )
+            inv = inv_result.scalar_one_or_none()
             if inv is not None:
                 deduct = Decimal(str(s["quantity"])) * multiplier
                 inv.quantity = (inv.quantity or Decimal("0")) - deduct
@@ -176,7 +254,10 @@ async def _deduct_inventory_and_update_printer(
                     inv.needs_purchase = True
 
     # 4. Horas de impresora
-    printer = await db.get(Printer, quote.printer_id)
+    p_result = await db.execute(
+        select(Printer).where(Printer.id == quote.printer_id).with_for_update()
+    )
+    printer = p_result.scalar_one_or_none()
     if printer is None:
         raise HTTPException(status_code=404, detail="Impresora de la cotización no encontrada")
     printer.current_hours = (printer.current_hours or Decimal("0")) + (
@@ -207,7 +288,7 @@ async def list_queue_history(
         .limit(50)
     )
     items = result.scalars().all()
-    return [await _build_response(item, db) for item in items]
+    return await _build_responses_bulk(items, db)
 
 
 @router.get("/", response_model=List[PrintQueueItemResponse])
@@ -229,7 +310,7 @@ async def list_queue(
         .order_by(PrintQueueItem.position.asc())
     )
     items = result.scalars().all()
-    return [await _build_response(item, db) for item in items]
+    return await _build_responses_bulk(items, db)
 
 
 @router.post("/", response_model=PrintQueueItemResponse, status_code=status.HTTP_201_CREATED)

@@ -221,7 +221,7 @@ async def create_log(
                 select(InventoryItem).where(
                     InventoryItem.id == item_data.inventory_item_id,
                     InventoryItem.company_id == current_user.company_id,
-                )
+                ).with_for_update()
             )
             inv_item = inv_result.scalar_one_or_none()
             if inv_item:
@@ -234,7 +234,7 @@ async def create_log(
                                f"(disponible: {inv_item.quantity}, requerido: {item_data.quantity})",
                     )
                 inv_item.quantity = new_quantity
-                if inv_item.quantity < inv_item.min_quantity:
+                if inv_item.min_quantity is not None and inv_item.quantity < inv_item.min_quantity:
                     inv_item.needs_purchase = True
 
     await db.commit()
