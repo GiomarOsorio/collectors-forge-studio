@@ -144,6 +144,7 @@ class QuoteResponse(BaseModel):
     total_price_cop: Optional[DecimalAsFloat] = None
     notes: Optional[str]
     created_at: datetime
+    updated_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 

@@ -15,7 +15,6 @@ Endpoints:
 """
 
 import asyncio
-import json
 import logging
 import re
 from datetime import timedelta
@@ -102,14 +101,14 @@ async def create_client_quote(
         for item in data.items
     )
 
-    items_json = json.dumps([
+    items_data = [
         {
             "name": item.name,
             "quantity": float(item.quantity),
             "unit_price": float(item.unit_price),
         }
         for item in data.items
-    ], ensure_ascii=False)
+    ]
 
     cq = ClientQuote(
         company_id=current_user.company_id,
@@ -119,7 +118,7 @@ async def create_client_quote(
         quote_date=data.quote_date,
         expiry_days=data.expiry_days,
         expiry_date=expiry_date,
-        items=items_json,
+        items=items_data,
         subtotal=subtotal,
         usd_to_cop_rate=Decimal(str(cop_rate)),
         include_iva=data.include_iva,

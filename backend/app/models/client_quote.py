@@ -15,7 +15,7 @@ from typing import Optional
 
 from sqlalchemy import String, Numeric, DateTime, Date, Text, Integer, ForeignKey, Boolean, text
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB
 
 from app.database import Base
 
@@ -49,8 +49,8 @@ class ClientQuote(Base):
     expiry_days: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("15"))
     expiry_date: Mapped[date] = mapped_column(Date, nullable=False)
 
-    # Líneas de producto (JSON: [{name, quantity, unit_price}])
-    items: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'[]'"))
+    # Líneas de producto (JSONB: [{name, quantity, unit_price}])
+    items: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
 
     # Subtotal calculado (en USD, moneda de entrada del usuario)
     subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
@@ -66,3 +66,4 @@ class ClientQuote(Base):
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

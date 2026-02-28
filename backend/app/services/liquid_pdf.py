@@ -30,7 +30,6 @@ Variables disponibles en el contexto Liquid:
 """
 
 import base64
-import json
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -362,7 +361,7 @@ def _build_cot_context(client_quote, company, usd_rate: float) -> dict:
     Returns:
         Diccionario con todas las variables disponibles en el template.
     """
-    items_raw = json.loads(client_quote.items)
+    items_raw = client_quote.items
     items_ctx = []
     for item in items_raw:
         unit_p   = item["unit_price"] * usd_rate

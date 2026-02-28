@@ -76,11 +76,6 @@ export default function QuotesPage() {
     }
   };
 
-  /** Parsea los items JSON de una cotización. */
-  const parseItems = (itemsStr) => {
-    try { return JSON.parse(itemsStr); } catch { return []; }
-  };
-
   if (loading) return <p className="text-center text-gunmetal py-16">Cargando cotizaciones...</p>;
 
   return (
@@ -126,7 +121,7 @@ export default function QuotesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {parseItems(selected.items).map((it, i) => (
+                  {(selected.items || []).map((it, i) => (
                     <tr key={i} className="border-b border-dark-border/40">
                       <td className="tf-td py-2">{it.name}</td>
                       <td className="tf-td-right py-2 text-steel">{it.quantity}</td>
@@ -179,7 +174,7 @@ export default function QuotesPage() {
                 <td className="tf-td font-medium text-tech-white">{q.client_name}</td>
                 <td className="tf-td text-steel hidden sm:table-cell">{fmt(q.expiry_date)}</td>
                 <td className="tf-td-right text-steel hidden sm:table-cell">
-                  {parseItems(q.items).length}
+                  {q.items?.length ?? 0}
                 </td>
                 <td className="tf-td-right font-semibold text-forge-green">
                   $ {parseFloat(q.subtotal).toFixed(2)}
