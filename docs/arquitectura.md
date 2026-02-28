@@ -1,0 +1,499 @@
+# Arquitectura del Sistema — TurtleForge Studio
+
+## Visión general
+
+TurtleForge Studio es una plataforma multi-aplicación para gestión de un negocio de impresión 3D. Está compuesta por varios microservicios en contenedores Podman, expuestos a internet a través de un Cloudflare Tunnel.
+
+---
+
+## Diagrama de contenedores
+
+```
+                          Internet
+                             │
+                    ┌────────▼────────┐
+                    │  Cloudflare CDN  │
+                    │  + DDoS Shield   │
+                    └────────┬────────┘
+                             │ HTTPS
+                    ┌────────▼────────┐
+                    │ Cloudflare Tunnel│
+                    │  (cloudflared)   │
+                    │  calculator3d-   │
+                    │    tunnel        │
+                    └────────┬────────┘
+                             │ HTTP interno
+              ───────────────┼───────────────────────────
+              Red: calculator3d (bridge)
+                             │
+                    ┌────────▼────────┐
+                    │    Frontend      │
+                    │  React + Nginx   │
+                    │  calculator3d-   │
+                    │    frontend      │
+                    │   :80 (3000)     │
+                    └────────┬────────┘
+                    /api/*   │   /static/*
+              ───────────────┼─────────────────
+                             │
+              ┌──────────────▼─────────────────┐
+              │            Backend              │
+              │          FastAPI                │
+              │      calculator3d-backend       │
+              │            :8000                │
+              │                                 │
+              │  • Routers (Auth, Quotes, etc.) │
+              │  • Calculator (Decimal engine)  │
+              │  • PDF Generator (ReportLab)    │
+              │  • Liquid PDF (WeasyPrint)      │
+              │  • Exchange Rate (open.er-api)  │
+              │  • Tariff Scraper (EPM PDF)     │
+              └──────┬───────────┬─────────────┘
+                     │           │
+         ┌───────────▼──┐    ┌───▼──────────┐
+         │  PostgreSQL  │    │    Slicer      │
+         │      16       │    │  OrcaSlicer   │
+         │  calculator3d │    │  calculator3d │
+         │    -postgres  │    │    -slicer    │
+         │     :5432     │    │     :8001     │
+         └───────────────┘    └──────┬────────┘
+                                     │ volumen compartido
+                             ┌────────▼────────┐
+                             │   slicer_jobs/  │
+                             │  (Podman volume) │
+                             └─────────────────┘
+```
+
+**Tracker** (microservicio auxiliar):
+```
+calculator3d-tracker (:8002)
+  └─ Escanea tracking de pedidos cada N minutos
+  └─ Escribe estado en PostgreSQL (purchase_orders)
+  └─ Accedido por backend: POST /inventory/purchases/scan-tracking
+```
+
+---
+
+## Aplicaciones (apps)
+
+Cada "app" es una sección de la SPA React con su propio layout y rutas:
+
+| App | Color | Ruta base | Descripción |
+|-----|-------|-----------|-------------|
+| Cost | `#3FAF4C` | `/cost/` | Calculadora de costos de impresión |
+| Archive | `#3B82F6` | `/inventory/` | Inventario y pedidos de compra |
+| Slicer | `#F59E0B` | `/slicer/` | Laminado STL / extracción G-code |
+| Mantenimiento | `#8B5CF6` | `/maintenance/` | Registro de mantenimiento |
+| Queue | `#14B8A6` | `/queue/` | Cola de impresión |
+| Compañía | `#6366F1` | `/company/` | Perfil, branding y templates PDF |
+
+La pantalla de inicio (`/`) es el **TurtleForge Studio**, que muestra todas las apps como un panel estilo Okta. El `AppSwitcherDrawer` permite navegar entre apps sin salir.
+
+---
+
+## Estructura de archivos
+
+```
+Calculator3D/
+├── .github/
+│   └── workflows/deploy.yml          # CI/CD: tests → deploy
+│
+├── backend/                          # Servicio API principal
+│   ├── app/
+│   │   ├── main.py                   # FastAPI app + lifespan + routers
+│   │   ├── config.py                 # Settings (pydantic-settings, .env)
+│   │   ├── database.py               # Engine async + Base ORM + get_db()
+│   │   ├── limiter.py                # Rate limiting (slowapi)
+│   │   │
+│   │   ├── models/                   # SQLAlchemy ORM
+│   │   │   ├── __init__.py           # Re-exporta todos los modelos
+│   │   │   ├── company.py            # Company (UUID PK, logo, pdf_palette)
+│   │   │   ├── company_template.py   # CompanyTemplate (Liquid HTML)
+│   │   │   ├── user.py               # User (FK→Company, is_admin, JWT)
+│   │   │   ├── printer.py            # Printer (depreciación, mantenimiento)
+│   │   │   ├── filament.py           # Filament (legacy, migrado a inventory)
+│   │   │   ├── supply.py             # Supply (legacy, migrado a inventory)
+│   │   │   ├── inventory.py          # InventoryItem (stock unificado)
+│   │   │   ├── purchase_order.py     # PurchaseOrder + PurchaseOrderItem
+│   │   │   ├── printed_item.py       # PrintedItem (impresiones 3D con foto)
+│   │   │   ├── quote.py              # Quote (costo impresión, JSONB details)
+│   │   │   ├── client_quote.py       # ClientQuote (multi-producto, COT-XXXX)
+│   │   │   ├── settings.py           # AppSettings (por empresa)
+│   │   │   ├── electricity_tariff.py # Historial tarifas EPM por mes/estrato
+│   │   │   ├── slicing_job.py        # SlicingJob (STL/gcode procesados)
+│   │   │   ├── maintenance.py        # MaintenancePrinter/Log/LogItem
+│   │   │   └── queue.py              # PrintQueueItem (cola de impresión)
+│   │   │
+│   │   ├── schemas/                  # Pydantic v2 (request/response)
+│   │   │   ├── company.py            # CompanyResponse, CompanyUpdate
+│   │   │   ├── company_template.py   # Template CRUD + ValidateResponse
+│   │   │   ├── user.py               # UserCreate, UserResponse, Token
+│   │   │   ├── printer.py            # PrinterCreate/Update/Response
+│   │   │   ├── quote.py              # QuoteRequest, QuoteCostBreakdown
+│   │   │   ├── client_quote.py       # ClientQuoteCreate/Response
+│   │   │   ├── inventory.py          # InventoryItem CRUD
+│   │   │   ├── purchase_order.py     # PurchaseOrder + tracking fields
+│   │   │   ├── printed_item.py       # PrintedItem CRUD + sell
+│   │   │   ├── maintenance.py        # Log + summary schemas
+│   │   │   ├── queue.py              # QueueItem + status update
+│   │   │   └── slicer.py             # SlicingJob schemas
+│   │   │
+│   │   ├── routers/                  # Endpoints FastAPI
+│   │   │   ├── auth.py               # POST /auth/login, /register, GET /me
+│   │   │   ├── company.py            # GET/PUT /company/, POST /company/logo
+│   │   │   ├── company_templates.py  # CRUD + /validate + /preview
+│   │   │   ├── users.py              # GET/PATCH /users/, PUT /users/me
+│   │   │   ├── printers.py           # CRUD /printers/
+│   │   │   ├── filaments.py          # CRUD /filaments/ (legacy)
+│   │   │   ├── supplies.py           # CRUD /supplies/ (legacy)
+│   │   │   ├── inventory.py          # /inventory/items/ + /purchases/ + /prints/
+│   │   │   ├── purchase_orders.py    # Pedidos de compra + arrive + tracking
+│   │   │   ├── printed_items.py      # /inventory/prints/ (CRUD + imagen + venta)
+│   │   │   ├── quotes.py             # /quotes/ cálculo + historial + PDF
+│   │   │   ├── client_quotes.py      # /client-quotes/ + PDF (Liquid/ReportLab)
+│   │   │   ├── settings.py           # /settings/ + exchange-rate + tariff
+│   │   │   ├── slicer.py             # /slicer/upload-gcode + stl + makerworld
+│   │   │   ├── maintenance.py        # /maintenance/logs/ + /summary/
+│   │   │   └── queue.py              # /queue/ cola activa + history
+│   │   │
+│   │   ├── services/                 # Lógica de negocio pura
+│   │   │   ├── auth.py               # JWT create/verify, password hash/verify
+│   │   │   ├── calculator.py         # Motor de cálculo (Decimal puro)
+│   │   │   ├── pdf_generator.py      # ReportLab → PDF (fallback)
+│   │   │   ├── liquid_pdf.py         # python-liquid + WeasyPrint → PDF
+│   │   │   ├── exchange_rate.py      # Tasa USD/COP (open.er-api.com, caché 1h)
+│   │   │   ├── tariff_scraper.py     # PDF EPM → tarifas por estrato (caché 24h)
+│   │   │   ├── slicer_parser.py      # Parse .gcode/.3mf (pdfplumber)
+│   │   │   └── makerworld_fetcher.py # Scraping API + HTML MakerWorld
+│   │   │
+│   │   └── static/                   # Archivos estáticos servidos por FastAPI
+│   │       ├── logo.png              # Logo por defecto
+│   │       ├── fonts/                # Fuentes para ReportLab
+│   │       │   ├── TrajanPro-Bold.otf
+│   │       │   └── TrajanPro-Regular.ttf
+│   │       └── companies/            # Logos subidos por cada empresa
+│   │           └── {company_id}/logo.{ext}
+│   │
+│   ├── alembic/                      # Migraciones de base de datos
+│   │   ├── env.py                    # Configuración Alembic async
+│   │   ├── script.py.mako            # Template para nuevas migraciones
+│   │   └── versions/                 # Historial de migraciones (ver docs/base-de-datos.md)
+│   │
+│   ├── tests/                        # Suite de tests
+│   │   ├── conftest.py               # Fixtures MagicMock (sin DB real)
+│   │   ├── test_calculator.py        # Motor de cálculo
+│   │   ├── test_pdf_generator.py     # ReportLab PDF
+│   │   ├── test_manual_quote.py      # Cotizaciones manuales
+│   │   ├── test_integration_http.py  # 21 tests HTTP con httpx
+│   │   ├── test_queue.py             # Cola de impresión
+│   │   ├── test_slicer_parser.py     # Parser G-code
+│   │   ├── test_slicer_router_helpers.py
+│   │   ├── test_exchange_rate.py
+│   │   ├── test_tariff_scraper.py
+│   │   ├── test_makerworld_fetcher.py
+│   │   └── test_printed_item_schemas.py
+│   │
+│   ├── Containerfile                 # Imagen Python 3.11-slim + WeasyPrint deps
+│   ├── requirements.txt
+│   ├── alembic.ini
+│   ├── pytest.ini
+│   └── .coveragerc
+│
+├── frontend/                         # SPA React
+│   ├── src/
+│   │   ├── App.jsx                   # Router raíz + PrivateRoute + AppRoutes
+│   │   ├── main.jsx                  # Entry point React
+│   │   ├── index.css                 # TailwindCSS v4 + clases custom tf-*
+│   │   │
+│   │   ├── context/
+│   │   │   ├── AuthContext.jsx       # JWT: login, logout, user state
+│   │   │   └── DirtyStateContext.jsx # Rastreo de forms sin guardar
+│   │   │
+│   │   ├── components/
+│   │   │   ├── StudioLayout.jsx      # Layout pantalla inicio
+│   │   │   ├── CostLayout.jsx        # Layout app Cost
+│   │   │   ├── InventoryLayout.jsx   # Layout app Archive
+│   │   │   ├── SlicerLayout.jsx      # Layout app Slicer
+│   │   │   ├── MaintenanceLayout.jsx # Layout app Mantenimiento
+│   │   │   ├── QueueLayout.jsx       # Layout app Queue
+│   │   │   ├── CompanyLayout.jsx     # Layout app Compañía
+│   │   │   ├── SettingsLayout.jsx    # Layout configuración de cuenta
+│   │   │   ├── AppSwitcherDrawer.jsx # Cajón para cambiar entre apps
+│   │   │   ├── ConfirmDialog.jsx     # Modal de confirmación global
+│   │   │   ├── Layout.jsx            # Layout legacy (deprecado)
+│   │   │   └── ModelViewer3D.jsx     # Visor 3D de modelos STL
+│   │   │
+│   │   ├── config/
+│   │   │   ├── apps.js               # Definición de las 6 apps (id, nombre, ruta, color)
+│   │   │   └── maintenance.js        # 12 tipos de mantenimiento BambuLab P2S
+│   │   │
+│   │   ├── pages/
+│   │   │   ├── Login.jsx
+│   │   │   ├── StudioHomePage.jsx    # Panel de apps (estilo Okta)
+│   │   │   ├── CalculatorPage.jsx    # Calculadora de costos
+│   │   │   ├── ManualQuotePage.jsx   # Cotización manual multi-producto
+│   │   │   ├── QuotesPage.jsx        # Historial cotizaciones cliente
+│   │   │   ├── PrintersPage.jsx
+│   │   │   ├── HistoryPage.jsx       # Historial cotizaciones de costo
+│   │   │   ├── SettingsPage.jsx
+│   │   │   ├── company/
+│   │   │   │   ├── CompanyProfilePage.jsx
+│   │   │   │   ├── CompanyBrandingPage.jsx  # Paleta JSONB + términos
+│   │   │   │   ├── CompanyTemplatesPage.jsx # Lista de templates Liquid
+│   │   │   │   └── CompanyTemplateEditorPage.jsx # Editor + validar + preview
+│   │   │   ├── inventory/
+│   │   │   │   ├── InventoryStockPage.jsx   # Stock unificado paginado
+│   │   │   │   ├── InventoryFilamentsPage.jsx
+│   │   │   │   ├── InventorySuppliesPage.jsx
+│   │   │   │   ├── InventoryToolsPage.jsx
+│   │   │   │   ├── InventoryPrintsPage.jsx  # Impresiones con fotos
+│   │   │   │   ├── InventoryPurchasesPage.jsx
+│   │   │   │   └── InventoryImportExportPage.jsx
+│   │   │   ├── maintenance/
+│   │   │   │   ├── MaintenanceDashboardPage.jsx
+│   │   │   │   ├── MaintenanceLogsPage.jsx
+│   │   │   │   └── MaintenancePrintersPage.jsx
+│   │   │   ├── queue/
+│   │   │   │   ├── QueuePage.jsx
+│   │   │   │   └── QueueHistoryPage.jsx
+│   │   │   ├── settings/
+│   │   │   │   ├── CuentaPage.jsx
+│   │   │   │   ├── EmpresaPage.jsx
+│   │   │   │   └── UsuariosPage.jsx
+│   │   │   └── slicer/
+│   │   │       ├── SlicerUploadPage.jsx
+│   │   │       └── SlicerHistoryPage.jsx
+│   │   │
+│   │   ├── services/
+│   │   │   └── api.js                # Axios + interceptors + todas las funciones API
+│   │   │
+│   │   └── utils/
+│   │       └── apiError.js           # Helper para extraer mensaje de error de Axios
+│   │
+│   ├── nginx.conf                    # Config Nginx (proxy API, SPA fallback, headers)
+│   ├── Containerfile                 # Multi-stage: Node build → Nginx serve
+│   ├── vite.config.js                # Vite + proxy /api → localhost:8000
+│   └── package.json
+│
+├── slicer/                           # Microservicio OrcaSlicer
+│   ├── app.py                        # FastAPI pequeño: /slice, /health, /cli-help
+│   ├── Containerfile                 # Ubuntu 24.04 + OrcaSlicer AppImage
+│   └── requirements.txt
+│
+├── tracker/                          # Microservicio de tracking de pedidos
+│   ├── app.py                        # Escanea tracking URLs y actualiza DB
+│   ├── Containerfile
+│   └── requirements.txt
+│
+├── quadlet/                          # Definiciones systemd (Podman Quadlet)
+│   ├── calculator3d.network
+│   ├── calculator3d-data.volume
+│   ├── calculator3d-pgdata.volume
+│   ├── calculator3d-slicer-jobs.volume
+│   ├── calculator3d-postgres.container
+│   ├── calculator3d-backend.container
+│   ├── calculator3d-frontend.container
+│   ├── calculator3d-slicer.container
+│   └── calculator3d-tunnel.container
+│
+├── deploy.sh                         # Script de despliegue completo
+├── podman-compose.yml                # Alternativa a Quadlet (desarrollo/staging)
+└── .env.example                      # Plantilla de variables de entorno
+```
+
+---
+
+## Modelo de datos — resumen
+
+### Multi-tenant
+
+Toda la data está aislada por `company_id` (UUID). La empresa por defecto tiene UUID fijo `00000000-0000-0000-0000-000000000001`.
+
+```
+Company (UUID PK)
+  ├── User (FK company_id)
+  ├── Printer (FK company_id)
+  ├── InventoryItem (FK company_id)
+  ├── PurchaseOrder (FK company_id)
+  ├── PrintedItem (FK company_id)
+  ├── Quote (FK company_id)
+  ├── ClientQuote (FK company_id)
+  ├── AppSettings (FK company_id, UNIQUE)
+  ├── SlicingJob (FK company_id)
+  ├── MaintenancePrinter (FK company_id)
+  ├── MaintenanceLog (FK company_id)
+  ├── PrintQueueItem (FK company_id)
+  └── CompanyTemplate (FK company_id)
+```
+
+### Entidades principales
+
+| Entidad | Tabla | Descripción |
+|---------|-------|-------------|
+| `Company` | `companies` | Empresa: nombre, logo, pdf_palette (JSONB), pdf_terms |
+| `CompanyTemplate` | `company_templates` | Template Liquid HTML para PDF de cotizaciones |
+| `User` | `users` | Usuario con hash bcrypt, is_admin |
+| `Printer` | `printers` | Impresora 3D con parámetros de costo |
+| `InventoryItem` | `inventory_items` | Stock unificado: filamentos, insumos, herramientas |
+| `PurchaseOrder` | `purchase_orders` | Pedido de compra con tracking internacional |
+| `PrintedItem` | `printed_items` | Impresión terminada con foto e inventario |
+| `Quote` | `quotes` | Cálculo de costo de impresión guardado |
+| `ClientQuote` | `client_quotes` | Cotización multi-producto para cliente (COT-XXXX) |
+| `AppSettings` | `app_settings` | Config por empresa (tarifas, margen) |
+| `ElectricityTariff` | `electricity_tariffs` | Historial tarifas EPM por mes/estrato |
+| `SlicingJob` | `slicing_jobs` | Trabajo de laminado STL/G-code |
+| `MaintenancePrinter` | `maintenance_printers` | Impresora registrada para mantenimiento |
+| `MaintenanceLog` | `maintenance_logs` | Registro de mantenimiento con items usados |
+| `PrintQueueItem` | `print_queue` | Item en cola de impresión (pending/printing/done/cancelled) |
+
+---
+
+## Flujo de generación de PDF de cotización cliente
+
+```
+GET /api/client-quotes/{id}/pdf
+          │
+          ▼
+  ¿Tiene la empresa un CompanyTemplate
+   activo (is_default=true) para tipo "cot" o "all"?
+          │
+    ┌─────┴──────┐
+    │ Sí         │ No
+    ▼            ▼
+python-liquid   ReportLab
++ WeasyPrint    pdf_generator.py
+liquid_pdf.py   (fallback con
+                 colores de Company)
+    │            │
+    └─────┬──────┘
+          ▼
+    PDF bytes → Response(media_type="application/pdf")
+```
+
+---
+
+## Flujo de autenticación
+
+```
+POST /api/auth/login (form: username + password)
+          │
+          ▼
+  Verificar bcrypt hash (passlib)
+          │
+          ▼
+  Generar JWT (python-jose, HS256, 24h por defecto)
+          │
+          ▼
+  access_token → localStorage (frontend)
+          │
+          ▼
+  Cada request: Authorization: Bearer <token>
+          │
+          ▼
+  Backend: oauth2_scheme → verify_token → current_user
+          │
+          ▼
+  Si 401 → frontend dispara 'auth:unauthorized' → redirect /login
+```
+
+---
+
+## Motor de cálculo (calculator.py)
+
+El motor opera exclusivamente con `Decimal` para evitar errores de punto flotante (IEEE 754). Los valores de la base de datos llegan como `Decimal` (columnas `Numeric`). Los valores de JSON se convierten con `_d(value)` antes de cualquier operación.
+
+```
+Fórmula (en orden):
+
+1. material_cost   = Σ(gramos × precio_por_kg / 1000)
+2. electricity     = (watts × horas / 1000) × tarifa_kWh
+3. depreciation    = (precio_impresora / vida_util) × horas
+4. maintenance     = (nozzle/vida + placa/vida + otros) × horas
+5. labor           = (t_prep + t_post) × costo_hora
+6. base_cost       = sum(1..5)
+7. failure_cost    = base_cost × (failure_rate / 100)
+8. subtotal        = base_cost + failure_cost
+9. supplies_cost   = Σ(qty × price_per_unit)
+10. subtotal_final = subtotal + supplies_cost
+11. margin_amount  = subtotal_final × (margin / 100)
+12. total_per_unit = (subtotal_final + margin_amount) / quantity
+```
+
+---
+
+## Sistema de templates Liquid
+
+Los templates de cotización son HTML puro con sintaxis Liquid. Se procesan con `python-liquid` y se convierten a PDF con **WeasyPrint**.
+
+### Restricciones de CSS en WeasyPrint
+
+WeasyPrint no es un navegador completo. Estas propiedades CSS **no funcionan**:
+
+| No soportado | Alternativa |
+|---|---|
+| `display: flex` | `<table>` o bloques inline |
+| `display: grid` | `<table>` |
+| `gap` en flex/grid | `padding`/`margin` en celdas |
+| `linear-gradient()` | Color sólido |
+| `position: fixed/absolute` | No usar |
+| `overflow: hidden` con `border-radius` | Simplificar |
+| `var(--variable)` | Variables Liquid directamente |
+
+Ver [templates-liquid.md](templates-liquid.md) para la guía completa de variables disponibles.
+
+---
+
+## Red interna (Podman)
+
+Todos los contenedores se comunican en la red `calculator3d` (bridge). Los nombres de contenedor sirven como hostnames:
+
+| Hostname interno | Puerto | Quién lo usa |
+|---|---|---|
+| `calculator3d-postgres` | `5432` | backend, tracker |
+| `calculator3d-backend` | `8000` | frontend (nginx proxy) |
+| `calculator3d-slicer` | `8001` | backend (POST /slicer/*) |
+| `calculator3d-tracker` | `8002` | backend (POST /scan-tracking) |
+| `calculator3d-frontend` | `80` | cloudflared tunnel |
+
+---
+
+## Volúmenes persistentes
+
+| Volumen | Montaje | Contenido |
+|---|---|---|
+| `calculator3d-pgdata` | `/var/lib/postgresql/data` | Datos PostgreSQL |
+| `calculator3d-data` | `/app/static` | Logos, imágenes de impresiones |
+| `calculator3d-slicer-jobs` | `/slicer_jobs` | Archivos STL/G-code temporales |
+
+---
+
+## CI/CD
+
+```
+git push → main
+      │
+      ▼
+GitHub Actions (ubuntu-latest)
+      │
+      ├─ Setup Python 3.11
+      ├─ pip install requirements.txt
+      ├─ alembic upgrade head (PostgreSQL CI)
+      ├─ pytest --cov --cov-fail-under=80
+      └─ Upload coverage.xml artifact
+      │
+      ▼ (solo si tests pasan Y es push a main)
+Self-hosted runner (Linux PC)
+      │
+      ├─ git pull origin main
+      └─ ./deploy.sh
+            │
+            ├─ podman build (backend, frontend, slicer)
+            ├─ podman pull postgres:16-alpine
+            ├─ Instalar Quadlets → systemctl daemon-reload
+            ├─ systemctl restart calculator3d-postgres
+            ├─ Esperar PostgreSQL ready (pg_isready)
+            ├─ podman run --rm → alembic upgrade head
+            ├─ systemctl restart backend, slicer, frontend
+            ├─ Verificar /api/health
+            └─ systemctl restart calculator3d-tunnel
+```

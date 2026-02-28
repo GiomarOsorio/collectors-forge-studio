@@ -1,0 +1,406 @@
+# Base de Datos — TurtleForge Studio
+
+PostgreSQL 16 con SQLAlchemy 2.0 async + asyncpg. Migraciones gestionadas con Alembic.
+
+---
+
+## Conexión
+
+**En contenedor (producción):**
+```bash
+# Shell interactivo
+podman exec -it calculator3d-postgres psql -U turtleforge -d turtleforge
+
+# Consulta directa
+podman exec calculator3d-postgres \
+  psql -U turtleforge -d turtleforge -c "SELECT now();"
+```
+
+**URL de conexión:**
+```
+postgresql+asyncpg://turtleforge:<password>@calculator3d-postgres:5432/turtleforge
+```
+
+---
+
+## Historial de migraciones
+
+Las migraciones están en `backend/alembic/versions/`. Se aplican con `alembic upgrade head`.
+
+| Revisión | Archivo | Descripción |
+|---|---|---|
+| `a3f8d2c19b47` | `a3f8d2c19b47_initial_schema.py` | Schema inicial: users, filaments, printers, supplies, quotes, settings, electricity_tariffs |
+| `f4a1b9c2d8e7` | `f4a1b9c2d8e7_add_company_id.py` | Multi-tenant: tabla `companies` (UUID PK), company_id en todas las entidades. Empresa por defecto UUID `000...0001` |
+| `a7b8c9d0e1f2` | `a7b8c9d0e1f2_add_client_quotes.py` | Tabla `client_quotes`: cotizaciones multi-producto COT-XXXX |
+| `b1c2d3e4f5a6` | `b1c2d3e4f5a6_add_inventory.py` | Tabla `inventory_items` (stock unificado) y `purchase_orders` / `purchase_order_items` |
+| `b2c3d4e5f6a7` | `b2c3d4e5f6a7_add_tracking_data_to_purchase_orders.py` | Campos de tracking en purchase_orders: tracking_number, carrier, status, tracking_url, etc. |
+| `c2d3e4f5a6b7` | `c2d3e4f5a6b7_merge_filaments_supplies_to_inventory.py` | Migra filamentos e insumos a `inventory_items`; quotes pasan a referenciar `inventory_item_id` |
+| `c3d4e5f6a7b8` | `c3d4e5f6a7b8_add_maintenance.py` | Tablas `maintenance_printers`, `maintenance_logs`, `maintenance_log_items` |
+| `c3d5e7f9a1b3` | `c3d5e7f9a1b3_float_to_numeric.py` | Columnas de precio cambiadas de Float a Numeric(12,4) para precisión Decimal |
+| `c4d5e6f7a8b9` | `c4d5e6f7a8b9_maintenance_use_printers.py` | maintenance_printers referencia a tabla `printers` en lugar de tener nombre propio |
+| `d1e2f3a4b5c6` | `d1e2f3a4b5c6_add_printed_items.py` | Tabla `printed_items`: impresiones 3D con foto, precio y stock |
+| `d3e4f5a6b7c8` | `d3e4f5a6b7c8_add_slicing_jobs.py` | Tabla `slicing_jobs`: trabajos de laminado STL/G-code |
+| `d5e6f7a8b9c0` | `d5e6f7a8b9c0_add_print_queue.py` | Tabla `print_queue`: cola de impresión con posición y deducción atómica de inventario |
+| `e2f3a4b5c6d7` | `e2f3a4b5c6d7_quotes_jsonb_details.py` | Columna `details` JSONB en `quotes` para desglose completo de costos |
+| `e6f7a8b9c0d1` | `e6f7a8b9c0d1_add_iva_to_client_quotes.py` | Campo `include_iva` (bool) y `usd_rate` en `client_quotes` |
+| `f5a6b7c8d9e0` | `f5a6b7c8d9e0_add_company_profile.py` | Campos de perfil en `companies`: slogan, address, phone, email, nit, logo_url |
+| `f7a8b9c0d1e2` | `f7a8b9c0d1e2_add_company_pdf_settings.py` | Tabla `company_templates`; campo `pdf_terms` en companies |
+| `a9b0c1d2e3f4` | `a9b0c1d2e3f4_palette_jsonb.py` | Campo `pdf_palette` JSONB en companies: `[{name, hex}]`; elimina los 4 campos de color fijos |
+| `a1b2c3d4e5f6` | `a1b2c3d4e5f6_add_usd_rate_to_client_quotes.py` | Campo `usd_rate` agregado en `client_quotes` para guardar la tasa USD/COP al momento de emisión |
+
+**Aplicar todas las migraciones:**
+```bash
+alembic upgrade head
+```
+
+**Verificar versión actual:**
+```bash
+alembic current
+# o
+podman exec calculator3d-postgres \
+  psql -U turtleforge -d turtleforge \
+  -c "SELECT version_num FROM alembic_version;"
+```
+
+---
+
+## Esquema completo de tablas
+
+### `companies`
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | UUID PK | UUID fijo `000...0001` para empresa default |
+| `name` | VARCHAR(200) | Nombre de la empresa |
+| `slogan` | VARCHAR(500) | Eslogan (opcional) |
+| `address` | TEXT | Dirección postal |
+| `phone` | VARCHAR(50) | Teléfono |
+| `email` | VARCHAR(200) | Correo electrónico |
+| `nit` | VARCHAR(50) | NIT o número fiscal |
+| `logo_url` | VARCHAR(500) | Ruta relativa al logo (`/static/companies/{id}/logo.ext`) |
+| `pdf_terms` | TEXT | Términos de pago para el pie de cotización |
+| `pdf_palette` | JSONB | Paleta de colores: `[{"name": "primary", "hex": "#1A1A1A"}, ...]` |
+| `created_at` | TIMESTAMP | Fecha de creación |
+
+### `company_templates`
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK autoincrement | — |
+| `company_id` | UUID FK → companies | — |
+| `name` | VARCHAR(200) | Nombre del template |
+| `description` | TEXT | Descripción opcional |
+| `template_type` | VARCHAR(20) | `cot` \| `tfc` \| `all` |
+| `content` | TEXT | HTML + Liquid completo |
+| `is_default` | BOOLEAN | Si es el template activo para su tipo |
+| `created_at` | TIMESTAMP | — |
+| `updated_at` | TIMESTAMP | — |
+
+### `users`
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | UUID PK | — |
+| `username` | VARCHAR(50) UNIQUE | — |
+| `email` | VARCHAR(200) UNIQUE | — |
+| `hashed_password` | VARCHAR(200) | bcrypt hash |
+| `is_admin` | BOOLEAN | Permisos de administrador |
+| `company_id` | UUID FK → companies | — |
+| `created_at` | TIMESTAMP | — |
+
+### `printers`
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `company_id` | UUID FK → companies | — |
+| `name` | VARCHAR(200) | Nombre descriptivo |
+| `model` | VARCHAR(200) | Modelo del equipo |
+| `purchase_price` | NUMERIC(12,4) | Precio de compra en USD |
+| `power_consumption_watts` | NUMERIC(12,4) | Consumo en W durante impresión |
+| `estimated_lifespan_hours` | NUMERIC(12,4) | Vida útil estimada en horas |
+| `current_hours` | NUMERIC(12,4) | Horas acumuladas de uso |
+| `nozzle_price` | NUMERIC(12,4) | Precio de reemplazo de boquilla |
+| `nozzle_lifespan_hours` | NUMERIC(12,4) | Vida útil de la boquilla |
+| `buildplate_price` | NUMERIC(12,4) | Precio de la placa de construcción |
+| `buildplate_lifespan_hours` | NUMERIC(12,4) | Vida útil de la placa |
+| `other_maintenance_per_hour` | NUMERIC(12,4) | Otros costos de mant. por hora |
+| `notes` | TEXT | Notas libres |
+
+### `filaments` (legacy)
+
+Tabla legacy reemplazada por `inventory_items` con `category="Filamento"`. Se mantiene por compatibilidad con cotizaciones antiguas.
+
+| Columna | Tipo |
+|---|---|
+| `id` | INTEGER PK |
+| `company_id` | UUID FK |
+| `brand` | VARCHAR(100) |
+| `type` | VARCHAR(50) |
+| `color` | VARCHAR(50) |
+| `price_per_kg` | NUMERIC(12,4) |
+| `weight_per_roll` | NUMERIC(12,4) |
+| `diameter` | NUMERIC(6,2) |
+| `density` | NUMERIC(6,4) |
+| `notes` | TEXT |
+
+### `inventory_items`
+
+Stock unificado para filamentos, insumos, herramientas y cualquier material.
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | UUID PK | — |
+| `company_id` | UUID FK → companies | — |
+| `name` | VARCHAR(200) | Nombre del ítem |
+| `category` | VARCHAR(50) | `Filamento` \| `Insumo` \| `Herramienta` \| `Otro` |
+| `brand` | VARCHAR(100) | Marca (opcional) |
+| `material_type` | VARCHAR(50) | Tipo de material: PLA, PETG, etc. (para filamentos) |
+| `color` | VARCHAR(50) | Color (para filamentos) |
+| `unit` | VARCHAR(20) | Unidad: `kg`, `g`, `unidad`, `m`, etc. |
+| `quantity` | NUMERIC(12,4) | Stock actual |
+| `min_quantity` | NUMERIC(12,4) | Mínimo para alerta de reorden |
+| `price_per_unit` | NUMERIC(12,4) | Precio por unidad en USD |
+| `location` | VARCHAR(100) | Ubicación física |
+| `notes` | TEXT | Notas |
+| `needs_reorder` | BOOLEAN | Flag manual de "necesita compra" |
+| `created_at` | TIMESTAMP | — |
+| `updated_at` | TIMESTAMP | — |
+
+### `purchase_orders`
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | UUID PK | — |
+| `company_id` | UUID FK | — |
+| `supplier` | VARCHAR(200) | Proveedor |
+| `order_date` | TIMESTAMP | Fecha de pedido |
+| `status` | VARCHAR(20) | `pending` \| `shipped` \| `arrived` |
+| `total_usd` | NUMERIC(12,4) | Total en USD |
+| `notes` | TEXT | — |
+| `tracking_number` | VARCHAR(200) | Número de rastreo |
+| `carrier` | VARCHAR(100) | Transportista |
+| `tracking_url` | VARCHAR(500) | URL de seguimiento |
+| `tracking_status` | VARCHAR(100) | Estado del tracking |
+| `tracking_last_update` | TIMESTAMP | Última actualización |
+| `arrived_at` | TIMESTAMP | Fecha de llegada efectiva |
+
+### `purchase_order_items`
+
+| Columna | Tipo |
+|---|---|
+| `id` | INTEGER PK |
+| `purchase_order_id` | UUID FK |
+| `inventory_item_id` | UUID FK → inventory_items |
+| `quantity` | NUMERIC(12,4) |
+| `unit_price` | NUMERIC(12,4) |
+
+### `printed_items`
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | UUID PK | — |
+| `company_id` | UUID FK | — |
+| `name` | VARCHAR(200) | Nombre del modelo |
+| `description` | TEXT | — |
+| `unit_price` | NUMERIC(10,2) | Precio de venta |
+| `quantity` | INTEGER | Stock disponible |
+| `image_url` | VARCHAR(500) | Ruta a la imagen (`/static/prints/{id}.ext`) |
+| `notes` | TEXT | — |
+| `created_at` | TIMESTAMP | — |
+
+### `quotes`
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `company_id` | UUID FK | — |
+| `piece_name` | VARCHAR(200) | Nombre de la pieza |
+| `description` | TEXT | — |
+| `client_name` | VARCHAR(200) | — |
+| `inventory_item_id` | UUID FK → inventory_items | Filamento principal |
+| `printer_id` | INTEGER FK → printers | — |
+| `weight_grams` | NUMERIC(12,4) | — |
+| `print_time_hours` | NUMERIC(12,4) | — |
+| `quantity` | INTEGER | — |
+| `margin_percent` | NUMERIC(8,4) | — |
+| `total_price` | NUMERIC(12,4) | Total calculado |
+| `details` | JSONB | Desglose completo: {material_cost, electricity_cost, ...} |
+| `created_at` | TIMESTAMP | — |
+
+### `client_quotes`
+
+Cotizaciones multi-producto para clientes (COT-XXXX).
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `company_id` | UUID FK | — |
+| `quote_number` | VARCHAR(20) | `COT-0001` (auto-incrementado por empresa) |
+| `client_name` | VARCHAR(200) | — |
+| `description` | TEXT | — |
+| `quote_date` | TIMESTAMP | Fecha de emisión |
+| `expiry_date` | TIMESTAMP | Fecha de vencimiento |
+| `items` | JSONB | `[{name, quantity, unit_price, line_total}]` |
+| `subtotal` | NUMERIC(12,4) | — |
+| `iva_amount` | NUMERIC(12,4) | — |
+| `total` | NUMERIC(12,4) | — |
+| `include_iva` | BOOLEAN | Si aplica IVA (19%) |
+| `usd_rate` | NUMERIC(12,4) | Tasa USD/COP al momento de emisión |
+| `notes` | TEXT | — |
+| `created_at` | TIMESTAMP | — |
+
+### `app_settings`
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `company_id` | UUID FK UNIQUE | Una config por empresa |
+| `user_id` | UUID FK nullable | Legacy |
+| `electricity_rate` | NUMERIC(12,4) | USD/kWh |
+| `failure_rate_percent` | NUMERIC(8,4) | % de absorción de fallos |
+| `labor_cost_per_hour` | NUMERIC(12,4) | USD/hora de trabajo |
+| `default_margin_percent` | NUMERIC(8,4) | % de margen por defecto |
+| `currency` | VARCHAR(10) | `USD` |
+
+### `electricity_tariffs`
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `month_label` | VARCHAR(50) | `Enero 2026` |
+| `stratum` | INTEGER | 1–6 |
+| `rate_cop_kwh` | NUMERIC(12,4) | Tarifa en COP/kWh |
+| `rate_usd_kwh` | NUMERIC(12,4) | Tarifa en USD/kWh |
+| `multiplier` | NUMERIC(8,4) | Factor COP→USD aplicado |
+| `scraped_at` | TIMESTAMP | Cuándo se obtuvo |
+
+### `slicing_jobs`
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | UUID PK | — |
+| `company_id` | UUID FK | — |
+| `status` | VARCHAR(20) | `pending` \| `processing` \| `done` \| `failed` |
+| `source_type` | VARCHAR(20) | `gcode` \| `3mf` \| `stl` \| `makerworld` |
+| `filename` | VARCHAR(500) | Nombre del archivo original |
+| `weight_grams` | NUMERIC(10,2) | Peso del filamento en g |
+| `print_time_hours` | NUMERIC(10,4) | Tiempo de impresión |
+| `filament_type` | VARCHAR(50) | PLA, PETG, etc. |
+| `layer_height` | NUMERIC(6,3) | — |
+| `support_enabled` | BOOLEAN | — |
+| `infill_percent` | INTEGER | — |
+| `error_message` | TEXT | Si falló |
+| `created_at` | TIMESTAMP | — |
+
+### `maintenance_printers`
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `company_id` | UUID FK | — |
+| `printer_id` | INTEGER FK → printers | — |
+
+### `maintenance_logs`
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `company_id` | UUID FK | — |
+| `maintenance_printer_id` | INTEGER FK | — |
+| `maintenance_type` | VARCHAR(100) | Tipo de mantenimiento |
+| `notes` | TEXT | — |
+| `performed_at` | TIMESTAMP | Fecha del mantenimiento |
+| `cost_usd` | NUMERIC(10,2) | Costo en USD |
+
+### `maintenance_log_items`
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `log_id` | INTEGER FK → maintenance_logs | — |
+| `inventory_item_id` | UUID FK → inventory_items | Ítem usado |
+| `quantity` | NUMERIC(12,4) | Cantidad usada (se descuenta del stock) |
+
+### `print_queue`
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | UUID PK | — |
+| `company_id` | UUID FK | — |
+| `quote_id` | INTEGER FK → quotes SET NULL | — |
+| `status` | VARCHAR(20) | `pending` \| `printing` \| `done` \| `cancelled` |
+| `position` | INTEGER | Orden en la cola (menor = primero) |
+| `printer_id` | INTEGER FK nullable | Impresora asignada |
+| `inventory_item_id` | UUID FK nullable | Filamento principal a descontar |
+| `weight_grams` | NUMERIC(10,2) | — |
+| `print_time_hours` | NUMERIC(10,4) | — |
+| `additional_filaments_detail` | JSONB | `[{filament_id, name, weight_grams, material_cost}]` |
+| `supplies_detail` | JSONB | `[{supply_id, name, unit, price_per_unit, quantity}]` |
+| `notes` | TEXT | — |
+| `added_at` | TIMESTAMP | — |
+| `started_at` | TIMESTAMP | — |
+| `completed_at` | TIMESTAMP | — |
+
+---
+
+## Comandos útiles en PostgreSQL
+
+```sql
+-- Ver todas las tablas
+\dt
+
+-- Contar registros por tabla
+SELECT schemaname, tablename,
+       n_live_tup AS rows
+FROM pg_stat_user_tables
+ORDER BY n_live_tup DESC;
+
+-- Ver la versión de Alembic
+SELECT * FROM alembic_version;
+
+-- Ver todas las empresas
+SELECT id, name FROM companies;
+
+-- Ver usuarios por empresa
+SELECT u.username, u.email, u.is_admin, c.name AS empresa
+FROM users u JOIN companies c ON u.company_id = c.id;
+
+-- Ver templates de cotización
+SELECT id, name, template_type, is_default, length(content) AS content_len
+FROM company_templates ORDER BY company_id, created_at;
+
+-- Ver stock bajo mínimo
+SELECT name, category, quantity, min_quantity
+FROM inventory_items
+WHERE quantity < min_quantity
+ORDER BY (quantity / min_quantity);
+
+-- Ver cola de impresión activa
+SELECT id, status, position, notes, added_at
+FROM print_queue
+WHERE status IN ('pending', 'printing')
+ORDER BY position;
+
+-- Ver historial de cotizaciones de cliente
+SELECT quote_number, client_name, total, created_at
+FROM client_quotes
+ORDER BY created_at DESC
+LIMIT 10;
+```
+
+---
+
+## Notas importantes sobre asyncpg
+
+asyncpg 0.29.0 tiene comportamientos específicos:
+
+1. **`TIMESTAMP WITHOUT TIME ZONE`**: Rechaza `datetime` con `tzinfo`. Siempre usar `.replace(tzinfo=None)`:
+   ```python
+   from datetime import datetime
+   created_at = datetime.utcnow().replace(tzinfo=None)
+   ```
+
+2. **`Numeric` → `Decimal`**: asyncpg devuelve columnas `NUMERIC/DECIMAL` como `Decimal` de Python automáticamente. No convertir a float antes de cálculos.
+
+3. **Transacciones y SAVEPOINT**: El `env.py` de Alembic usa `engine.connect()` (no `engine.begin()`) para evitar el problema del SAVEPOINT anidado que dejaba `alembic_version` sin actualizar.
