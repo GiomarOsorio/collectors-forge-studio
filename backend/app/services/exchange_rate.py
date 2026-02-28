@@ -72,11 +72,19 @@ async def get_usd_to_cop() -> float:
             market_rate = float(data["rates"]["COP"])
             rate_with_markup = round(market_rate + COP_MARKUP, 2)
             _cache = (rate_with_markup, time.time())
-            logger.info(f"Tasa USD/COP actualizada: {market_rate} + {COP_MARKUP} = {rate_with_markup}")
+            logger.info("Tasa USD/COP actualizada: %s + %s = %s", market_rate, COP_MARKUP, rate_with_markup)
             return rate_with_markup
+    except httpx.TimeoutException:
+        logger.warning("Timeout al consultar API de tasa USD/COP (5s)")
+    except httpx.HTTPStatusError as e:
+        logger.warning("API USD/COP devolvió error HTTP %s", e.response.status_code)
+    except httpx.RequestError as e:
+        logger.warning("Error de red al consultar API USD/COP: %s", type(e).__name__)
+    except (KeyError, ValueError, TypeError) as e:
+        logger.warning("Respuesta inesperada de la API USD/COP: %s", e)
     except Exception as e:
-        logger.warning(f"No se pudo obtener la tasa USD/COP: {e}")
-        # Devolver caché anterior aunque esté vencido
-        if _cache is not None:
-            return _cache[0]
-        return round(_FALLBACK_RATE + COP_MARKUP, 2)
+        logger.warning("Error inesperado al obtener tasa USD/COP: %s", e)
+    # Devolver caché anterior aunque esté vencido, o valor de respaldo
+    if _cache is not None:
+        return _cache[0]
+    return round(_FALLBACK_RATE + COP_MARKUP, 2)

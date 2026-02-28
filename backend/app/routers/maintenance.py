@@ -118,6 +118,8 @@ async def _get_company_printer(
 @router.get("/logs/", response_model=List[MaintenanceLogResponse])
 async def list_logs(
     printer_id: Optional[int] = Query(None),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -128,6 +130,8 @@ async def list_logs(
 
     Args:
         printer_id:   ID de impresora para filtrar (opcional).
+        skip:         Registros a omitir (paginación).
+        limit:        Máximo de registros a retornar (default 100, máx. 500).
         db:           Sesión de base de datos.
         current_user: Usuario autenticado.
 
@@ -144,7 +148,7 @@ async def list_logs(
     )
     if printer_id is not None:
         query = query.where(MaintenanceLog.printer_id == printer_id)
-    query = query.order_by(MaintenanceLog.performed_at.desc())
+    query = query.order_by(MaintenanceLog.performed_at.desc()).offset(skip).limit(limit)
     result = await db.execute(query)
     return result.scalars().all()
 

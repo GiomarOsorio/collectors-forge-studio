@@ -19,10 +19,14 @@ Endpoints:
 """
 
 import asyncio
+import logging
+import time
 import uuid
 import zipfile
 from pathlib import Path
 from typing import List, Optional
+
+logger = logging.getLogger(__name__)
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, File, Query, status
@@ -594,3 +598,38 @@ async def delete_job(
 
     await db.delete(job)
     await db.commit()
+
+
+# ── Limpieza periódica de archivos slicer ─────────────────────────────────────
+
+_SLICER_FILE_TTL_DAYS = 7
+
+
+async def cleanup_old_slicer_files() -> int:
+    """
+    Elimina archivos del directorio SLICER_JOBS_DIR con más de 7 días de antigüedad.
+
+    Los archivos temporales de slicing (gcode, stl, 3mf) pueden acumularse si
+    el usuario no los elimina explícitamente. Esta función se llama periódicamente
+    desde el lifespan de la aplicación.
+
+    Returns:
+        int: Número de archivos eliminados.
+    """
+    if not SLICER_JOBS_DIR.exists():
+        return 0
+
+    cutoff = time.time() - _SLICER_FILE_TTL_DAYS * 24 * 3600
+    count = 0
+    for archivo in SLICER_JOBS_DIR.iterdir():
+        try:
+            if archivo.is_file() and archivo.stat().st_mtime < cutoff:
+                archivo.unlink()
+                count += 1
+                logger.debug("Slicer cleanup: eliminado %s", archivo.name)
+        except OSError as e:
+            logger.warning("Slicer cleanup: error al eliminar %s: %s", archivo.name, e)
+
+    if count:
+        logger.info("Slicer cleanup: %d archivos eliminados (TTL %d días)", count, _SLICER_FILE_TTL_DAYS)
+    return count

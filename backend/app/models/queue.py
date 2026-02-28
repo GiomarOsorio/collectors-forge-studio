@@ -46,7 +46,7 @@ class PrintQueueItem(Base):
         PGUUID(as_uuid=True), ForeignKey("companies.id"), nullable=True, index=True
     )
     quote_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("quotes.id", ondelete="SET NULL"), nullable=True
+        Integer, ForeignKey("quotes.id", ondelete="SET NULL"), nullable=True, index=True
     )
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default=text("'pending'")
