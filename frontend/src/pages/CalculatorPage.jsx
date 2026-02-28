@@ -304,7 +304,7 @@ export default function CalculatorPage() {
       piece_name: '',
       description: '',
       client_name: '',
-      inventory_item_id: filaments.length > 0 ? filaments[0].id : '',
+      inventory_item_id: '',
       printer_id: printers.length > 0 ? printers[0].id : '',
       weight_grams: '',
       print_time_minutes: '',
@@ -333,6 +333,7 @@ export default function CalculatorPage() {
       }
       await createQuote(payload);
       toast.success('Cotización guardada en el historial');
+      handleClear();
     } catch {
       toast.error('Error al guardar');
     }
@@ -766,23 +767,13 @@ export default function CalculatorPage() {
               )}
               <p className="text-xs text-gunmetal mt-4">* Precios sin IVA</p>
 
-              <div className="flex gap-3 mt-4">
-                <button
-                  onClick={handleSave}
-                  className="tf-btn-primary flex-1 py-3 text-base"
-                >
-                  <Save size={20} />
-                  Guardar
-                </button>
-                <button
-                  onClick={handleClear}
-                  className="tf-btn-ghost px-4 py-3 text-sm"
-                  title="Limpiar y calcular otra pieza"
-                >
-                  <RotateCcw size={16} />
-                  Limpiar
-                </button>
-              </div>
+              <button
+                onClick={handleSave}
+                className="tf-btn-primary w-full py-3 text-base mt-4"
+              >
+                <Save size={20} />
+                Guardar Cotización y Limpiar formulario
+              </button>
             </div>
           ) : (
             <div className="tf-card p-12 text-center">
