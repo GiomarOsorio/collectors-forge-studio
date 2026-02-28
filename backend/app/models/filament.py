@@ -58,6 +58,6 @@ class Filament(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
     )
-    company_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("companies.id"), nullable=True, index=True
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True
     )

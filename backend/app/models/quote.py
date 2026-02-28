@@ -38,8 +38,8 @@ class Quote(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"))
-    company_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("companies.id"), nullable=True, index=True
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True
     )
 
     # Información de la pieza
@@ -103,3 +103,4 @@ class Quote(Base):
     # Metadata
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

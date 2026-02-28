@@ -15,7 +15,6 @@ El documento se genera en memoria usando un buffer BytesIO.
 """
 
 import io
-import json
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -537,7 +536,7 @@ def generate_client_quote_pdf(
     elements.append(Spacer(1, 16))
 
     # ── 5. TABLA DE ÍTEMS ─────────────────────────────────────────────────────
-    items = json.loads(client_quote.items)
+    items = client_quote.items
     cols = [2.6 * inch, 1.1 * inch, 1.3 * inch, 1.5 * inch]
 
     rows = [

@@ -13,13 +13,14 @@ Las tablas de la base de datos se crean y migran a través de Alembic
 
 import asyncio
 import logging
+import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
@@ -120,6 +121,37 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_audit_logger = logging.getLogger("audit")
+
+
+@app.middleware("http")
+async def audit_log_middleware(request: Request, call_next):
+    """
+    Middleware de auditoría: registra cada petición con método, ruta,
+    IP de origen, código de respuesta y tiempo de procesamiento (ms).
+    Solo registra rutas /api/ para evitar spam de archivos estáticos.
+    """
+    if not request.url.path.startswith("/api/"):
+        return await call_next(request)
+
+    start = time.monotonic()
+    response = await call_next(request)
+    elapsed_ms = round((time.monotonic() - start) * 1000)
+
+    client_ip = request.headers.get("X-Real-IP") or (
+        request.client.host if request.client else "unknown"
+    )
+    _audit_logger.info(
+        "%s %s %s %d %dms",
+        client_ip,
+        request.method,
+        request.url.path,
+        response.status_code,
+        elapsed_ms,
+    )
+    return response
+
 
 # Registrar routers con sus respectivos prefijos y etiquetas
 app.include_router(auth.router)

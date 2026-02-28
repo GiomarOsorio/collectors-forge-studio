@@ -46,8 +46,8 @@ class AppSettings(Base):
     # user_id se mantiene por auditoría (quién creó/modificó) pero ya no es la clave de aislamiento
     user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     # company_id es el identificador de aislamiento multi-tenant (una fila por empresa)
-    company_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("companies.id"), unique=True, nullable=True
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id"), unique=True, nullable=False
     )
     electricity_rate: Mapped[Decimal] = mapped_column(
         Numeric(12, 6), server_default=text("0.150000")

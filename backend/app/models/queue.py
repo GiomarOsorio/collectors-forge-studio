@@ -42,8 +42,8 @@ class PrintQueueItem(Base):
     __tablename__ = "print_queue"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    company_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("companies.id"), nullable=True, index=True
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True
     )
     quote_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("quotes.id", ondelete="SET NULL"), nullable=True, index=True

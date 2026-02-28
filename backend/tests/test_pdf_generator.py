@@ -320,7 +320,6 @@ def _make_client_quote(**overrides):
     Crea un mock de ClientQuote con los atributos mínimos requeridos por
     generate_client_quote_pdf. Cualquier atributo puede sobreescribirse.
     """
-    import json as _json
     from datetime import date
 
     cq = MagicMock(spec=[
@@ -332,7 +331,7 @@ def _make_client_quote(**overrides):
     cq.description  = None
     cq.quote_date   = date(2024, 6, 15)
     cq.expiry_date  = date(2024, 6, 30)
-    cq.items        = _json.dumps([{"name": "Figura Dragon", "quantity": 2, "unit_price": 15.0}])
+    cq.items        = [{"name": "Figura Dragon", "quantity": 2, "unit_price": 15.0}]
     cq.subtotal     = Decimal("30.00")
     cq.include_iva  = False
     cq.iva_percent  = Decimal("19.00")

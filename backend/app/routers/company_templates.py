@@ -278,7 +278,17 @@ async def validate_liquid_template(
     )
     company = company_result.scalar_one_or_none()
 
-    result = await asyncio.to_thread(validate_template, data.content, company)
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(validate_template, data.content, company),
+            timeout=30.0,
+        )
+    except asyncio.TimeoutError:
+        return TemplateValidateResponse(
+            ok=False,
+            errors=["Tiempo de validación agotado (máx. 30 s). Simplifica el template."],
+            warnings=[],
+        )
     return TemplateValidateResponse(**result)
 
 
@@ -310,7 +320,16 @@ async def preview_template(
     )
     company = company_result.scalar_one_or_none()
 
-    result = await asyncio.to_thread(validate_template, tpl.content, company)
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(validate_template, tpl.content, company),
+            timeout=30.0,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Tiempo de renderizado agotado (máx. 30 s). Simplifica el template.",
+        )
     if not result["ok"]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

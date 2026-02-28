@@ -18,7 +18,6 @@ Cubre:
     - render_client_quote_pdf: bytes PDF con libs mockeadas.
 """
 
-import json
 from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
@@ -60,9 +59,9 @@ def _make_client_quote(**overrides):
     cq.notes = None
     cq.quote_date = date(2026, 2, 27)
     cq.expiry_date = date(2026, 3, 29)
-    cq.items = json.dumps([
+    cq.items = [
         {"name": "Figura Dragon", "quantity": 2, "unit_price": 10.0},
-    ])
+    ]
     cq.subtotal = Decimal("20.00")
     cq.include_iva = False
     cq.iva_percent = Decimal("19.00")
@@ -270,7 +269,7 @@ class TestBuildCotContext:
             include_iva=True,
             iva_percent=Decimal("19.00"),
             subtotal=Decimal("10.00"),
-            items=json.dumps([{"name": "X", "quantity": 1, "unit_price": 10.0}]),
+            items=[{"name": "X", "quantity": 1, "unit_price": 10.0}],
         )
         ctx = _build_cot_context(cq, None, 4000.0)
         # subtotal = 10 * 4000 = 40000, IVA 19% = 7600, total = 47600
@@ -310,7 +309,7 @@ class TestBuildCotContext:
     def test_items_formateados_en_cop(self):
         """Los ítems deben incluir unit_price_fmt y line_total_fmt formateados."""
         cq = _make_client_quote(
-            items=json.dumps([{"name": "Pieza X", "quantity": 2, "unit_price": 5.0}])
+            items=[{"name": "Pieza X", "quantity": 2, "unit_price": 5.0}]
         )
         # unit_price=5 USD * 4000 = 20000 COP, line_total = 40000
         ctx = _build_cot_context(cq, None, 4000.0)
@@ -323,7 +322,7 @@ class TestBuildCotContext:
     def test_usd_rate_uno_usa_precio_directo(self):
         """Con usd_rate=1.0, los precios se pasan tal cual (sin conversión)."""
         cq = _make_client_quote(
-            items=json.dumps([{"name": "Item", "quantity": 1, "unit_price": 25000.0}])
+            items=[{"name": "Item", "quantity": 1, "unit_price": 25000.0}]
         )
         ctx = _build_cot_context(cq, None, 1.0)
         assert "25.000" in ctx["items"][0]["unit_price_fmt"]

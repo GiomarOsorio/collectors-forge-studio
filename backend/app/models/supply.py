@@ -49,6 +49,6 @@ class Supply(Base):
     pack_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 4), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
-    company_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("companies.id"), nullable=True, index=True
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True
     )
