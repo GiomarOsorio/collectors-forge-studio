@@ -405,3 +405,254 @@ class TestClienteQuotePDF:
         cq     = _make_client_quote(include_iva=True)
         result = generate_client_quote_pdf(cq, usd_rate=4200.0)
         assert result[:4] == b"%PDF"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TestColoresDinamicos — _resolve_colors y _palette_dict
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestColoresDinamicos:
+    """
+    Verifica que _resolve_colors y _palette_dict leen correctamente la
+    paleta dinámica de la empresa (pdf_palette JSONB).
+
+    Sin company o con paleta vacía/None se usan los colores de marca por defecto.
+    Con paleta personalizada se usan los colores configurados.
+    """
+
+    def _make_company(**overrides):
+        """Crea un MagicMock de Company con atributos para colores."""
+        c = MagicMock()
+        c.name = "Empresa Test"
+        c.slogan = None
+        c.address = "Medellín"
+        c.logo_url = None
+        c.pdf_palette = None
+        c.pdf_terms = None
+        for k, v in overrides.items():
+            setattr(c, k, v)
+        return c
+
+    # Importamos las funciones a testear (nivel de clase para evitar import circular)
+    @staticmethod
+    def _get_helpers():
+        from app.services.pdf_generator import _resolve_colors, _palette_dict
+        return _resolve_colors, _palette_dict
+
+    def test_sin_company_usa_colores_default_carbon(self):
+        """Sin company, _resolve_colors retorna _CARBON=#1A1A1A como primary."""
+        _resolve_colors, _ = self._get_helpers()
+        colores = _resolve_colors(None)
+        # hexval() retorna string '0x1a1a1a' en ReportLab
+        assert colores["_CARBON"].hexval().lower() == "0x1a1a1a"
+
+    def test_sin_company_usa_colores_default_bronze(self):
+        """Sin company, _resolve_colors retorna _BRONZE=#B67E3A como accent."""
+        _resolve_colors, _ = self._get_helpers()
+        colores = _resolve_colors(None)
+        assert colores["_BRONZE"].hexval().lower() == "0xb67e3a"
+
+    def test_sin_company_usa_colores_default_forge_red(self):
+        """Sin company, _resolve_colors retorna _FORGE_RED=#A33221 como highlight."""
+        _resolve_colors, _ = self._get_helpers()
+        colores = _resolve_colors(None)
+        assert colores["_FORGE_RED"].hexval().lower() == "0xa33221"
+
+    def test_sin_company_usa_colores_default_gold(self):
+        """Sin company, _resolve_colors retorna _GOLD=#D1A054 como table_text."""
+        _resolve_colors, _ = self._get_helpers()
+        colores = _resolve_colors(None)
+        assert colores["_GOLD"].hexval().lower() == "0xd1a054"
+
+    def test_company_con_pdf_palette_none_usa_defaults(self):
+        """Company con pdf_palette=None → colores de marca por defecto."""
+        _resolve_colors, _ = self._get_helpers()
+        company = MagicMock()
+        company.pdf_palette = None
+        colores = _resolve_colors(company)
+        assert colores["_CARBON"].hexval().lower() == "0x1a1a1a"
+        assert colores["_BRONZE"].hexval().lower() == "0xb67e3a"
+
+    def test_company_con_primary_personalizado(self):
+        """Company con primary=#FF0000 → _CARBON usa #FF0000."""
+        _resolve_colors, _ = self._get_helpers()
+        company = MagicMock()
+        company.pdf_palette = [{"name": "primary", "hex": "#FF0000"}]
+        colores = _resolve_colors(company)
+        assert colores["_CARBON"].hexval().lower() == "0xff0000"
+
+    def test_company_con_accent_personalizado(self):
+        """Company con accent=#0000FF → _BRONZE usa #0000FF."""
+        _resolve_colors, _ = self._get_helpers()
+        company = MagicMock()
+        company.pdf_palette = [{"name": "accent", "hex": "#0000FF"}]
+        colores = _resolve_colors(company)
+        assert colores["_BRONZE"].hexval().lower() == "0x0000ff"
+
+    def test_company_con_highlight_personalizado(self):
+        """Company con highlight=#00FF00 → _FORGE_RED usa #00FF00."""
+        _resolve_colors, _ = self._get_helpers()
+        company = MagicMock()
+        company.pdf_palette = [{"name": "highlight", "hex": "#00FF00"}]
+        colores = _resolve_colors(company)
+        assert colores["_FORGE_RED"].hexval().lower() == "0x00ff00"
+
+    def test_company_con_table_text_personalizado(self):
+        """Company con table_text=#AABBCC → _GOLD usa #AABBCC."""
+        _resolve_colors, _ = self._get_helpers()
+        company = MagicMock()
+        company.pdf_palette = [{"name": "table_text", "hex": "#AABBCC"}]
+        colores = _resolve_colors(company)
+        assert colores["_GOLD"].hexval().lower() == "0xaabbcc"
+
+    def test_company_sin_primary_en_paleta_usa_default(self):
+        """Paleta sin 'primary' → _CARBON usa valor default #1A1A1A."""
+        _resolve_colors, _ = self._get_helpers()
+        company = MagicMock()
+        company.pdf_palette = [{"name": "accent", "hex": "#123456"}]
+        colores = _resolve_colors(company)
+        assert colores["_CARBON"].hexval().lower() == "0x1a1a1a"
+
+    def test_colores_fijos_siempre_presentes(self):
+        """_resolve_colors siempre incluye _IRON, _CREAM y _WHITE."""
+        _resolve_colors, _ = self._get_helpers()
+        colores = _resolve_colors(None)
+        assert "_IRON" in colores
+        assert "_CREAM" in colores
+        assert "_WHITE" in colores
+
+    def test_palette_dict_vacio_sin_paleta(self):
+        """_palette_dict con company sin pdf_palette retorna dict vacío."""
+        _, _palette_dict = self._get_helpers()
+        company = MagicMock()
+        company.pdf_palette = None
+        resultado = _palette_dict(company)
+        assert resultado == {}
+
+    def test_palette_dict_con_paleta_custom(self):
+        """_palette_dict con paleta custom retorna dict con las entradas."""
+        _, _palette_dict = self._get_helpers()
+        company = MagicMock()
+        company.pdf_palette = [
+            {"name": "primary", "hex": "#111111"},
+            {"name": "accent",  "hex": "#222222"},
+        ]
+        resultado = _palette_dict(company)
+        assert resultado["primary"] == "#111111"
+        assert resultado["accent"] == "#222222"
+
+    def test_palette_dict_none_company_retorna_vacio(self):
+        """_palette_dict con company=None retorna dict vacío."""
+        _, _palette_dict = self._get_helpers()
+        resultado = _palette_dict(None)
+        assert resultado == {}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TestPdfTermsCustom — términos de pago personalizados desde company.pdf_terms
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestPdfTermsCustom:
+    """
+    Verifica que generate_client_quote_pdf utiliza company.pdf_terms
+    cuando está configurado, en lugar de los términos por defecto.
+    """
+
+    def test_pdf_terms_custom_aparece_en_pdf(self):
+        """company.pdf_terms personalizado debe aparecer en el PDF generado."""
+        cq = _make_client_quote()
+
+        company = MagicMock()
+        company.name = "Mi Empresa"
+        company.slogan = None
+        company.address = "Medellín"
+        company.logo_url = None
+        company.pdf_palette = None
+        company.pdf_terms = "Pago 100% anticipado."
+
+        with patch("app.services.pdf_generator.SimpleDocTemplate") as MockDoc:
+            capturados = []
+            instancia = MagicMock()
+            MockDoc.return_value = instancia
+            instancia.build.side_effect = lambda elems: capturados.extend(elems)
+            generate_client_quote_pdf(cq, company=company)
+
+        paras = [e for e in capturados if isinstance(e, Paragraph)]
+        assert any("Pago 100% anticipado." in p.text for p in paras), (
+            "El término personalizado no apareció en el PDF"
+        )
+
+    def test_pdf_terms_custom_reemplaza_terminos_default(self):
+        """Con pdf_terms custom, los términos default NO deben aparecer."""
+        cq = _make_client_quote()
+
+        company = MagicMock()
+        company.name = "Mi Empresa"
+        company.slogan = None
+        company.address = "Medellín"
+        company.logo_url = None
+        company.pdf_palette = None
+        company.pdf_terms = "Solo un término custom."
+
+        with patch("app.services.pdf_generator.SimpleDocTemplate") as MockDoc:
+            capturados = []
+            instancia = MagicMock()
+            MockDoc.return_value = instancia
+            instancia.build.side_effect = lambda elems: capturados.extend(elems)
+            generate_client_quote_pdf(cq, company=company)
+
+        paras = [e for e in capturados if isinstance(e, Paragraph)]
+        textos = [p.text for p in paras]
+        # El término por defecto sobre el 50% no debe aparecer
+        assert not any("pago del 50% del monto total" in t for t in textos), (
+            "Los términos por defecto no deben aparecer cuando hay pdf_terms personalizado"
+        )
+
+    def test_pdf_terms_none_usa_terminos_default(self):
+        """Con company.pdf_terms=None, se usan los 4 términos por defecto."""
+        cq = _make_client_quote()
+
+        company = MagicMock()
+        company.name = "Mi Empresa"
+        company.slogan = None
+        company.address = "Medellín"
+        company.logo_url = None
+        company.pdf_palette = None
+        company.pdf_terms = None
+
+        with patch("app.services.pdf_generator.SimpleDocTemplate") as MockDoc:
+            capturados = []
+            instancia = MagicMock()
+            MockDoc.return_value = instancia
+            instancia.build.side_effect = lambda elems: capturados.extend(elems)
+            generate_client_quote_pdf(cq, company=company)
+
+        paras = [e for e in capturados if isinstance(e, Paragraph)]
+        textos = [p.text for p in paras]
+        assert any("pago del 50% del monto total" in t for t in textos), (
+            "Los términos por defecto deben aparecer cuando pdf_terms es None"
+        )
+
+    def test_generate_quote_pdf_con_company_pdf_terms_custom(self):
+        """generate_quote_pdf (TFC-XXXX) también usa company.pdf_terms."""
+        quote = _make_quote()
+
+        company = MagicMock()
+        company.name = "Mi Empresa"
+        company.slogan = None
+        company.address = "Medellín"
+        company.logo_url = None
+        company.pdf_palette = None
+        company.pdf_terms = "Pago anticipado TFC."
+
+        with patch("app.services.pdf_generator.SimpleDocTemplate") as MockDoc:
+            capturados = []
+            instancia = MagicMock()
+            MockDoc.return_value = instancia
+            instancia.build.side_effect = lambda elems: capturados.extend(elems)
+            generate_quote_pdf(quote, company=company)
+
+        paras = [e for e in capturados if isinstance(e, Paragraph)]
+        assert any("Pago anticipado TFC." in p.text for p in paras), (
+            "El término personalizado no apareció en generate_quote_pdf"
+        )
