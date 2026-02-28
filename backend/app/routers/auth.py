@@ -4,7 +4,8 @@ Router de autenticación y gestión de usuarios de Calculator3D.
 Este módulo expone los endpoints HTTP necesarios para autenticar usuarios
 mediante el flujo OAuth2 con contraseña y tokens JWT:
 
-- POST /api/auth/login   - Autentica las credenciales y emite un token JWT.
+- POST /api/auth/login    - Autentica las credenciales y emite un token JWT.
+- POST /api/auth/logout   - Invalida el token de acceso actual (blacklist).
 - POST /api/auth/register - Registra un nuevo usuario (solo para admins).
 - GET  /api/auth/me       - Devuelve los datos del usuario autenticado actual.
 
@@ -12,11 +13,15 @@ Todos los endpoints de este router están bajo el prefijo /api/auth y se
 etiquetan como "auth" en la documentación automática de FastAPI.
 """
 
+import jwt
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.limiter import limiter
 from app.models.user import User
@@ -28,6 +33,8 @@ from app.services.auth import (
     create_access_token,
     get_current_user,
     get_current_admin,
+    blacklist_token,
+    oauth2_scheme,
 )
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -128,6 +135,34 @@ async def register(
     # Si por algún motivo no existiera, se crea automáticamente en el primer acceso a /api/settings.
 
     return new_user
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(
+    current_user: User = Depends(get_current_user),
+    token: str = Depends(oauth2_scheme),
+):
+    """
+    Invalida el token de acceso del usuario autenticado.
+
+    Agrega el token a una blacklist en memoria para que no pueda reutilizarse
+    aunque aún no haya expirado. La entrada se elimina automáticamente cuando
+    el token expire.
+
+    Args:
+        current_user: Usuario autenticado (valida que el token sea vigente).
+        token:        Token JWT extraído del header Authorization.
+    """
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        exp = payload.get("exp")
+        if exp:
+            expiry = datetime.utcfromtimestamp(exp)
+        else:
+            expiry = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    except Exception:
+        expiry = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    blacklist_token(token, expiry)
 
 
 @router.get("/me", response_model=UserResponse)

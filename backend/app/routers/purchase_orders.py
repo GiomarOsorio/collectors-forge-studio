@@ -281,18 +281,18 @@ async def mark_order_arrived(
     # Actualizar stock de los ítems de inventario vinculados
     for order_item in order.items:
         if order_item.inventory_item_id is not None:
-            # Obtener el ítem de inventario (debe pertenecer a la misma empresa)
+            # Obtener el ítem de inventario con bloqueo pesimista para evitar race conditions
             result = await db.execute(
                 select(InventoryItem).where(
                     InventoryItem.id == order_item.inventory_item_id,
                     InventoryItem.company_id == current_user.company_id,
-                )
+                ).with_for_update()
             )
             inv_item = result.scalar_one_or_none()
             if inv_item:
                 inv_item.quantity += order_item.quantity
                 # Si el stock ya supera el mínimo, desactivar needs_purchase
-                if inv_item.quantity >= inv_item.min_quantity:
+                if inv_item.min_quantity is None or inv_item.quantity >= inv_item.min_quantity:
                     inv_item.needs_purchase = False
 
     await db.commit()

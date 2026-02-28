@@ -47,7 +47,8 @@ class Settings(BaseSettings):
 
     SECRET_KEY: str  # Requerida — define en .env o variable de entorno
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ENABLE_DOCS: bool = False  # Habilitar /docs y /redoc solo en desarrollo
     ADMIN_USERNAME: str = "admin"
     ADMIN_PASSWORD: str  # Requerida — define en .env o variable de entorno
     ADMIN_EMAIL: str = "admin@calculator3d.local"

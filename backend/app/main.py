@@ -64,11 +64,14 @@ async def lifespan(app: FastAPI):
 
 
 # Instancia principal de la aplicación FastAPI con metadatos para la documentación
+# /docs y /redoc se deshabilitan en producción (ENABLE_DOCS=False por defecto)
 app = FastAPI(
     title="TurtleForge Cost API",
     description="API para calcular costos de impresión 3D",
     version="1.0.0",
     lifespan=lifespan,
+    docs_url="/docs" if settings.ENABLE_DOCS else None,
+    redoc_url="/redoc" if settings.ENABLE_DOCS else None,
 )
 
 # Rate limiting: registrar el limiter y el handler de errores 429
