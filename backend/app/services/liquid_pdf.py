@@ -44,11 +44,63 @@ except ImportError:
 
 try:
     from weasyprint import HTML as WeasyprintHTML
+    from weasyprint.urls import default_url_fetcher
     _WEASYPRINT_AVAILABLE = True
 except ImportError:
     _WEASYPRINT_AVAILABLE = False
 
 _STATIC_DIR = Path(__file__).parent.parent / "static"
+
+# Prefijos de red interna bloqueados para evitar SSRF via templates Liquid
+_BLOCKED_URL_PREFIXES = (
+    "http://localhost",
+    "http://127.",
+    "http://0.",
+    "http://10.",
+    "http://192.168.",
+    "http://172.",
+    "https://localhost",
+    "https://127.",
+)
+
+
+def _safe_url_fetcher(url: str) -> dict:
+    """
+    URL fetcher seguro para WeasyPrint que bloquea LFI y SSRF.
+
+    Permite únicamente:
+    - Archivos file:// dentro del directorio estático de la aplicación.
+    - URLs externas https:// fuera de rangos de red privada.
+
+    Bloquea:
+    - Rutas file:// fuera del directorio estático (LFI: /etc/passwd, /app/.env, etc.).
+    - URLs http/https a localhost o rangos de red privada (SSRF).
+
+    Args:
+        url: URL a resolver durante el renderizado de WeasyPrint.
+
+    Returns:
+        dict con los bytes del recurso, según protocolo default_url_fetcher.
+
+    Raises:
+        ValueError: Si la URL apunta a un recurso no permitido.
+    """
+    static_prefix = f"file://{_STATIC_DIR}"
+
+    if url.startswith("file://"):
+        # Solo se permite acceso al directorio estático de la aplicación
+        if not url.startswith(static_prefix):
+            raise ValueError(
+                f"Acceso a archivo local bloqueado por seguridad: {url!r}. "
+                "Solo se permiten recursos dentro del directorio estático."
+            )
+
+    if any(url.startswith(prefix) for prefix in _BLOCKED_URL_PREFIXES):
+        raise ValueError(
+            f"Acceso a URL de red interna bloqueado por seguridad: {url!r}."
+        )
+
+    return default_url_fetcher(url)
 
 # ── Paleta por defecto (se usa en el template ejemplo y en previews sin empresa) ─
 _DEFAULT_PALETTE = [
@@ -462,7 +514,7 @@ def render_client_quote_pdf(template_content: str, client_quote, company, usd_ra
     ctx = _build_cot_context(client_quote, company, usd_rate)
     html = tpl.render(**ctx)
     base_url = f"file://{_STATIC_DIR}/"
-    return WeasyprintHTML(string=html, base_url=base_url).write_pdf()
+    return WeasyprintHTML(string=html, base_url=base_url, url_fetcher=_safe_url_fetcher).write_pdf()
 
 
 def validate_template(content: str, company=None) -> dict:
@@ -495,7 +547,7 @@ def validate_template(content: str, company=None) -> dict:
         ctx = _build_sample_context(company)
         html = tpl.render(**ctx)
         base_url = f"file://{_STATIC_DIR}/"
-        pdf_bytes = WeasyprintHTML(string=html, base_url=base_url).write_pdf()
+        pdf_bytes = WeasyprintHTML(string=html, base_url=base_url, url_fetcher=_safe_url_fetcher).write_pdf()
         warnings = _check_required_vars(content)
         pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
         return {"ok": True, "errors": [], "warnings": warnings, "preview_pdf_b64": pdf_b64}

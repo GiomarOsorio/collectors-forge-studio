@@ -16,6 +16,7 @@ Endpoints:
     GET    /api/company/templates/{id}/preview — PDF de muestra (bytes).
 """
 
+import asyncio
 from datetime import datetime, timezone
 from typing import List
 
@@ -117,6 +118,24 @@ async def create_template(
     await db.commit()
     await db.refresh(tpl)
     return tpl
+
+
+@router.get("/default-template", response_model=None)
+async def get_default_template_content(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Retorna el contenido del template Liquid por defecto del sistema.
+
+    Útil para pre-cargar el editor al crear un nuevo template.
+
+    Args:
+        current_user: Usuario autenticado.
+
+    Returns:
+        JSON con la clave 'content' conteniendo el template Liquid por defecto.
+    """
+    return {"content": DEFAULT_COT_TEMPLATE}
 
 
 @router.get("/{template_id}", response_model=CompanyTemplateResponse)
@@ -259,7 +278,7 @@ async def validate_liquid_template(
     )
     company = company_result.scalar_one_or_none()
 
-    result = validate_template(data.content, company)
+    result = await asyncio.to_thread(validate_template, data.content, company)
     return TemplateValidateResponse(**result)
 
 
@@ -291,7 +310,7 @@ async def preview_template(
     )
     company = company_result.scalar_one_or_none()
 
-    result = validate_template(tpl.content, company)
+    result = await asyncio.to_thread(validate_template, tpl.content, company)
     if not result["ok"]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -305,24 +324,6 @@ async def preview_template(
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="preview_{template_id}.pdf"'},
     )
-
-
-@router.get("/default-template", response_model=None)
-async def get_default_template_content(
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Retorna el contenido del template Liquid por defecto del sistema.
-
-    Útil para pre-cargar el editor al crear un nuevo template.
-
-    Args:
-        current_user: Usuario autenticado.
-
-    Returns:
-        JSON con la clave 'content' conteniendo el template Liquid por defecto.
-    """
-    return {"content": DEFAULT_COT_TEMPLATE}
 
 
 # ── Helpers internos ───────────────────────────────────────────────────────────
