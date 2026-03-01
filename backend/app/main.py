@@ -42,6 +42,7 @@ from app.routers.company_templates import router as company_templates_router
 from app.routers.users import router as users_router
 from app.routers.maintenance import router as maintenance_router
 from app.routers.queue import router as queue_router
+from app.routers.inventory_categories import router as inventory_categories_router
 from app.routers.slicer import cleanup_old_slicer_files
 
 # UUID fijo de la empresa por defecto — coincide con la migración f4a1b9c2d8e7
@@ -168,6 +169,7 @@ app.include_router(company_templates_router)
 app.include_router(users_router)
 app.include_router(maintenance_router)
 app.include_router(queue_router)
+app.include_router(inventory_categories_router)
 
 # Archivos estáticos: imágenes de ítems de impresión y otros recursos subidos
 app.mount("/static", StaticFiles(directory="/app/static", check_dir=False), name="static")

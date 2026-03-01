@@ -30,21 +30,11 @@ import {
   deleteInventoryItem,
   flagInventoryItem,
   adjustInventoryItem,
+  getInventoryCategories,
 } from '../../services/api';
 
 /** Ítems por página en la tabla */
 const PAGE_SIZE = 15;
-
-/** Categorías predefinidas de inventario */
-const CATEGORIES = [
-  'Filamento',
-  'Accesorio',
-  'Accesorios de postprocesado',
-  'Accesorios de preprocesado',
-  'Repuesto impresora',
-  'Herramienta',
-  'General',
-];
 
 /** Tipos de filamento disponibles */
 const FILAMENT_TYPES = ['PLA', 'PETG', 'ABS', 'TPU', 'ASA', 'Nylon', 'PLA+', 'PETG+', 'Otro'];
@@ -152,6 +142,7 @@ function SortTh({ label, sortKey, sortConfig, onSort, className = 'tf-th' }) {
 export default function InventoryStockPage({ categoryFilter = null, excludeCategory = null, excludeCategories = null }) {
   const confirm = useConfirm();
   const [items, setItems] = useState([]);
+  const [apiCategories, setApiCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState(null);
@@ -165,8 +156,12 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
 
   const load = async () => {
     try {
-      const res = await getInventoryItems();
-      setItems(res.data);
+      const [itemsRes, catsRes] = await Promise.all([
+        getInventoryItems(),
+        getInventoryCategories(),
+      ]);
+      setItems(itemsRes.data);
+      setApiCategories(catsRes.data);
     } catch {
       toast.error('Error al cargar el inventario');
     } finally {
@@ -370,6 +365,11 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
         : 'Todo el stock';
 
   const isFilamentForm = form.category === 'Filamento';
+
+  // Determina si la categoría seleccionada admite decimales
+  const selectedCatConfig = apiCategories.find((c) => c.name === form.category);
+  const allowsDecimals = selectedCatConfig ? selectedCatConfig.allows_decimals : true;
+  const qtyStep = allowsDecimals ? '0.001' : '1';
 
   return (
     <div>
@@ -594,13 +594,13 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
                         placeholder="Selecciona o escribe una categoría"
                       />
                       <datalist id="categories-list">
-                        {CATEGORIES
+                        {apiCategories
                           .filter((c) => {
-                            if (excludeCategory && c === excludeCategory) return false;
-                            if (excludeCategories && excludeCategories.includes(c)) return false;
+                            if (excludeCategory && c.name === excludeCategory) return false;
+                            if (excludeCategories && excludeCategories.includes(c.name)) return false;
                             return true;
                           })
-                          .map((c) => <option key={c} value={c} />)}
+                          .map((c) => <option key={c.id} value={c.name} />)}
                       </datalist>
                     </div>
                   )}
@@ -633,12 +633,15 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="tf-label">Cantidad actual</label>
-                  <input name="quantity" type="number" step="0.001" min="0"
+                  <input name="quantity" type="number" step={qtyStep} min="0"
                     value={form.quantity} onChange={handleChange} className="tf-input" />
+                  {!allowsDecimals && (
+                    <p className="text-xs text-gunmetal mt-1">Solo números enteros</p>
+                  )}
                 </div>
                 <div>
                   <label className="tf-label">Mínimo de stock</label>
-                  <input name="min_quantity" type="number" step="0.001" min="0"
+                  <input name="min_quantity" type="number" step={qtyStep} min="0"
                     value={form.min_quantity} onChange={handleChange} className="tf-input"
                     placeholder="0 = sin límite" />
                   <p className="text-xs text-gunmetal mt-1">0 = sin alerta de mínimo</p>
@@ -771,7 +774,10 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
             </label>
             <input
               type="number"
-              step="0.001"
+              step={(() => {
+                const c = apiCategories.find((cat) => cat.name === adjustModal.item.category);
+                return c?.allows_decimals ? '0.001' : '1';
+              })()}
               value={adjustModal.value}
               onChange={(e) => setAdjustModal({ ...adjustModal, value: e.target.value })}
               className="tf-input mb-4"

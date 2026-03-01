@@ -684,6 +684,22 @@ export const previewTemplate = (id) => api.get(`/company/templates/${id}/preview
 export const getDefaultTemplateContent = () => api.get('/company/templates/default-template');
 
 // ============================================================================
+// Inventario - Categorías configurables
+// ============================================================================
+
+/** Obtiene todas las categorías de inventario de la empresa. */
+export const getInventoryCategories = () => api.get('/inventory/categories/');
+
+/** Crea una nueva categoría de inventario. */
+export const createInventoryCategory = (data) => api.post('/inventory/categories/', data);
+
+/** Actualiza una categoría de inventario (nombre o allows_decimals). */
+export const updateInventoryCategory = (id, data) => api.put(`/inventory/categories/${id}`, data);
+
+/** Elimina una categoría de inventario (no aplica a categorías de sistema). */
+export const deleteInventoryCategory = (id) => api.delete(`/inventory/categories/${id}`);
+
+// ============================================================================
 // Cola de impresión (Queue)
 // ============================================================================
 

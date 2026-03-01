@@ -21,6 +21,7 @@ import {
   Printer,
   ArrowLeftRight,
   Wrench,
+  Tags,
 } from 'lucide-react';
 
 /**
@@ -34,6 +35,7 @@ const navItems = [
   { to: '/inventory/purchases', icon: ShoppingCart, label: 'Pedidos' },
   { to: '/inventory/prints', icon: Printer, label: 'Impresiones' },
   { to: '/inventory/io', icon: ArrowLeftRight, label: 'Importar / Exportar' },
+  { to: '/inventory/categories', icon: Tags, label: 'Categorías' },
 ];
 
 /**
