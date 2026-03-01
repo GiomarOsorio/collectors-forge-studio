@@ -31,6 +31,12 @@ _TABLES = [
 
 
 def upgrade() -> None:
+    # app_settings tiene UNIQUE(company_id) y puede ya tener una fila con el company_id
+    # por defecto. Las filas NULL que conflictúan deben borrarse en vez de actualizarse.
+    op.execute(
+        f"DELETE FROM app_settings WHERE company_id IS NULL "
+        f"AND EXISTS (SELECT 1 FROM app_settings a2 WHERE a2.company_id = '{DEFAULT_COMPANY_ID}')"
+    )
     for table in _TABLES:
         op.execute(
             f"UPDATE {table} SET company_id = '{DEFAULT_COMPANY_ID}' WHERE company_id IS NULL"
