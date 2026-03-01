@@ -56,7 +56,7 @@ export default function StudioLayout() {
       </header>
 
       {/* Contenido */}
-      <main className="flex-1">
+      <main className="flex-1" style={{ animation: 'fadeInUp 0.35s ease-out both' }}>
         <Outlet />
       </main>
 

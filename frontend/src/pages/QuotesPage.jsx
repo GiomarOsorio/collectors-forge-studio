@@ -178,7 +178,7 @@ export default function QuotesPage() {
                 <td className="tf-td-right text-steel hidden sm:table-cell">
                   {q.items?.length ?? 0}
                 </td>
-                <td className="tf-td-right font-semibold text-forge-green">
+                <td className="tf-td-right font-semibold font-mono text-forge-green">
                   $ {parseFloat(q.subtotal).toFixed(2)}
                 </td>
                 <td className="tf-td-right">
