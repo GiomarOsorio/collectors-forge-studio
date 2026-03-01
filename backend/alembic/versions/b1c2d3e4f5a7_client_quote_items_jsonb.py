@@ -19,12 +19,16 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute(
-        "ALTER TABLE client_quotes ALTER COLUMN items TYPE JSONB USING items::jsonb"
-    )
+    # 1. Eliminar el DEFAULT TEXT ('[]') antes de cambiar el tipo,
+    #    porque PostgreSQL no puede castearlo automáticamente a JSONB.
+    op.execute("ALTER TABLE client_quotes ALTER COLUMN items DROP DEFAULT")
+    # 2. Convertir la columna de TEXT a JSONB usando el cast explícito.
+    op.execute("ALTER TABLE client_quotes ALTER COLUMN items TYPE JSONB USING items::jsonb")
+    # 3. Restaurar el DEFAULT como JSONB nativo.
+    op.execute("ALTER TABLE client_quotes ALTER COLUMN items SET DEFAULT '[]'::jsonb")
 
 
 def downgrade() -> None:
-    op.execute(
-        "ALTER TABLE client_quotes ALTER COLUMN items TYPE TEXT USING items::text"
-    )
+    op.execute("ALTER TABLE client_quotes ALTER COLUMN items DROP DEFAULT")
+    op.execute("ALTER TABLE client_quotes ALTER COLUMN items TYPE TEXT USING items::text")
+    op.execute("ALTER TABLE client_quotes ALTER COLUMN items SET DEFAULT '[]'")
