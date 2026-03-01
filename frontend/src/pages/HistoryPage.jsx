@@ -211,8 +211,8 @@ export default function HistoryPage() {
                 <td className="tf-td text-gunmetal">{formatDate(q.created_at)}</td>
                 <td className="tf-td font-medium text-tech-white">{q.piece_name}</td>
                 <td className="tf-td text-steel hidden sm:table-cell">{q.client_name || '-'}</td>
-                <td className="tf-td-right text-steel">{q.quantity}</td>
-                <td className="tf-td-right font-semibold text-forge-green">
+                <td className="tf-td-right text-steel font-mono">{q.quantity}</td>
+                <td className="tf-td-right font-semibold font-mono text-forge-green">
                   {q.total_price_cop
                     ? `$ ${Math.round(q.total_price_cop).toLocaleString('es-CO')} COP`
                     : `$ ${q.total_price.toFixed(2)}`}

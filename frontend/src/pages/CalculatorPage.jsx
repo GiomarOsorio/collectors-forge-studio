@@ -356,191 +356,213 @@ export default function CalculatorPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Formulario */}
-        <form onSubmit={handleCalculate} className="tf-card p-6 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="col-span-1 sm:col-span-2">
-              <label className="tf-label">Nombre de la pieza *</label>
-              <input
-                name="piece_name"
-                value={form.piece_name}
-                onChange={handleChange}
-                required
-                className="tf-input"
-              />
+        <form onSubmit={handleCalculate} className="tf-card p-6 space-y-5">
+
+          {/* — Sección: Pieza — */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xs font-semibold text-gunmetal uppercase tracking-wider">Pieza</span>
+              <div className="flex-1 h-px bg-[#1e2125]" />
             </div>
-            <div>
-              <label className="tf-label">Cliente</label>
-              <input
-                name="client_name"
-                value={form.client_name}
-                onChange={handleChange}
-                className="tf-input"
-              />
-            </div>
-            <div>
-              <label className="tf-label">Cantidad</label>
-              <input
-                name="quantity"
-                type="number"
-                min="1"
-                value={form.quantity}
-                onChange={handleChange}
-                className="tf-input"
-              />
-            </div>
-            <div className="col-span-1 sm:col-span-2">
-              <label className="tf-label">Descripción</label>
-              <textarea
-                name="description"
-                value={form.description}
-                onChange={handleChange}
-                rows={2}
-                className="tf-input"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="col-span-1 sm:col-span-2">
+                <label className="tf-label">Nombre de la pieza *</label>
+                <input
+                  name="piece_name"
+                  value={form.piece_name}
+                  onChange={handleChange}
+                  required
+                  className="tf-input"
+                />
+              </div>
+              <div>
+                <label className="tf-label">Cliente</label>
+                <input
+                  name="client_name"
+                  value={form.client_name}
+                  onChange={handleChange}
+                  className="tf-input"
+                />
+              </div>
+              <div>
+                <label className="tf-label">Cantidad</label>
+                <input
+                  name="quantity"
+                  type="number"
+                  min="1"
+                  value={form.quantity}
+                  onChange={handleChange}
+                  className="tf-input"
+                />
+              </div>
+              <div className="col-span-1 sm:col-span-2">
+                <label className="tf-label">Descripción</label>
+                <textarea
+                  name="description"
+                  value={form.description}
+                  onChange={handleChange}
+                  rows={2}
+                  className="tf-input"
+                />
+              </div>
             </div>
           </div>
 
-          <hr className="tf-hr" />
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="tf-label">Filamento *</label>
-              {filaments.length === 0 ? (
-                <div className="tf-input flex items-center gap-2 text-orange-400 text-sm">
-                  <AlertTriangle size={14} className="shrink-0" />
-                  <span>
-                    Sin filamentos en inventario.{' '}
-                    <a href="/inventory/stock" className="underline hover:text-orange-300">
-                      Ir a Inventario → Stock
-                    </a>{' '}
-                    para registrar uno.
-                  </span>
-                </div>
-              ) : (
-                <>
-                  <select
-                    name="inventory_item_id"
-                    value={form.inventory_item_id}
-                    onChange={handleChange}
-                    required
-                    className="tf-input"
-                  >
-                    <option value="">Seleccionar...</option>
-                    {filaments.map((f) => {
-                      const sinStock =
-                        parseFloat(f.quantity) === 0 && parseFloat(f.min_quantity) > 0;
-                      return (
-                        <option key={f.id} value={f.id} disabled={sinStock}>
-                          {filamentLabel(f)}
-                          {sinStock ? ' (Sin stock)' : ''}
-                        </option>
-                      );
-                    })}
-                  </select>
-                  {/* Advertencia de stock bajo para el filamento seleccionado */}
-                  {filamentLowStock && (
-                    <div className="mt-1 flex items-center gap-1.5 text-xs text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 rounded px-2 py-1">
-                      <AlertTriangle size={12} />
-                      Stock bajo — solo{' '}
-                      {parseFloat(selectedFilament.quantity).toLocaleString('es-CO', {
-                        maximumFractionDigits: 3,
-                      })}{' '}
-                      {selectedFilament.unit} disponible
-                    </div>
-                  )}
-                </>
-              )}
+          {/* — Sección: Material & equipo — */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xs font-semibold text-gunmetal uppercase tracking-wider">Material &amp; equipo</span>
+              <div className="flex-1 h-px bg-[#1e2125]" />
             </div>
-            <div>
-              <label className="tf-label">Impresora *</label>
-              <select
-                name="printer_id"
-                value={form.printer_id}
-                onChange={handleChange}
-                required
-                className="tf-input"
-              >
-                <option value="">Seleccionar...</option>
-                {printers.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="tf-label">Peso filamento (g) *</label>
-              <input
-                name="weight_grams"
-                type="number"
-                step="0.01"
-                min="0"
-                value={form.weight_grams}
-                onChange={handleChange}
-                required
-                className="tf-input"
-              />
-            </div>
-            <div>
-              <label className="tf-label">Tiempo impresión (min) *</label>
-              <input
-                name="print_time_minutes"
-                type="number"
-                step="1"
-                min="0"
-                value={form.print_time_minutes}
-                onChange={handleChange}
-                required
-                className="tf-input"
-              />
-            </div>
-            <div>
-              <label className="tf-label">Preparación (min)</label>
-              <input
-                name="preparation_time_minutes"
-                type="number"
-                step="1"
-                min="0"
-                value={form.preparation_time_minutes}
-                onChange={handleChange}
-                className="tf-input"
-              />
-            </div>
-            <div>
-              <label className="tf-label">Post-procesado (min)</label>
-              <input
-                name="post_processing_time_minutes"
-                type="number"
-                step="1"
-                min="0"
-                value={form.post_processing_time_minutes}
-                onChange={handleChange}
-                className="tf-input"
-              />
-            </div>
-            <div className="col-span-1 sm:col-span-2">
-              <label className="tf-label">Margen de ganancia (%)</label>
-              <input
-                name="margin_percent"
-                type="number"
-                step="0.1"
-                min="0"
-                value={form.margin_percent}
-                onChange={handleChange}
-                className="tf-input"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="tf-label">Filamento *</label>
+                {filaments.length === 0 ? (
+                  <div className="tf-input flex items-center gap-2 text-orange-400 text-sm">
+                    <AlertTriangle size={14} className="shrink-0" />
+                    <span>
+                      Sin filamentos en inventario.{' '}
+                      <a href="/inventory/stock" className="underline hover:text-orange-300">
+                        Ir a Inventario → Stock
+                      </a>{' '}
+                      para registrar uno.
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    <select
+                      name="inventory_item_id"
+                      value={form.inventory_item_id}
+                      onChange={handleChange}
+                      required
+                      className="tf-input"
+                    >
+                      <option value="">Seleccionar...</option>
+                      {filaments.map((f) => {
+                        const sinStock =
+                          parseFloat(f.quantity) === 0 && parseFloat(f.min_quantity) > 0;
+                        return (
+                          <option key={f.id} value={f.id} disabled={sinStock}>
+                            {filamentLabel(f)}
+                            {sinStock ? ' (Sin stock)' : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    {filamentLowStock && (
+                      <div className="mt-1 flex items-center gap-1.5 text-xs text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 rounded px-2 py-1">
+                        <AlertTriangle size={12} />
+                        Stock bajo — solo{' '}
+                        {parseFloat(selectedFilament.quantity).toLocaleString('es-CO', {
+                          maximumFractionDigits: 3,
+                        })}{' '}
+                        {selectedFilament.unit} disponible
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              <div>
+                <label className="tf-label">Impresora *</label>
+                <select
+                  name="printer_id"
+                  value={form.printer_id}
+                  onChange={handleChange}
+                  required
+                  className="tf-input"
+                >
+                  <option value="">Seleccionar...</option>
+                  {printers.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="tf-label">Peso filamento (g) *</label>
+                <input
+                  name="weight_grams"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.weight_grams}
+                  onChange={handleChange}
+                  required
+                  className="tf-input"
+                />
+              </div>
+              <div>
+                <label className="tf-label">Margen de ganancia (%)</label>
+                <input
+                  name="margin_percent"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={form.margin_percent}
+                  onChange={handleChange}
+                  className="tf-input"
+                />
+              </div>
             </div>
           </div>
 
-          {/* Filamentos adicionales (multicolor) */}
+          {/* — Sección: Tiempos — */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xs font-semibold text-gunmetal uppercase tracking-wider">Tiempos</span>
+              <div className="flex-1 h-px bg-[#1e2125]" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="tf-label">Impresión (min) *</label>
+                <input
+                  name="print_time_minutes"
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={form.print_time_minutes}
+                  onChange={handleChange}
+                  required
+                  className="tf-input"
+                />
+              </div>
+              <div>
+                <label className="tf-label">Preparación (min)</label>
+                <input
+                  name="preparation_time_minutes"
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={form.preparation_time_minutes}
+                  onChange={handleChange}
+                  className="tf-input"
+                />
+              </div>
+              <div>
+                <label className="tf-label">Post-procesado (min)</label>
+                <input
+                  name="post_processing_time_minutes"
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={form.post_processing_time_minutes}
+                  onChange={handleChange}
+                  className="tf-input"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* — Sección: Adicionales — */}
           {filaments.length > 0 && (
             <>
-              <hr className="tf-hr" />
               <div>
-                <p className="text-sm font-medium text-steel mb-2">
-                  Filamentos adicionales{' '}
-                  <span className="text-gunmetal font-normal">(multicolor)</span>
-                </p>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-xs font-semibold text-gunmetal uppercase tracking-wider">Filamentos adicionales</span>
+                  <span className="text-xs text-gunmetal">(multicolor)</span>
+                  <div className="flex-1 h-px bg-[#1e2125]" />
+                </div>
                 {additionalFilaments.map((af, i) => {
                   const f = filaments.find((x) => x.id === af.inventory_item_id);
                   return (
@@ -603,9 +625,11 @@ export default function CalculatorPage() {
           {/* Insumos adicionales del inventario */}
           {supplies.length > 0 && (
             <>
-              <hr className="tf-hr" />
               <div>
-                <p className="text-sm font-medium text-steel mb-2">Insumos adicionales</p>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-xs font-semibold text-gunmetal uppercase tracking-wider">Insumos adicionales</span>
+                  <div className="flex-1 h-px bg-[#1e2125]" />
+                </div>
                 {selectedSupplies.map((si) => {
                   const sup = supplies.find((x) => x.id === si.inventory_item_id);
                   const price = sup

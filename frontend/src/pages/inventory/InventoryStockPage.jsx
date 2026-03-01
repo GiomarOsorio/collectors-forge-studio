@@ -480,12 +480,12 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
                     </td>
                   )}
                   <td className="tf-td-right">
-                    <span className={`font-semibold ${alert ? 'text-red-400' : 'text-tech-white'}`}>
+                    <span className={`font-semibold font-mono ${alert ? 'text-red-400' : 'text-tech-white'}`}>
                       {parseFloat(item.quantity).toLocaleString('es-CO', { maximumFractionDigits: 3 })}
                     </span>
                     <span className="text-gunmetal text-xs ml-1">{item.unit}</span>
                   </td>
-                  <td className="tf-td-right hidden sm:table-cell text-steel text-sm">
+                  <td className="tf-td-right hidden sm:table-cell text-steel text-sm font-mono">
                     {parseFloat(item.min_quantity) > 0
                       ? parseFloat(item.min_quantity).toLocaleString('es-CO', { maximumFractionDigits: 3 })
                       : '—'}
@@ -530,9 +530,10 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
       {/* Paginación */}
       {!loading && sorted.length > 0 && (
         <div className="flex items-center justify-between mt-4 text-sm text-steel px-1">
-          <span>
-            {sorted.length} ítem{sorted.length !== 1 ? 's' : ''}
-            {totalPages > 1 && ` · Página ${currentPage} de ${totalPages}`}
+          <span className="font-mono text-xs text-gunmetal">
+            {sorted.length <= PAGE_SIZE
+              ? `${sorted.length} ítem${sorted.length !== 1 ? 's' : ''}`
+              : `Mostrando ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, sorted.length)} de ${sorted.length} ítems`}
           </span>
           {totalPages > 1 && (
             <div className="flex items-center gap-2">
