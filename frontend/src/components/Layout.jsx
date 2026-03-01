@@ -132,8 +132,9 @@ export default function Layout() {
             <span className="text-gunmetal text-sm">{user?.username}</span>
             <button
               onClick={handleLogout}
-              className="text-gunmetal hover:text-tech-white transition-colors"
+              className="tf-btn-ghost"
               title="Cerrar sesión"
+              aria-label="Cerrar sesión"
             >
               <LogOut size={18} />
             </button>

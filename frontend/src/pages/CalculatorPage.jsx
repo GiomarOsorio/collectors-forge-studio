@@ -24,7 +24,7 @@ import {
   createQuote,
 } from '../services/api';
 import toast from 'react-hot-toast';
-import { Calculator, Save, Plus, Trash2, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Calculator, Save, Plus, Trash2, AlertTriangle, RotateCcw, Loader2 } from 'lucide-react';
 
 /**
  * Componente de la pagina de calculadora de costos.
@@ -71,6 +71,8 @@ export default function CalculatorPage() {
   const [result, setResult] = useState(null);
   /** @type {[boolean, Function]} Estado de carga durante el calculo */
   const [loading, setLoading] = useState(false);
+  /** @type {[boolean, Function]} Estado de carga durante el guardado */
+  const [saving, setSaving] = useState(false);
 
   /**
    * Estado del formulario con los parametros de la pieza a cotizar.
@@ -324,6 +326,7 @@ export default function CalculatorPage() {
    * Usa inventory_item_id para referenciar el filamento principal.
    */
   const handleSave = async () => {
+    setSaving(true);
     try {
       const payload = buildPayload();
       // Incluir la tasa USD/COP ya calculada para que el backend
@@ -335,6 +338,8 @@ export default function CalculatorPage() {
       toast.success('Cotización guardada en el historial');
     } catch {
       toast.error('Error al guardar');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -677,7 +682,7 @@ export default function CalculatorPage() {
               disabled={loading}
               className="tf-btn-primary flex-1 py-3 text-base"
             >
-              <Calculator size={20} />
+              {loading ? <Loader2 size={20} className="animate-spin" /> : <Calculator size={20} />}
               {loading ? 'Calculando...' : 'Calcular Costo'}
             </button>
             <button
@@ -768,10 +773,11 @@ export default function CalculatorPage() {
 
               <button
                 onClick={handleSave}
+                disabled={saving}
                 className="tf-btn-primary w-full py-3 text-base mt-4"
               >
-                <Save size={20} />
-                Guardar costo de impresión
+                {saving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
+                {saving ? 'Guardando...' : 'Guardar costo de impresión'}
               </button>
             </div>
           ) : (

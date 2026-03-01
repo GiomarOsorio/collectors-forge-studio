@@ -12,8 +12,10 @@
 import { useState, useEffect } from 'react';
 import { getQuotes, deleteQuote, updateQuote } from '../services/api';
 import toast from 'react-hot-toast';
-import { Trash2, Eye, X, Pencil } from 'lucide-react';
+import { Trash2, Eye, X, Pencil, BarChart2 } from 'lucide-react';
 import { useConfirm } from '../components/ConfirmDialog';
+import { SkeletonTable } from '../components/SkeletonLoader';
+import EmptyState from '../components/EmptyState';
 
 /**
  * Componente de la pagina de historial de cotizaciones.
@@ -96,7 +98,7 @@ export default function HistoryPage() {
     return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
-  if (loading) return <p className="text-center text-gunmetal py-16">Cargando historial...</p>;
+  if (loading) return <SkeletonTable rows={6} cols={6} />;
 
   return (
     <div>
@@ -223,7 +225,17 @@ export default function HistoryPage() {
               </tr>
             ))}
             {quotes.length === 0 && (
-              <tr><td colSpan={6} className="px-5 py-12 text-center text-gunmetal">No hay registros de costos de impresión.</td></tr>
+              <tr>
+                <td colSpan={6}>
+                  <EmptyState
+                    icon={BarChart2}
+                    title="No hay registros de costos"
+                    description="Calcula y guarda el costo de una impresión para verlo aquí."
+                    actionLabel="Ir a la calculadora"
+                    onAction={() => window.location.href = '/cost/calculator'}
+                  />
+                </td>
+              </tr>
             )}
           </tbody>
         </table>

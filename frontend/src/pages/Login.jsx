@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { login, getMe } from '../services/api';
 import toast from 'react-hot-toast';
+import { Loader2 } from 'lucide-react';
 
 /**
  * Componente de la pagina de inicio de sesion.
@@ -88,7 +89,8 @@ export default function Login() {
               className="tf-input py-3" required />
           </div>
           <button type="submit" disabled={loading}
-            className="tf-btn-primary w-full py-3 text-base">
+            className="tf-btn-primary w-full py-3 text-base gap-2">
+            {loading && <Loader2 size={18} className="animate-spin" />}
             {loading ? 'Ingresando...' : 'Ingresar'}
           </button>
         </form>

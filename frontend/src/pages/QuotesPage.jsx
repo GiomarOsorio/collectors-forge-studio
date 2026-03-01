@@ -12,8 +12,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getClientQuotes, deleteClientQuote, downloadClientQuotePdf } from '../services/api';
 import toast from 'react-hot-toast';
-import { FileDown, Trash2, Eye, X, Plus } from 'lucide-react';
+import { FileDown, Trash2, Eye, X, Plus, FileText } from 'lucide-react';
 import { useConfirm } from '../components/ConfirmDialog';
+import { SkeletonTable } from '../components/SkeletonLoader';
+import EmptyState from '../components/EmptyState';
 
 /**
  * Formatea una fecha ISO o YYYY-MM-DD a dd/mm/yyyy.
@@ -76,7 +78,7 @@ export default function QuotesPage() {
     }
   };
 
-  if (loading) return <p className="text-center text-gunmetal py-16">Cargando cotizaciones...</p>;
+  if (loading) return <SkeletonTable rows={6} cols={5} />;
 
   return (
     <div>
@@ -188,11 +190,14 @@ export default function QuotesPage() {
             ))}
             {quotes.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-5 py-12 text-center text-gunmetal">
-                  No hay cotizaciones aún.{' '}
-                  <button onClick={() => navigate('/cost/manual')} className="text-forge-green hover:underline">
-                    Crear la primera
-                  </button>
+                <td colSpan={7}>
+                  <EmptyState
+                    icon={FileText}
+                    title="No hay cotizaciones aún"
+                    description="Crea tu primera cotización de cliente para verla aquí."
+                    actionLabel="Nueva cotización"
+                    onAction={() => navigate('/cost/manual')}
+                  />
                 </td>
               </tr>
             )}
