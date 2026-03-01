@@ -22,6 +22,7 @@ import toast from 'react-hot-toast';
 import { Plus, AlertTriangle, CheckCircle2, Clock, HelpCircle, X } from 'lucide-react';
 import { getMaintenanceSummary, updatePrinter } from '../../services/api';
 import { MAINTENANCE_TYPES, getMaintenanceType } from '../../config/maintenance';
+import { SkeletonDashboard } from '../../components/SkeletonLoader';
 
 /**
  * Calcula el estado de un tipo de mantenimiento.
@@ -240,7 +241,7 @@ export default function MaintenanceDashboardPage() {
       </div>
 
       {loading ? (
-        <p className="text-steel">Cargando...</p>
+        <SkeletonDashboard count={2} />
       ) : summaries.length === 0 ? (
         <div className="text-center py-16">
           <p className="text-steel mb-4">No hay impresoras registradas.</p>

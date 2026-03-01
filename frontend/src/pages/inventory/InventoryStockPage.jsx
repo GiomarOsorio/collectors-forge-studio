@@ -21,7 +21,7 @@ import toast from 'react-hot-toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import {
   Plus, Pencil, Trash2, X, AlertTriangle, ShoppingCart,
-  PackageOpen, CheckCircle, ChevronUp, ChevronDown,
+  PackageOpen, CheckCircle, ChevronUp, ChevronDown, Loader2,
 } from 'lucide-react';
 import {
   getInventoryItems,
@@ -32,6 +32,8 @@ import {
   adjustInventoryItem,
   getInventoryCategories,
 } from '../../services/api';
+import { SkeletonTable } from '../../components/SkeletonLoader';
+import EmptyState from '../../components/EmptyState';
 
 /** Ítems por página en la tabla */
 const PAGE_SIZE = 15;
@@ -429,14 +431,35 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={7} className="px-5 py-12 text-center text-gunmetal">Cargando...</td></tr>
+              Array.from({ length: 6 }).map((_, i) => (
+                <tr key={i} aria-hidden="true">
+                  {Array.from({ length: 7 }).map((_, j) => (
+                    <td key={j} className="px-5 py-3.5">
+                      <div className={`tf-skeleton h-4 ${j === 0 ? 'w-3/4' : 'w-1/2'}`} />
+                    </td>
+                  ))}
+                </tr>
+              ))
             )}
             {!loading && filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-5 py-12 text-center text-gunmetal">
-                  {items.length === 0
-                    ? <span>No hay ítems en el inventario. <button onClick={openCreate} className="text-blue-400 hover:underline">Agregar el primero</button></span>
-                    : 'No hay ítems que coincidan con los filtros.'}
+                <td colSpan={7}>
+                  {items.length === 0 ? (
+                    <EmptyState
+                      icon={PackageOpen}
+                      title="El inventario está vacío"
+                      description="Agrega tu primer ítem para comenzar a gestionar el stock."
+                      actionLabel="Agregar ítem"
+                      onAction={openCreate}
+                    />
+                  ) : (
+                    <EmptyState
+                      icon={PackageOpen}
+                      title="Sin resultados"
+                      description="Ningún ítem coincide con los filtros aplicados."
+                      size="sm"
+                    />
+                  )}
                 </td>
               </tr>
             )}
@@ -746,6 +769,7 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
                 </button>
                 <button type="submit" disabled={saving}
                   className="flex-1 tf-btn-primary" style={{ backgroundColor: '#3B82F6', borderColor: '#3B82F6' }}>
+                  {saving && <Loader2 size={16} className="animate-spin" />}
                   {saving ? 'Guardando...' : editItem ? 'Actualizar' : 'Crear ítem'}
                 </button>
               </div>

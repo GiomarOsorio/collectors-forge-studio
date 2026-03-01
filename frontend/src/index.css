@@ -4,9 +4,12 @@
   --color-forge-green: #3FAF4C;
   --color-deep-green: #1E6F3A;
   --color-steel: #C7CCD1;
-  --color-gunmetal: #4B4F55;
+  --color-gunmetal: #8892A0;
   --color-forge-black: #121417;
   --color-tech-white: #F2F4F6;
+
+  --font-sans: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
 
 body {
@@ -14,6 +17,14 @@ body {
   min-height: 100vh;
   background-color: #121417;
   color: #F2F4F6;
+  font-family: var(--font-sans);
+}
+
+/* Focus visible global — accesibilidad teclado */
+*:focus-visible {
+  outline: 2px solid #3FAF4C;
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 select option {
@@ -25,6 +36,12 @@ select option {
 ::-webkit-scrollbar-track { background: #121417; }
 ::-webkit-scrollbar-thumb { background: #2a2d31; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #3FAF4C; }
+
+/* Animación shimmer para skeleton loaders */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
 
 @layer components {
   .tf-card {
@@ -40,16 +57,19 @@ select option {
     @apply text-xs text-gunmetal mt-1;
   }
   .tf-btn-primary {
-    @apply inline-flex items-center justify-center gap-2 bg-forge-green text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-deep-green transition-colors disabled:opacity-50 cursor-pointer;
+    @apply inline-flex items-center justify-center gap-2 bg-forge-green text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-deep-green transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer;
   }
   .tf-btn-secondary {
     @apply inline-flex items-center justify-center gap-2 bg-transparent text-steel border border-[#2a2d31] px-4 py-2 rounded-lg font-medium text-sm hover:bg-[#1e2125] hover:text-tech-white transition-colors cursor-pointer;
   }
   .tf-btn-ghost {
-    @apply text-gunmetal hover:text-tech-white transition-colors;
+    @apply inline-flex items-center justify-center text-gunmetal hover:text-tech-white transition-colors min-w-[44px] min-h-[44px];
   }
   .tf-btn-danger {
-    @apply text-gunmetal hover:text-red-400 transition-colors;
+    @apply inline-flex items-center justify-center text-gunmetal hover:text-red-400 transition-colors min-w-[44px] min-h-[44px];
+  }
+  .tf-btn-icon {
+    @apply inline-flex items-center justify-center rounded-lg text-gunmetal hover:text-tech-white hover:bg-[#1e2125] transition-colors min-w-[36px] min-h-[36px];
   }
   .tf-page-title {
     @apply text-2xl font-bold text-tech-white mb-6;
@@ -92,5 +112,12 @@ select option {
   }
   .tf-cost-row {
     @apply flex justify-between items-center gap-2 py-0.5;
+  }
+  /* Skeleton loader base */
+  .tf-skeleton {
+    background: linear-gradient(90deg, #1e2125 25%, #252a2f 50%, #1e2125 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 6px;
   }
 }

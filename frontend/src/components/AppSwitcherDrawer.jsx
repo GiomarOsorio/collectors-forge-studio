@@ -80,7 +80,7 @@ export default function AppSwitcherDrawer({ isOpen, onClose }) {
             </div>
             <button
               onClick={onClose}
-              className="text-gunmetal hover:text-tech-white transition-colors"
+              className="tf-btn-ghost"
               aria-label="Cerrar"
             >
               <X size={20} />

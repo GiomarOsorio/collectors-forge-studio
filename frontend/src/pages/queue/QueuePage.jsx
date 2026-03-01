@@ -33,6 +33,7 @@ import {
   Weight,
   Printer,
 } from 'lucide-react';
+import { SkeletonList } from '../../components/SkeletonLoader';
 
 /**
  * Formatea un número de horas a string legible (ej. 1.5 → "1h 30m").
@@ -340,14 +341,7 @@ export default function QueuePage() {
   const printing = items.filter((i) => i.status === 'printing');
   const pending = items.filter((i) => i.status === 'pending');
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20 text-gunmetal">
-        <Loader2 size={22} className="animate-spin mr-2" />
-        Cargando cola...
-      </div>
-    );
-  }
+  if (loading) return <SkeletonList count={4} />;
 
   return (
     <div>
