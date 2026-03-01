@@ -9,6 +9,18 @@ export default defineConfig({
       '/api': 'http://localhost:8000',
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-three': ['three', '@react-three/fiber', '@react-three/drei'],
+          'vendor-ui':    ['lucide-react'],
+          'vendor-misc':  ['axios', 'react-hot-toast'],
+        },
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     globals: true,
