@@ -14,12 +14,18 @@
  * @module components/AppLayout
  */
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { NavLink, Link, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import AppSwitcherDrawer from './AppSwitcherDrawer';
 import { LogOut, Menu } from 'lucide-react';
 import Breadcrumb from './Breadcrumb';
+
+const PageFallback = () => (
+  <div className="flex items-center justify-center min-h-[60vh]">
+    <div className="w-7 h-7 border-2 border-forge-green/20 border-t-forge-green rounded-full animate-spin" />
+  </div>
+);
 
 /**
  * Layout unificado para apps de TurtleForge Studio.
@@ -181,7 +187,9 @@ export default function AppLayout({ appName, navItems, activeClass, useAppSwitch
             style={{ animation: 'fadeInUp 0.3s ease-out both' }}
           >
             <Breadcrumb />
-            <Outlet />
+            <Suspense fallback={<PageFallback />}>
+              <Outlet />
+            </Suspense>
           </div>
         </main>
 

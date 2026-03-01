@@ -7,6 +7,7 @@
  * @module components/StudioLayout
  */
 
+import { Suspense } from 'react';
 import { Outlet, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LogOut } from 'lucide-react';
@@ -57,7 +58,9 @@ export default function StudioLayout() {
 
       {/* Contenido */}
       <main className="flex-1" style={{ animation: 'fadeInUp 0.35s ease-out both' }}>
-        <Outlet />
+        <Suspense fallback={null}>
+          <Outlet />
+        </Suspense>
       </main>
 
       {/* Footer */}
