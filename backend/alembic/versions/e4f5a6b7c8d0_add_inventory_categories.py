@@ -49,7 +49,8 @@ def upgrade() -> None:
     # Insertar categorías por defecto para todas las empresas existentes
     conn = op.get_bind()
     companies = conn.execute(sa.text("SELECT id FROM companies")).fetchall()
-    now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+    # asyncpg requiere datetime object (no string ISO) para columnas TIMESTAMP
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     rows = []
     for (company_id,) in companies:
