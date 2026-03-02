@@ -3,7 +3,7 @@
  * @module components/InventoryLayout
  */
 
-import { PackageOpen, ShoppingCart, Layers, Package, Printer, ArrowLeftRight, Wrench, Tags } from 'lucide-react';
+import { PackageOpen, ShoppingCart, Layers, Package, Printer, ArrowLeftRight, Wrench } from 'lucide-react';
 import AppLayout from './AppLayout';
 
 const navItems = [
@@ -14,7 +14,6 @@ const navItems = [
   { to: '/inventory/purchases',  icon: ShoppingCart,   label: 'Pedidos'              },
   { to: '/inventory/prints',     icon: Printer,        label: 'Disponible para Venta' },
   { to: '/inventory/io',         icon: ArrowLeftRight, label: 'Importar / Exportar'  },
-  { to: '/inventory/categories', icon: Tags,           label: 'Categorías'           },
 ];
 
 /** @returns {JSX.Element} */

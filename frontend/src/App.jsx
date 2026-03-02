@@ -29,7 +29,6 @@
  * - /inventory/purchases      → Pedidos de compra (protegida)
  * - /inventory/prints         → Inventario de impresiones 3D (protegida)
  * - /inventory/io             → Importar / Exportar inventario (protegida)
- * - /inventory/categories     → Categorías de inventario configurables (protegida)
  * - /slicer/upload            → Subir modelo STL / .gcode / .3mf o URL MakerWorld (protegida)
  * - /slicer/history           → Historial de trabajos de laminado (protegida)
  * - /maintenance/dashboard    → Estado general de mantenimiento (protegida)
@@ -79,7 +78,6 @@ const InventorySuppliesPage    = lazy(() => import('./pages/inventory/InventoryS
 const InventoryToolsPage       = lazy(() => import('./pages/inventory/InventoryToolsPage'));
 const InventoryPrintsPage      = lazy(() => import('./pages/inventory/InventoryPrintsPage'));
 const InventoryImportExportPage= lazy(() => import('./pages/inventory/InventoryImportExportPage'));
-const InventoryCategoriesPage  = lazy(() => import('./pages/inventory/InventoryCategoriesPage'));
 const SlicerUploadPage         = lazy(() => import('./pages/slicer/SlicerUploadPage'));
 const SlicerHistoryPage        = lazy(() => import('./pages/slicer/SlicerHistoryPage'));
 const MaintenanceDashboardPage = lazy(() => import('./pages/maintenance/MaintenanceDashboardPage'));
@@ -145,7 +143,6 @@ function AppRoutes() {
         <Route path="purchases" element={<InventoryPurchasesPage />} />
         <Route path="prints" element={<InventoryPrintsPage />} />
         <Route path="io" element={<InventoryImportExportPage />} />
-        <Route path="categories" element={<InventoryCategoriesPage />} />
       </Route>
 
       {/* Aplicación Cost: calculadora de costos de impresión 3D */}

@@ -362,8 +362,8 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
     ? 'Filamentos'
     : categoryFilter === 'Herramienta'
       ? 'Herramientas'
-      : excludeCategory === 'Filamento' || (excludeCategories && excludeCategories.includes('Filamento'))
-        ? 'Insumos y Accesorios'
+      : categoryFilter === 'Insumo'
+        ? 'Insumos'
         : 'Todo el stock';
 
   const isFilamentForm = form.category === 'Filamento';
