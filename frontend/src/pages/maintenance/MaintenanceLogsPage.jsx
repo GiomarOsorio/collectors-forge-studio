@@ -65,7 +65,7 @@ function LogRow({ log, onDelete, onEdit }) {
             {log.items?.length > 0 && (
               <button
                 onClick={() => setExpanded(!expanded)}
-                className="p-1.5 rounded text-steel hover:text-tech-white hover:bg-[#1e2125] transition-colors"
+                className="tf-btn-ghost p-1.5"
                 title={expanded ? 'Colapsar' : 'Ver ítems'}
               >
                 {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
@@ -73,14 +73,14 @@ function LogRow({ log, onDelete, onEdit }) {
             )}
             <button
               onClick={() => onEdit(log)}
-              className="p-1.5 rounded text-steel hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+              className="tf-btn-ghost p-1.5 text-blue-400 hover:text-blue-300"
               title="Editar"
             >
               <Pencil size={15} />
             </button>
             <button
               onClick={() => onDelete(log)}
-              className="p-1.5 rounded text-steel hover:text-red-400 hover:bg-red-500/10 transition-colors"
+              className="tf-btn-danger p-1.5"
               title="Eliminar"
             >
               <Trash2 size={15} />
@@ -148,8 +148,12 @@ export default function MaintenanceLogsPage() {
         getInventoryItems(),
       ]);
       setLogs(logsRes.data);
-      setPrinters(printersRes.data);
-      setInventoryItems(invRes.data);
+      setPrinters([...printersRes.data].sort((a, b) => a.name.localeCompare(b.name, 'es')));
+      setInventoryItems(
+        [...invRes.data].sort((a, b) =>
+          (a.category || '').localeCompare(b.category || '', 'es') || a.name.localeCompare(b.name, 'es')
+        )
+      );
     } catch {
       toast.error('Error al cargar los registros');
     } finally {
@@ -554,10 +558,18 @@ export default function MaintenanceLogsPage() {
                           onChange={(e) => handleInventoryItemChange(idx, e.target.value)}
                         >
                           <option value="">— Sin vincular —</option>
-                          {inventoryItems.map((inv) => (
-                            <option key={inv.id} value={String(inv.id)}>
-                              {inv.name} ({inv.category})
-                            </option>
+                          {Object.entries(
+                            inventoryItems.reduce((acc, inv) => {
+                              const cat = inv.category || 'Sin categoría';
+                              (acc[cat] = acc[cat] || []).push(inv);
+                              return acc;
+                            }, {})
+                          ).map(([category, items]) => (
+                            <optgroup key={category} label={category}>
+                              {items.map((inv) => (
+                                <option key={inv.id} value={String(inv.id)}>{inv.name}</option>
+                              ))}
+                            </optgroup>
                           ))}
                         </select>
                       </div>

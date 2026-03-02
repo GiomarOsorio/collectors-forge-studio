@@ -88,7 +88,11 @@ export default function InventoryPurchasesPage() {
         getInventoryItems(),
       ]);
       setOrders(ordersRes.data);
-      setInventoryItems(itemsRes.data);
+      setInventoryItems(
+        [...itemsRes.data].sort((a, b) =>
+          (a.category || '').localeCompare(b.category || '', 'es') || a.name.localeCompare(b.name, 'es')
+        )
+      );
     } catch {
       toast.error('Error al cargar los pedidos');
     } finally {
@@ -538,8 +542,18 @@ export default function InventoryPurchasesPage() {
                           className="tf-input text-sm"
                         >
                           <option value="">Sin vincular</option>
-                          {inventoryItems.map((inv) => (
-                            <option key={inv.id} value={inv.id}>{inv.name}</option>
+                          {Object.entries(
+                            inventoryItems.reduce((acc, inv) => {
+                              const cat = inv.category || 'Sin categoría';
+                              (acc[cat] = acc[cat] || []).push(inv);
+                              return acc;
+                            }, {})
+                          ).map(([category, items]) => (
+                            <optgroup key={category} label={category}>
+                              {items.map((inv) => (
+                                <option key={inv.id} value={inv.id}>{inv.name}</option>
+                              ))}
+                            </optgroup>
                           ))}
                         </select>
                       </div>
