@@ -3,17 +3,18 @@
  * @module components/InventoryLayout
  */
 
-import { PackageOpen, ShoppingCart, Layers, Package, Printer, ArrowLeftRight, Wrench } from 'lucide-react';
+import { PackageOpen, ShoppingCart, Layers, Package, Printer, ArrowLeftRight, Wrench, Zap } from 'lucide-react';
 import AppLayout from './AppLayout';
 
 const navItems = [
-  { to: '/inventory/filaments',  icon: Layers,         label: 'Filamentos'           },
-  { to: '/inventory/supplies',   icon: Package,        label: 'Insumos'              },
-  { to: '/inventory/tools',      icon: Wrench,         label: 'Herramientas'         },
-  { to: '/inventory/stock',      icon: PackageOpen,    label: 'Todo el stock'        },
-  { to: '/inventory/purchases',  icon: ShoppingCart,   label: 'Pedidos'              },
-  { to: '/inventory/prints',     icon: Printer,        label: 'Disponible para Venta' },
-  { to: '/inventory/io',         icon: ArrowLeftRight, label: 'Importar / Exportar'  },
+  { to: '/inventory/filaments',    icon: Layers,         label: 'Filamentos'           },
+  { to: '/inventory/supplies',     icon: Package,        label: 'Insumos'              },
+  { to: '/inventory/tools',        icon: Wrench,         label: 'Herramientas'         },
+  { to: '/inventory/consumables',  icon: Zap,            label: 'Consumibles'          },
+  { to: '/inventory/stock',        icon: PackageOpen,    label: 'Todo el stock'        },
+  { to: '/inventory/purchases',    icon: ShoppingCart,   label: 'Pedidos'              },
+  { to: '/inventory/prints',       icon: Printer,        label: 'Disponible para Venta'},
+  { to: '/inventory/io',           icon: ArrowLeftRight, label: 'Importar / Exportar'  },
 ];
 
 /** @returns {JSX.Element} */

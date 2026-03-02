@@ -25,6 +25,7 @@
  * - /inventory/filaments      → Filamentos del inventario (protegida)
  * - /inventory/supplies       → Insumos y accesorios del inventario (protegida)
  * - /inventory/tools          → Herramientas y suplementos del inventario (protegida)
+ * - /inventory/consumables    → Consumibles de la impresora (protegida)
  * - /inventory/stock          → Todo el stock del inventario (protegida)
  * - /inventory/purchases      → Pedidos de compra (protegida)
  * - /inventory/prints         → Inventario de impresiones 3D (protegida)
@@ -77,6 +78,7 @@ const InventoryFilamentsPage   = lazy(() => import('./pages/inventory/InventoryF
 const InventorySuppliesPage    = lazy(() => import('./pages/inventory/InventorySuppliesPage'));
 const InventoryToolsPage       = lazy(() => import('./pages/inventory/InventoryToolsPage'));
 const InventoryPrintsPage      = lazy(() => import('./pages/inventory/InventoryPrintsPage'));
+const InventoryConsumablesPage  = lazy(() => import('./pages/inventory/InventoryConsumablesPage'));
 const InventoryImportExportPage= lazy(() => import('./pages/inventory/InventoryImportExportPage'));
 const SlicerUploadPage         = lazy(() => import('./pages/slicer/SlicerUploadPage'));
 const SlicerHistoryPage        = lazy(() => import('./pages/slicer/SlicerHistoryPage'));
@@ -139,6 +141,7 @@ function AppRoutes() {
         <Route path="filaments" element={<InventoryFilamentsPage />} />
         <Route path="supplies" element={<InventorySuppliesPage />} />
         <Route path="tools" element={<InventoryToolsPage />} />
+        <Route path="consumables" element={<InventoryConsumablesPage />} />
         <Route path="stock" element={<InventoryStockPage />} />
         <Route path="purchases" element={<InventoryPurchasesPage />} />
         <Route path="prints" element={<InventoryPrintsPage />} />

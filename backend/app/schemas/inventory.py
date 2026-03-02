@@ -59,6 +59,9 @@ class InventoryItemCreate(BaseModel):
     weight_per_roll: Optional[Decimal] = None
     # Precio por unidad para insumos (calculadora)
     price_per_unit: Optional[Decimal] = None
+    # Campos específicos para consumibles (calculadora)
+    useful_life_hours: Optional[Decimal] = None
+    unit_cost_cal: Optional[Decimal] = None
 
 
 class InventoryItemUpdate(BaseModel):
@@ -103,6 +106,9 @@ class InventoryItemUpdate(BaseModel):
     weight_per_roll: Optional[Decimal] = None
     # Precio por unidad para insumos (calculadora)
     price_per_unit: Optional[Decimal] = None
+    # Campos específicos para consumibles (calculadora)
+    useful_life_hours: Optional[Decimal] = None
+    unit_cost_cal: Optional[Decimal] = None
 
 
 class InventoryItemResponse(BaseModel):
@@ -153,6 +159,9 @@ class InventoryItemResponse(BaseModel):
     weight_per_roll: Optional[DecimalAsFloat] = None
     # Precio por unidad para insumos (calculadora)
     price_per_unit: Optional[DecimalAsFloat] = None
+    # Campos específicos para consumibles (calculadora)
+    useful_life_hours: Optional[DecimalAsFloat] = None
+    unit_cost_cal: Optional[DecimalAsFloat] = None
     low_stock: bool = False
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -220,6 +229,8 @@ class InventoryItemExport(BaseModel):
     filament_density: Optional[DecimalAsFloat] = None
     weight_per_roll: Optional[DecimalAsFloat] = None
     price_per_unit: Optional[DecimalAsFloat] = None
+    useful_life_hours: Optional[DecimalAsFloat] = None
+    unit_cost_cal: Optional[DecimalAsFloat] = None
 
     model_config = {"from_attributes": True}
 
