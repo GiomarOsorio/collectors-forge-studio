@@ -74,6 +74,8 @@ async def calculate_quote(
     Calcula el costo de una impresión 3D sin guardar la cotización.
 
     Filtra filamento e impresora por company_id para garantizar el aislamiento.
+    Los consumibles de la empresa se cargan automáticamente y su desgaste se
+    calcula proporcional al tiempo de impresión.
 
     Returns:
         QuoteCostBreakdown: Desglose completo de costos (no persistido en BD).
@@ -87,6 +89,7 @@ async def calculate_quote(
     cop_rate = await get_usd_to_cop()
     supplies_data = await _resolve_supplies(db, current_user, data.supplies)
     additional_filaments_data = await _resolve_additional_filaments(db, current_user, data.additional_filaments)
+    consumables_data = await _get_consumables(db, current_user)
 
     return calculate_cost(
         filament=filament,
@@ -101,6 +104,7 @@ async def calculate_quote(
         usd_to_cop_rate=cop_rate,
         supplies=supplies_data,
         additional_filaments=additional_filaments_data,
+        consumables=consumables_data,
     )
 
 
@@ -162,6 +166,7 @@ async def calculate_quote_manual(
     )
 
     cop_rate = await get_usd_to_cop()
+    consumables_data = await _get_consumables(db, current_user)
 
     return calculate_cost(
         filament=fake_filament,
@@ -174,6 +179,7 @@ async def calculate_quote_manual(
         quantity=data.quantity,
         margin_percent=data.margin_percent,
         usd_to_cop_rate=cop_rate,
+        consumables=consumables_data,
     )
 
 
@@ -202,6 +208,7 @@ async def create_quote(
     cop_rate = data.usd_to_cop_rate if data.usd_to_cop_rate else await get_usd_to_cop()
     supplies_data = await _resolve_supplies(db, current_user, data.supplies)
     additional_filaments_data = await _resolve_additional_filaments(db, current_user, data.additional_filaments)
+    consumables_data = await _get_consumables(db, current_user)
 
     breakdown = calculate_cost(
         filament=filament,
@@ -216,6 +223,7 @@ async def create_quote(
         usd_to_cop_rate=cop_rate,
         supplies=supplies_data,
         additional_filaments=additional_filaments_data,
+        consumables=consumables_data,
     )
 
     quote = Quote(
@@ -449,6 +457,30 @@ async def _get_company_quote(db: AsyncSession, quote_id: int, company_id) -> Quo
     if not quote:
         raise HTTPException(status_code=404, detail="Cotización no encontrada")
     return quote
+
+
+async def _get_consumables(db: AsyncSession, current_user: User) -> list:
+    """
+    Carga los consumibles activos de la empresa para el cálculo de desgaste.
+
+    Retorna solo los ítems con category="Consumible", useful_life_hours > 0
+    y unit_cost_cal definido. Estos se aplicarán automáticamente en la
+    calculadora proporcional al tiempo de impresión.
+    """
+    r = await db.execute(
+        select(InventoryItem).where(
+            InventoryItem.company_id == current_user.company_id,
+            InventoryItem.category == "Consumible",
+            InventoryItem.useful_life_hours.isnot(None),
+            InventoryItem.useful_life_hours > 0,
+            InventoryItem.unit_cost_cal.isnot(None),
+        )
+    )
+    items = r.scalars().all()
+    return [
+        {"name": c.name, "unit_cost_cal": c.unit_cost_cal, "useful_life_hours": c.useful_life_hours}
+        for c in items
+    ]
 
 
 async def _resolve_supplies(db: AsyncSession, current_user: User, supply_items) -> list:

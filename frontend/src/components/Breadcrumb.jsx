@@ -35,6 +35,7 @@ const SEGMENT_LABELS = {
   filaments:   'Filamentos',
   supplies:    'Insumos',
   tools:       'Herramientas',
+  consumables: 'Consumibles',
   stock:       'Todo el stock',
   purchases:   'Pedidos',
   prints:      'Disponible para Venta',

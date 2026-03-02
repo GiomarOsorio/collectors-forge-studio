@@ -133,9 +133,9 @@ export default function CalculatorPage() {
     Promise.all([getInventoryFilaments(), getInventoryItems(), getPrinters(), getSettings()])
       .then(([fRes, allRes, pRes, sRes]) => {
         const filamentItems = [...fRes.data].sort((a, b) => a.name.localeCompare(b.name, 'es'));
-        // Los insumos son todos los items que NO son "Filamento", ordenados por categoría y nombre
+        // Los insumos son items que NO son Filamento ni Consumible (los consumibles son automáticos)
         const supplyItems = allRes.data
-          .filter((i) => i.category !== 'Filamento')
+          .filter((i) => i.category !== 'Filamento' && i.category !== 'Consumible')
           .sort((a, b) => (a.category || '').localeCompare(b.category || '', 'es') || a.name.localeCompare(b.name, 'es'));
         const sortedPrinters = [...pRes.data].sort((a, b) => a.name.localeCompare(b.name, 'es'));
 
@@ -751,6 +751,9 @@ export default function CalculatorPage() {
                 <CostRow label="Mantenimiento" value={result.maintenance_cost} />
                 <CostRow label="Mano de obra" value={result.labor_cost} />
                 <CostRow label="Absorción de fallos" value={result.failure_cost} />
+                {result.consumables_wear_cost > 0 && (
+                  <CostRow label="Desgaste consumibles" value={result.consumables_wear_cost} />
+                )}
                 {result.supplies_cost > 0 && (
                   <CostRow label="Insumos adicionales" value={result.supplies_cost} />
                 )}

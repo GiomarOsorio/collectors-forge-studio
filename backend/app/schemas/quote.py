@@ -91,6 +91,7 @@ class QuoteCostBreakdown(BaseModel):
     total_price: DecimalAsFloat
     supplies_cost: DecimalAsFloat = Decimal("0")
     supplies_detail: list = []
+    consumables_wear_cost: DecimalAsFloat = Decimal("0")
     usd_to_cop_rate: Optional[DecimalAsFloat] = None
     total_per_unit_cop: Optional[DecimalAsFloat] = None
     total_price_cop: Optional[DecimalAsFloat] = None

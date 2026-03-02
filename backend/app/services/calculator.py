@@ -5,18 +5,19 @@ Fórmula de cálculo aplicada:
     El peso y tiempo de impresión representan el trabajo completo (la placa con
     todas las piezas). La cantidad indica cuántas piezas produce ese trabajo.
 
-    1. Costo de material  = gramos_totales × (precio_por_kg / 1000) + filamentos adicionales
-    2. Costo eléctrico    = (watts × horas_totales / 1000) × tarifa_kWh
-    3. Depreciación       = (precio_impresora / vida_útil_horas) × horas_totales
-    4. Mantenimiento      = (boquilla/vida_boquilla + placa/vida_placa + otros) × horas_totales
-    5. Mano de obra       = (t_preparación + t_post_procesado) × costo_hora
-    6. Costo de fallos    = (suma 1-5) × (tasa_fallos / 100)
-    7. Subtotal base      = suma 1-5 + costo_fallos
-    8. Insumos            = suma(cantidad × precio_unitario) por cada insumo
-    9. Subtotal final     = subtotal_base + insumos
-   10. Margen             = subtotal_final × (margen_percent / 100)
-   11. Total trabajo      = subtotal_final + margen  (lo que paga el cliente)
-   12. Precio por pieza   = total_trabajo / cantidad
+    1. Costo de material   = gramos_totales × (precio_por_kg / 1000) + filamentos adicionales
+    2. Costo eléctrico     = (watts × horas_totales / 1000) × tarifa_kWh
+    3. Depreciación        = (precio_impresora / vida_útil_horas) × horas_totales
+    4. Mantenimiento       = (boquilla/vida_boquilla + placa/vida_placa + otros) × horas_totales
+    5. Mano de obra        = (t_preparación + t_post_procesado) × costo_hora
+    6. Costo de fallos     = (suma 1-5) × (tasa_fallos / 100)
+    7. Subtotal base       = suma 1-5 + costo_fallos
+    8. Insumos adicionales = suma(cantidad × precio_unitario) por cada insumo
+    9. Desgaste consumible = suma(unit_cost_cal / useful_life_hours × horas_impresión)
+   10. Subtotal final      = subtotal_base + insumos + consumibles
+   11. Margen              = subtotal_final × (margen_percent / 100)
+   12. Total trabajo       = subtotal_final + margen  (lo que paga el cliente)
+   13. Precio por pieza    = total_trabajo / cantidad
 """
 
 from decimal import Decimal, ROUND_HALF_UP
@@ -63,6 +64,7 @@ def calculate_cost(
     usd_to_cop_rate: Optional[Decimal] = None,
     supplies: Optional[List[dict]] = None,
     additional_filaments: Optional[List[dict]] = None,
+    consumables: Optional[List[dict]] = None,
 ) -> QuoteCostBreakdown:
     """
     Calcula el costo total de imprimir una pieza 3D con desglose por componente.
@@ -70,8 +72,8 @@ def calculate_cost(
     Todos los campos de filament, printer y app_settings son Decimal (columnas
     Numeric → asyncpg devuelve Decimal automáticamente). Los parámetros de
     entrada weight_grams, print_time_hours, etc. se reciben como Decimal desde
-    los schemas Pydantic. Los dicts en supplies y additional_filaments pueden
-    traer float desde JSON; se convierten con _d() antes de cualquier operación.
+    los schemas Pydantic. Los dicts en supplies, additional_filaments y consumables
+    pueden traer float desde JSON; se convierten con _d() antes de cualquier operación.
 
     La conversión de tipo es responsabilidad exclusiva de los schemas (Pydantic).
     El dominio opera únicamente con Decimal en todos los pasos.
@@ -89,6 +91,9 @@ def calculate_cost(
         usd_to_cop_rate:             Tasa USD→COP opcional (Decimal).
         supplies:                    Lista de dicts de insumos con float desde JSON.
         additional_filaments:        Lista de dicts de filamentos extra con float desde JSON.
+        consumables:                 Lista de dicts de consumibles con unit_cost_cal y
+                                     useful_life_hours. Su desgaste se calcula automáticamente
+                                     proporcional a print_time_hours.
 
     Returns:
         QuoteCostBreakdown con todos los valores como Decimal.
@@ -181,9 +186,24 @@ def calculate_cost(
 
     supplies_cost = supplies_cost.quantize(_2, rounding=ROUND_HALF_UP)
 
-    subtotal_with_supplies: Decimal = subtotal + supplies_cost
+    # ── 9. Desgaste de consumibles ────────────────────────────────────────────
+    # Los consumibles (boquillas, calcetas, filtros, etc.) se desgastan
+    # proporcionalmente a las horas de impresión. Se cargan automáticamente
+    # desde el inventario (categoría "Consumible") sin intervención del usuario.
+    # Fórmula por consumible: unit_cost_cal / useful_life_hours × print_time_hours
+    consumables_wear_cost: Decimal = _D0
+    for c in (consumables or []):
+        life_hours: Decimal = _d(c["useful_life_hours"])
+        cost_cal: Decimal = _d(c["unit_cost_cal"])
+        if life_hours > _D0:
+            consumables_wear_cost += (cost_cal / life_hours * print_time_hours).quantize(
+                _4, rounding=ROUND_HALF_UP
+            )
+    consumables_wear_cost = consumables_wear_cost.quantize(_2, rounding=ROUND_HALF_UP)
 
-    # ── 10. Margen ────────────────────────────────────────────────────────────
+    subtotal_with_supplies: Decimal = subtotal + supplies_cost + consumables_wear_cost
+
+    # ── 11. Margen ────────────────────────────────────────────────────────────
     margin: Decimal = (
         _d(margin_percent) if margin_percent is not None else _d(app_settings.default_margin_percent)
     )
@@ -221,6 +241,7 @@ def calculate_cost(
         total_price=total_price,
         supplies_cost=supplies_cost,
         supplies_detail=supplies_detail,
+        consumables_wear_cost=consumables_wear_cost,
         usd_to_cop_rate=_d(usd_to_cop_rate) if usd_to_cop_rate else None,
         total_per_unit_cop=total_per_unit_cop,
         total_price_cop=total_price_cop,

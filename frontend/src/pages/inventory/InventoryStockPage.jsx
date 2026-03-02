@@ -21,7 +21,7 @@ import toast from 'react-hot-toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import {
   Plus, Pencil, Trash2, X, AlertTriangle, ShoppingCart,
-  PackageOpen, CheckCircle, ChevronUp, ChevronDown, Loader2,
+  PackageOpen, CheckCircle, ChevronUp, ChevronDown, Loader2, Zap,
 } from 'lucide-react';
 import {
   getInventoryItems,
@@ -65,6 +65,8 @@ const EMPTY_FORM = {
   filament_density: '1.24',
   weight_per_roll: '1000',
   price_per_unit: '',
+  useful_life_hours: '',
+  unit_cost_cal: '',
 };
 
 /**
@@ -216,6 +218,8 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
       filament_density: item.filament_density != null ? String(item.filament_density) : '1.24',
       weight_per_roll: item.weight_per_roll != null ? String(item.weight_per_roll) : '1000',
       price_per_unit: item.price_per_unit != null ? String(item.price_per_unit) : '',
+      useful_life_hours: item.useful_life_hours != null ? String(item.useful_life_hours) : '',
+      unit_cost_cal: item.unit_cost_cal != null ? String(item.unit_cost_cal) : '',
     });
     setModalOpen(true);
   };
@@ -230,6 +234,7 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
     setSaving(true);
     try {
       const isFilament = form.category === 'Filamento';
+      const isConsumable = form.category === 'Consumible';
       const payload = {
         name: form.name.trim(),
         category: form.category,
@@ -250,7 +255,10 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
         filament_diameter: isFilament && form.filament_diameter ? parseFloat(form.filament_diameter) : null,
         filament_density: isFilament && form.filament_density ? parseFloat(form.filament_density) : null,
         weight_per_roll: isFilament && form.weight_per_roll ? parseFloat(form.weight_per_roll) : null,
-        price_per_unit: !isFilament && form.price_per_unit ? parseFloat(form.price_per_unit) : null,
+        price_per_unit: !isFilament && !isConsumable && form.price_per_unit ? parseFloat(form.price_per_unit) : null,
+        // Campos de consumible (calculadora de desgaste)
+        useful_life_hours: isConsumable && form.useful_life_hours ? parseFloat(form.useful_life_hours) : null,
+        unit_cost_cal: isConsumable && form.unit_cost_cal ? parseFloat(form.unit_cost_cal) : null,
       };
       if (editItem) {
         await updateInventoryItem(editItem.id, payload);
@@ -364,9 +372,12 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
       ? 'Herramientas'
       : categoryFilter === 'Insumo'
         ? 'Insumos'
-        : 'Todo el stock';
+        : categoryFilter === 'Consumible'
+          ? 'Consumibles'
+          : 'Todo el stock';
 
   const isFilamentForm = form.category === 'Filamento';
+  const isConsumableForm = form.category === 'Consumible';
 
   // Determina si la categoría seleccionada admite decimales
   const selectedCatConfig = apiCategories.find((c) => c.name === form.category);
@@ -724,8 +735,42 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
                 </div>
               )}
 
-              {/* Precio por unidad para insumos (no filamento) */}
-              {!isFilamentForm && (
+              {/* Campos específicos para consumibles */}
+              {isConsumableForm && (
+                <div className="border border-amber-500/20 rounded-lg p-4 space-y-4 bg-amber-500/5">
+                  <p className="text-sm font-medium text-amber-400 flex items-center gap-2">
+                    <Zap size={15} /> Datos del consumible (para la calculadora)
+                  </p>
+                  <p className="text-xs text-gunmetal -mt-2">
+                    El desgaste se calcula automáticamente: precio_cal / vida_útil × horas_impresión
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="tf-label">Vida útil (horas de impresión) *</label>
+                      <input name="useful_life_hours" type="number" step="1" min="1"
+                        value={form.useful_life_hours} onChange={handleChange}
+                        className="tf-input" placeholder="Ej: 500"
+                        required={isConsumableForm} />
+                      <p className="text-xs text-gunmetal mt-1">
+                        Horas antes de necesitar reemplazo
+                      </p>
+                    </div>
+                    <div>
+                      <label className="tf-label">Precio para cotización (USD) *</label>
+                      <input name="unit_cost_cal" type="number" step="0.0001" min="0"
+                        value={form.unit_cost_cal} onChange={handleChange}
+                        className="tf-input" placeholder="Ej: 3.50"
+                        required={isConsumableForm} />
+                      <p className="text-xs text-gunmetal mt-1">
+                        Lo que cobras al cliente (puede incluir impuestos de importación)
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Precio por unidad para insumos (no filamento, no consumible) */}
+              {!isFilamentForm && !isConsumableForm && (
                 <div>
                   <label className="tf-label">Precio por unidad para calculadora (USD)</label>
                   <input name="price_per_unit" type="number" step="0.0001" min="0"

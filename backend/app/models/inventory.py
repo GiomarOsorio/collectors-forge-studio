@@ -86,6 +86,12 @@ class InventoryItem(Base):
     # Precio por unidad para insumos (usado por la calculadora)
     price_per_unit: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 4), nullable=True)
 
+    # Campos específicos para ítems de categoría "Consumible" (calculadora)
+    # useful_life_hours: horas de impresión que dura el consumible (ej. 500 para boquilla)
+    # unit_cost_cal: precio a cobrar en cotización (puede diferir de unit_cost por impuestos)
+    useful_life_hours: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
+    unit_cost_cal: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 4), nullable=True)
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at: Mapped[datetime] = mapped_column(
