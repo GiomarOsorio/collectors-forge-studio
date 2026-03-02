@@ -83,9 +83,10 @@ class PurchaseOrderCreate(BaseModel):
 
 class PurchaseOrderUpdate(BaseModel):
     """
-    Datos opcionales para actualizar una orden de compra (sin ítems).
+    Datos opcionales para actualizar una orden de compra.
 
     Todos los campos son opcionales. Solo se actualizan los que se envíen.
+    Si se envía 'items', reemplaza completamente los ítems de la orden.
 
     Atributos:
         supplier:          Nuevo nombre del proveedor.
@@ -94,6 +95,7 @@ class PurchaseOrderUpdate(BaseModel):
         status:            Nuevo estado (pendiente, en_transito, llegado, cancelado).
         estimated_arrival: Nueva fecha estimada de llegada.
         notes:             Nuevas notas.
+        items:             Lista de ítems; si se envía, reemplaza los existentes.
     """
     supplier: Optional[str] = Field(default=None, min_length=1, max_length=200)
     tracking_number: Optional[str] = Field(default=None, max_length=200)
@@ -101,6 +103,7 @@ class PurchaseOrderUpdate(BaseModel):
     status: Optional[str] = Field(default=None, max_length=50)
     estimated_arrival: Optional[date] = None
     notes: Optional[str] = None
+    items: Optional[List[PurchaseOrderItemCreate]] = None
 
 
 class PurchaseOrderResponse(BaseModel):

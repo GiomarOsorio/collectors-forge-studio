@@ -132,18 +132,21 @@ export default function CalculatorPage() {
   useEffect(() => {
     Promise.all([getInventoryFilaments(), getInventoryItems(), getPrinters(), getSettings()])
       .then(([fRes, allRes, pRes, sRes]) => {
-        const filamentItems = fRes.data;
-        // Los insumos son todos los items que NO son "Filamento"
-        const supplyItems = allRes.data.filter((i) => i.category !== 'Filamento');
+        const filamentItems = [...fRes.data].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+        // Los insumos son todos los items que NO son "Filamento", ordenados por categoría y nombre
+        const supplyItems = allRes.data
+          .filter((i) => i.category !== 'Filamento')
+          .sort((a, b) => (a.category || '').localeCompare(b.category || '', 'es') || a.name.localeCompare(b.name, 'es'));
+        const sortedPrinters = [...pRes.data].sort((a, b) => a.name.localeCompare(b.name, 'es'));
 
         setFilaments(filamentItems);
         setSupplies(supplyItems);
-        setPrinters(pRes.data);
+        setPrinters(sortedPrinters);
         setSettings(sRes.data);
 
         // Valores base: primera impresora, primer filamento, margen por defecto
         const updates = { margin_percent: sRes.data.default_margin_percent };
-        if (pRes.data.length > 0) updates.printer_id = pRes.data[0].id;
+        if (sortedPrinters.length > 0) updates.printer_id = sortedPrinters[0].id;
         if (filamentItems.length > 0) updates.inventory_item_id = filamentItems[0].id;
 
         // Aplicar URL params del Slicer si están presentes
@@ -668,14 +671,24 @@ export default function CalculatorPage() {
                     className="tf-input flex-1"
                   >
                     <option value="">Insumo...</option>
-                    {supplies.map((s) => {
-                      const price = s.price_per_unit ?? s.unit_cost ?? 0;
-                      return (
-                        <option key={s.id} value={s.id}>
-                          {s.name} — ${parseFloat(price).toFixed(4)}/{s.unit}
-                        </option>
-                      );
-                    })}
+                    {Object.entries(
+                      supplies.reduce((acc, s) => {
+                        const cat = s.category || 'Sin categoría';
+                        (acc[cat] = acc[cat] || []).push(s);
+                        return acc;
+                      }, {})
+                    ).map(([category, items]) => (
+                      <optgroup key={category} label={category}>
+                        {items.map((s) => {
+                          const price = s.price_per_unit ?? s.unit_cost ?? 0;
+                          return (
+                            <option key={s.id} value={s.id}>
+                              {s.name} — ${parseFloat(price).toFixed(4)}/{s.unit}
+                            </option>
+                          );
+                        })}
+                      </optgroup>
+                    ))}
                   </select>
                   <input
                     type="number"

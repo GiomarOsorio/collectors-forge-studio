@@ -183,10 +183,11 @@ async def update_purchase_order(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Actualiza los campos de una orden de compra (no modifica los ítems).
+    Actualiza los campos de una orden de compra.
 
     Solo actualiza los campos que se envíen (exclude_unset=True).
-    Para modificar los ítems se debe eliminar y recrear la orden.
+    Si se envía 'items' (lista no vacía), reemplaza completamente los
+    ítems de la orden (delete-orphan cascade elimina los anteriores).
 
     Args:
         order_id:     ID de la orden a actualizar.
@@ -203,8 +204,21 @@ async def update_purchase_order(
     order = await _get_company_purchase_order(db, order_id, current_user.company_id)
 
     update_data = data.model_dump(exclude_unset=True)
+    new_items = update_data.pop("items", None)
+
     for field, value in update_data.items():
         setattr(order, field, value)
+
+    if new_items is not None and len(new_items) > 0:
+        order.items.clear()
+        for item_data in data.items:
+            order.items.append(PurchaseOrderItem(
+                name=item_data.name,
+                quantity=item_data.quantity,
+                unit_cost=item_data.unit_cost,
+                inventory_item_id=item_data.inventory_item_id,
+                notes=item_data.notes,
+            ))
 
     await db.commit()
     await db.refresh(order)
