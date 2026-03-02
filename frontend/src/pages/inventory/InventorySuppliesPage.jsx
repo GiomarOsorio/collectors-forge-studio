@@ -15,5 +15,5 @@ import InventoryStockPage from './InventoryStockPage';
  * @returns {JSX.Element}
  */
 export default function InventorySuppliesPage() {
-  return <InventoryStockPage excludeCategories={['Filamento', 'Herramienta']} />;
+  return <InventoryStockPage categoryFilter="Insumo" />;
 }
