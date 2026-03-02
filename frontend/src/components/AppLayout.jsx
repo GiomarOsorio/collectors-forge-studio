@@ -183,7 +183,7 @@ export default function AppLayout({ appName, navItems, activeClass, useAppSwitch
         {/* Contenido de la página activa */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden">
           <div
-            className="p-4 md:p-6 xl:p-8 max-w-7xl mx-auto w-full"
+            className="p-4 md:p-6 xl:p-8 max-w-7xl mx-auto w-full min-h-full"
             style={{ animation: 'fadeInUp 0.3s ease-out both' }}
           >
             <Breadcrumb />
