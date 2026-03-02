@@ -37,7 +37,7 @@ const SEGMENT_LABELS = {
   tools:       'Herramientas',
   stock:       'Todo el stock',
   purchases:   'Pedidos',
-  prints:      'Impresiones',
+  prints:      'Disponible para Venta',
   io:          'Importar / Exportar',
   categories:  'Categorías',
   /* Queue */

@@ -275,7 +275,7 @@ export default function InventoryPrintsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="tf-page-title mb-0">Impresiones</h2>
+          <h2 className="tf-page-title mb-0">Disponible para Venta</h2>
           <p className="text-sm text-gunmetal mt-1">
             {total} {total === 1 ? 'ítem' : 'ítems'} en inventario
           </p>

@@ -12,7 +12,7 @@ const navItems = [
   { to: '/inventory/tools',      icon: Wrench,         label: 'Herramientas'         },
   { to: '/inventory/stock',      icon: PackageOpen,    label: 'Todo el stock'        },
   { to: '/inventory/purchases',  icon: ShoppingCart,   label: 'Pedidos'              },
-  { to: '/inventory/prints',     icon: Printer,        label: 'Impresiones'          },
+  { to: '/inventory/prints',     icon: Printer,        label: 'Disponible para Venta' },
   { to: '/inventory/io',         icon: ArrowLeftRight, label: 'Importar / Exportar'  },
   { to: '/inventory/categories', icon: Tags,           label: 'Categorías'           },
 ];
