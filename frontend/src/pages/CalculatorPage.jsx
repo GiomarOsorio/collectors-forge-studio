@@ -54,9 +54,13 @@ export default function CalculatorPage() {
   /** @type {[Object|null, Function]} Configuracion de la aplicacion (tarifas, margenes) */
   const [settings, setSettings] = useState(null);
   /**
-   * @type {[Array, Function]} Catalogo de insumos (items de inventario que no son Filamento)
+   * @type {[Array, Function]} Catalogo de insumos (items de inventario que no son Filamento ni Consumible)
    */
   const [supplies, setSupplies] = useState([]);
+  /**
+   * @type {[Array, Function]} Consumibles del inventario (desgaste automático por horas de impresión)
+   */
+  const [consumables, setConsumables] = useState([]);
   /**
    * @type {[Array, Function]} Insumos seleccionados para esta cotizacion
    * Cada elemento: {inventory_item_id: string, quantity: number}
@@ -137,10 +141,14 @@ export default function CalculatorPage() {
         const supplyItems = allRes.data
           .filter((i) => i.category !== 'Filamento' && i.category !== 'Consumible')
           .sort((a, b) => (a.category || '').localeCompare(b.category || '', 'es') || a.name.localeCompare(b.name, 'es'));
+        const consumableItems = allRes.data
+          .filter((i) => i.category === 'Consumible' && i.useful_life_hours > 0 && i.unit_cost_cal)
+          .sort((a, b) => a.name.localeCompare(b.name, 'es'));
         const sortedPrinters = [...pRes.data].sort((a, b) => a.name.localeCompare(b.name, 'es'));
 
         setFilaments(filamentItems);
         setSupplies(supplyItems);
+        setConsumables(consumableItems);
         setPrinters(sortedPrinters);
         setSettings(sRes.data);
 
@@ -711,6 +719,40 @@ export default function CalculatorPage() {
                 </div>
               </div>
             </>
+          )}
+
+          {/* Consumibles del inventario (desgaste automático) */}
+          {consumables.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs font-semibold text-gunmetal uppercase tracking-wider">Consumibles adicionales</span>
+                <span className="text-xs text-gunmetal">(automático)</span>
+                <div className="flex-1 h-px bg-[#1e2125]" />
+              </div>
+              {consumables.map((c) => {
+                const printHours = (parseFloat(form.print_time_minutes) || 0) / 60;
+                const wear = printHours > 0
+                  ? (parseFloat(c.unit_cost_cal) / parseFloat(c.useful_life_hours)) * printHours
+                  : null;
+                return (
+                  <div
+                    key={c.id}
+                    className="flex items-center gap-2 mb-1 text-sm bg-[#0d1014] border border-[#1e2125] px-3 py-1.5 rounded-lg"
+                  >
+                    <span className="flex-1 text-steel">{c.name}</span>
+                    <span className="text-gunmetal text-xs">{c.useful_life_hours}h vida útil</span>
+                    {wear !== null && (
+                      <span className="text-amber-400 font-mono text-xs">
+                        ${wear.toFixed(4)}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+              <p className="text-xs text-gunmetal mt-1">
+                El desgaste se calcula automáticamente según el tiempo de impresión.
+              </p>
+            </div>
           )}
 
           <div className="flex gap-3 mt-4">
