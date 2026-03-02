@@ -38,6 +38,9 @@ import EmptyState from '../../components/EmptyState';
 /** Ítems por página en la tabla */
 const PAGE_SIZE = 15;
 
+/** Categorías de inventario disponibles */
+const INVENTORY_CATEGORIES = ['Filamento', 'Insumo', 'Herramienta', 'Consumible'];
+
 /** Tipos de filamento disponibles */
 const FILAMENT_TYPES = ['PLA', 'PETG', 'ABS', 'TPU', 'ASA', 'Nylon', 'PLA+', 'PETG+', 'Otro'];
 
@@ -626,13 +629,9 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
                       className="tf-input"
                     >
                       <option value="" disabled>— Seleccionar categoría —</option>
-                      {apiCategories
-                        .filter((c) => {
-                          if (excludeCategory && c.name === excludeCategory) return false;
-                          if (excludeCategories && excludeCategories.includes(c.name)) return false;
-                          return true;
-                        })
-                        .map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                      {INVENTORY_CATEGORIES.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
                     </select>
                   )}
                 </div>
