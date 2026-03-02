@@ -55,6 +55,14 @@ class MaintenanceLogCreate(BaseModel):
     items: List[MaintenanceLogItemCreate] = Field(default_factory=list)
 
 
+class MaintenanceLogUpdate(BaseModel):
+    """Campos editables de un registro (no modifica ítems ni impresora)."""
+    performed_at: datetime
+    hours_at_maintenance: DecimalAsFloat = Field(ge=0)
+    maintenance_type: str = Field(min_length=1, max_length=100)
+    description: Optional[str] = Field(default=None, max_length=1000)
+
+
 class MaintenanceLogResponse(BaseModel):
     """Respuesta de registro de mantenimiento con ítems e impresora."""
     id: int

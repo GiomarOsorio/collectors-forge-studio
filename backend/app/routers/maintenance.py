@@ -11,6 +11,7 @@ Endpoints:
     GET    /api/maintenance/logs/              — Listar registros (filtrar por printer_id).
     POST   /api/maintenance/logs/              — Crear registro + descontar inventario.
     GET    /api/maintenance/logs/{id}          — Obtener detalle del registro.
+    PUT    /api/maintenance/logs/{id}          — Editar fecha, horas, tipo y descripción.
     DELETE /api/maintenance/logs/{id}          — Eliminar registro.
 
     GET    /api/maintenance/summary/           — Resumen por impresora (dashboard).
@@ -32,6 +33,7 @@ from app.models.printer import Printer
 from app.models.user import User
 from app.schemas.maintenance import (
     MaintenanceLogCreate,
+    MaintenanceLogUpdate,
     MaintenanceLogResponse,
     MaintenancePrinterSummary,
     MaintenanceLastEntry,
@@ -267,6 +269,40 @@ async def get_log(
     Raises:
         HTTPException 404: Si no existe.
     """
+    return await _get_log(db, log_id, current_user.company_id)
+
+
+@router.put("/logs/{log_id}", response_model=MaintenanceLogResponse)
+async def update_log(
+    log_id: int,
+    data: MaintenanceLogUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Edita los campos no-inventario de un registro de mantenimiento.
+
+    No modifica la impresora ni los ítems (estos ya descontaron inventario).
+    Campos editables: performed_at, hours_at_maintenance, maintenance_type, description.
+
+    Args:
+        log_id:       ID del registro.
+        data:         Campos a actualizar.
+        db:           Sesión de base de datos.
+        current_user: Usuario autenticado.
+
+    Returns:
+        MaintenanceLogResponse actualizado.
+
+    Raises:
+        HTTPException 404: Si el registro no existe.
+    """
+    log = await _get_log(db, log_id, current_user.company_id)
+    log.performed_at = data.performed_at.replace(tzinfo=None)
+    log.hours_at_maintenance = data.hours_at_maintenance
+    log.maintenance_type = data.maintenance_type
+    log.description = data.description
+    await db.commit()
     return await _get_log(db, log_id, current_user.company_id)
 
 

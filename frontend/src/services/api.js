@@ -646,6 +646,9 @@ export const createMaintenanceLog = (data) => api.post('/maintenance/logs/', dat
 /** Obtiene el detalle de un registro de mantenimiento. */
 export const getMaintenanceLog = (id) => api.get(`/maintenance/logs/${id}`);
 
+/** Actualiza fecha, horas, tipo y descripción de un registro (no modifica ítems). */
+export const updateMaintenanceLog = (id, data) => api.put(`/maintenance/logs/${id}`, data);
+
 /** Elimina un registro de mantenimiento. */
 export const deleteMaintenanceLog = (id) => api.delete(`/maintenance/logs/${id}`);
 
