@@ -7,8 +7,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Instalar Chromium para Playwright (headless scraping)
-RUN python3 -m playwright install chromium --with-deps
+# Instalar Chromium para Playwright (headless scraping) + curl para health check
+RUN python3 -m playwright install chromium --with-deps \
+ && apt-get install -y --no-install-recommends curl \
+ && rm -rf /var/lib/apt/lists/*
 
 COPY app.py .
 

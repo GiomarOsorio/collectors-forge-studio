@@ -1,0 +1,24 @@
+[Unit]
+Description=TurtleForge Tracker - Seguimiento de pedidos con Playwright
+After=network-online.target calculator3d-postgres.service
+Requires=calculator3d-postgres.service
+
+[Container]
+ContainerName=calculator3d-tracker
+Image=localhost/calculator3d-tracker:latest
+Network=calculator3d.network:alias=tracker
+EnvironmentFile=__ENV_FILE__
+HealthCmd=curl -sf http://localhost:8002/health
+HealthInterval=30s
+HealthTimeout=10s
+HealthRetries=3
+HealthStartPeriod=60s
+
+[Service]
+Restart=always
+RestartSec=10
+TimeoutStartSec=120
+StartLimitIntervalSec=0
+
+[Install]
+WantedBy=default.target
