@@ -191,7 +191,7 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
     setEditItem(null);
     setForm({
       ...EMPTY_FORM,
-      category: categoryFilter || 'General',
+      category: categoryFilter || '',
     });
     setModalOpen(true);
   };
@@ -612,32 +612,28 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
                   <input name="name" value={form.name} onChange={handleChange}
                     required className="tf-input" placeholder="Ej: PLA Bambu Lab Negro 1kg" />
                 </div>
-                {/* Categoría: readonly si la página ya filtra por una */}
+                {/* Categoría: readonly si la página ya filtra por una, dropdown si es stock general */}
                 <div>
                   <label className="tf-label">Categoría *</label>
                   {categoryFilter ? (
                     <input value={categoryFilter} readOnly className="tf-input opacity-60 cursor-not-allowed" />
                   ) : (
-                    <div className="relative">
-                      <input
-                        name="category"
-                        value={form.category}
-                        onChange={handleChange}
-                        list="categories-list"
-                        required
-                        className="tf-input"
-                        placeholder="Selecciona o escribe una categoría"
-                      />
-                      <datalist id="categories-list">
-                        {apiCategories
-                          .filter((c) => {
-                            if (excludeCategory && c.name === excludeCategory) return false;
-                            if (excludeCategories && excludeCategories.includes(c.name)) return false;
-                            return true;
-                          })
-                          .map((c) => <option key={c.id} value={c.name} />)}
-                      </datalist>
-                    </div>
+                    <select
+                      name="category"
+                      value={form.category}
+                      onChange={handleChange}
+                      required
+                      className="tf-input"
+                    >
+                      <option value="" disabled>— Seleccionar categoría —</option>
+                      {apiCategories
+                        .filter((c) => {
+                          if (excludeCategory && c.name === excludeCategory) return false;
+                          if (excludeCategories && excludeCategories.includes(c.name)) return false;
+                          return true;
+                        })
+                        .map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                    </select>
                   )}
                 </div>
                 <div>
