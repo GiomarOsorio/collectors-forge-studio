@@ -25,13 +25,13 @@ class PurchaseOrderItemCreate(BaseModel):
 
     Atributos:
         name:              Nombre o descripción del artículo.
-        quantity:          Cantidad solicitada.
+        quantity:          Cantidad solicitada (número entero positivo).
         unit_cost:         Costo unitario en USD (default 0).
         inventory_item_id: ID del ítem de inventario vinculado (opcional).
         notes:             Notas adicionales (opcional).
     """
     name: str = Field(min_length=1, max_length=200)
-    quantity: Decimal = Field(gt=0)
+    quantity: int = Field(ge=1)
     unit_cost: Decimal = Field(default=Decimal("0"), ge=0)
     inventory_item_id: Optional[int] = None
     notes: Optional[str] = None

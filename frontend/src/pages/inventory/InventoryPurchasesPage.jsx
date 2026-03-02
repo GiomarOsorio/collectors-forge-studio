@@ -167,7 +167,7 @@ export default function InventoryPurchasesPage() {
       notes: form.notes || null,
       items: formItems.map((it) => ({
         name: it.name.trim(),
-        quantity: parseFloat(it.quantity) || 1,
+        quantity: parseInt(it.quantity, 10) || 1,
         unit_cost: parseFloat(it.unit_cost) || 0,
         inventory_item_id: it.inventory_item_id ? parseInt(it.inventory_item_id) : null,
         notes: it.notes || null,
@@ -559,7 +559,7 @@ export default function InventoryPurchasesPage() {
                       </div>
                       <div className="col-span-5 sm:col-span-2">
                         <input
-                          type="number" min="0.001" step="0.001" value={it.quantity}
+                          type="number" min="1" step="1" value={it.quantity}
                           onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
                           className="tf-input text-sm text-right" placeholder="1" required />
                       </div>
