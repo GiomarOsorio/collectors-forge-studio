@@ -163,16 +163,37 @@ export default function MaintenanceLogsPage() {
 
   useEffect(() => { load(filterPrinter); }, [filterPrinter]);
 
+  /** Convierte los suggested_items de un tipo en filas del formulario. */
+  const suggestedToFormItems = (typeDef) => {
+    if (!typeDef?.suggested_items?.length) return [{ ...EMPTY_ITEM }];
+    return typeDef.suggested_items.map((si) => ({
+      ...EMPTY_ITEM,
+      name: si.name,
+      quantity: String(si.quantity),
+    }));
+  };
+
   const openModal = () => {
+    const defaultType = MAINTENANCE_TYPES[0];
     setForm({
       printer_id: printers[0]?.id ? String(printers[0].id) : '',
-      maintenance_type: MAINTENANCE_TYPES[0].value,
+      maintenance_type: defaultType.value,
       hours_at_maintenance: printers[0] ? String(printers[0].current_hours) : '',
       description: '',
       performed_at: new Date().toISOString().split('T')[0],
     });
-    setFormItems([{ ...EMPTY_ITEM }]);
+    setFormItems(suggestedToFormItems(defaultType));
     setModalOpen(true);
+  };
+
+  // Cuando cambia el tipo de mantenimiento, auto-poblar ítems si aún están vacíos
+  const handleMaintenanceTypeChange = (newType) => {
+    setForm((prev) => ({ ...prev, maintenance_type: newType }));
+    const allEmpty = formItems.every((it) => !it.name.trim());
+    if (allEmpty) {
+      const typeDef = getMaintenanceType(newType);
+      setFormItems(suggestedToFormItems(typeDef));
+    }
   };
 
   // Cuando cambia la impresora en el modal, auto-rellenar las horas
@@ -481,7 +502,7 @@ export default function MaintenanceLogsPage() {
                     required
                     className="w-full bg-[#1a1d21] border border-[#2a2d31] rounded-lg px-3 py-2 text-tech-white text-sm focus:outline-none focus:border-violet-500"
                     value={form.maintenance_type}
-                    onChange={(e) => setForm({ ...form, maintenance_type: e.target.value })}
+                    onChange={(e) => handleMaintenanceTypeChange(e.target.value)}
                   >
                     {MAINTENANCE_TYPES.map((t) => (
                       <option key={t.value} value={t.value} title={t.description}>{t.label}</option>
