@@ -122,7 +122,7 @@ select option {
     @apply px-5 py-3.5 text-sm text-steel text-right;
   }
   .tf-modal-overlay {
-    @apply fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4;
+    @apply fixed inset-0 bg-black/70 flex items-start justify-center z-50 p-4 overflow-y-auto;
   }
   .tf-modal {
     @apply bg-[#1a1d21] border border-[#2a2d31] rounded-xl p-6 w-full max-h-[90vh] overflow-y-auto;
