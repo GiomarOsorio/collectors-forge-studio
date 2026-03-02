@@ -51,6 +51,7 @@ echo "→ Construyendo imágenes de la aplicación..."
 podman build -t calculator3d-backend -f "$DEPLOY_PATH/backend/Containerfile" "$DEPLOY_PATH/backend/"
 podman build -t calculator3d-frontend -f "$DEPLOY_PATH/frontend/Containerfile" "$DEPLOY_PATH/frontend/"
 podman build -t calculator3d-slicer -f "$DEPLOY_PATH/slicer/Containerfile" "$DEPLOY_PATH/slicer/"
+podman build -t calculator3d-tracker -f "$DEPLOY_PATH/tracker/Containerfile" "$DEPLOY_PATH/tracker/"
 
 echo "→ Descargando imagen de PostgreSQL..."
 podman pull docker.io/postgres:16-alpine
@@ -116,8 +117,8 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "→ Iniciando backend, slicer y frontend..."
-systemctl --user restart calculator3d-slicer calculator3d-backend calculator3d-frontend
+echo "→ Iniciando backend, slicer, tracker y frontend..."
+systemctl --user restart calculator3d-slicer calculator3d-backend calculator3d-tracker calculator3d-frontend
 
 echo "→ Verificando que el backend responde (máx. 30s)..."
 for i in $(seq 1 15); do
@@ -149,8 +150,10 @@ echo "Comandos útiles:"
 echo "  systemctl --user status calculator3d-postgres        # Estado PostgreSQL"
 echo "  systemctl --user status calculator3d-backend         # Estado backend"
 echo "  systemctl --user status calculator3d-slicer          # Estado OrcaSlicer"
+echo "  systemctl --user status calculator3d-tracker         # Estado tracker"
 echo "  systemctl --user status calculator3d-frontend        # Estado frontend"
 echo "  journalctl --user -u calculator3d-backend -f         # Logs backend"
 echo "  journalctl --user -u calculator3d-slicer -f          # Logs OrcaSlicer"
+echo "  journalctl --user -u calculator3d-tracker -f         # Logs tracker"
 echo "  podman exec -it calculator3d-postgres psql -U $PG_USER $PG_DB  # Shell PG"
 echo "  podman ps                                             # Ver contenedores"
