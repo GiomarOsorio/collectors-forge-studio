@@ -11,10 +11,11 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../../components/ConfirmDialog';
-import { Plus, X, Trash2, ChevronDown, ChevronUp, ClipboardList, ExternalLink } from 'lucide-react';
+import { Plus, X, Trash2, Pencil, ChevronDown, ChevronUp, ClipboardList, ExternalLink } from 'lucide-react';
 import {
   getMaintenanceLogs,
   createMaintenanceLog,
+  updateMaintenanceLog,
   deleteMaintenanceLog,
   getPrinters,
   getInventoryItems,
@@ -40,7 +41,7 @@ const fmt = (str) => {
 /**
  * Fila expandible de la tabla de logs.
  */
-function LogRow({ log, onDelete }) {
+function LogRow({ log, onDelete, onEdit }) {
   const [expanded, setExpanded] = useState(false);
   const typeDef = getMaintenanceType(log.maintenance_type);
   const typeLabel = typeDef?.label ?? log.maintenance_type;
@@ -70,6 +71,13 @@ function LogRow({ log, onDelete }) {
                 {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
               </button>
             )}
+            <button
+              onClick={() => onEdit(log)}
+              className="p-1.5 rounded text-steel hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+              title="Editar"
+            >
+              <Pencil size={15} />
+            </button>
             <button
               onClick={() => onDelete(log)}
               className="p-1.5 rounded text-steel hover:text-red-400 hover:bg-red-500/10 transition-colors"
@@ -117,6 +125,10 @@ export default function MaintenanceLogsPage() {
   const [filterPrinter, setFilterPrinter] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingLog, setEditingLog] = useState(null);
+  const [editForm, setEditForm] = useState({ performed_at: '', hours_at_maintenance: '', maintenance_type: '', description: '' });
+  const [editSaving, setEditSaving] = useState(false);
 
   // Formulario del modal
   const [form, setForm] = useState({
@@ -229,12 +241,10 @@ export default function MaintenanceLogsPage() {
 
   const handleDelete = async (log) => {
     const typeDef = getMaintenanceType(log.maintenance_type);
-    const ok = await confirm({
-      title: 'Eliminar registro',
-      message: `¿Eliminar el registro de "${typeDef?.label ?? log.maintenance_type}" del ${fmt(log.performed_at)}?`,
-      confirmLabel: 'Eliminar',
-      danger: true,
-    });
+    const ok = await confirm(
+      `¿Eliminar el registro de "${typeDef?.label ?? log.maintenance_type}" del ${fmt(log.performed_at)}?`,
+      'Eliminar',
+    );
     if (!ok) return;
     try {
       await deleteMaintenanceLog(log.id);
@@ -242,6 +252,37 @@ export default function MaintenanceLogsPage() {
       load(filterPrinter);
     } catch {
       toast.error('Error al eliminar el registro');
+    }
+  };
+
+  const handleEdit = (log) => {
+    setEditingLog(log);
+    setEditForm({
+      performed_at: log.performed_at ? log.performed_at.split('T')[0] : '',
+      hours_at_maintenance: String(log.hours_at_maintenance),
+      maintenance_type: log.maintenance_type,
+      description: log.description ?? '',
+    });
+    setEditModalOpen(true);
+  };
+
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    setEditSaving(true);
+    try {
+      await updateMaintenanceLog(editingLog.id, {
+        performed_at: `${editForm.performed_at}T00:00:00`,
+        hours_at_maintenance: parseFloat(editForm.hours_at_maintenance) || 0,
+        maintenance_type: editForm.maintenance_type,
+        description: editForm.description.trim() || null,
+      });
+      toast.success('Registro actualizado');
+      setEditModalOpen(false);
+      load(filterPrinter);
+    } catch (err) {
+      toast.error(err.response?.data?.detail ?? 'Error al actualizar el registro');
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -300,10 +341,89 @@ export default function MaintenanceLogsPage() {
             </thead>
             <tbody>
               {logs.map((log) => (
-                <LogRow key={log.id} log={log} onDelete={handleDelete} />
+                <LogRow key={log.id} log={log} onDelete={handleDelete} onEdit={handleEdit} />
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Modal editar registro */}
+      {editModalOpen && editingLog && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0d1014] border border-[#1e2125] rounded-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#1e2125]">
+              <h2 className="text-tech-white font-semibold">Editar registro</h2>
+              <button onClick={() => setEditModalOpen(false)} className="text-steel hover:text-tech-white">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleUpdate} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-gunmetal mb-1">Fecha *</label>
+                  <input
+                    type="date"
+                    required
+                    className="w-full bg-[#1a1d21] border border-[#2a2d31] rounded-lg px-3 py-2 text-tech-white text-sm focus:outline-none focus:border-violet-500"
+                    value={editForm.performed_at}
+                    onChange={(e) => setEditForm({ ...editForm, performed_at: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gunmetal mb-1">Horas al realizar *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    required
+                    className="w-full bg-[#1a1d21] border border-[#2a2d31] rounded-lg px-3 py-2 text-tech-white text-sm focus:outline-none focus:border-violet-500"
+                    value={editForm.hours_at_maintenance}
+                    onChange={(e) => setEditForm({ ...editForm, hours_at_maintenance: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gunmetal mb-1">Tipo de mantenimiento *</label>
+                <select
+                  required
+                  className="w-full bg-[#1a1d21] border border-[#2a2d31] rounded-lg px-3 py-2 text-tech-white text-sm focus:outline-none focus:border-violet-500"
+                  value={editForm.maintenance_type}
+                  onChange={(e) => setEditForm({ ...editForm, maintenance_type: e.target.value })}
+                >
+                  {MAINTENANCE_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gunmetal mb-1">Descripción</label>
+                <textarea
+                  rows={2}
+                  className="w-full bg-[#1a1d21] border border-[#2a2d31] rounded-lg px-3 py-2 text-tech-white text-sm focus:outline-none focus:border-violet-500 resize-none"
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                />
+              </div>
+              <p className="text-xs text-gunmetal">Los ítems no se pueden modificar (ya se descontaron del inventario).</p>
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setEditModalOpen(false)}
+                  className="flex-1 px-4 py-2 rounded-lg border border-[#2a2d31] text-steel hover:text-tech-white text-sm transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={editSaving}
+                  className="flex-1 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium transition-colors"
+                >
+                  {editSaving ? 'Guardando...' : 'Guardar cambios'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
