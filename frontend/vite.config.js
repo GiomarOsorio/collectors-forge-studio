@@ -10,6 +10,10 @@ export default defineConfig({
     },
   },
   build: {
+    // Deshabilitar el polyfill de modulepreload: genera un inline script que
+    // viola script-src 'self' del CSP de nginx. Los navegadores modernos
+    // soportan modulepreload de forma nativa.
+    modulePreload: { polyfill: false },
     rollupOptions: {
       output: {
         manualChunks: {
