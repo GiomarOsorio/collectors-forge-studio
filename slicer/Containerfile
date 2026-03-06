@@ -34,6 +34,9 @@ RUN wget -q -O /tmp/OrcaSlicer.AppImage \
     && chmod +x /opt/squashfs-root/AppRun \
     && ln -sf /opt/squashfs-root/AppRun /usr/local/bin/OrcaSlicer
 
+# Mismo usuario que el backend (UID 1000) para compartir slicer_jobs sin conflictos de permisos
+RUN useradd --no-create-home --shell /bin/false --uid 1000 appuser
+
 # Instalar dependencias Python del wrapper FastAPI
 WORKDIR /app
 COPY requirements.txt .
@@ -41,10 +44,14 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages -r requirement
 
 # Copiar aplicacion wrapper
 COPY app.py .
+RUN chown -R appuser:appuser /app
 
 # Volumen para archivos de trabajos (compartido con el backend)
+RUN mkdir -p /slicer_jobs && chown appuser:appuser /slicer_jobs
 VOLUME ["/slicer_jobs"]
 
 EXPOSE 8001
+
+USER appuser
 
 CMD ["python3", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8001"]
