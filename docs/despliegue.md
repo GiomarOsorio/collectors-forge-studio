@@ -563,3 +563,135 @@ systemctl --user start calculator3d-postgres
 # Si persiste:
 podman unshare chown -R 999:999 ~/.local/share/containers/storage/volumes/calculator3d-pgdata/
 ```
+
+---
+
+## 10. MinIO en turtleStorage (Vault)
+
+MinIO es el object storage del Vault de modelos `.3mf`. Corre en una máquina separada (`turtleStorage`) para aislar el almacenamiento del servidor de aplicación. La instalación es **manual** — no pasa por el pipeline de CI/CD.
+
+### 10.1 Prerrequisitos en turtleStorage
+
+```bash
+# Verificar que Podman está instalado
+podman --version
+
+# Habilitar linger para que los servicios sobrevivan al logout
+loginctl enable-linger $(whoami)
+```
+
+### 10.2 Instalar los Quadlets
+
+```bash
+# Crear directorio de Quadlets de usuario
+mkdir -p ~/.config/containers/systemd/
+
+# Copiar los archivos desde el repo (desde la Mac dev o turtleServer)
+scp path/to/Calculator3D/quadlet/calculator3d-minio.container \
+    turtleStorage:~/.config/containers/systemd/
+
+scp path/to/Calculator3D/quadlet/calculator3d-minio-data.volume \
+    turtleStorage:~/.config/containers/systemd/
+```
+
+### 10.3 Configurar variables de entorno
+
+Crear `~/.env` en `turtleStorage`:
+
+```bash
+nano ~/.env
+```
+
+```bash
+# Credenciales de MinIO (usuario root de la consola web)
+MINIO_ROOT_USER=turtleforge
+MINIO_ROOT_PASSWORD=pon-una-password-segura
+```
+
+> Estas credenciales son las mismas que `MINIO_ACCESS_KEY` y `MINIO_SECRET_KEY` en el `.env` de `turtleServer`.
+
+### 10.4 Arrancar MinIO
+
+```bash
+# Recargar systemd para que detecte los nuevos Quadlets
+systemctl --user daemon-reload
+
+# Iniciar MinIO
+systemctl --user start calculator3d-minio
+
+# Verificar que está corriendo
+systemctl --user status calculator3d-minio
+podman ps
+```
+
+### 10.5 Verificar que MinIO responde
+
+```bash
+# Health check (desde turtleStorage)
+curl -sf http://localhost:9000/minio/health/live && echo "OK"
+
+# Health check (desde turtleServer — verifica conectividad de red)
+curl -sf http://turtleStorage:9000/minio/health/live && echo "OK"
+```
+
+> Si el hostname `turtleStorage` no resuelve desde `turtleServer`, agregar a `/etc/hosts` en `turtleServer`:
+> ```
+> <ip-de-turtleStorage>  turtleStorage
+> ```
+
+### 10.6 Bucket inicial
+
+El backend crea el bucket `turtleforge-models` automáticamente al arrancar si no existe. No hay que crearlo manualmente.
+
+Para verificar desde la consola web de MinIO (accesible desde la LAN):
+```
+http://turtleStorage:9001
+```
+Ingresar con `MINIO_ROOT_USER` y `MINIO_ROOT_PASSWORD`.
+
+### 10.7 Variables necesarias en turtleServer
+
+Agregar al `.env` de `turtleServer` (ya hecho):
+
+```bash
+MINIO_ENDPOINT=http://turtleStorage:9000
+MINIO_ACCESS_KEY=turtleforge
+MINIO_SECRET_KEY=<mismo-valor-que-MINIO_ROOT_PASSWORD>
+MINIO_BUCKET=turtleforge-models
+VAULT_QUOTA_GB=100
+```
+
+Luego reiniciar el backend para que tome los nuevos valores:
+```bash
+systemctl --user restart calculator3d-backend
+```
+
+### 10.8 Gestión del servicio
+
+```bash
+# Reiniciar MinIO
+systemctl --user restart calculator3d-minio
+
+# Detener MinIO
+systemctl --user stop calculator3d-minio
+
+# Ver logs en tiempo real
+journalctl --user -u calculator3d-minio -f
+
+# Ver últimas 50 líneas
+journalctl --user -u calculator3d-minio -n 50
+```
+
+### 10.9 Backup de objetos
+
+Los archivos `.3mf` están en el volumen `calculator3d-minio-data`. Para hacer backup:
+
+```bash
+# Backup del volumen completo (desde turtleStorage)
+podman volume export calculator3d-minio-data \
+  > ~/backups/minio-data-$(date +%Y%m%d).tar
+
+# Restaurar
+podman volume import calculator3d-minio-data \
+  ~/backups/minio-data-20260306.tar
+```
