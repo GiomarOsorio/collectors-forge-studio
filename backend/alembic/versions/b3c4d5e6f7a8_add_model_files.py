@@ -41,7 +41,7 @@ def upgrade() -> None:
         sa.Column("name", sa.String(200), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("thumbnail_url", sa.String(1000), nullable=True),
-        sa.Column("tags", JSONB(), nullable=False, server_default="'[]'::jsonb"),
+        sa.Column("tags", JSONB(), nullable=False, server_default=sa.text("'[]'::jsonb")),
         sa.Column("source_url", sa.String(1000), nullable=True),
         sa.Column("source_platform", sa.String(50), nullable=True),
         sa.Column("creator_name", sa.String(200), nullable=True),
