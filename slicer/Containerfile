@@ -34,8 +34,15 @@ RUN wget -q -O /tmp/OrcaSlicer.AppImage \
     && chmod +x /opt/squashfs-root/AppRun \
     && ln -sf /opt/squashfs-root/AppRun /usr/local/bin/OrcaSlicer
 
-# Mismo usuario que el backend (UID 1000) para compartir slicer_jobs sin conflictos de permisos
-RUN useradd --no-create-home --shell /bin/false --uid 1000 appuser
+# Mismo usuario que el backend (UID 1000) para compartir slicer_jobs sin conflictos de permisos.
+# Ubuntu 24.04 incluye un usuario 'ubuntu' con UID 1000 en la imagen base,
+# por lo que no se puede hacer useradd directo. Si UID 1000 ya existe se renombra
+# ese usuario a appuser; si no existe se crea desde cero.
+RUN if id -u 1000 >/dev/null 2>&1; then \
+        usermod --login appuser --shell /bin/false $(id -nu 1000); \
+    else \
+        useradd --no-create-home --shell /bin/false --uid 1000 appuser; \
+    fi
 
 # Instalar dependencias Python del wrapper FastAPI
 WORKDIR /app
