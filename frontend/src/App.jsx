@@ -42,6 +42,8 @@
  * - /company/templates        → Lista de templates Liquid (protegida)
  * - /company/templates/new    → Crear template (protegida)
  * - /company/templates/:id    → Editar template (protegida)
+ * - /vault                    → Galería de modelos .3mf (protegida)
+ * - /vault/upload             → Subir modelo .3mf (protegida, solo admins)
  *
  * @module App
  */
@@ -60,6 +62,7 @@ import SettingsLayout from './components/SettingsLayout';
 import MaintenanceLayout from './components/MaintenanceLayout';
 import QueueLayout from './components/QueueLayout';
 import CompanyLayout from './components/CompanyLayout';
+import VaultLayout from './components/VaultLayout';
 import Login from './pages/Login';
 
 const StudioHomePage           = lazy(() => import('./pages/StudioHomePage'));
@@ -91,6 +94,8 @@ const CompanyProfilePage       = lazy(() => import('./pages/company/CompanyProfi
 const CompanyBrandingPage      = lazy(() => import('./pages/company/CompanyBrandingPage'));
 const CompanyTemplatesPage     = lazy(() => import('./pages/company/CompanyTemplatesPage'));
 const CompanyTemplateEditorPage= lazy(() => import('./pages/company/CompanyTemplateEditorPage'));
+const VaultPage                = lazy(() => import('./pages/vault/VaultPage'));
+const VaultUploadPage          = lazy(() => import('./pages/vault/VaultUploadPage'));
 
 /**
  * Componente guardia de ruta privada.
@@ -196,6 +201,12 @@ function AppRoutes() {
         <Route path="templates"     element={<CompanyTemplatesPage />} />
         <Route path="templates/new" element={<CompanyTemplateEditorPage />} />
         <Route path="templates/:id" element={<CompanyTemplateEditorPage />} />
+      </Route>
+
+      {/* Aplicación Vault: archivo de modelos .3mf */}
+      <Route path="/vault" element={<PrivateRoute><VaultLayout /></PrivateRoute>}>
+        <Route index element={<VaultPage />} />
+        <Route path="upload" element={<VaultUploadPage />} />
       </Route>
     </Routes>
   );

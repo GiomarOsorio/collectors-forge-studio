@@ -52,6 +52,9 @@ const SEGMENT_LABELS = {
   templates:   'Templates PDF',
   /* Slicer */
   upload:      'Subir modelo',
+  /* Vault */
+  vault:       'Vault',
+  /* upload ya está arriba (Slicer) */
   /* Settings */
   account:     'Cuenta',
   users:       'Usuarios',
