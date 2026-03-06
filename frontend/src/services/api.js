@@ -721,5 +721,48 @@ export const updateQueueStatus = (id, data) => api.put(`/queue/${id}/status`, da
 /** Elimina un ítem de la cola (solo si pending o cancelled). */
 export const deleteQueueItem = (id) => api.delete(`/queue/${id}`);
 
+// ============================================================================
+// Vault — archivos .3mf
+// ============================================================================
+
+/** Lista los archivos del Vault (paginado, búsqueda opcional por nombre). */
+export const getVaultFiles = (params) => api.get('/vault/', { params });
+
+/** Retorna el uso y cuota de almacenamiento de la empresa. */
+export const getVaultStats = () => api.get('/vault/stats');
+
+/**
+ * Pre-lee metadata de un modelo desde su URL pública (MakerWorld, Printables, OG).
+ * @param {string} url - URL del modelo
+ */
+export const fetchVaultMetadata = (url) => api.post('/vault/fetch-metadata', { url });
+
+/**
+ * Sube un archivo .3mf al Vault con sus metadatos.
+ * @param {FormData} formData - Campos: file (UploadFile) + metadata (JSON string)
+ * @param {Function} onUploadProgress - Callback axios para barra de progreso
+ */
+export const uploadVaultFile = (formData, onUploadProgress) =>
+  api.post('/vault/upload', formData, { onUploadProgress });
+
+/**
+ * Obtiene una URL pre-firmada para descargar el archivo desde MinIO.
+ * @param {number} id - ID del archivo en el Vault
+ */
+export const getVaultDownloadUrl = (id) => api.get(`/vault/${id}/download`);
+
+/**
+ * Actualiza los metadatos de un archivo del Vault (solo admins).
+ * @param {number} id - ID del archivo
+ * @param {Object} data - Campos a actualizar
+ */
+export const updateVaultFile = (id, data) => api.put(`/vault/${id}`, data);
+
+/**
+ * Elimina un archivo del Vault y su objeto en MinIO (solo admins).
+ * @param {number} id - ID del archivo
+ */
+export const deleteVaultFile = (id) => api.delete(`/vault/${id}`);
+
 export default api;
 

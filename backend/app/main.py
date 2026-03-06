@@ -43,7 +43,9 @@ from app.routers.users import router as users_router
 from app.routers.maintenance import router as maintenance_router
 from app.routers.queue import router as queue_router
 from app.routers.inventory_categories import router as inventory_categories_router
+from app.routers.vault import router as vault_router
 from app.routers.slicer import cleanup_old_slicer_files
+from app.services.vault_storage import ensure_bucket
 
 # UUID fijo de la empresa por defecto — coincide con la migración f4a1b9c2d8e7
 DEFAULT_COMPANY_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
@@ -84,6 +86,8 @@ async def lifespan(app: FastAPI):
     # Crear directorios estáticos necesarios
     Path("/app/static/companies").mkdir(parents=True, exist_ok=True)
     await create_default_data()
+    # Inicializar bucket MinIO del Vault (no-fatal si MinIO no está disponible)
+    await ensure_bucket()
     # Ejecutar limpieza de slicer al inicio y luego cada 24h en background
     await cleanup_old_slicer_files()
     cleanup_task = asyncio.create_task(_periodic_slicer_cleanup())
@@ -170,6 +174,7 @@ app.include_router(users_router)
 app.include_router(maintenance_router)
 app.include_router(queue_router)
 app.include_router(inventory_categories_router)
+app.include_router(vault_router)
 
 # Archivos estáticos: imágenes de ítems de impresión y otros recursos subidos
 app.mount("/static", StaticFiles(directory="/app/static", check_dir=False), name="static")

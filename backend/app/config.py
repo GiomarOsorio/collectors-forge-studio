@@ -53,6 +53,13 @@ class Settings(BaseSettings):
     ADMIN_PASSWORD: str  # Requerida — define en .env o variable de entorno
     ADMIN_EMAIL: str = "admin@calculator3d.local"
 
+    # MinIO (Vault)
+    MINIO_ENDPOINT: str = "http://calculator3d-minio:9000"
+    MINIO_ACCESS_KEY: str = "minioadmin"
+    MINIO_SECRET_KEY: str = "minioadmin"
+    MINIO_BUCKET: str = "turtleforge-models"
+    VAULT_QUOTA_GB: int = 50
+
     model_config = {"env_file": ".env"}
 
     @model_validator(mode="after")

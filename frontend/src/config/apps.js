@@ -7,7 +7,7 @@
  * @module config/apps
  */
 
-import { Building2, Calculator, Package, Cpu, Wrench, ListOrdered } from 'lucide-react';
+import { Archive, Building2, Calculator, Package, Cpu, Wrench, ListOrdered } from 'lucide-react';
 
 /**
  * @typedef {Object} AppDefinition
@@ -72,6 +72,16 @@ export const APPS = [
     icon: ListOrdered,
     route: '/queue/',
     color: '#14B8A6',
+    badge: null,
+  },
+  {
+    id: 'vault',
+    name: 'Vault',
+    shortDescription: 'Archivo de modelos .3mf listos para imprimir',
+    description: 'Centraliza los modelos .3mf probados y listos para imprimir. Almacena, organiza y descarga archivos con metadata de MakerWorld y Printables.',
+    icon: Archive,
+    route: '/vault',
+    color: '#F43F5E',
     badge: null,
   },
   {
