@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgdk-pixbuf-2.0-0 \
     libcairo2 \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd --no-create-home --shell /bin/false appuser
+    && useradd --no-create-home --shell /bin/false --uid 1000 appuser
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
