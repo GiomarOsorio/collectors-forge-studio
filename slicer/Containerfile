@@ -39,7 +39,9 @@ RUN wget -q -O /tmp/OrcaSlicer.AppImage \
 # por lo que no se puede hacer useradd directo. Si UID 1000 ya existe se renombra
 # ese usuario a appuser; si no existe se crea desde cero.
 RUN if id -u 1000 >/dev/null 2>&1; then \
-        usermod --login appuser --shell /bin/false $(id -nu 1000); \
+        OLDNAME=$(id -nu 1000); \
+        usermod --login appuser --shell /bin/false "$OLDNAME"; \
+        groupmod --new-name appuser "$OLDNAME"; \
     else \
         useradd --no-create-home --shell /bin/false --uid 1000 appuser; \
     fi
