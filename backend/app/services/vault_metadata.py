@@ -10,6 +10,7 @@ El endpoint de metadata es de acceso público pero requiere autenticación
 para reducir el abuso.
 """
 
+import html
 import json
 import logging
 import re
@@ -31,6 +32,24 @@ _BROWSER_HEADERS = {
 
 # Timeout para peticiones externas
 _TIMEOUT = 12.0
+
+
+def _strip_html(text: str) -> Optional[str]:
+    """Convierte HTML a texto plano: elimina tags y decodifica entidades HTML."""
+    if not text:
+        return None
+    # Reemplazar saltos de línea comunes antes de quitar tags
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</p>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</li>", "\n", text, flags=re.IGNORECASE)
+    # Eliminar todos los tags restantes
+    text = re.sub(r"<[^>]+>", "", text)
+    # Decodificar entidades HTML (&amp; &#34; &nbsp; etc.)
+    text = html.unescape(text)
+    # Normalizar espacios y saltos de línea
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r"[ \t]+", " ", text)
+    return text.strip() or None
 
 
 def _detect_platform(url: str) -> str:
@@ -133,12 +152,12 @@ async def _fetch_makerworld(url: str) -> Optional[dict]:
             if resp.status_code == 200:
                 data = resp.json()
                 result["name"] = data.get("title") or data.get("name")
-                result["description"] = (
+                result["description"] = _strip_html(
                     data.get("description")
                     or data.get("summary")
                     or data.get("designSummary")
                     or data.get("shortDescription")
-                ) or None
+                )
                 result["thumbnail_url"] = _mw_thumbnail(data)
                 result["creator_name"], result["creator_url"] = _mw_creator(data)
                 logger.debug(
