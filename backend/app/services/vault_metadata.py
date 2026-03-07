@@ -73,7 +73,7 @@ def _mw_creator(data: dict) -> tuple:
     """
     Extrae (creator_name, creator_url) del JSON de MakerWorld probando varios campos.
     """
-    for key in ("designerUser", "designer", "user", "author", "uploader", "creatorUser"):
+    for key in ("designCreator", "designerUser", "designer", "user", "author", "uploader", "creatorUser"):
         creator = data.get(key)
         if creator and isinstance(creator, dict):
             name = (
