@@ -30,7 +30,7 @@ jobs:
             -e POSTGRES_PASSWORD=ci_password \
             -e POSTGRES_DB=turtleforge_test \
             -p 5433:5432 \
-            postgres:16
+            docker.io/library/postgres:16
           for i in $(seq 1 30); do
             podman exec pg-ci-${{ github.run_id }} pg_isready -U turtleforge && break
             sleep 1
