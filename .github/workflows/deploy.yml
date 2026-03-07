@@ -84,6 +84,24 @@ jobs:
           cd $HOME/Calculator3D
           git pull origin main
 
+      - name: Escribir variables de entorno
+        run: |
+          {
+            echo "SECRET_KEY=${{ secrets.SECRET_KEY }}"
+            echo "POSTGRES_USER=${{ secrets.POSTGRES_USER }}"
+            echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}"
+            echo "POSTGRES_DB=${{ secrets.POSTGRES_DB }}"
+            echo "ADMIN_USERNAME=${{ secrets.ADMIN_USERNAME }}"
+            echo "ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}"
+            echo "ADMIN_EMAIL=${{ secrets.ADMIN_EMAIL }}"
+            echo "TUNNEL_TOKEN=${{ secrets.TUNNEL_TOKEN }}"
+            echo "MINIO_ENDPOINT=${{ secrets.MINIO_ENDPOINT }}"
+            echo "MINIO_ACCESS_KEY=${{ secrets.MINIO_ACCESS_KEY }}"
+            echo "MINIO_SECRET_KEY=${{ secrets.MINIO_SECRET_KEY }}"
+            echo "MINIO_BUCKET=${{ secrets.MINIO_BUCKET }}"
+            echo "VAULT_QUOTA_GB=${{ secrets.VAULT_QUOTA_GB }}"
+          } > $HOME/Calculator3DENV
+
       - name: Deploy
         run: |
           cd $HOME/Calculator3D
