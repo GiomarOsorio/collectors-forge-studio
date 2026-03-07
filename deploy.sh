@@ -9,9 +9,27 @@ DEPLOY_PATH="$(cd "$(dirname "$0")" && pwd)"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 
 # ── Archivo de variables de entorno ──────────────────────────────────────────
-# Busca primero ~/Calculator3dENV (fuente única fuera del repo),
-# luego cae a .env en el directorio del proyecto como fallback.
-if [ -f "$HOME/Calculator3DENV" ]; then
+# Si SECRET_KEY ya está en el entorno (inyectado por CI desde secrets del repo),
+# genera el archivo automáticamente. Si no, busca el archivo en el servidor.
+if [ -n "$SECRET_KEY" ] && [ -n "$POSTGRES_PASSWORD" ]; then
+    ENV_FILE="$HOME/Calculator3DENV"
+    echo "→ Generando variables de entorno desde el entorno CI..."
+    {
+        echo "SECRET_KEY=$SECRET_KEY"
+        echo "POSTGRES_USER=${POSTGRES_USER:-turtleforge}"
+        echo "POSTGRES_PASSWORD=$POSTGRES_PASSWORD"
+        echo "POSTGRES_DB=${POSTGRES_DB:-turtleforge}"
+        echo "ADMIN_USERNAME=${ADMIN_USERNAME:-admin}"
+        echo "ADMIN_PASSWORD=$ADMIN_PASSWORD"
+        echo "ADMIN_EMAIL=${ADMIN_EMAIL:-admin@calculator3d.local}"
+        echo "TUNNEL_TOKEN=${TUNNEL_TOKEN:-}"
+        echo "MINIO_ENDPOINT=${MINIO_ENDPOINT:-http://calculator3d-minio:9000}"
+        echo "MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}"
+        echo "MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}"
+        echo "MINIO_BUCKET=${MINIO_BUCKET:-turtleforge-models}"
+        echo "VAULT_QUOTA_GB=${VAULT_QUOTA_GB:-50}"
+    } > "$ENV_FILE"
+elif [ -f "$HOME/Calculator3DENV" ]; then
     ENV_FILE="$HOME/Calculator3DENV"
 elif [ -f "$DEPLOY_PATH/.env" ]; then
     ENV_FILE="$DEPLOY_PATH/.env"
