@@ -377,7 +377,7 @@ export default function VaultPage() {
         </div>
       ) : files.length === 0 ? (
         <EmptyState
-          icon={<Archive size={40} />}
+          icon={Archive}
           title={search ? 'Sin resultados' : 'El Vault está vacío'}
           description={
             search
