@@ -36,9 +36,6 @@ jobs:
             sleep 1
           done
 
-      - name: Instalar dependencias del sistema (WeasyPrint)
-        run: sudo dnf install -y pango cairo gdk-pixbuf2 libffi
-
       - name: Configurar Python 3.11
         uses: actions/setup-python@v5
         with:
