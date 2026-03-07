@@ -99,23 +99,19 @@ async def delete_file(key: str) -> None:
     await asyncio.to_thread(_delete)
 
 
-async def get_presigned_url(key: str, expires: int = 3600) -> str:
+async def download_file(key: str) -> bytes:
     """
-    Genera una URL pre-firmada para descarga directa desde MinIO.
+    Descarga el contenido completo de un objeto de MinIO.
 
     Args:
-        key:     Clave del objeto.
-        expires: TTL de la URL en segundos (default 1 hora).
+        key: Clave del objeto.
 
     Returns:
-        URL pre-firmada como string.
+        Contenido del archivo en bytes.
     """
-    def _presign():
+    def _get():
         client = _get_client()
-        return client.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": settings.MINIO_BUCKET, "Key": key},
-            ExpiresIn=expires,
-        )
+        obj = client.get_object(Bucket=settings.MINIO_BUCKET, Key=key)
+        return obj["Body"].read()
 
-    return await asyncio.to_thread(_presign)
+    return await asyncio.to_thread(_get)

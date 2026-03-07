@@ -746,10 +746,10 @@ export const uploadVaultFile = (formData, onUploadProgress) =>
   api.post('/vault/upload', formData, { onUploadProgress });
 
 /**
- * Obtiene una URL pre-firmada para descargar el archivo desde MinIO.
+ * Descarga el archivo del Vault a través del backend (proxy, MinIO privado).
  * @param {number} id - ID del archivo en el Vault
  */
-export const getVaultDownloadUrl = (id) => api.get(`/vault/${id}/download`);
+export const downloadVaultFile = (id) => api.get(`/vault/${id}/download`, { responseType: 'blob' });
 
 /**
  * Actualiza los metadatos de un archivo del Vault (solo admins).
