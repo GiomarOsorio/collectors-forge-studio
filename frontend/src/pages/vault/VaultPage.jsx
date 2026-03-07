@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Archive, Download, Pencil, Trash2, Search, X, CheckCircle } from 'lucide-react';
+import { Archive, Download, Loader2, Pencil, Trash2, Search, X, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -157,7 +157,9 @@ const PLATFORM_LABELS = {
   otro: 'Otro',
 };
 
-function ModelCard({ file, isAdmin, onDownload, onEdit, onDelete }) {
+function ModelCard({ file, isAdmin, onDownload, onEdit, onDelete, downloadingIds }) {
+  const isDownloading = downloadingIds.has(file.id);
+
   const fmt = (b) => {
     if (b >= 1024 ** 3) return `${(b / 1024 ** 3).toFixed(1)} GB`;
     if (b >= 1024 ** 2) return `${(b / 1024 ** 2).toFixed(1)} MB`;
@@ -219,8 +221,9 @@ function ModelCard({ file, isAdmin, onDownload, onEdit, onDelete }) {
         <button
           className="tf-btn-primary flex-1 text-xs py-1.5 flex items-center justify-center gap-1"
           onClick={() => onDownload(file)}
+          disabled={isDownloading}
         >
-          <Download size={13} />
+          {isDownloading ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
           Descargar
         </button>
         {isAdmin && (
@@ -253,6 +256,7 @@ export default function VaultPage() {
   const [search, setSearch] = useState('');
   const [inputSearch, setInputSearch] = useState('');
   const [editingFile, setEditingFile] = useState(null);
+  const [downloadingIds, setDownloadingIds] = useState(new Set());
 
   const PAGE_SIZE = 20;
   const debounceRef = useRef(null);
@@ -291,6 +295,7 @@ export default function VaultPage() {
   };
 
   const handleDownload = async (file) => {
+    setDownloadingIds((prev) => new Set(prev).add(file.id));
     try {
       const res = await downloadVaultFile(file.id);
       const url = URL.createObjectURL(res.data);
@@ -303,6 +308,8 @@ export default function VaultPage() {
       URL.revokeObjectURL(url);
     } catch {
       toast.error('Error al descargar el archivo');
+    } finally {
+      setDownloadingIds((prev) => { const s = new Set(prev); s.delete(file.id); return s; });
     }
   };
 
@@ -400,6 +407,7 @@ export default function VaultPage() {
                 onDownload={handleDownload}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
+                downloadingIds={downloadingIds}
               />
             ))}
           </div>
