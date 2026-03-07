@@ -9,7 +9,9 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Archive, Download, Pencil, Trash2, Search, X, CheckCircle } from 'lucide-react';
+import { Archive, Download, MonitorPlay, Pencil, Trash2, Search, X, CheckCircle } from 'lucide-react';
+
+const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -157,7 +159,7 @@ const PLATFORM_LABELS = {
   otro: 'Otro',
 };
 
-function ModelCard({ file, isAdmin, onDownload, onEdit, onDelete }) {
+function ModelCard({ file, isAdmin, onDownload, onOpenBambu, onEdit, onDelete }) {
   const fmt = (b) => {
     if (b >= 1024 ** 3) return `${(b / 1024 ** 3).toFixed(1)} GB`;
     if (b >= 1024 ** 2) return `${(b / 1024 ** 2).toFixed(1)} MB`;
@@ -216,13 +218,23 @@ function ModelCard({ file, isAdmin, onDownload, onEdit, onDelete }) {
 
       {/* Acciones */}
       <div className="px-3 pb-3 flex items-center gap-2">
-        <button
-          className="tf-btn-primary flex-1 text-xs py-1.5 flex items-center justify-center gap-1"
-          onClick={() => onDownload(file)}
-        >
-          <Download size={13} />
-          Descargar
-        </button>
+        {isMobile ? (
+          <button
+            className="tf-btn-primary flex-1 text-xs py-1.5 flex items-center justify-center gap-1"
+            onClick={() => onDownload(file)}
+          >
+            <Download size={13} />
+            Descargar
+          </button>
+        ) : (
+          <button
+            className="tf-btn-primary flex-1 text-xs py-1.5 flex items-center justify-center gap-1"
+            onClick={() => onOpenBambu(file)}
+          >
+            <MonitorPlay size={13} />
+            Abrir en Bambu Studio
+          </button>
+        )}
         {isAdmin && (
           <>
             <button className="tf-btn-icon" onClick={() => onEdit(file)} title="Editar">
@@ -299,6 +311,15 @@ export default function VaultPage() {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+    } catch {
+      toast.error('Error al generar el enlace de descarga');
+    }
+  };
+
+  const handleOpenBambu = async (file) => {
+    try {
+      const res = await getVaultDownloadUrl(file.id);
+      window.location.href = `bambustudio://open?file=${encodeURIComponent(res.data.url)}`;
     } catch {
       toast.error('Error al generar el enlace de descarga');
     }
@@ -396,6 +417,7 @@ export default function VaultPage() {
                 file={file}
                 isAdmin={isAdmin}
                 onDownload={handleDownload}
+                onOpenBambu={handleOpenBambu}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
               />
