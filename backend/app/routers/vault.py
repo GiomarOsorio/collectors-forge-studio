@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,7 +42,7 @@ from app.schemas.vault import (
 )
 from app.services.auth import get_current_user
 from app.services.vault_metadata import fetch_metadata
-from app.services.vault_storage import delete_file, get_presigned_url, upload_file
+from app.services.vault_storage import delete_file, download_file, upload_file
 
 logger = logging.getLogger(__name__)
 
@@ -275,20 +276,24 @@ async def upload_vault_file(
     return _to_response(model, current_user.username)
 
 
-@router.get("/{file_id}/download", response_model=VaultDownloadResponse)
+@router.get("/{file_id}/download")
 async def download_vault_file(
     file_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Genera una URL pre-firmada para descarga directa del archivo desde MinIO.
+    Descarga el archivo desde MinIO a través del backend (proxy).
 
-    La URL expira en 1 hora (3600 segundos).
+    MinIO permanece en la red interna; el cliente solo interactúa con el backend autenticado.
     """
     model = await _get_model_file(db, file_id, current_user.company_id)
-    url = await get_presigned_url(model.file_key, expires=3600)
-    return VaultDownloadResponse(url=url, file_name=model.file_name, expires_in=3600)
+    data = await download_file(model.file_key)
+    return Response(
+        content=data,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{model.file_name}"'},
+    )
 
 
 @router.put("/{file_id}", response_model=ModelFileResponse)
