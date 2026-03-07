@@ -45,12 +45,63 @@ def _detect_platform(url: str) -> str:
     return "otro"
 
 
+def _mw_thumbnail(data: dict) -> Optional[str]:
+    """
+    Extrae la URL de thumbnail del JSON de MakerWorld probando varios nombres de campo
+    usados en distintas versiones de la API.
+    """
+    # Intento 1: array de imágenes de portada
+    for key in ("coverFiles", "coverMedias", "medias", "media", "images", "files"):
+        arr = data.get(key)
+        if arr and isinstance(arr, list):
+            first = arr[0]
+            if isinstance(first, dict):
+                url = first.get("url") or first.get("filePath") or first.get("path")
+                if url:
+                    return url
+
+    # Intento 2: campo escalar
+    for key in ("coverUrl", "coverFile", "thumbnailUrl", "previewImageUrl", "imageUrl"):
+        val = data.get(key)
+        if val and isinstance(val, str):
+            return val
+
+    return None
+
+
+def _mw_creator(data: dict) -> tuple:
+    """
+    Extrae (creator_name, creator_url) del JSON de MakerWorld probando varios campos.
+    """
+    for key in ("designerUser", "designer", "user", "author", "uploader", "creatorUser"):
+        creator = data.get(key)
+        if creator and isinstance(creator, dict):
+            name = (
+                creator.get("name")
+                or creator.get("nickname")
+                or creator.get("username")
+                or creator.get("displayName")
+            )
+            if name:
+                handle = (
+                    creator.get("handle")
+                    or creator.get("slug")
+                    or creator.get("uid")
+                )
+                url = f"https://makerworld.com/en/@{handle}" if handle else None
+                return name, url
+
+    return None, None
+
+
 async def _fetch_makerworld(url: str) -> Optional[dict]:
     """
-    Extrae metadata de MakerWorld usando su API JSON pública.
+    Extrae metadata de MakerWorld.
 
-    Reutiliza la misma estrategia que makerworld_fetcher: primero API,
-    luego __NEXT_DATA__ HTML como fallback.
+    Estrategia:
+    1. Llama a la API JSON para obtener nombre, thumbnail y creador.
+    2. Para los campos que sigan siendo None (thumbnail, description, creator),
+       complementa con Open Graph del HTML público.
     """
     m = re.search(r"makerworld\.com(?:/[a-z]{2})?/models/(\d+)", url, re.IGNORECASE)
     if not m:
@@ -62,6 +113,18 @@ async def _fetch_makerworld(url: str) -> Optional[dict]:
         **_BROWSER_HEADERS,
         "Accept": "application/json, text/plain, */*",
         "Referer": f"https://makerworld.com/en/models/{model_id}",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin",
+    }
+
+    result = {
+        "name": None,
+        "description": None,
+        "thumbnail_url": None,
+        "source_platform": "makerworld",
+        "creator_name": None,
+        "creator_url": None,
     }
 
     async with httpx.AsyncClient() as client:
@@ -69,36 +132,35 @@ async def _fetch_makerworld(url: str) -> Optional[dict]:
             resp = await client.get(api_url, headers=headers, timeout=_TIMEOUT, follow_redirects=True)
             if resp.status_code == 200:
                 data = resp.json()
-                nombre = data.get("title") or data.get("name") or f"Modelo {model_id}"
-                # Thumbnail: buscar en coverFiles o coverFile
-                thumbnail = None
-                cover = data.get("coverFiles") or []
-                if cover and isinstance(cover, list):
-                    thumbnail = cover[0].get("url") if isinstance(cover[0], dict) else None
-                if not thumbnail:
-                    thumbnail = data.get("coverFile") or data.get("thumbnailUrl")
-
-                creator = data.get("designer") or data.get("author") or {}
-                creator_name = creator.get("name") if isinstance(creator, dict) else None
-                creator_url = None
-                if creator_name:
-                    handle = creator.get("handle") or creator.get("slug")
-                    if handle:
-                        creator_url = f"https://makerworld.com/en/@{handle}"
-
-                return {
-                    "name": nombre,
-                    "description": data.get("description"),
-                    "thumbnail_url": thumbnail,
-                    "source_platform": "makerworld",
-                    "creator_name": creator_name,
-                    "creator_url": creator_url,
-                }
+                result["name"] = data.get("title") or data.get("name")
+                result["description"] = (
+                    data.get("description")
+                    or data.get("summary")
+                    or data.get("designSummary")
+                    or data.get("shortDescription")
+                ) or None
+                result["thumbnail_url"] = _mw_thumbnail(data)
+                result["creator_name"], result["creator_url"] = _mw_creator(data)
+                logger.debug(
+                    "MakerWorld API: name=%s thumb=%s creator=%s",
+                    result["name"], result["thumbnail_url"], result["creator_name"],
+                )
         except Exception as exc:
             logger.debug("MakerWorld API metadata excepción: %s", exc)
 
-        # Fallback: Open Graph desde HTML
-        return await _fetch_open_graph(url, "makerworld")
+    # Complementar con Open Graph para los campos que aún sean None
+    missing = not result["thumbnail_url"] or not result["description"] or not result["name"]
+    if missing:
+        og = await _fetch_open_graph(url, "makerworld")
+        if og:
+            if not result["name"]:
+                result["name"] = og.get("name")
+            if not result["description"]:
+                result["description"] = og.get("description")
+            if not result["thumbnail_url"]:
+                result["thumbnail_url"] = og.get("thumbnail_url")
+
+    return result if result["name"] else None
 
 
 async def _fetch_printables(url: str) -> Optional[dict]:
