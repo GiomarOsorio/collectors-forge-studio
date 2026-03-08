@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Archive, Download, Loader2, Pencil, Trash2, Search, X, CheckCircle } from 'lucide-react';
+import { Archive, Download, Loader2, Pencil, Trash2, Search, X, CheckCircle, UploadCloud } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -19,6 +19,7 @@ import {
   getVaultStats,
   downloadVaultFile,
   updateVaultFile,
+  replaceVaultFile,
   deleteVaultFile,
 } from '../../services/api';
 
@@ -60,7 +61,7 @@ function StorageBar({ stats }) {
 
 // ─── Modal de edición ─────────────────────────────────────────────────────
 
-function EditModal({ file, onSave, onClose }) {
+function EditModal({ file, onSave, onReplace, onClose }) {
   const [form, setForm] = useState({
     name: file.name,
     description: file.description || '',
@@ -68,6 +69,10 @@ function EditModal({ file, onSave, onClose }) {
     tags: (file.tags || []).join(', '),
   });
   const [saving, setSaving] = useState(false);
+  const [newFile, setNewFile] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
 
   const handleSave = async () => {
     setSaving(true);
@@ -90,15 +95,46 @@ function EditModal({ file, onSave, onClose }) {
     }
   };
 
+  const handleReplace = async () => {
+    if (!newFile) return;
+    setUploading(true);
+    setUploadProgress(0);
+    try {
+      await onReplace(file.id, newFile, (e) => {
+        setUploadProgress(Math.round((e.loaded / e.total) * 100));
+      });
+      toast.success('Archivo reemplazado correctamente');
+      onClose();
+    } catch {
+      toast.error('Error al subir la nueva versión');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const f = e.target.files?.[0];
+    if (f && f.name.toLowerCase().endsWith('.3mf')) {
+      setNewFile(f);
+    } else if (f) {
+      toast.error('Solo se permiten archivos .3mf');
+      e.target.value = '';
+    }
+  };
+
+  const busy = saving || uploading;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-surface border border-border rounded-2xl p-6 w-full max-w-md mx-4">
+      <div className="bg-[#1a1d21] border border-[#2a2d31] rounded-2xl p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-steel">Editar archivo</h3>
-          <button className="tf-btn-ghost" onClick={onClose}>
+          <button className="tf-btn-ghost" onClick={onClose} disabled={busy}>
             <X size={16} />
           </button>
         </div>
+
+        {/* Metadatos */}
         <div className="space-y-3">
           <div>
             <label className="block text-xs text-gunmetal mb-1">Nombre</label>
@@ -135,14 +171,64 @@ function EditModal({ file, onSave, onClose }) {
             />
           </div>
         </div>
-        <div className="flex justify-end gap-2 mt-5">
-          <button className="tf-btn-ghost" onClick={onClose} disabled={saving}>
+
+        <div className="flex justify-end gap-2 mt-4">
+          <button className="tf-btn-ghost" onClick={onClose} disabled={busy}>
             Cancelar
           </button>
-          <button className="tf-btn-primary" onClick={handleSave} disabled={saving || !form.name.trim()}>
-            {saving ? 'Guardando…' : 'Guardar'}
+          <button className="tf-btn-primary" onClick={handleSave} disabled={busy || !form.name.trim()}>
+            {saving ? <><Loader2 size={13} className="animate-spin" /> Guardando…</> : 'Guardar'}
           </button>
         </div>
+
+        {/* Separador */}
+        <div className="border-t border-[#2a2d31] my-5" />
+
+        {/* Nueva versión del archivo */}
+        <p className="text-xs font-medium text-steel mb-3">Nueva versión del archivo</p>
+        <div
+          className="border border-dashed border-[#2a2d31] rounded-xl p-4 flex flex-col items-center gap-2 cursor-pointer hover:border-rose-500/40 transition-colors"
+          onClick={() => !busy && fileInputRef.current?.click()}
+        >
+          <UploadCloud size={22} className="text-gunmetal" />
+          <p className="text-xs text-gunmetal text-center">
+            {newFile ? (
+              <span className="text-steel font-medium">{newFile.name}</span>
+            ) : (
+              <>Haz clic para seleccionar un <span className="text-rose-400">.3mf</span></>
+            )}
+          </p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".3mf"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+        </div>
+
+        {uploading && (
+          <div className="mt-3">
+            <div className="h-1.5 bg-[#2a2d31] rounded-full overflow-hidden">
+              <div
+                className="h-full bg-rose-500 rounded-full transition-all"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+            <p className="text-xs text-gunmetal font-mono mt-1">{uploadProgress}%</p>
+          </div>
+        )}
+
+        {newFile && !uploading && (
+          <button
+            className="tf-btn-primary w-full mt-3 text-xs"
+            onClick={handleReplace}
+            disabled={busy}
+          >
+            <UploadCloud size={13} />
+            Subir nueva versión
+          </button>
+        )}
       </div>
     </div>
   );
@@ -322,6 +408,12 @@ export default function VaultPage() {
     await getVaultStats().then((r) => setStats(r.data));
   };
 
+  const handleReplaceFile = async (id, file, onUploadProgress) => {
+    const res = await replaceVaultFile(id, file, onUploadProgress);
+    setFiles((prev) => prev.map((f) => (f.id === id ? res.data : f)));
+    await getVaultStats().then((r) => setStats(r.data));
+  };
+
   const handleDelete = async (file) => {
     const ok = await confirm(
       `¿Eliminar "${file.name}"? Esta acción no se puede deshacer.`,
@@ -444,6 +536,7 @@ export default function VaultPage() {
         <EditModal
           file={editingFile}
           onSave={handleSaveEdit}
+          onReplace={handleReplaceFile}
           onClose={() => setEditingFile(null)}
         />
       )}
