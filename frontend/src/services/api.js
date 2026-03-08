@@ -759,6 +759,18 @@ export const downloadVaultFile = (id) => api.get(`/vault/${id}/download`, { resp
 export const updateVaultFile = (id, data) => api.put(`/vault/${id}`, data);
 
 /**
+ * Reemplaza el archivo .3mf de un modelo conservando sus metadatos (solo admins).
+ * @param {number} id - ID del archivo
+ * @param {File} file - Nuevo archivo .3mf
+ * @param {Function} [onUploadProgress] - Callback de progreso
+ */
+export const replaceVaultFile = (id, file, onUploadProgress) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api.post(`/vault/${id}/replace`, formData, { onUploadProgress });
+};
+
+/**
  * Elimina un archivo del Vault y su objeto en MinIO (solo admins).
  * @param {number} id - ID del archivo
  */

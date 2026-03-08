@@ -326,6 +326,76 @@ async def update_vault_file(
     return _to_response(model, username)
 
 
+@router.post("/{file_id}/replace", response_model=ModelFileResponse)
+async def replace_vault_file(
+    file_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Reemplaza el archivo .3mf de un modelo existente conservando sus metadatos.
+
+    Sube el nuevo archivo a MinIO con una clave fresca, actualiza la DB y
+    elimina el archivo anterior. Solo admins.
+    """
+    _require_admin(current_user)
+
+    if not file.filename or not file.filename.lower().endswith(".3mf"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Solo se permiten archivos .3mf",
+        )
+
+    model = await _get_model_file(db, file_id, current_user.company_id)
+
+    content = await file.read()
+    file_size = len(content)
+
+    if file_size > MAX_VAULT_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="El archivo supera el límite de 1 GB",
+        )
+
+    # Verificar cuota descontando el tamaño del archivo actual
+    used = await _get_used_bytes(db, current_user.company_id)
+    quota = settings.VAULT_QUOTA_GB * 1024 * 1024 * 1024
+    if used - model.file_size + file_size > quota:
+        raise HTTPException(
+            status_code=status.HTTP_507_INSUFFICIENT_STORAGE,
+            detail=f"Sin espacio disponible. Cuota: {settings.VAULT_QUOTA_GB} GB",
+        )
+
+    # Subir nuevo archivo con clave única
+    old_key = model.file_key
+    file_uuid = str(uuid.uuid4())
+    safe_name = file.filename.replace(" ", "_")
+    new_key = f"{current_user.company_id}/{file_uuid}-{safe_name}"
+
+    await upload_file(new_key, content, content_type="model/3mf")
+
+    # Actualizar DB antes de borrar el archivo viejo
+    model.file_key = new_key
+    model.file_name = file.filename
+    model.file_size = file_size
+    model.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    await db.commit()
+    await db.refresh(model)
+
+    # Eliminar archivo anterior (después de confirmar la DB)
+    await delete_file(old_key)
+
+    username = None
+    if model.uploaded_by:
+        u_result = await db.execute(
+            select(User.username).where(User.id == model.uploaded_by)
+        )
+        username = u_result.scalar_one_or_none()
+
+    return _to_response(model, username)
+
+
 @router.delete("/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_vault_file(
     file_id: int,
