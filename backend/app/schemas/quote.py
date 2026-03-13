@@ -64,6 +64,7 @@ class QuoteCalculateRequest(BaseModel):
     save: bool = True
     supplies: List["SupplyItemRef"] = []
     additional_filaments: List[FilamentItem] = []
+    consumable_ids: Optional[List[int]] = None
     # Tasa USD/COP ya calculada: si se envía, el backend la reutiliza en lugar de
     # volver a consultar la API externa. Evita discrepancias entre "Calcular" y "Guardar".
     usd_to_cop_rate: Optional[Decimal] = None
@@ -251,6 +252,8 @@ class QuoteManualRequest(BaseModel):
     electricity_rate: Optional[Decimal] = Field(default=None, ge=0)
     failure_rate_percent: Optional[Decimal] = Field(default=None, ge=0, le=100)
     labor_cost_per_hour: Optional[Decimal] = Field(default=None, ge=0)
+
+    consumable_ids: Optional[List[int]] = None
 
 
 QuoteCalculateRequest.model_rebuild()

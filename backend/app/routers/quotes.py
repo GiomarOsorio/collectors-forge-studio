@@ -18,6 +18,7 @@ Endpoints disponibles bajo el prefijo /api/quotes:
 import asyncio
 import re
 from decimal import Decimal
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
@@ -89,7 +90,7 @@ async def calculate_quote(
     cop_rate = await get_usd_to_cop()
     supplies_data = await _resolve_supplies(db, current_user, data.supplies)
     additional_filaments_data = await _resolve_additional_filaments(db, current_user, data.additional_filaments)
-    consumables_data = await _get_consumables(db, current_user)
+    consumables_data = await _get_consumables(db, current_user, data.consumable_ids)
 
     return calculate_cost(
         filament=filament,
@@ -166,7 +167,7 @@ async def calculate_quote_manual(
     )
 
     cop_rate = await get_usd_to_cop()
-    consumables_data = await _get_consumables(db, current_user)
+    consumables_data = await _get_consumables(db, current_user, data.consumable_ids)
 
     return calculate_cost(
         filament=fake_filament,
@@ -208,7 +209,7 @@ async def create_quote(
     cop_rate = data.usd_to_cop_rate if data.usd_to_cop_rate else await get_usd_to_cop()
     supplies_data = await _resolve_supplies(db, current_user, data.supplies)
     additional_filaments_data = await _resolve_additional_filaments(db, current_user, data.additional_filaments)
-    consumables_data = await _get_consumables(db, current_user)
+    consumables_data = await _get_consumables(db, current_user, data.consumable_ids)
 
     breakdown = calculate_cost(
         filament=filament,
@@ -459,23 +460,25 @@ async def _get_company_quote(db: AsyncSession, quote_id: int, company_id) -> Quo
     return quote
 
 
-async def _get_consumables(db: AsyncSession, current_user: User) -> list:
+async def _get_consumables(
+    db: AsyncSession, current_user: User, consumable_ids: Optional[List[int]] = None
+) -> list:
     """
-    Carga los consumibles activos de la empresa para el cálculo de desgaste.
+    Carga consumibles de la empresa para el cálculo de desgaste.
 
-    Retorna solo los ítems con category="Consumible", useful_life_hours > 0
-    y unit_cost_cal definido. Estos se aplicarán automáticamente en la
-    calculadora proporcional al tiempo de impresión.
+    Si consumable_ids es None, carga todos los consumibles activos (backward compat).
+    Si es una lista, solo carga los IDs indicados (selección manual del usuario).
     """
-    r = await db.execute(
-        select(InventoryItem).where(
-            InventoryItem.company_id == current_user.company_id,
-            InventoryItem.category == "Consumible",
-            InventoryItem.useful_life_hours.isnot(None),
-            InventoryItem.useful_life_hours > 0,
-            InventoryItem.unit_cost_cal.isnot(None),
-        )
+    query = select(InventoryItem).where(
+        InventoryItem.company_id == current_user.company_id,
+        InventoryItem.category == "Consumible",
+        InventoryItem.useful_life_hours.isnot(None),
+        InventoryItem.useful_life_hours > 0,
+        InventoryItem.unit_cost_cal.isnot(None),
     )
+    if consumable_ids is not None:
+        query = query.where(InventoryItem.id.in_(consumable_ids))
+    r = await db.execute(query)
     items = r.scalars().all()
     return [
         {"name": c.name, "unit_cost_cal": c.unit_cost_cal, "useful_life_hours": c.useful_life_hours}
