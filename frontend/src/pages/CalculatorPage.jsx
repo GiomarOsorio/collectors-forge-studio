@@ -58,9 +58,13 @@ export default function CalculatorPage() {
    */
   const [supplies, setSupplies] = useState([]);
   /**
-   * @type {[Array, Function]} Consumibles del inventario (desgaste automático por horas de impresión)
+   * @type {[Array, Function]} Consumibles del inventario (desgaste por horas de impresión)
    */
   const [consumables, setConsumables] = useState([]);
+  /**
+   * @type {[Array, Function]} IDs de consumibles seleccionados para esta cotización
+   */
+  const [selectedConsumables, setSelectedConsumables] = useState([]);
   /**
    * @type {[Array, Function]} Insumos seleccionados para esta cotizacion
    * Cada elemento: {inventory_item_id: string, quantity: number}
@@ -109,6 +113,7 @@ export default function CalculatorPage() {
    * @type {[{inventory_item_id: string, weight_grams: string}, Function]}
    */
   const [filamentToAdd, setFilamentToAdd] = useState({ inventory_item_id: '', weight_grams: '' });
+  const [consumableToAdd, setConsumableToAdd] = useState('');
 
   /**
    * Genera la etiqueta de nombre para un item de inventario tipo Filamento.
@@ -221,6 +226,7 @@ export default function CalculatorPage() {
     margin_percent: parseFloat(form.margin_percent),
     supplies: selectedSupplies,
     additional_filaments: additionalFilaments,
+    consumable_ids: selectedConsumables.map((c) => c.id),
   });
 
   /**
@@ -284,6 +290,18 @@ export default function CalculatorPage() {
   const removeFilament = (index) =>
     setAdditionalFilaments(additionalFilaments.filter((_, i) => i !== index));
 
+  const addConsumable = () => {
+    if (!consumableToAdd) return;
+    const id = parseInt(consumableToAdd);
+    if (selectedConsumables.some((c) => c.id === id)) return;
+    const item = consumables.find((c) => c.id === id);
+    if (item) setSelectedConsumables([...selectedConsumables, item]);
+    setConsumableToAdd('');
+  };
+
+  const removeConsumable = (id) =>
+    setSelectedConsumables(selectedConsumables.filter((c) => c.id !== id));
+
   /**
    * Maneja el envio del formulario para calcular los costos.
    * Valida que se haya seleccionado filamento (del inventario) e impresora antes de enviar.
@@ -328,6 +346,7 @@ export default function CalculatorPage() {
     });
     setSelectedSupplies([]);
     setAdditionalFilaments([]);
+    setSelectedConsumables([]);
     setResult(null);
   };
 
@@ -721,15 +740,15 @@ export default function CalculatorPage() {
             </>
           )}
 
-          {/* Consumibles del inventario (desgaste automático) */}
+          {/* Consumibles del inventario (desgaste por tiempo de impresión) */}
           {consumables.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs font-semibold text-gunmetal uppercase tracking-wider">Consumibles adicionales</span>
-                <span className="text-xs text-gunmetal">(automático)</span>
+                <span className="text-xs font-semibold text-gunmetal uppercase tracking-wider">Consumibles</span>
+                <span className="text-xs text-gunmetal">(desgaste por horas)</span>
                 <div className="flex-1 h-px bg-[#1e2125]" />
               </div>
-              {consumables.map((c) => {
+              {selectedConsumables.map((c) => {
                 const printHours = (parseFloat(form.print_time_minutes) || 0) / 60;
                 const wear = printHours > 0
                   ? (parseFloat(c.unit_cost_cal) / parseFloat(c.useful_life_hours)) * printHours
@@ -746,12 +765,39 @@ export default function CalculatorPage() {
                         ${wear.toFixed(4)}
                       </span>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => removeConsumable(c.id)}
+                      className="text-gunmetal hover:text-red-400 ml-1 transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 );
               })}
-              <p className="text-xs text-gunmetal mt-1">
-                El desgaste se calcula automáticamente según el tiempo de impresión.
-              </p>
+              <div className="flex flex-wrap gap-2 mt-1">
+                <select
+                  value={consumableToAdd}
+                  onChange={(e) => setConsumableToAdd(e.target.value)}
+                  className="tf-input flex-1"
+                >
+                  <option value="">Consumible...</option>
+                  {consumables
+                    .filter((c) => !selectedConsumables.some((sc) => sc.id === c.id))
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} — {c.useful_life_hours}h vida útil
+                      </option>
+                    ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={addConsumable}
+                  className="tf-btn-secondary px-3 py-1.5 text-sm"
+                >
+                  <Plus size={14} /> Añadir
+                </button>
+              </div>
             </div>
           )}
 
