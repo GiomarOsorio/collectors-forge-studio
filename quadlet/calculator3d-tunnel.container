@@ -8,6 +8,7 @@ Image=docker.io/cloudflare/cloudflared:latest
 Exec=tunnel --no-autoupdate run
 Network=calculator3d.network
 Network=kumistudio.network
+Network=championsapp.network
 EnvironmentFile=__DEPLOY_PATH__/.env
 
 [Service]
