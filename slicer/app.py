@@ -147,6 +147,8 @@ def _patch_3mf_params(src_path: Path) -> tuple:
        "Deserializing nil into a non-nullable object"
     3. Valores "nil" en XML metadata (model_settings) como value="30,nil"
     4. Anotaciones de pintura de triángulos (custom_supports/seam/color) incompatibles
+    5. cut_information.xml con conectores de corte de BS 2.5+ que causan crash
+    6. Metadata XML con claves BS 2.5+ desconocidas para OrcaSlicer 2.3.x
 
     Args:
         src_path: Ruta al archivo .3mf original.
@@ -164,15 +166,35 @@ def _patch_3mf_params(src_path: Path) -> tuple:
     ]
     BINARY_EXTS = {".png", ".jpg", ".jpeg", ".stl", ".obj", ".bin", ".ttf", ".gcode"}
 
+    # Archivos del 3MF que deben ser eliminados completamente.
+    # cut_information.xml tiene conectores de corte de BS 2.5+ que OrcaSlicer 2.3.x
+    # no reconoce y provocan crash en calc_exclude_triangles.
+    SKIP_FILES = {"Metadata/cut_information.xml"}
+
+    # Claves de metadata XML (model_settings.config) que son exclusivas de BS 2.5+
+    # y OrcaSlicer 2.3.x no reconoce. Al encontrarlas, las elimina del XML.
+    BS25_XML_KEYS = {
+        "filament_map_mode", "filament_maps", "filament_volume_maps",
+        "skeleton_infill_density", "skin_infill_density", "identify_id",
+        "plater_id", "plater_name", "pick_file", "top_file",
+        "thumbnail_file", "thumbnail_no_light_file", "top_one_wall_type",
+    }
+
     dst_path = src_path.with_name(f"patched_{src_path.name}")
     total_changes = 0
     nil_fixes = 0
+    skipped_files = []
     files_text = []
 
     try:
         with zipfile.ZipFile(src_path, "r") as zin, \
              zipfile.ZipFile(dst_path, "w", zipfile.ZIP_DEFLATED) as zout:
             for item in zin.infolist():
+                # --- Fix 5: eliminar archivos incompatibles ---
+                if item.filename in SKIP_FILES:
+                    skipped_files.append(item.filename)
+                    continue
+
                 raw = zin.read(item.filename)
                 ext = Path(item.filename).suffix.lower()
 
@@ -215,23 +237,16 @@ def _patch_3mf_params(src_path: Path) -> tuple:
                         # Bambu Studio 2.5+ usa "nil" como placeholder en arrays de
                         # filament settings (retraction, temperature, z_hop, etc.).
                         # OrcaSlicer 2.3.x no puede deserializar "nil".
-                        # Estrategia: eliminar elementos "nil" de arrays JSON.
-                        # Ej: ["200", "nil"] → ["200"]  /  ["nil","nil"] → []
                         if item.filename.endswith(".config") and '"nil"' in text:
-                            # Reemplazar "nil" seguido de coma (o precedido por coma) en arrays
                             before = text.count('"nil"')
-                            # Caso: "nil" como último elemento: , "nil"
                             text = re.sub(r',\s*"nil"', '', text)
-                            # Caso: "nil" como primer elemento seguido de coma: "nil",
                             text = re.sub(r'"nil"\s*,\s*', '', text)
-                            # Caso: "nil" como único elemento: ["nil"]  → []
                             text = re.sub(r'"nil"', '', text)
                             after = text.count('"nil"')
                             nil_fixes += before - after
 
                         # --- Fix 3: ",nil" en XML metadata values ---
                         # model_settings.config: value="30,nil" → value="30"
-                        # El segundo valor es para un extruder no configurado.
                         if item.filename.endswith(".config") and ",nil" in text:
                             before_count = text.count(",nil")
                             text = re.sub(r',nil(?=")', '', text)
@@ -246,6 +261,16 @@ def _patch_3mf_params(src_path: Path) -> tuple:
                             '', text, flags=re.IGNORECASE)
                         total_changes += n
 
+                        # --- Fix 6: claves BS 2.5+ en model_settings.config ---
+                        # Eliminar <metadata key="KEY" value="..."/> desconocidas
+                        if item.filename.endswith("model_settings.config"):
+                            for key in BS25_XML_KEYS:
+                                text, n = re.subn(
+                                    r'\s*<metadata\s+key="' + re.escape(key)
+                                    + r'"[^>]*/>\s*',
+                                    '\n', text)
+                                total_changes += n
+
                         raw = text.encode("utf-8")
                     except (UnicodeDecodeError, TypeError):
                         pass
@@ -253,7 +278,8 @@ def _patch_3mf_params(src_path: Path) -> tuple:
                 zout.writestr(item, raw)
 
         debug = (
-            f"parche OK: {total_changes} fixes centinela, {nil_fixes} nils eliminados "
+            f"parche OK: {total_changes} fixes, {nil_fixes} nils eliminados, "
+            f"{len(skipped_files)} archivos eliminados "
             f"en {len(files_text)} archivos"
         )
         return dst_path, debug
