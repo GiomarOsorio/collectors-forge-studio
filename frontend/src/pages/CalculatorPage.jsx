@@ -81,6 +81,8 @@ export default function CalculatorPage() {
   const [loading, setLoading] = useState(false);
   /** @type {[boolean, Function]} Estado de carga durante el guardado */
   const [saving, setSaving] = useState(false);
+  /** @type {[boolean, Function]} Carga inicial de datos (filamentos, impresoras, config) */
+  const [initialLoading, setInitialLoading] = useState(true);
 
   /**
    * Estado del formulario con los parametros de la pieza a cotizar.
@@ -188,7 +190,8 @@ export default function CalculatorPage() {
           toast.success('Datos del Slicer cargados en la calculadora');
         }
       })
-      .catch(() => toast.error('Error cargando datos'));
+      .catch(() => toast.error('Error cargando datos'))
+      .finally(() => setInitialLoading(false));
   }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
@@ -379,6 +382,15 @@ export default function CalculatorPage() {
     selectedFilament &&
     parseFloat(selectedFilament.min_quantity) > 0 &&
     parseFloat(selectedFilament.quantity) < parseFloat(selectedFilament.min_quantity);
+
+  if (initialLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-3">
+        <Loader2 size={28} className="text-amber-400 animate-spin" />
+        <p className="text-steel text-sm">Cargando calculadora…</p>
+      </div>
+    );
+  }
 
   return (
     <div>
