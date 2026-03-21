@@ -17,9 +17,10 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
+import sqlalchemy as sa
 from sqlalchemy import String, Numeric, DateTime, Text, Integer, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 
 from app.database import Base
 
@@ -78,6 +79,11 @@ class SlicingJob(Base):
     printer_preset: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     filament_preset: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     config_preset: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    # Datos por placa (multi-placa .3mf)
+    plates_data: Mapped[Optional[list]] = mapped_column(
+        JSONB, server_default=sa.text("'[]'::jsonb"), nullable=False
+    )
 
     # Mensaje de error si el laminado falló
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
