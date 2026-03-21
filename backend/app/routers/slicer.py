@@ -44,7 +44,7 @@ from app.schemas.slicer import (
 from app.limiter import limiter
 from app.services.auth import get_current_user
 from app.services.makerworld_fetcher import extract_model_id, fetch_model_data
-from app.services.slicer_parser import parse_gcode_file, parse_3mf_file
+from app.services.slicer_parser import parse_gcode_file, parse_3mf_file, parse_3mf_all_plates
 
 router = APIRouter(prefix="/api/slicer", tags=["slicer"])
 
@@ -69,6 +69,72 @@ ALLOWED_STL_EXTENSIONS = {".stl", ".3mf", ".step", ".stp", ".obj", ".amf"}
 
 # Límite de tamaño de archivo (M-06): protección DoS en acceso directo al puerto 8000
 MAX_UPLOAD_BYTES = 250 * 1024 * 1024  # 250 MB, consistente con nginx client_max_body_size
+
+
+def _plates_to_jsonb(plates: list) -> list:
+    """Convierte lista de PlateResult a lista de dicts para JSONB."""
+    result = []
+    for p in plates:
+        filaments = []
+        if p.filaments:
+            for f in p.filaments:
+                filaments.append({
+                    "filament_type": f.filament_type,
+                    "colour_hex": f.colour_hex,
+                    "weight_g": f.weight_g,
+                    "length_m": f.length_m,
+                })
+        result.append({
+            "plate_number": p.plate_number,
+            "print_time_seconds": p.print_time_seconds,
+            "filament_weight_g": p.filament_weight_g,
+            "filament_type": p.filament_type,
+            "layer_height_mm": p.layer_height_mm,
+            "nozzle_temp": p.nozzle_temp,
+            "bed_temp": p.bed_temp,
+            "filaments": filaments,
+            "objects": p.objects or [],
+        })
+    return result
+
+
+def _aggregate_plates(plates: list) -> dict:
+    """Calcula totales agregados de todas las placas para campos legacy."""
+    total_time = 0
+    total_weight = 0.0
+    filament_type = None
+    nozzle_temp = None
+    bed_temp = None
+    layer_height = None
+    tipos = set()
+
+    for p in plates:
+        if p.print_time_seconds:
+            total_time += p.print_time_seconds
+        if p.filament_weight_g:
+            total_weight += p.filament_weight_g
+        if p.filament_type:
+            tipos.add(p.filament_type)
+        if nozzle_temp is None and p.nozzle_temp:
+            nozzle_temp = p.nozzle_temp
+        if bed_temp is None and p.bed_temp:
+            bed_temp = p.bed_temp
+        if layer_height is None and p.layer_height_mm:
+            layer_height = p.layer_height_mm
+
+    if len(tipos) == 1:
+        filament_type = tipos.pop()
+    elif tipos:
+        filament_type = "/".join(sorted(tipos))
+
+    return {
+        "print_time_seconds": total_time if total_time > 0 else None,
+        "filament_weight_g": round(total_weight, 2) if total_weight > 0 else None,
+        "filament_type": filament_type,
+        "nozzle_temp": nozzle_temp,
+        "bed_temp": bed_temp,
+        "layer_height_mm": layer_height,
+    }
 
 
 def _es_3mf_proyecto(file_path: Path) -> bool:
@@ -300,8 +366,15 @@ async def upload_gcode(
     temp_path.write_bytes(contenido)
 
     # Parsear metadatos
+    plates_data_json = []
     if ext == ".3mf":
-        resultado = parse_3mf_file(str(temp_path))
+        plates = parse_3mf_all_plates(str(temp_path))
+        if plates:
+            plates_data_json = _plates_to_jsonb(plates)
+            agg = _aggregate_plates(plates)
+            resultado = type("R", (), agg)()  # objeto con atributos de los agregados
+        else:
+            resultado = None
     else:
         resultado = parse_gcode_file(str(temp_path))
 
@@ -324,6 +397,7 @@ async def upload_gcode(
         original_filename=file.filename,
         status="done" if resultado else "error",
         error_message=error_msg,
+        plates_data=plates_data_json,
     )
 
     if resultado:
@@ -511,8 +585,8 @@ async def fetch_makerworld(
 async def list_jobs(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=20, ge=1, le=100),
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1, le=100),
 ):
     """
     Lista los trabajos de laminado de la empresa, ordenados por fecha.
@@ -520,8 +594,8 @@ async def list_jobs(
     Args:
         db:           Sesión de base de datos.
         current_user: Usuario autenticado.
-        skip:         Número de registros a saltar (paginación).
-        limit:        Máximo de registros a retornar.
+        page:         Número de página (1-indexed).
+        per_page:     Registros por página.
 
     Returns:
         SlicingJobListResponse con los jobs y el total.
@@ -534,13 +608,14 @@ async def list_jobs(
     )
     total = total_result.scalar_one()
 
-    # Listado
+    # Listado con paginación page/per_page
+    offset = (page - 1) * per_page
     result = await db.execute(
         select(SlicingJob)
         .where(SlicingJob.company_id == current_user.company_id)
         .order_by(SlicingJob.created_at.desc())
-        .offset(skip)
-        .limit(limit)
+        .offset(offset)
+        .limit(per_page)
     )
     jobs = result.scalars().all()
 

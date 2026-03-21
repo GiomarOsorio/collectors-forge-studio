@@ -31,9 +31,58 @@ class SliceResult:
     bed_temp: Optional[int] = None
 
 
+@dataclass
+class PlateFilament:
+    """Filamento usado en una placa específica."""
+    filament_type: str = ""
+    colour_hex: str = ""
+    weight_g: float = 0.0
+    length_m: float = 0.0
+
+
+@dataclass
+class PlateResult:
+    """
+    Resultado de parsear una placa individual de un .3mf multi-placa.
+
+    Contiene los datos específicos de cada placa: tiempo, filamentos usados,
+    objetos incluidos, temperaturas y dimensiones.
+    """
+    plate_number: int = 1
+    print_time_seconds: Optional[int] = None
+    filament_weight_g: Optional[float] = None
+    filament_type: Optional[str] = None
+    layer_height_mm: Optional[float] = None
+    nozzle_temp: Optional[int] = None
+    bed_temp: Optional[int] = None
+    filaments: Optional[List["PlateFilament"]] = None
+    objects: Optional[List[str]] = None
+
+
 class MakerworldRequest(BaseModel):
     """Solicitud para extraer datos de un modelo de MakerWorld."""
     url: str
+
+
+class PlateFilamentData(BaseModel):
+    """Datos de un filamento usado en una placa (respuesta API)."""
+    filament_type: str = ""
+    colour_hex: str = ""
+    weight_g: float = 0.0
+    length_m: float = 0.0
+
+
+class PlateData(BaseModel):
+    """Datos de una placa individual en un .3mf multi-placa (respuesta API)."""
+    plate_number: int
+    print_time_seconds: Optional[int] = None
+    filament_weight_g: Optional[float] = None
+    filament_type: Optional[str] = None
+    layer_height_mm: Optional[float] = None
+    nozzle_temp: Optional[int] = None
+    bed_temp: Optional[int] = None
+    filaments: List[PlateFilamentData] = []
+    objects: List[str] = []
 
 
 class SlicingJobResponse(BaseModel):
@@ -59,6 +108,7 @@ class SlicingJobResponse(BaseModel):
     filament_preset: Optional[str] = None
     config_preset: Optional[str] = None
     error_message: Optional[str] = None
+    plates_data: List[PlateData] = []
     created_at: datetime
     updated_at: datetime
 
@@ -67,6 +117,14 @@ class SlicingJobResponse(BaseModel):
     def uuid_to_str(cls, v):
         """Convierte UUID a string para la serialización JSON."""
         return str(v)
+
+    @field_validator("plates_data", mode="before")
+    @classmethod
+    def parse_plates_json(cls, v):
+        """Convierte JSONB raw a lista de PlateData."""
+        if v is None:
+            return []
+        return v
 
     model_config = {"from_attributes": True, "protected_namespaces": ()}
 

@@ -15,11 +15,12 @@ Formatos soportados:
 """
 
 import re
+import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
-from app.schemas.slicer import SliceResult
+from app.schemas.slicer import PlateFilament, PlateResult, SliceResult
 
 
 # Densidades de filamento en g/cm3 para conversión longitud→gramos
@@ -125,6 +126,18 @@ def _parse_gcode_text(text: str) -> SliceResult:
         if m and result.bed_temp is None:
             result.bed_temp = int(m.group(1))
 
+        # Bambu Studio usa campos por tipo de placa en lugar de bed_temperature
+        # "; textured_plate_temp = 70,70,70,70" / "; hot_plate_temp = 70,70,70,70"
+        if result.bed_temp is None:
+            m = re.match(
+                r";\s*(?:textured_plate_temp|hot_plate_temp|cool_plate_temp|eng_plate_temp)\s*=\s*(\d+)",
+                line, re.IGNORECASE
+            )
+            if m:
+                val = int(m.group(1))
+                if val > 0:
+                    result.bed_temp = val
+
         # Altura de capa: "; layer_height = 0.20"
         m = re.match(r";\s*layer_height\s*=\s*([\d.]+)", line, re.IGNORECASE)
         if m and result.layer_height_mm is None:
@@ -178,13 +191,252 @@ def parse_gcode_file(file_path: str) -> Optional[SliceResult]:
         return None
 
 
+def _parse_slice_info_xml(xml_text: str) -> List[PlateResult]:
+    """
+    Parsea el archivo slice_info.config (XML) de Bambu Studio.
+
+    Este XML contiene la información más rica por placa: tiempo estimado,
+    peso total, y detalle de cada filamento (tipo, color, gramos, metros).
+
+    Args:
+        xml_text: Contenido del archivo slice_info.config.
+
+    Returns:
+        Lista de PlateResult, una por cada placa encontrada.
+    """
+    plates = []
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return plates
+
+    for plate_el in root.findall("plate"):
+        meta = {}
+        for m in plate_el.findall("metadata"):
+            meta[m.get("key", "")] = m.get("value", "")
+
+        plate_num = int(meta.get("index", "0"))
+        if plate_num == 0:
+            continue
+
+        pr = PlateResult(plate_number=plate_num)
+
+        # Tiempo de impresión en segundos
+        prediction = meta.get("prediction")
+        if prediction:
+            pr.print_time_seconds = int(prediction)
+
+        # Peso total de la placa
+        weight = meta.get("weight")
+        if weight:
+            pr.filament_weight_g = float(weight)
+
+        # Diámetro de boquilla → nozzle_temp se extrae del gcode
+        # Objetos de la placa
+        objetos = []
+        for obj_el in plate_el.findall("object"):
+            nombre = obj_el.get("name", "")
+            if nombre and obj_el.get("skipped") != "true":
+                objetos.append(nombre)
+        if objetos:
+            pr.objects = objetos
+
+        # Filamentos usados en esta placa
+        filamentos = []
+        tipos_unicos = set()
+        for fil_el in plate_el.findall("filament"):
+            pf = PlateFilament(
+                filament_type=fil_el.get("type", ""),
+                colour_hex=fil_el.get("color", ""),
+                weight_g=float(fil_el.get("used_g", "0")),
+                length_m=float(fil_el.get("used_m", "0")),
+            )
+            filamentos.append(pf)
+            if pf.filament_type:
+                tipos_unicos.add(pf.filament_type)
+
+        if filamentos:
+            pr.filaments = filamentos
+            # Tipo de filamento: si todos iguales usar ese, si mixto separar con "/"
+            if len(tipos_unicos) == 1:
+                pr.filament_type = tipos_unicos.pop()
+            elif tipos_unicos:
+                pr.filament_type = "/".join(sorted(tipos_unicos))
+
+        plates.append(pr)
+
+    return plates
+
+
+def _enrich_plates_from_gcode(zf: zipfile.ZipFile, plates: List[PlateResult]) -> None:
+    """
+    Complementa los datos de las placas con info del gcode header.
+
+    Extrae temperaturas (nozzle, cama), altura de capa y colores de
+    filamento que no están en slice_info.config.
+
+    Args:
+        zf:     ZipFile abierto del .3mf.
+        plates: Lista de PlateResult a enriquecer (se modifican in-place).
+    """
+    for plate in plates:
+        gcode_name = f"Metadata/plate_{plate.plate_number}.gcode"
+        try:
+            with zf.open(gcode_name) as f:
+                contenido = f.read(200 * 1024).decode("utf-8", errors="ignore")
+        except KeyError:
+            continue
+
+        result = _parse_gcode_text(contenido)
+        if plate.nozzle_temp is None and result.nozzle_temp is not None:
+            plate.nozzle_temp = result.nozzle_temp
+        if plate.bed_temp is None and result.bed_temp is not None:
+            plate.bed_temp = result.bed_temp
+        if plate.layer_height_mm is None and result.layer_height_mm is not None:
+            plate.layer_height_mm = result.layer_height_mm
+        # Si no tenemos tiempo del XML, usar el del gcode
+        if plate.print_time_seconds is None and result.print_time_seconds is not None:
+            plate.print_time_seconds = result.print_time_seconds
+        # Si no tenemos peso del XML, usar el del gcode
+        if plate.filament_weight_g is None and result.filament_weight_g is not None:
+            plate.filament_weight_g = result.filament_weight_g
+        if plate.filament_type is None and result.filament_type is not None:
+            plate.filament_type = result.filament_type
+
+
+def _enrich_plates_from_json(zf: zipfile.ZipFile, plates: List[PlateResult]) -> None:
+    """
+    Complementa datos de las placas con los JSON de placa (plate_N.json).
+
+    Extrae colores de filamento y nombres de objetos si no se obtuvieron
+    de slice_info.config.
+
+    Args:
+        zf:     ZipFile abierto del .3mf.
+        plates: Lista de PlateResult a enriquecer (se modifican in-place).
+    """
+    import json
+
+    for plate in plates:
+        json_name = f"Metadata/plate_{plate.plate_number}.json"
+        try:
+            with zf.open(json_name) as f:
+                data = json.loads(f.read())
+        except (KeyError, Exception):
+            continue
+
+        # Objetos del JSON si no los tenemos del XML
+        if not plate.objects and "bbox_objects" in data:
+            nombres = [
+                obj.get("name", "")
+                for obj in data["bbox_objects"]
+                if obj.get("name")
+            ]
+            if nombres:
+                plate.objects = nombres
+
+        # layer_height del primer objeto
+        if plate.layer_height_mm is None and "bbox_objects" in data:
+            for obj in data["bbox_objects"]:
+                lh = obj.get("layer_height")
+                if lh and lh > 0:
+                    plate.layer_height_mm = round(lh, 3)
+                    break
+
+
+def parse_3mf_all_plates(file_path: str) -> List[PlateResult]:
+    """
+    Parsea TODAS las placas de un archivo .3mf de Bambu Studio.
+
+    Estrategia de parseo (en orden de prioridad):
+    1. slice_info.config (XML) — datos más ricos: tiempo, peso, filamentos
+    2. plate_N.gcode headers — temperaturas, altura de capa
+    3. plate_N.json — objetos, colores de filamento
+
+    Si no existe slice_info.config, detecta los plate_N.gcode y parsea
+    cada uno individualmente.
+
+    Args:
+        file_path: Ruta al archivo .3mf.
+
+    Returns:
+        Lista de PlateResult, una por cada placa. Lista vacía si no hay
+        datos de laminado.
+    """
+    try:
+        with zipfile.ZipFile(file_path, "r") as zf:
+            nombres = zf.namelist()
+            plates: List[PlateResult] = []
+
+            # Intentar parsear slice_info.config primero (fuente más rica)
+            if "Metadata/slice_info.config" in nombres:
+                with zf.open("Metadata/slice_info.config") as f:
+                    xml_text = f.read().decode("utf-8", errors="ignore")
+                plates = _parse_slice_info_xml(xml_text)
+
+            # Si no hay slice_info, detectar placas por gcode (Metadata/plate_N.gcode)
+            if not plates:
+                plate_gcodes = sorted([
+                    n for n in nombres
+                    if re.match(r"Metadata/plate_\d+\.gcode$", n, re.IGNORECASE)
+                ])
+                for gcode_name in plate_gcodes:
+                    m = re.search(r"plate_(\d+)", gcode_name)
+                    if not m:
+                        continue
+                    plate_num = int(m.group(1))
+                    with zf.open(gcode_name) as f:
+                        contenido = f.read(200 * 1024).decode("utf-8", errors="ignore")
+                    result = _parse_gcode_text(contenido)
+                    if result.print_time_seconds is not None or result.filament_weight_g is not None:
+                        plates.append(PlateResult(
+                            plate_number=plate_num,
+                            print_time_seconds=result.print_time_seconds,
+                            filament_weight_g=result.filament_weight_g,
+                            filament_type=result.filament_type,
+                            layer_height_mm=result.layer_height_mm,
+                            nozzle_temp=result.nozzle_temp,
+                            bed_temp=result.bed_temp,
+                        ))
+
+            # Fallback: buscar cualquier .gcode en el ZIP (raíz u otra ruta)
+            if not plates:
+                for nombre in nombres:
+                    if nombre.lower().endswith(".gcode"):
+                        with zf.open(nombre) as f:
+                            contenido = f.read(200 * 1024).decode("utf-8", errors="ignore")
+                        result = _parse_gcode_text(contenido)
+                        if result.print_time_seconds is not None or result.filament_weight_g is not None:
+                            plates.append(PlateResult(
+                                plate_number=1,
+                                print_time_seconds=result.print_time_seconds,
+                                filament_weight_g=result.filament_weight_g,
+                                filament_type=result.filament_type,
+                                layer_height_mm=result.layer_height_mm,
+                                nozzle_temp=result.nozzle_temp,
+                                bed_temp=result.bed_temp,
+                            ))
+                            break
+
+            if not plates:
+                return []
+
+            # Enriquecer con datos de gcode headers y JSONs de placa
+            _enrich_plates_from_gcode(zf, plates)
+            _enrich_plates_from_json(zf, plates)
+
+            return plates
+
+    except (zipfile.BadZipFile, Exception):
+        return []
+
+
 def parse_3mf_file(file_path: str) -> Optional[SliceResult]:
     """
     Parsea un archivo .3mf de Bambu Studio y extrae los metadatos.
 
-    Un .3mf es un archivo ZIP. Busca el G-code laminado dentro del ZIP
-    en las rutas conocidas de Bambu Studio: 'Metadata/plate_1.gcode',
-    'Metadata/plate_*.gcode', o cualquier .gcode en la raíz.
+    Usa parse_3mf_all_plates() internamente y retorna los datos de la
+    primera placa como SliceResult (backward compat).
 
     Args:
         file_path: Ruta al archivo .3mf.
@@ -192,29 +444,17 @@ def parse_3mf_file(file_path: str) -> Optional[SliceResult]:
     Returns:
         SliceResult con los datos extraídos, o None si no hay G-code laminado.
     """
-    try:
-        with zipfile.ZipFile(file_path, "r") as zf:
-            nombres = zf.namelist()
-
-            # Buscar G-code en orden de prioridad
-            candidatos = []
-            for nombre in nombres:
-                nombre_lower = nombre.lower()
-                if nombre_lower.endswith(".gcode"):
-                    # Priorizar plate_1.gcode de Bambu Studio
-                    if "plate_1" in nombre_lower:
-                        candidatos.insert(0, nombre)
-                    else:
-                        candidatos.append(nombre)
-
-            for candidato in candidatos:
-                with zf.open(candidato) as f:
-                    # Leer solo los primeros 200 KB del gcode
-                    contenido = f.read(200 * 1024).decode("utf-8", errors="ignore")
-                result = _parse_gcode_text(contenido)
-                if result.print_time_seconds is not None or result.filament_weight_g is not None:
-                    return result
-
+    plates = parse_3mf_all_plates(file_path)
+    if not plates:
         return None
-    except (zipfile.BadZipFile, Exception):
-        return None
+
+    # Retornar datos de la primera placa
+    p = plates[0]
+    return SliceResult(
+        print_time_seconds=p.print_time_seconds,
+        filament_weight_g=p.filament_weight_g,
+        filament_type=p.filament_type,
+        layer_height_mm=p.layer_height_mm,
+        nozzle_temp=p.nozzle_temp,
+        bed_temp=p.bed_temp,
+    )
