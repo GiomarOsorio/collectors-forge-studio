@@ -168,14 +168,18 @@ export default function CalculatorPage() {
         const weightGrams = searchParams.get('weight_grams');
         const printTimeHours = searchParams.get('print_time_hours');
         const filamentType = searchParams.get('filament_type');
+        const inventoryItemId = searchParams.get('inventory_item_id');
 
         if (weightGrams) updates.weight_grams = parseFloat(weightGrams).toFixed(2);
         if (printTimeHours) {
-          // Convertir horas a minutos para el formulario
           updates.print_time_minutes = Math.round(parseFloat(printTimeHours) * 60).toString();
         }
-        if (filamentType && filamentItems.length > 0) {
-          // Buscar filamento que coincida por tipo (filament_type o nombre)
+
+        // ID directo del inventario (viene del modal de mapeo)
+        if (inventoryItemId && filamentItems.some((f) => f.id === parseInt(inventoryItemId))) {
+          updates.inventory_item_id = parseInt(inventoryItemId);
+        } else if (filamentType && filamentItems.length > 0) {
+          // Fallback: match por tipo de filamento
           const match = filamentItems.find(
             (item) =>
               (item.filament_type || '').toLowerCase() === filamentType.toLowerCase() ||
@@ -185,6 +189,22 @@ export default function CalculatorPage() {
         }
 
         setForm((prev) => ({ ...prev, ...updates }));
+
+        // Filamentos adicionales: primero buscar extra_id_N (IDs directos del modal)
+        const extras = [];
+        for (let i = 1; i <= 10; i++) {
+          const eId = searchParams.get(`extra_id_${i}`);
+          const eWeight = searchParams.get(`extra_weight_${i}`);
+          if (eId && eWeight && filamentItems.some((f) => f.id === parseInt(eId))) {
+            extras.push({
+              inventory_item_id: parseInt(eId),
+              weight_grams: parseFloat(eWeight),
+            });
+          } else if (!eId) {
+            break;
+          }
+        }
+        if (extras.length > 0) setAdditionalFilaments(extras);
 
         if (weightGrams || printTimeHours) {
           toast.success('Datos del Slicer cargados en la calculadora');
