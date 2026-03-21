@@ -52,7 +52,6 @@ export const APPS = [
     route: '/slicer/upload',
     color: '#F59E0B',
     badge: null,
-    hidden: true,
   },
   {
     id: 'maintenance',
