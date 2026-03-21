@@ -84,14 +84,16 @@ function parseGcode(gcodeText) {
   }
 
   const cx = (minX + maxX) / 2;
-  const cy = (minZ + maxZ) / 2;
   const cz = (minY + maxY) / 2;
-  const size = Math.max(maxX - minX, maxY - minY, maxZ - minZ) || 100;
+  const height = maxZ - minZ;
+  const size = Math.max(maxX - minX, maxY - minY, height) || 100;
 
   return {
     segments: new Float32Array(positions),
     colors: new Float32Array(colors),
-    center: [cx, cy, cz],
+    // Centrar X/Z, pero Y (altura) se desplaza para que la base quede en Y=0
+    offset: [cx, minZ, cz],
+    height,
     size,
   };
 }
@@ -100,18 +102,16 @@ function parseGcode(gcodeText) {
  * Mesh del toolpath como LineSegments.
  */
 function Toolpath({ gcodeText }) {
-  const { segments, colors, center, size } = useMemo(
+  const { segments, colors, offset } = useMemo(
     () => parseGcode(gcodeText),
     [gcodeText],
   );
 
-  const ref = useRef();
-
   if (segments.length === 0) return null;
 
   return (
-    <group position={[-center[0], -center[1], -center[2]]}>
-      <lineSegments ref={ref}>
+    <group position={[-offset[0], -offset[1], -offset[2]]}>
+      <lineSegments>
         <bufferGeometry>
           <bufferAttribute
             attach="attributes-position"
@@ -153,22 +153,29 @@ function BuildPlate({ size }) {
  * @param {string} [props.className] - Clases CSS adicionales
  */
 export default function GcodeViewer({ gcodeText, className = '' }) {
-  const { size } = useMemo(() => parseGcode(gcodeText || ''), [gcodeText]);
+  const { size, height } = useMemo(() => parseGcode(gcodeText || ''), [gcodeText]);
 
   if (!gcodeText) return null;
 
   const camDist = Math.max(size * 1.2, 50);
+  const centerY = height / 2;
 
   return (
     <div className={`w-full h-full bg-[#0a0c0f] rounded-lg overflow-hidden ${className}`}>
       <Canvas
-        camera={{ position: [camDist * 0.7, camDist * 0.8, camDist * 0.7], fov: 45, near: 0.1, far: camDist * 10 }}
+        camera={{
+          position: [camDist * 0.7, centerY + camDist * 0.6, camDist * 0.7],
+          fov: 45,
+          near: 0.1,
+          far: camDist * 10,
+        }}
         gl={{ antialias: true }}
       >
         <ambientLight intensity={0.6} />
         <Toolpath gcodeText={gcodeText} />
         <BuildPlate size={size * 1.2} />
         <OrbitControls
+          target={[0, centerY, 0]}
           enableDamping
           dampingFactor={0.1}
           rotateSpeed={0.8}
