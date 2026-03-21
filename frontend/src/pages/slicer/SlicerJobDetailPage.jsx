@@ -17,6 +17,7 @@ import {
 import { getSlicingJob } from '../../services/api';
 import toast from 'react-hot-toast';
 import FilamentMapperModal from '../../components/slicer/FilamentMapperModal';
+import GcodeViewerDialog from '../../components/slicer/GcodeViewerDialog';
 
 /**
  * Formatea segundos en un string legible (Xh Ym Zs).
@@ -46,6 +47,8 @@ export default function SlicerJobDetailPage() {
   const [loading, setLoading] = useState(true);
   /** Filamentos a mapear para el modal (null = cerrado). */
   const [mapperData, setMapperData] = useState(null);
+  /** Placa a visualizar en 3D (null = cerrado). */
+  const [viewerPlate, setViewerPlate] = useState(null);
 
   useEffect(() => {
     getSlicingJob(id)
@@ -328,13 +331,22 @@ export default function SlicerJobDetailPage() {
                       ))}
                     </div>
 
-                    <button
-                      onClick={() => goToCalc(plate)}
-                      className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs text-amber-400/80 hover:text-amber-400 border border-[#1e2125] hover:border-amber-400/30 hover:bg-amber-400/5 transition-colors"
-                    >
-                      <Calculator size={12} />
-                      Usar placa {plate.plate_number}
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setViewerPlate(plate.plate_number)}
+                        className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs text-steel hover:text-tech-white border border-[#1e2125] hover:border-[#3a3d41] hover:bg-[#1a1d21] transition-colors"
+                        title="Vista 3D"
+                      >
+                        3D
+                      </button>
+                      <button
+                        onClick={() => goToCalc(plate)}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs text-amber-400/80 hover:text-amber-400 border border-[#1e2125] hover:border-amber-400/30 hover:bg-amber-400/5 transition-colors"
+                      >
+                        <Calculator size={12} />
+                        Usar placa {plate.plate_number}
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -351,6 +363,14 @@ export default function SlicerJobDetailPage() {
           </button>
         </div>
       )}
+
+      {/* Visor 3D de placa */}
+      <GcodeViewerDialog
+        open={viewerPlate !== null}
+        onClose={() => setViewerPlate(null)}
+        jobId={job?.id}
+        plateNumber={viewerPlate}
+      />
 
       {/* Modal de mapeo de filamentos */}
       <FilamentMapperModal
