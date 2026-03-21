@@ -36,6 +36,17 @@ class SliceRequest(BaseModel):
     config_preset: str = "0.20mm Standard @BBL P2S"
 
 
+class PlateMetadata(BaseModel):
+    """Metadatos de una placa individual."""
+    plate_number: int = 1
+    print_time_seconds: Optional[int] = None
+    filament_weight_g: Optional[float] = None
+    filament_type: Optional[str] = None
+    layer_height_mm: Optional[float] = None
+    nozzle_temp: Optional[int] = None
+    bed_temp: Optional[int] = None
+
+
 class SliceResponse(BaseModel):
     """Resultado del laminado."""
     status: str  # done, error
@@ -46,6 +57,8 @@ class SliceResponse(BaseModel):
     nozzle_temp: Optional[int] = None
     bed_temp: Optional[int] = None
     error_message: Optional[str] = None
+    plates_data: list = []
+    output_3mf: Optional[str] = None
 
 
 def parse_gcode_metadata(gcode_path: Path) -> dict:
@@ -98,6 +111,17 @@ def parse_gcode_metadata(gcode_path: Path) -> dict:
                 m = re.match(r"; bed_temperature = (\d+)", line)
                 if m:
                     result["bed_temp"] = int(m.group(1))
+
+                # Bambu Studio usa campos por tipo de placa
+                if "bed_temp" not in result:
+                    m = re.match(
+                        r";\s*(?:textured_plate_temp|hot_plate_temp|cool_plate_temp|eng_plate_temp)\s*=\s*(\d+)",
+                        line, re.IGNORECASE
+                    )
+                    if m:
+                        val = int(m.group(1))
+                        if val > 0:
+                            result["bed_temp"] = val
 
                 m = re.match(r"; layer_height = ([\d.]+)", line)
                 if m:
@@ -333,17 +357,67 @@ async def slice_model(request: SliceRequest):
                 error_message=f"OrcaSlicer error (codigo {proc.returncode}): {combined[:4000]}\n[debug parche: {patch_debug}]",
             )
 
-        # Buscar el gcode generado (OrcaSlicer nombra el output)
-        gcode_files = list(JOBS_DIR.glob(f"*{request.job_id}*.gcode"))
+        # Buscar los gcodes generados (OrcaSlicer genera plate_N.gcode por placa)
+        stem = stl_path.stem
+        gcode_files = sorted(JOBS_DIR.glob(f"*{request.job_id}*.gcode"))
         if not gcode_files:
-            stem = stl_path.stem
-            gcode_files = list(JOBS_DIR.glob(f"{stem}*.gcode"))
+            gcode_files = sorted(JOBS_DIR.glob(f"{stem}*.gcode"))
+        # Filtrar solo archivos .gcode (no .gcode.3mf)
+        gcode_files = [f for f in gcode_files if not f.name.endswith(".3mf")]
 
-        if not gcode_files:
+        # Buscar .gcode.3mf (contiene todas las placas en un ZIP)
+        output_3mf_files = list(JOBS_DIR.glob(f"*{request.job_id}*.gcode.3mf"))
+        if not output_3mf_files:
+            output_3mf_files = list(JOBS_DIR.glob(f"{stem}*.gcode.3mf"))
+        # También buscar .3mf que OrcaSlicer pueda generar como output
+        if not output_3mf_files:
+            output_3mf_files = list(JOBS_DIR.glob(f"{stem}*.3mf"))
+            output_3mf_files = [f for f in output_3mf_files if f != stl_path and f != effective_path]
+
+        if not gcode_files and not output_3mf_files:
             return SliceResponse(status="error", error_message="No se genero el G-code")
 
-        metadata = parse_gcode_metadata(gcode_files[0])
-        return SliceResponse(status="done", **metadata)
+        # Parsear cada gcode individual → plates_data
+        plates_data = []
+        for gf in gcode_files:
+            meta = parse_gcode_metadata(gf)
+            if not meta:
+                continue
+            # Extraer número de placa del nombre: plate_1, plate_2, etc.
+            plate_match = re.search(r"plate_(\d+)", gf.name, re.IGNORECASE)
+            plate_num = int(plate_match.group(1)) if plate_match else (len(plates_data) + 1)
+            meta["plate_number"] = plate_num
+            plates_data.append(meta)
+
+        # Ordenar por número de placa
+        plates_data.sort(key=lambda x: x.get("plate_number", 0))
+
+        # Campos legacy = primera placa (o agregado si hay múltiples)
+        if plates_data:
+            first = plates_data[0]
+            total_time = sum(p.get("print_time_seconds", 0) or 0 for p in plates_data)
+            total_weight = sum(p.get("filament_weight_g", 0) or 0 for p in plates_data)
+            legacy = {
+                "print_time_seconds": total_time if total_time > 0 else first.get("print_time_seconds"),
+                "filament_weight_g": round(total_weight, 2) if total_weight > 0 else first.get("filament_weight_g"),
+                "filament_type": first.get("filament_type"),
+                "layer_height_mm": first.get("layer_height_mm"),
+                "nozzle_temp": first.get("nozzle_temp"),
+                "bed_temp": first.get("bed_temp"),
+            }
+        elif gcode_files:
+            legacy = parse_gcode_metadata(gcode_files[0])
+        else:
+            legacy = {}
+
+        output_3mf = output_3mf_files[0].name if output_3mf_files else None
+
+        return SliceResponse(
+            status="done",
+            plates_data=plates_data,
+            output_3mf=output_3mf,
+            **legacy,
+        )
 
     except asyncio.TimeoutError:
         return SliceResponse(status="error", error_message="Tiempo de laminado agotado (>5 minutos)")
