@@ -139,10 +139,14 @@ def parse_gcode_metadata(gcode_path: Path) -> dict:
 
 def _patch_3mf_params(src_path: Path) -> tuple:
     """
-    Corrige valores centinela fuera de rango en config de 3MF de Bambu Studio/OrcaSlicer 2.5+.
+    Corrige valores incompatibles en 3MF de Bambu Studio para OrcaSlicer 2.3.x.
 
-    Usa regex para cubrir variaciones de formato (XML, JSON, INI) y retorna
-    informacion de depuracion sobre cuantos cambios se aplicaron.
+    Problemas que resuelve:
+    1. Valores centinela fuera de rango (raft_first_layer_expansion=-1, etc.)
+    2. Valores "nil" en JSON configs (project_settings, filament_settings) que causan
+       "Deserializing nil into a non-nullable object"
+    3. Valores "nil" en XML metadata (model_settings) como value="30,nil"
+    4. Anotaciones de pintura de triángulos (custom_supports/seam/color) incompatibles
 
     Args:
         src_path: Ruta al archivo .3mf original.
@@ -162,6 +166,7 @@ def _patch_3mf_params(src_path: Path) -> tuple:
 
     dst_path = src_path.with_name(f"patched_{src_path.name}")
     total_changes = 0
+    nil_fixes = 0
     files_text = []
 
     try:
@@ -174,19 +179,13 @@ def _patch_3mf_params(src_path: Path) -> tuple:
                 if ext not in BINARY_EXTS:
                     try:
                         text = raw.decode("utf-8")
-                        # Captura snippet de contexto alrededor del primer param para debug
-                        for param, _, _ in FIXES:
-                            idx = text.find(param)
-                            if idx >= 0:
-                                snip = text[max(0, idx - 10):idx + len(param) + 50]
-                                files_text.append(f"{item.filename}→{repr(snip)}")
-                                break
-                        else:
-                            files_text.append(item.filename)
+                        files_text.append(item.filename)
+
+                        # --- Fix 1: valores centinela fuera de rango ---
                         for param, bad, good in FIXES:
                             p = re.escape(param)
                             b = re.escape(bad)
-                            # XML value attr: param" value="bad" (con o sin espacio)
+                            # XML value attr: param" value="bad"
                             text, n = re.subn(
                                 p + r'("\s+value\s*=\s*")' + b + r'"',
                                 param + r'\g<1>' + good + '"', text)
@@ -196,7 +195,7 @@ def _patch_3mf_params(src_path: Path) -> tuple:
                                 p + r'(\s*=\s*")' + b + r'"',
                                 param + r'\g<1>' + good + '"', text)
                             total_changes += n
-                            # JSON valor string: "param": "bad"  ← formato real de project_settings.config
+                            # JSON valor string: "param": "bad"
                             text, n = re.subn(
                                 r'"' + p + r'"(\s*:\s*)"' + b + r'"',
                                 '"' + param + r'"\g<1>"' + good + '"', text)
@@ -206,16 +205,41 @@ def _patch_3mf_params(src_path: Path) -> tuple:
                                 r'"' + p + r'"(\s*:\s*)' + b + r'(?=[,}\s\n])',
                                 '"' + param + r'"\g<1>' + good, text)
                             total_changes += n
-                            # INI: param = bad  o  param=bad
+                            # INI: param = bad
                             text, n = re.subn(
                                 r'(\b' + p + r'\s*=\s*)' + b + r'(\s*(?:#|$|\n))',
                                 r'\g<1>' + good + r'\2', text)
                             total_changes += n
 
-                        # Eliminar anotaciones de pintura de triángulos (support/seam/color)
-                        # almacenadas como blobs base64 en archivos .model del 3MF.
-                        # OrcaSlicer 2.3.x no puede parsear el formato binario de
-                        # Bambu Studio/OrcaSlicer 2.5.x y crashea en calc_exclude_triangles.
+                        # --- Fix 2: "nil" en JSON configs ---
+                        # Bambu Studio 2.5+ usa "nil" como placeholder en arrays de
+                        # filament settings (retraction, temperature, z_hop, etc.).
+                        # OrcaSlicer 2.3.x no puede deserializar "nil".
+                        # Estrategia: eliminar elementos "nil" de arrays JSON.
+                        # Ej: ["200", "nil"] → ["200"]  /  ["nil","nil"] → []
+                        if item.filename.endswith(".config") and '"nil"' in text:
+                            # Reemplazar "nil" seguido de coma (o precedido por coma) en arrays
+                            before = text.count('"nil"')
+                            # Caso: "nil" como último elemento: , "nil"
+                            text = re.sub(r',\s*"nil"', '', text)
+                            # Caso: "nil" como primer elemento seguido de coma: "nil",
+                            text = re.sub(r'"nil"\s*,\s*', '', text)
+                            # Caso: "nil" como único elemento: ["nil"]  → []
+                            text = re.sub(r'"nil"', '', text)
+                            after = text.count('"nil"')
+                            nil_fixes += before - after
+
+                        # --- Fix 3: ",nil" en XML metadata values ---
+                        # model_settings.config: value="30,nil" → value="30"
+                        # El segundo valor es para un extruder no configurado.
+                        if item.filename.endswith(".config") and ",nil" in text:
+                            before_count = text.count(",nil")
+                            text = re.sub(r',nil(?=")', '', text)
+                            nil_fixes += before_count - text.count(",nil")
+
+                        # --- Fix 4: anotaciones de pintura de triángulos ---
+                        # OrcaSlicer 2.3.x no parsea el formato binario de BS 2.5.x
+                        # y crashea en calc_exclude_triangles.
                         text, n = re.subn(
                             r'<(?:\w+:)?custom_(?:supports|seam|color)\b[^/]*'
                             r'(?:/>|>[\s\S]*?</[^>]+>)',
@@ -228,7 +252,10 @@ def _patch_3mf_params(src_path: Path) -> tuple:
 
                 zout.writestr(item, raw)
 
-        debug = f"parche OK: {total_changes} cambios en {len(files_text)} archivos ({', '.join(files_text)})"
+        debug = (
+            f"parche OK: {total_changes} fixes centinela, {nil_fixes} nils eliminados "
+            f"en {len(files_text)} archivos"
+        )
         return dst_path, debug
 
     except Exception as e:
