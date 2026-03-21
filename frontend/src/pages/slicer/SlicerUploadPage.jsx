@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import api, { getSlicingJob } from '../../services/api';
 import toast from 'react-hot-toast';
+import FilamentMapperModal from '../../components/slicer/FilamentMapperModal';
 
 /** Presets de filamento de OrcaSlicer para la BambuLab P2S. */
 const FILAMENT_PRESETS = [
@@ -144,6 +145,8 @@ export default function SlicerUploadPage() {
   const [selectedFile, setSelectedFile] = useState(null);
   const fileInputRef = useRef(null);
   const pollingRef = useRef(null);
+  /** Datos para el modal de mapeo de filamentos (null = cerrado). */
+  const [mapperData, setMapperData] = useState(null);
 
   /** Extensión del archivo seleccionado (en minúsculas, con punto). */
   const fileExt = selectedFile
@@ -266,13 +269,35 @@ export default function SlicerUploadPage() {
    */
   const handleUseInCalculator = (plate = null) => {
     if (!result) return;
-    const src = plate || result;
-    const params = new URLSearchParams();
-    if (src.filament_weight_g) params.set('weight_grams', src.filament_weight_g);
-    if (src.print_time_seconds) {
-      params.set('print_time_hours', (src.print_time_seconds / 3600).toFixed(4));
+    const data = plate || result;
+    const fils = plate?.filaments || [];
+
+    if (fils.length > 0) {
+      setMapperData({ filaments: fils, printTimeSeconds: data.print_time_seconds });
+    } else {
+      const params = new URLSearchParams();
+      if (data.filament_weight_g) params.set('weight_grams', data.filament_weight_g);
+      if (data.print_time_seconds) {
+        params.set('print_time_hours', (data.print_time_seconds / 3600).toFixed(4));
+      }
+      if (data.filament_type) params.set('filament_type', data.filament_type);
+      navigate(`/cost/calculator?${params.toString()}`);
     }
-    if (src.filament_type) params.set('filament_type', src.filament_type);
+  };
+
+  /** Callback del modal: navega a la calculadora con IDs del inventario. */
+  const handleMapperConfirm = ({ primaryId, primaryWeight, extras, printTimeSeconds }) => {
+    setMapperData(null);
+    const params = new URLSearchParams();
+    params.set('inventory_item_id', primaryId);
+    params.set('weight_grams', primaryWeight);
+    if (printTimeSeconds) {
+      params.set('print_time_hours', (printTimeSeconds / 3600).toFixed(4));
+    }
+    extras.forEach((e, i) => {
+      params.set(`extra_id_${i + 1}`, e.inventory_item_id);
+      params.set(`extra_weight_${i + 1}`, e.weight_grams);
+    });
     navigate(`/cost/calculator?${params.toString()}`);
   };
 
@@ -703,6 +728,15 @@ export default function SlicerUploadPage() {
           )}
         </div>
       )}
+
+      {/* Modal de mapeo de filamentos */}
+      <FilamentMapperModal
+        open={!!mapperData}
+        onClose={() => setMapperData(null)}
+        slicerFilaments={mapperData?.filaments || []}
+        printTimeSeconds={mapperData?.printTimeSeconds}
+        onConfirm={handleMapperConfirm}
+      />
     </div>
   );
 }

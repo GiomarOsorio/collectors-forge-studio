@@ -85,6 +85,7 @@ const InventoryConsumablesPage  = lazy(() => import('./pages/inventory/Inventory
 const InventoryImportExportPage= lazy(() => import('./pages/inventory/InventoryImportExportPage'));
 const SlicerUploadPage         = lazy(() => import('./pages/slicer/SlicerUploadPage'));
 const SlicerHistoryPage        = lazy(() => import('./pages/slicer/SlicerHistoryPage'));
+const SlicerJobDetailPage      = lazy(() => import('./pages/slicer/SlicerJobDetailPage'));
 const MaintenanceDashboardPage = lazy(() => import('./pages/maintenance/MaintenanceDashboardPage'));
 const MaintenanceLogsPage      = lazy(() => import('./pages/maintenance/MaintenanceLogsPage'));
 const MaintenancePrintersPage  = lazy(() => import('./pages/maintenance/MaintenancePrintersPage'));
@@ -177,6 +178,7 @@ function AppRoutes() {
         <Route index element={<Navigate to="/slicer/upload" replace />} />
         <Route path="upload" element={<SlicerUploadPage />} />
         <Route path="history" element={<SlicerHistoryPage />} />
+        <Route path="jobs/:id" element={<SlicerJobDetailPage />} />
       </Route>
 
       {/* Aplicación Mantenimiento: historial de mantenimiento de impresoras */}

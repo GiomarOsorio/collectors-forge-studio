@@ -6,7 +6,7 @@
  * automático cada 4 segundos para detectar cuando terminan.
  *
  * Acciones disponibles por trabajo:
- * - "Calcular": pre-llena la Calculadora con los datos extraídos (solo estado 'done').
+ * - "Revisar": navega al detalle del trabajo con desglose multi-placa (solo estado 'done').
  * - Eliminar: elimina el trabajo y el archivo asociado.
  *
  * @module pages/slicer/SlicerHistoryPage
@@ -16,7 +16,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Loader, CheckCircle, AlertCircle, Clock,
-  Trash2, ArrowRight, RefreshCw,
+  Trash2, Eye, RefreshCw, Layers,
 } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
@@ -154,15 +154,9 @@ export default function SlicerHistoryPage() {
     }
   };
 
-  /** Navega a la calculadora con los datos del trabajo como URL params. */
-  const handleUseInCalculator = (job) => {
-    const params = new URLSearchParams();
-    if (job.filament_weight_g) params.set('weight_grams', job.filament_weight_g);
-    if (job.print_time_seconds) {
-      params.set('print_time_hours', (job.print_time_seconds / 3600).toFixed(4));
-    }
-    if (job.filament_type) params.set('filament_type', job.filament_type);
-    navigate(`/cost/calculator?${params.toString()}`);
+  /** Navega al detalle del trabajo. */
+  const handleReview = (job) => {
+    navigate(`/slicer/jobs/${job.id}`);
   };
 
   const totalPages = Math.ceil(total / PER_PAGE);
@@ -250,19 +244,27 @@ export default function SlicerHistoryPage() {
                       {formatTime(job.print_time_seconds)}
                     </td>
                     <td className="px-4 py-3 text-right text-steel text-sm">
-                      {job.filament_weight_g
-                        ? `${Number(job.filament_weight_g).toFixed(1)} g`
-                        : '—'}
+                      <div className="flex items-center justify-end gap-2">
+                        {job.filament_weight_g
+                          ? `${Number(job.filament_weight_g).toFixed(1)} g`
+                          : '—'}
+                        {job.plates_data?.length > 1 && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium text-amber-400 bg-amber-400/10">
+                            <Layers size={9} />
+                            {job.plates_data.length}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
                         {job.status === 'done' && (
                           <button
-                            onClick={() => handleUseInCalculator(job)}
+                            onClick={() => handleReview(job)}
                             className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-400/10 text-amber-400 border border-amber-400/20 hover:bg-amber-400/20 transition-colors text-xs font-medium whitespace-nowrap"
                           >
-                            <ArrowRight size={12} />
-                            Calcular
+                            <Eye size={12} />
+                            Revisar
                           </button>
                         )}
                         <button
