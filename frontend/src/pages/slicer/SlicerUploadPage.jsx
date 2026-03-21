@@ -18,6 +18,7 @@ import {
 import api, { getSlicingJob } from '../../services/api';
 import toast from 'react-hot-toast';
 import FilamentMapperModal from '../../components/slicer/FilamentMapperModal';
+import GcodeViewerDialog from '../../components/slicer/GcodeViewerDialog';
 
 /** Presets de filamento de OrcaSlicer para la BambuLab P2S. */
 const FILAMENT_PRESETS = [
@@ -147,6 +148,8 @@ export default function SlicerUploadPage() {
   const pollingRef = useRef(null);
   /** Datos para el modal de mapeo de filamentos (null = cerrado). */
   const [mapperData, setMapperData] = useState(null);
+  /** Placa a visualizar en 3D (null = cerrado). */
+  const [viewerPlate, setViewerPlate] = useState(null);
 
   /** Extensión del archivo seleccionado (en minúsculas, con punto). */
   const fileExt = selectedFile
@@ -688,12 +691,23 @@ export default function SlicerUploadPage() {
                           </div>
 
                           {/* Botón usar placa en calculadora */}
-                          <button
-                            onClick={() => handleUseInCalculator(plate)}
-                            className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs text-amber-400/80 hover:text-amber-400 border border-[#1e2125] hover:border-amber-400/30 hover:bg-amber-400/5 transition-colors"
-                          >
-                            Usar placa {plate.plate_number} <ArrowRight size={12} />
-                          </button>
+                          <div className="flex gap-2">
+                            {result?.id && (
+                              <button
+                                onClick={() => setViewerPlate(plate.plate_number)}
+                                className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs text-steel hover:text-tech-white border border-[#1e2125] hover:border-[#3a3d41] hover:bg-[#1a1d21] transition-colors"
+                                title="Vista 3D"
+                              >
+                                3D
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleUseInCalculator(plate)}
+                              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs text-amber-400/80 hover:text-amber-400 border border-[#1e2125] hover:border-amber-400/30 hover:bg-amber-400/5 transition-colors"
+                            >
+                              Usar placa {plate.plate_number} <ArrowRight size={12} />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -733,6 +747,14 @@ export default function SlicerUploadPage() {
           )}
         </div>
       )}
+
+      {/* Visor 3D de placa */}
+      <GcodeViewerDialog
+        open={viewerPlate !== null}
+        onClose={() => setViewerPlate(null)}
+        jobId={result?.id}
+        plateNumber={viewerPlate}
+      />
 
       {/* Modal de mapeo de filamentos */}
       <FilamentMapperModal

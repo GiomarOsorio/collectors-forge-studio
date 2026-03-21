@@ -29,7 +29,7 @@ from typing import List, Optional
 logger = logging.getLogger(__name__)
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, File, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, UploadFile, File, Query, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -677,6 +677,60 @@ async def get_job(
     """
     job = await _get_company_slicing_job(db, job_id, current_user.company_id)
     return SlicingJobResponse.model_validate(job)
+
+
+@router.get("/jobs/{job_id}/plate/{plate_number}/gcode")
+async def get_plate_gcode(
+    job_id: int,
+    plate_number: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Extrae y sirve el G-code de una placa específica desde el .3mf guardado.
+
+    Busca el archivo job{id}_*.3mf en /slicer_jobs/, abre el ZIP y extrae
+    Metadata/plate_{N}.gcode. Retorna el texto G-code como text/plain.
+
+    Args:
+        job_id:       ID del trabajo de laminado.
+        plate_number: Número de placa (1-based).
+        db:           Sesión de base de datos.
+        current_user: Usuario autenticado.
+
+    Returns:
+        Response con el contenido G-code como text/plain.
+    """
+    await _get_company_slicing_job(db, job_id, current_user.company_id)
+
+    # Buscar el archivo .3mf del job
+    archivos = list(SLICER_JOBS_DIR.glob(f"job{job_id}_*.3mf"))
+    if not archivos:
+        raise HTTPException(status_code=404, detail="Archivo .3mf no encontrado en disco")
+
+    archivo_3mf = archivos[0]
+    gcode_nombres = [
+        f"Metadata/plate_{plate_number}.gcode",
+        f"plate_{plate_number}.gcode",
+    ]
+
+    try:
+        with zipfile.ZipFile(str(archivo_3mf), "r") as zf:
+            for nombre in gcode_nombres:
+                if nombre in zf.namelist():
+                    contenido = zf.read(nombre).decode("utf-8", errors="replace")
+                    return Response(
+                        content=contenido,
+                        media_type="text/plain",
+                        headers={"Cache-Control": "public, max-age=3600"},
+                    )
+    except (zipfile.BadZipFile, OSError) as e:
+        raise HTTPException(status_code=500, detail=f"Error al leer el archivo: {e}")
+
+    raise HTTPException(
+        status_code=404,
+        detail=f"G-code de placa {plate_number} no encontrado en el archivo",
+    )
 
 
 @router.delete("/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
