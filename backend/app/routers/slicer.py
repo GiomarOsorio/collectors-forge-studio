@@ -266,12 +266,43 @@ async def _run_orca_slicer(
                 return
             if data.get("status") == "done":
                 job.status = "done"
-                job.print_time_seconds = data.get("print_time_seconds")
-                job.filament_weight_g = data.get("filament_weight_g")
-                job.filament_type = data.get("filament_type")
-                job.layer_height_mm = data.get("layer_height_mm")
-                job.nozzle_temp = data.get("nozzle_temp")
-                job.bed_temp = data.get("bed_temp")
+
+                # Multi-placa: intentar parsear .gcode.3mf del volumen compartido
+                # (datos más ricos: colores, objetos, filamentos por placa)
+                output_3mf = data.get("output_3mf")
+                plates = []
+                if output_3mf:
+                    output_path = SLICER_JOBS_DIR / output_3mf
+                    if output_path.exists():
+                        plates = parse_3mf_all_plates(str(output_path))
+
+                if plates:
+                    # Usar datos ricos del .gcode.3mf
+                    job.plates_data = _plates_to_jsonb(plates)
+                    agg = _aggregate_plates(plates)
+                    job.print_time_seconds = agg["print_time_seconds"]
+                    job.filament_weight_g = agg["filament_weight_g"]
+                    job.filament_type = agg["filament_type"]
+                    job.layer_height_mm = agg["layer_height_mm"]
+                    job.nozzle_temp = agg["nozzle_temp"]
+                    job.bed_temp = agg["bed_temp"]
+                elif data.get("plates_data"):
+                    # Usar plates_data del microservicio (gcodes individuales)
+                    job.plates_data = data["plates_data"]
+                    job.print_time_seconds = data.get("print_time_seconds")
+                    job.filament_weight_g = data.get("filament_weight_g")
+                    job.filament_type = data.get("filament_type")
+                    job.layer_height_mm = data.get("layer_height_mm")
+                    job.nozzle_temp = data.get("nozzle_temp")
+                    job.bed_temp = data.get("bed_temp")
+                else:
+                    # Fallback: datos legacy simples (una sola placa)
+                    job.print_time_seconds = data.get("print_time_seconds")
+                    job.filament_weight_g = data.get("filament_weight_g")
+                    job.filament_type = data.get("filament_type")
+                    job.layer_height_mm = data.get("layer_height_mm")
+                    job.nozzle_temp = data.get("nozzle_temp")
+                    job.bed_temp = data.get("bed_temp")
             else:
                 job.status = "error"
                 job.error_message = data.get("error_message", "Error desconocido en OrcaSlicer")
