@@ -270,7 +270,12 @@ export default function SlicerUploadPage() {
   const handleUseInCalculator = (plate = null) => {
     if (!result) return;
     const data = plate || result;
-    const fils = plate?.filaments || [];
+
+    // Filamentos: de la placa específica, o todos los de todas las placas
+    let fils = plate?.filaments || [];
+    if (!plate && result.plates_data?.length > 0) {
+      fils = result.plates_data.flatMap((p) => p.filaments || []);
+    }
 
     if (fils.length > 0) {
       setMapperData({ filaments: fils, printTimeSeconds: data.print_time_seconds });

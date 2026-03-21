@@ -1,14 +1,15 @@
 /**
  * @file Modal para mapear filamentos del slicer a filamentos del inventario.
  *
- * Recibe los filamentos detectados en un archivo/placa y los mapea
- * automáticamente por tipo (filament_type) contra el inventario.
- * Si alguno no tiene match, permite selección manual con dropdown.
+ * Recibe los filamentos detectados en un archivo/placa, los agrupa por
+ * tipo+color (sumando pesos de placas distintas), y los mapea contra el
+ * inventario. Auto-match por filament_type; si alguno no matchea, permite
+ * selección manual con dropdown.
  *
  * @module components/slicer/FilamentMapperModal
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { X, AlertTriangle, Check, Loader2 } from 'lucide-react';
 import { getInventoryFilaments } from '../../services/api';
 import toast from 'react-hot-toast';
@@ -25,6 +26,24 @@ function filamentLabel(item) {
 }
 
 /**
+ * Agrupa filamentos por tipo+color, sumando pesos.
+ *
+ * @param {Array} filaments - [{filament_type, colour_hex, weight_g}]
+ * @returns {Array} [{filament_type, colour_hex, weight_g (sumado), key}]
+ */
+function groupFilaments(filaments) {
+  const map = {};
+  filaments.forEach((f) => {
+    const key = `${(f.filament_type || '').toLowerCase()}|${(f.colour_hex || '').toLowerCase()}`;
+    if (!map[key]) {
+      map[key] = { ...f, weight_g: 0, key };
+    }
+    map[key].weight_g += f.weight_g || 0;
+  });
+  return Object.values(map);
+}
+
+/**
  * Modal de mapeo de filamentos del slicer al inventario.
  *
  * @param {Object} props
@@ -32,13 +51,16 @@ function filamentLabel(item) {
  * @param {Function} props.onClose - Callback al cerrar
  * @param {Array} props.slicerFilaments - Filamentos detectados [{filament_type, colour_hex, weight_g}]
  * @param {number|null} props.printTimeSeconds - Tiempo total de impresión
- * @param {Function} props.onConfirm - Callback con datos mapeados ({primaryId, primaryWeight, extras[], printTimeSeconds})
+ * @param {Function} props.onConfirm - Callback con datos mapeados
  */
 export default function FilamentMapperModal({ open, onClose, slicerFilaments, printTimeSeconds, onConfirm }) {
   const [inventoryFilaments, setInventoryFilaments] = useState([]);
   const [loading, setLoading] = useState(true);
-  /** Mapeo: índice del slicerFilament → inventory_item_id seleccionado */
+  /** Mapeo: key del grupo → inventory_item_id seleccionado */
   const [mapping, setMapping] = useState({});
+
+  /** Filamentos agrupados por tipo+color con pesos sumados. */
+  const grouped = useMemo(() => groupFilaments(slicerFilaments || []), [slicerFilaments]);
 
   useEffect(() => {
     if (!open) return;
@@ -50,40 +72,42 @@ export default function FilamentMapperModal({ open, onClose, slicerFilaments, pr
 
         // Auto-match por filament_type
         const autoMap = {};
-        slicerFilaments.forEach((sf, i) => {
+        grouped.forEach((gf) => {
           const match = items.find(
-            (inv) => (inv.filament_type || '').toLowerCase() === (sf.filament_type || '').toLowerCase(),
+            (inv) => (inv.filament_type || '').toLowerCase() === (gf.filament_type || '').toLowerCase(),
           );
-          if (match) autoMap[i] = match.id;
-          else autoMap[i] = '';
+          autoMap[gf.key] = match ? String(match.id) : '';
         });
         setMapping(autoMap);
       })
       .catch(() => toast.error('Error cargando filamentos del inventario'))
       .finally(() => setLoading(false));
-  }, [open, slicerFilaments]);
+  }, [open, grouped]);
 
   if (!open) return null;
 
-  const unmapped = slicerFilaments.filter((_, i) => !mapping[i]);
-  const allMapped = unmapped.length === 0 && !loading;
+  const unmappedCount = grouped.filter((gf) => !mapping[gf.key]).length;
+  const allMapped = unmappedCount === 0 && !loading;
 
   const handleConfirm = () => {
-    // Ordenar por peso (mayor primero) para elegir el principal
-    const sorted = slicerFilaments
-      .map((sf, i) => ({ ...sf, inventoryId: parseInt(mapping[i]), idx: i }))
-      .filter((sf) => sf.inventoryId)
-      .sort((a, b) => (b.weight_g || 0) - (a.weight_g || 0));
+    const mapped = grouped
+      .map((gf) => ({
+        inventoryId: parseInt(mapping[gf.key]),
+        weight_g: gf.weight_g,
+        filament_type: gf.filament_type,
+      }))
+      .filter((m) => m.inventoryId)
+      .sort((a, b) => b.weight_g - a.weight_g);
 
-    if (sorted.length === 0) {
+    if (mapped.length === 0) {
       toast.error('Selecciona al menos un filamento');
       return;
     }
 
-    const primary = sorted[0];
-    const extras = sorted.slice(1).map((s) => ({
-      inventory_item_id: s.inventoryId,
-      weight_grams: s.weight_g || 0,
+    const primary = mapped[0];
+    const extras = mapped.slice(1).map((m) => ({
+      inventory_item_id: m.inventoryId,
+      weight_grams: m.weight_g || 0,
     }));
 
     onConfirm({
@@ -114,24 +138,22 @@ export default function FilamentMapperModal({ open, onClose, slicerFilaments, pr
             </div>
           ) : (
             <>
-              {/* Aviso si hay filamentos sin match */}
-              {unmapped.length > 0 && (
+              {unmappedCount > 0 && (
                 <div className="flex items-start gap-2 bg-amber-400/5 border border-amber-400/20 rounded-lg px-4 py-3">
                   <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
                   <p className="text-amber-400/90 text-xs">
-                    {unmapped.length} filamento{unmapped.length > 1 ? 's' : ''} no pudo ser mapeado automáticamente.
-                    Selecciona el filamento del inventario manualmente.
+                    {unmappedCount} filamento{unmappedCount > 1 ? 's' : ''} no pudo ser mapeado
+                    automáticamente. Selecciona del inventario manualmente.
                   </p>
                 </div>
               )}
 
-              {/* Lista de filamentos a mapear */}
               <div className="space-y-3">
-                {slicerFilaments.map((sf, i) => {
-                  const isMapped = !!mapping[i];
+                {grouped.map((gf) => {
+                  const isMapped = !!mapping[gf.key];
                   return (
                     <div
-                      key={i}
+                      key={gf.key}
                       className={`rounded-lg border p-4 space-y-2 ${
                         isMapped
                           ? 'border-[#1e2125] bg-[#0d1014]'
@@ -142,14 +164,14 @@ export default function FilamentMapperModal({ open, onClose, slicerFilaments, pr
                       <div className="flex items-center gap-2">
                         <div
                           className="w-4 h-4 rounded-full border border-[#3a3d41] shrink-0"
-                          style={{ backgroundColor: sf.colour_hex || '#888' }}
+                          style={{ backgroundColor: gf.colour_hex || '#888' }}
                         />
                         <span className="text-tech-white text-sm font-medium">
-                          {sf.filament_type || '—'}
+                          {gf.filament_type || '—'}
                         </span>
-                        <span className="text-gunmetal text-xs">{sf.colour_hex}</span>
+                        <span className="text-gunmetal text-xs">{gf.colour_hex}</span>
                         <span className="text-steel text-xs ml-auto font-mono">
-                          {(sf.weight_g || 0).toFixed(1)} g
+                          {gf.weight_g.toFixed(1)} g
                         </span>
                       </div>
 
@@ -157,15 +179,15 @@ export default function FilamentMapperModal({ open, onClose, slicerFilaments, pr
                       <div className="flex items-center gap-2">
                         {isMapped && <Check size={14} className="text-emerald-400 shrink-0" />}
                         <select
-                          value={mapping[i] || ''}
-                          onChange={(e) => setMapping({ ...mapping, [i]: e.target.value })}
+                          value={mapping[gf.key] || ''}
+                          onChange={(e) => setMapping({ ...mapping, [gf.key]: e.target.value })}
                           className="tf-input text-sm py-1.5 flex-1"
                         >
                           <option value="">— Seleccionar del inventario —</option>
                           {inventoryFilaments.map((inv) => (
                             <option key={inv.id} value={inv.id}>
                               {filamentLabel(inv)}
-                              {inv.quantity != null ? ` (${inv.quantity} disponible)` : ''}
+                              {inv.quantity != null ? ` (${Number(inv.quantity).toFixed(0)}g)` : ''}
                             </option>
                           ))}
                         </select>
