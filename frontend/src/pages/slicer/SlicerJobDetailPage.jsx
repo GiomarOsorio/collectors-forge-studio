@@ -62,13 +62,16 @@ export default function SlicerJobDetailPage() {
    */
   const goToCalc = (plate = null) => {
     const data = plate || job;
-    const fils = plate?.filaments || allFilaments.length > 0 ? (plate?.filaments || []) : [];
+
+    // Filamentos: de la placa específica, o todos los de todas las placas
+    let fils = plate?.filaments || [];
+    if (!plate && job.plates_data?.length > 0) {
+      fils = job.plates_data.flatMap((p) => p.filaments || []);
+    }
 
     if (fils.length > 0) {
-      // Abrir modal de mapeo
       setMapperData({ filaments: fils, printTimeSeconds: data.print_time_seconds });
     } else {
-      // Sin detalle de filamentos → navegación directa con URL params
       const params = new URLSearchParams();
       if (data.filament_weight_g) params.set('weight_grams', data.filament_weight_g);
       if (data.print_time_seconds) {
