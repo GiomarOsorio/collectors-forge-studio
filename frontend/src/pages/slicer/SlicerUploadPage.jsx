@@ -75,7 +75,7 @@ const NOZZLE_CONFIGS = {
 const SLICEABLE_EXTS = new Set(['.3mf', '.stl', '.step', '.stp', '.obj', '.amf']);
 
 /** Todas las extensiones aceptadas (para el atributo accept del input). */
-const ACCEPTED_EXTS = '.gcode,.3mf,.stl,.step,.stp,.obj,.amf';
+const ACCEPTED_EXTS = '.gcode,.gcode.3mf,.3mf,.stl,.step,.stp,.obj,.amf';
 
 /** Definición de las pestañas de entrada. */
 const TABS = [
@@ -150,8 +150,13 @@ export default function SlicerUploadPage() {
     ? selectedFile.name.slice(selectedFile.name.lastIndexOf('.')).toLowerCase()
     : null;
 
+  /** True si el archivo es .gcode.3mf (ya laminado por BambuStudio). */
+  const isGcode3mf = selectedFile
+    ? selectedFile.name.toLowerCase().endsWith('.gcode.3mf')
+    : false;
+
   /** True si el archivo seleccionado requiere laminado con OrcaSlicer. */
-  const needsSlicing = fileExt !== null && SLICEABLE_EXTS.has(fileExt);
+  const needsSlicing = fileExt !== null && SLICEABLE_EXTS.has(fileExt) && !isGcode3mf;
 
   /** Detiene el polling activo si existe. */
   const stopPolling = () => {
@@ -309,6 +314,7 @@ export default function SlicerUploadPage() {
               <h2 className="text-tech-white font-semibold mb-1">Subir archivo</h2>
               <p className="text-gunmetal text-sm">
                 <code className="text-amber-400 bg-amber-400/10 px-1 rounded">.gcode</code>{' '}
+                <code className="text-amber-400 bg-amber-400/10 px-1 rounded">.gcode.3mf</code>{' '}
                 extrae metadatos · el resto se lamina con OrcaSlicer:{' '}
                 {['.3mf', '.stl', '.step', '.stp', '.obj', '.amf'].map((ext) => (
                   <code key={ext} className="text-amber-400 bg-amber-400/10 px-1 rounded mx-0.5">{ext}</code>
