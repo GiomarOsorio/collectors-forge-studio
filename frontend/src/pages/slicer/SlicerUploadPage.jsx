@@ -13,7 +13,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Upload, Link, FileCode, CheckCircle, AlertCircle,
-  Clock, Loader, Box,
+  Clock, Loader, Box, Layers, ArrowRight,
 } from 'lucide-react';
 import api, { getSlicingJob } from '../../services/api';
 import toast from 'react-hot-toast';
@@ -257,15 +257,22 @@ export default function SlicerUploadPage() {
     }
   };
 
-  /** Navega a la calculadora pre-llenando los campos con los datos extraídos. */
-  const handleUseInCalculator = () => {
+  /** True si la respuesta tiene desglose multi-placa. */
+  const hasPlates = result?.plates_data?.length > 1;
+
+  /**
+   * Navega a la calculadora pre-llenando los campos.
+   * Si se pasa una placa específica, usa sus datos; si no, usa los totales.
+   */
+  const handleUseInCalculator = (plate = null) => {
     if (!result) return;
+    const src = plate || result;
     const params = new URLSearchParams();
-    if (result.filament_weight_g) params.set('weight_grams', result.filament_weight_g);
-    if (result.print_time_seconds) {
-      params.set('print_time_hours', (result.print_time_seconds / 3600).toFixed(4));
+    if (src.filament_weight_g) params.set('weight_grams', src.filament_weight_g);
+    if (src.print_time_seconds) {
+      params.set('print_time_hours', (src.print_time_seconds / 3600).toFixed(4));
     }
-    if (result.filament_type) params.set('filament_type', result.filament_type);
+    if (src.filament_type) params.set('filament_type', src.filament_type);
     navigate(`/cost/calculator?${params.toString()}`);
   };
 
@@ -490,13 +497,14 @@ export default function SlicerUploadPage() {
           {/* Metadatos extraídos */}
           {result.status === 'done' && (
             <>
+              {/* Totales generales */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
                 <div className="bg-[#0d1014] rounded-lg p-4">
-                  <p className="text-gunmetal text-xs mb-1">Tiempo de impresión</p>
+                  <p className="text-gunmetal text-xs mb-1">Tiempo total</p>
                   <p className="text-tech-white font-semibold text-sm">{formatTime(result.print_time_seconds)}</p>
                 </div>
                 <div className="bg-[#0d1014] rounded-lg p-4">
-                  <p className="text-gunmetal text-xs mb-1">Peso de filamento</p>
+                  <p className="text-gunmetal text-xs mb-1">Peso total</p>
                   <p className="text-tech-white font-semibold text-sm">
                     {result.filament_weight_g
                       ? `${Number(result.filament_weight_g).toFixed(2)} g`
@@ -504,7 +512,7 @@ export default function SlicerUploadPage() {
                   </p>
                 </div>
                 <div className="bg-[#0d1014] rounded-lg p-4">
-                  <p className="text-gunmetal text-xs mb-1">Tipo de filamento</p>
+                  <p className="text-gunmetal text-xs mb-1">Filamento</p>
                   <p className="text-tech-white font-semibold text-sm">{result.filament_type || '—'}</p>
                 </div>
                 {result.layer_height_mm && (
@@ -527,11 +535,148 @@ export default function SlicerUploadPage() {
                 )}
               </div>
 
+              {/* Desglose multi-placa */}
+              {hasPlates && (
+                <div className="mb-6 space-y-4">
+                  {/* Filamentos detectados */}
+                  {(() => {
+                    const allFilaments = result.plates_data.flatMap((p) =>
+                      (p.filaments || []).map((f) => ({ ...f, plate: p.plate_number }))
+                    );
+                    const grouped = {};
+                    allFilaments.forEach((f) => {
+                      const key = `${f.filament_type}|${f.colour_hex}`;
+                      if (!grouped[key]) {
+                        grouped[key] = { ...f, total_weight_g: 0, plates: [] };
+                      }
+                      grouped[key].total_weight_g += f.weight_g || 0;
+                      if (!grouped[key].plates.includes(f.plate)) {
+                        grouped[key].plates.push(f.plate);
+                      }
+                    });
+                    const filaments = Object.values(grouped);
+                    if (filaments.length === 0) return null;
+
+                    return (
+                      <div>
+                        <h4 className="text-steel text-xs font-medium uppercase tracking-wider mb-3">
+                          Filamentos detectados
+                        </h4>
+                        <div className="space-y-2">
+                          {filaments.map((f, i) => (
+                            <div key={i} className="flex items-center gap-3 bg-[#0d1014] rounded-lg px-4 py-3">
+                              <div
+                                className="w-4 h-4 rounded-full border border-[#3a3d41] shrink-0"
+                                style={{ backgroundColor: f.colour_hex || '#888' }}
+                                title={f.colour_hex}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <span className="text-tech-white text-sm font-medium">
+                                  {f.filament_type || '—'}
+                                </span>
+                                <span className="text-gunmetal text-xs ml-2">{f.colour_hex}</span>
+                              </div>
+                              <span className="text-steel text-sm font-mono">
+                                {f.total_weight_g.toFixed(1)} g
+                              </span>
+                              <span className="text-gunmetal text-xs">
+                                {f.plates.length === 1
+                                  ? `placa ${f.plates[0]}`
+                                  : `${f.plates.length} placas`}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Cards por placa */}
+                  <div>
+                    <h4 className="text-steel text-xs font-medium uppercase tracking-wider mb-3">
+                      {result.plates_data.length} placas encontradas
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {result.plates_data.map((plate) => (
+                        <div
+                          key={plate.plate_number}
+                          className="bg-[#0d1014] border border-[#1e2125] rounded-lg p-4 space-y-3"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Layers size={14} className="text-amber-400" />
+                              <span className="text-tech-white font-semibold text-sm">
+                                Placa {plate.plate_number}
+                              </span>
+                            </div>
+                            {plate.filaments?.length > 0 && (
+                              <div className="flex items-center gap-1">
+                                {plate.filaments.map((f, i) => (
+                                  <div
+                                    key={i}
+                                    className="w-3 h-3 rounded-full border border-[#3a3d41]"
+                                    style={{ backgroundColor: f.colour_hex || '#888' }}
+                                    title={`${f.filament_type} ${f.colour_hex}`}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Objetos de la placa */}
+                          {plate.objects?.length > 0 && (
+                            <p className="text-gunmetal text-xs truncate" title={plate.objects.join(', ')}>
+                              {plate.objects.join(', ')}
+                            </p>
+                          )}
+
+                          {/* Datos de la placa */}
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <span className="text-gunmetal">Tiempo</span>
+                              <p className="text-steel font-medium">{formatTime(plate.print_time_seconds)}</p>
+                            </div>
+                            <div>
+                              <span className="text-gunmetal">Peso</span>
+                              <p className="text-steel font-medium">
+                                {plate.filament_weight_g
+                                  ? `${Number(plate.filament_weight_g).toFixed(1)} g`
+                                  : '—'}
+                              </p>
+                            </div>
+                            {plate.filaments?.length > 0 && plate.filaments.map((f, i) => (
+                              <div key={i} className="col-span-2 flex items-center gap-2">
+                                <div
+                                  className="w-2.5 h-2.5 rounded-full border border-[#3a3d41]"
+                                  style={{ backgroundColor: f.colour_hex || '#888' }}
+                                />
+                                <span className="text-gunmetal">
+                                  {f.filament_type} — {f.weight_g?.toFixed(1) || '?'} g
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Botón usar placa en calculadora */}
+                          <button
+                            onClick={() => handleUseInCalculator(plate)}
+                            className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs text-amber-400/80 hover:text-amber-400 border border-[#1e2125] hover:border-amber-400/30 hover:bg-amber-400/5 transition-colors"
+                          >
+                            Usar placa {plate.plate_number} <ArrowRight size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Botón total */}
               <button
-                onClick={handleUseInCalculator}
+                onClick={() => handleUseInCalculator()}
                 className="w-full py-3 rounded-lg bg-amber-400/15 text-amber-400 border border-amber-400/30 hover:bg-amber-400/25 transition-colors font-medium text-sm"
               >
-                Usar en Calculadora →
+                {hasPlates ? 'Usar total en Calculadora →' : 'Usar en Calculadora →'}
               </button>
             </>
           )}
