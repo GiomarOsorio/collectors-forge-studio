@@ -16,7 +16,11 @@ import zipfile
 from pathlib import Path
 from typing import Optional
 
-import trimesh
+try:
+    import lib3mf
+    HAS_LIB3MF = True
+except ImportError:
+    HAS_LIB3MF = False
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -318,20 +322,143 @@ def _es_proyecto_bs(src_path: Path) -> bool:
         return False
 
 
+def _reexport_3mf_lib3mf(src_path: Path, dst_path: Path) -> tuple:
+    """
+    Re-exporta un .3mf usando lib3mf (C++, oficial del consorcio 3MF).
+
+    Lee todos los mesh objects del 3MF original (incluyendo los referenciados
+    por <components> de la extensión de producción) y los escribe en un 3MF
+    nuevo con solo geometría estándar. Esto elimina toda traza de BambuStudio.
+
+    Returns:
+        Tupla (ruta_limpia_o_None, mensaje_debug).
+    """
+    try:
+        wrapper = lib3mf.get_wrapper()
+        src_model = wrapper.CreateModel()
+        reader = src_model.QueryReader("3mf")
+        reader.SetStrictModeActive(False)
+        reader.ReadFromFile(str(src_path))
+
+        dst_model = wrapper.CreateModel()
+        mesh_it = src_model.GetMeshObjects()
+        mesh_count = 0
+        total_tris = 0
+
+        while mesh_it.MoveNext():
+            src_mesh = mesh_it.GetCurrentMeshObject()
+            vert_count = src_mesh.GetVertexCount()
+            tri_count = src_mesh.GetTriangleCount()
+
+            if vert_count == 0 or tri_count == 0:
+                continue
+
+            dst_mesh = dst_model.AddMeshObject()
+            dst_mesh.SetName(src_mesh.GetName() or f"mesh_{mesh_count}")
+
+            # Copiar vértices
+            for i in range(vert_count):
+                v = src_mesh.GetVertex(i)
+                dst_mesh.AddVertex(v)
+
+            # Copiar triángulos
+            for i in range(tri_count):
+                t = src_mesh.GetTriangle(i)
+                dst_mesh.AddTriangle(t)
+
+            # Agregar como build item con transform identidad
+            dst_model.AddBuildItem(dst_mesh, wrapper.GetIdentityTransform())
+
+            mesh_count += 1
+            total_tris += tri_count
+
+        if mesh_count == 0:
+            return None, "lib3mf: 0 meshes encontrados"
+
+        writer = dst_model.QueryWriter("3mf")
+        writer.WriteToFile(str(dst_path))
+
+        return dst_path, (
+            f"lib3mf re-export: {mesh_count} meshes, "
+            f"{total_tris:,} triángulos → 3MF limpio"
+        )
+
+    except Exception as e:
+        if dst_path.exists():
+            dst_path.unlink()
+        return None, f"lib3mf falló: {e}"
+
+
+def _strip_3mf_manual(src_path: Path, dst_path: Path) -> tuple:
+    """
+    Fallback: limpieza manual por ZIP del 3MF de BambuStudio.
+
+    Mantiene solo archivos de geometría (3D/, [Content_Types], _rels/) y
+    limpia XML de namespaces/metadata de BS. No resuelve <components> pero
+    OrcaSlicer puede cargar la geometría con la extensión de producción.
+
+    Returns:
+        Tupla (ruta_limpia_o_None, mensaje_debug).
+    """
+    KEEP_PREFIXES = ("[Content_Types].xml", "_rels/", "3D/")
+    SKIP_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
+    kept = []
+
+    try:
+        with zipfile.ZipFile(src_path, "r") as zin, \
+             zipfile.ZipFile(dst_path, "w", zipfile.ZIP_DEFLATED) as zout:
+            for item in zin.infolist():
+                if not any(item.filename.startswith(p) for p in KEEP_PREFIXES):
+                    continue
+                ext = Path(item.filename).suffix.lower()
+                if ext in SKIP_EXTS:
+                    continue
+                raw = zin.read(item.filename)
+                if item.filename.endswith(".model"):
+                    try:
+                        text = raw.decode("utf-8")
+                        # Limpiar custom_supports/seam/color paint data
+                        text = re.sub(
+                            r'<(?:\w+:)?custom_(?:supports|seam|color)\b[^/]*'
+                            r'(?:/>|>[\s\S]*?</[^>]+>)',
+                            '', text, flags=re.IGNORECASE)
+                        if item.filename == "3D/3dmodel.model":
+                            # Quitar metadata BambuStudio
+                            text = re.sub(
+                                r'\s*<metadata\s+name="[^"]*[Bb]ambu[^"]*">[^<]*</metadata>',
+                                '', text)
+                            text = re.sub(
+                                r'\s*<metadata\s+name="Application">[^<]*</metadata>',
+                                '', text)
+                            # Quitar namespace BambuStudio del tag <model>
+                            text = re.sub(
+                                r'\s+xmlns:BambuStudio="[^"]*"', '', text)
+                            # Quitar requiredextensions
+                            text = re.sub(
+                                r'\s+requiredextensions="[^"]*"', '', text,
+                                flags=re.IGNORECASE)
+                        raw = text.encode("utf-8")
+                    except (UnicodeDecodeError, TypeError):
+                        pass
+                zout.writestr(item, raw)
+                kept.append(item.filename)
+
+        return dst_path, (
+            f"manual strip: {len(kept)} archivos (solo geometría, sin Metadata BS)"
+        )
+
+    except Exception as e:
+        if dst_path.exists():
+            dst_path.unlink()
+        return None, f"manual strip falló: {e}"
+
+
 def _strip_3mf_to_geometry(src_path: Path) -> tuple:
     """
-    Re-exporta un .3mf de BambuStudio como 3MF limpio usando trimesh.
+    Crea un 3MF limpio de un proyecto BambuStudio.
 
-    En vez de manipular el XML manualmente (que deja restos de estructura BS
-    como xmlns:p, <components>, UUIDs, etc.), carga toda la geometría con
-    trimesh y la re-exporta como 3MF estándar. Esto produce un archivo que
-    OrcaSlicer puede leer sin entrar en modo "proyecto BS".
-
-    trimesh resuelve las referencias <components>, aplica transforms, y
-    produce un 3MF con solo <mesh> + <build> estándar.
-
-    Pierde: asignaciones de placa, multi-extruder, configs de proyecto.
-    Gana: OrcaSlicer puede laminar sin crash.
+    Intenta lib3mf (C++, re-export completo) y si falla usa limpieza manual
+    por ZIP como fallback.
 
     Args:
         src_path: Ruta al archivo .3mf original.
@@ -341,42 +468,16 @@ def _strip_3mf_to_geometry(src_path: Path) -> tuple:
     """
     dst_path = src_path.with_name(f"clean_{src_path.name}")
 
-    try:
-        # Cargar como Scene para preservar todos los objetos individuales.
-        # postprocess=False evita que trimesh fusione meshes con nombres
-        # similares (comportamiento de SolidWorks, no deseado para BS).
-        scene = trimesh.load(
-            str(src_path),
-            file_type="3mf",
-            force="scene",
-            process=False,
-        )
+    # Intentar lib3mf primero (re-export completo, sin restos de BS)
+    if HAS_LIB3MF:
+        result, debug = _reexport_3mf_lib3mf(src_path, dst_path)
+        if result:
+            return result, debug
+        # lib3mf falló, intentar fallback manual
+        print(f"[SLICER] {debug}, intentando fallback manual...", flush=True)
 
-        # Contar geometría para debug
-        mesh_count = 0
-        total_faces = 0
-        for name, geom in scene.geometry.items():
-            if hasattr(geom, "faces"):
-                mesh_count += 1
-                total_faces += len(geom.faces)
-
-        if mesh_count == 0:
-            return None, "trimesh: 0 meshes encontrados en el 3MF"
-
-        # Re-exportar como 3MF estándar (solo geometría + build items)
-        exported = scene.export(file_type="3mf")
-        dst_path.write_bytes(exported)
-
-        debug = (
-            f"trimesh re-export: {mesh_count} meshes, "
-            f"{total_faces:,} triángulos → 3MF limpio"
-        )
-        return dst_path, debug
-
-    except Exception as e:
-        if dst_path.exists():
-            dst_path.unlink()
-        return None, f"trimesh re-export falló: {e}"
+    # Fallback: limpieza manual por ZIP
+    return _strip_3mf_manual(src_path, dst_path)
 
 
 @app.get("/health")
@@ -450,14 +551,14 @@ async def slice_model(request: SliceRequest):
     if stl_path.suffix.lower() == ".3mf":
         if _es_proyecto_bs(stl_path):
             # Proyecto BS sin gcode: OrcaSlicer no puede cargar la estructura de
-            # proyecto BS 2.5.x (0 objects, crash). Re-exportamos con trimesh
-            # para obtener un 3MF limpio. Se ejecuta en thread para no bloquear
-            # el event loop de uvicorn (puede tardar minutos en archivos grandes).
-            print(f"[SLICER] proyecto BS detectado, iniciando re-export con trimesh...", flush=True)
+            # proyecto BS 2.5.x (0 objects, crash). Re-exportamos con lib3mf
+            # (o fallback manual) para obtener un 3MF limpio. Se ejecuta en
+            # thread para no bloquear el event loop de uvicorn.
+            print(f"[SLICER] proyecto BS detectado, iniciando re-export...", flush=True)
             cleaned, patch_debug = await asyncio.to_thread(
                 _strip_3mf_to_geometry, stl_path
             )
-            print(f"[SLICER] trimesh resultado: {patch_debug}", flush=True)
+            print(f"[SLICER] re-export resultado: {patch_debug}", flush=True)
             if cleaned:
                 patched_path = cleaned
                 effective_path = patched_path
