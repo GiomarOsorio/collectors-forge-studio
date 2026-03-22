@@ -16,6 +16,8 @@ import zipfile
 from pathlib import Path
 from typing import Optional
 
+import trimesh
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
@@ -318,12 +320,15 @@ def _es_proyecto_bs(src_path: Path) -> bool:
 
 def _strip_3mf_to_geometry(src_path: Path) -> tuple:
     """
-    Crea un 3MF limpio con solo la geometría, sin metadata de BambuStudio.
+    Re-exporta un .3mf de BambuStudio como 3MF limpio usando trimesh.
 
-    OrcaSlicer 2.3.x no puede interpretar proyectos de BS 2.5.x correctamente
-    (0 objects, crash en calc_exclude_triangles). Este método extrae solo los
-    archivos de geometría y estructura 3MF necesarios para que OrcaSlicer
-    cargue los modelos como geometría genérica y los lamine con defaults.
+    En vez de manipular el XML manualmente (que deja restos de estructura BS
+    como xmlns:p, <components>, UUIDs, etc.), carga toda la geometría con
+    trimesh y la re-exporta como 3MF estándar. Esto produce un archivo que
+    OrcaSlicer puede leer sin entrar en modo "proyecto BS".
+
+    trimesh resuelve las referencias <components>, aplica transforms, y
+    produce un 3MF con solo <mesh> + <build> estándar.
 
     Pierde: asignaciones de placa, multi-extruder, configs de proyecto.
     Gana: OrcaSlicer puede laminar sin crash.
@@ -334,68 +339,44 @@ def _strip_3mf_to_geometry(src_path: Path) -> tuple:
     Returns:
         Tupla (ruta_limpia_o_None, mensaje_debug).
     """
-    # Archivos que OrcaSlicer necesita para cargar un 3MF genérico
-    KEEP_PREFIXES = (
-        "[Content_Types].xml",
-        "_rels/",
-        "3D/",
-    )
-    SKIP_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
-
     dst_path = src_path.with_name(f"clean_{src_path.name}")
-    kept = []
 
     try:
-        with zipfile.ZipFile(src_path, "r") as zin, \
-             zipfile.ZipFile(dst_path, "w", zipfile.ZIP_DEFLATED) as zout:
-            for item in zin.infolist():
-                # Solo mantener archivos de estructura 3MF y geometría
-                if not any(item.filename.startswith(p) for p in KEEP_PREFIXES):
-                    continue
-                # Excluir imágenes dentro de 3D/ (thumbnails embebidos)
-                ext = Path(item.filename).suffix.lower()
-                if ext in SKIP_EXTS:
-                    continue
-                raw = zin.read(item.filename)
-                if item.filename.endswith(".model"):
-                    try:
-                        text = raw.decode("utf-8")
-                        # Limpiar custom_supports/seam/color
-                        text = re.sub(
-                            r'<(?:\w+:)?custom_(?:supports|seam|color)\b[^/]*'
-                            r'(?:/>|>[\s\S]*?</[^>]+>)',
-                            '', text, flags=re.IGNORECASE)
-                        # Eliminar metadata de BambuStudio del modelo principal
-                        # para que OrcaSlicer no entre en modo "proyecto BS"
-                        # y trate el 3MF como geometría genérica
-                        if item.filename == "3D/3dmodel.model":
-                            # Quitar <metadata> que identifica como BambuStudio
-                            text = re.sub(
-                                r'\s*<metadata\s+name="[^"]*[Bb]ambu[^"]*">[^<]*</metadata>',
-                                '', text)
-                            text = re.sub(
-                                r'\s*<metadata\s+name="Application">[^<]*</metadata>',
-                                '', text)
-                            # Quitar namespace BambuStudio del tag <model>
-                            text = re.sub(
-                                r'\s+xmlns:BambuStudio="[^"]*"', '', text)
-                            # Quitar requiredextensions que podrían incluir BS
-                            text = re.sub(
-                                r'\s+requiredextensions="[^"]*"', '', text,
-                                flags=re.IGNORECASE)
-                        raw = text.encode("utf-8")
-                    except (UnicodeDecodeError, TypeError):
-                        pass
-                zout.writestr(item, raw)
-                kept.append(item.filename)
+        # Cargar como Scene para preservar todos los objetos individuales.
+        # postprocess=False evita que trimesh fusione meshes con nombres
+        # similares (comportamiento de SolidWorks, no deseado para BS).
+        scene = trimesh.load(
+            str(src_path),
+            file_type="3mf",
+            force="scene",
+            process=False,
+        )
 
-        debug = f"3MF limpio: {len(kept)} archivos (solo geometría, sin Metadata BS)"
+        # Contar geometría para debug
+        mesh_count = 0
+        total_faces = 0
+        for name, geom in scene.geometry.items():
+            if hasattr(geom, "faces"):
+                mesh_count += 1
+                total_faces += len(geom.faces)
+
+        if mesh_count == 0:
+            return None, "trimesh: 0 meshes encontrados en el 3MF"
+
+        # Re-exportar como 3MF estándar (solo geometría + build items)
+        exported = scene.export(file_type="3mf")
+        dst_path.write_bytes(exported)
+
+        debug = (
+            f"trimesh re-export: {mesh_count} meshes, "
+            f"{total_faces:,} triángulos → 3MF limpio"
+        )
         return dst_path, debug
 
     except Exception as e:
         if dst_path.exists():
             dst_path.unlink()
-        return None, f"limpieza falló: {e}"
+        return None, f"trimesh re-export falló: {e}"
 
 
 @app.get("/health")
