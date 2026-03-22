@@ -172,11 +172,13 @@ def _patch_3mf_params(src_path: Path) -> tuple:
     SKIP_FILES = {"Metadata/cut_information.xml"}
 
     # Claves de metadata XML (model_settings.config) que son exclusivas de BS 2.5+
-    # y OrcaSlicer 2.3.x no reconoce. Al encontrarlas, las elimina del XML.
+    # y OrcaSlicer 2.3.x no reconoce. Solo eliminamos las cosméticas/internas.
+    # MANTENER: plater_id (asignación de placa), plater_name, filament_maps,
+    # filament_map_mode (funcionales para multi-placa/multi-extruder).
     BS25_XML_KEYS = {
-        "filament_map_mode", "filament_maps", "filament_volume_maps",
+        "filament_volume_maps",
         "skeleton_infill_density", "skin_infill_density", "identify_id",
-        "plater_id", "plater_name", "pick_file", "top_file",
+        "pick_file", "top_file",
         "thumbnail_file", "thumbnail_no_light_file", "top_one_wall_type",
     }
 
