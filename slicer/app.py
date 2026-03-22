@@ -366,17 +366,16 @@ def _reexport_3mf_lib3mf(src_path: Path, dst_path: Path) -> tuple:
             for i in range(vert_count):
                 compound.AddVertex(src_mesh.GetVertex(i))
 
-            # Copiar triángulos con offset de vértices
+            # Copiar triángulos con offset de vértices.
+            # lib3mf usa ctypes: Triangle.Indices es c_uint_Array_3,
+            # no acepta listas de Python.
             for i in range(tri_count):
-                t = src_mesh.GetTriangle(i)
-                idx = t.Indices
-                compound.AddTriangle(lib3mf.Triangle(
-                    Indices=[
-                        idx[0] + vert_offset,
-                        idx[1] + vert_offset,
-                        idx[2] + vert_offset,
-                    ]
-                ))
+                src_tri = src_mesh.GetTriangle(i)
+                dst_tri = lib3mf.Triangle()
+                dst_tri.Indices[0] = src_tri.Indices[0] + vert_offset
+                dst_tri.Indices[1] = src_tri.Indices[1] + vert_offset
+                dst_tri.Indices[2] = src_tri.Indices[2] + vert_offset
+                compound.AddTriangle(dst_tri)
 
             vert_offset += vert_count
             total_tris += tri_count
