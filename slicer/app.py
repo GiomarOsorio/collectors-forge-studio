@@ -11,7 +11,9 @@ Endpoints:
 """
 
 import asyncio
+import json
 import re
+import tempfile
 import zipfile
 from pathlib import Path
 from typing import Optional
@@ -531,6 +533,66 @@ async def cli_help():
         return {"error": str(e)}
 
 
+def _write_minimal_presets(output_dir: Path) -> list[Path]:
+    """Genera JSONs mínimos de máquina y proceso para OrcaSlicer.
+
+    Los presets BBL embebidos en el AppImage usan cadenas "inherits" que
+    activan código multi-extruder en OrcaSlicer 2.3.x, causando SIGSEGV
+    en update_values_to_printer_extruders_for_multiple_filaments.
+
+    Estos JSONs mínimos definen solo lo esencial (volumen, boquilla,
+    extrusión absoluta) sin herencia, evitando el crash.
+    """
+    machine = {
+        "type": "machine",
+        "name": "MinimalP2S",
+        "nozzle_diameter": ["0.4"],
+        "printable_area": ["0x0", "256x0", "256x256", "0x256"],
+        "printable_height": "256",
+        "bed_exclude_area": [],
+        "gcode_flavor": "marlin",
+        "use_relative_e_distances": "0",
+        "use_firmware_retraction": "0",
+        "printer_technology": "FFF",
+        "default_print_profile": "",
+        "default_filament_profile": "",
+        "extruder_offset": ["0x0"],
+        "retraction_length": ["0.8"],
+        "retract_before_wipe": ["70%"],
+        "retract_when_changing_layer": ["1"],
+        "retraction_speed": ["30"],
+        "deretraction_speed": ["0"],
+        "retract_restart_extra": ["0"],
+        "retraction_minimum_travel": ["1"],
+        "wipe": ["1"],
+        "z_hop": ["0.4"],
+    }
+    process = {
+        "type": "process",
+        "name": "MinimalStandard",
+        "layer_height": "0.2",
+        "first_layer_height": "0.2",
+        "perimeters": "2",
+        "top_solid_layers": "4",
+        "bottom_solid_layers": "4",
+        "fill_density": "15%",
+        "infill_every_layers": "1",
+        "skirts": "1",
+        "skirt_distance": "2",
+        "brim_width": "0",
+        "support_material": "0",
+        "wall_infill_order": "inner wall/outer wall/infill",
+    }
+
+    paths = []
+    for name, data in [("machine_minimal.json", machine),
+                       ("process_minimal.json", process)]:
+        p = output_dir / name
+        p.write_text(json.dumps(data, indent=2))
+        paths.append(p)
+    return paths
+
+
 @app.post("/slice", response_model=SliceResponse)
 async def slice_model(request: SliceRequest):
     """
@@ -598,20 +660,19 @@ async def slice_model(request: SliceRequest):
         "--outputdir", str(JOBS_DIR),
     ]
 
-    # Proyectos BS stripped necesitan presets explícitos porque el 3MF limpio
-    # no tiene configs — sin ellos OrcaSlicer usa defaults genéricos que fallan
-    # con "G92 E0" validation error.
-    # STL también necesita presets (no tiene ninguna config embebida).
+    # Proyectos BS stripped y STL necesitan presets (no tienen config embebida).
+    # NO usar los JSONs BBL del AppImage directamente — su cadena "inherits"
+    # activa código multi-extruder en OrcaSlicer 2.3.x que crashea (SIGSEGV)
+    # en update_values_to_printer_extruders_for_multiple_filaments.
+    # En su lugar, usamos JSONs mínimos sin herencia.
+    settings_files: list[Path] = []
     if needs_presets or stl_path.suffix.lower() == ".stl":
-        if DEFAULT_MACHINE_JSON.exists() and DEFAULT_PROCESS_JSON.exists():
+        settings_files = _write_minimal_presets(JOBS_DIR)
+        if settings_files:
             cmd.extend([
                 "--load-settings",
-                f"{DEFAULT_MACHINE_JSON};{DEFAULT_PROCESS_JSON}",
+                ";".join(str(p) for p in settings_files),
             ])
-        # NO pasar --load-filaments: OrcaSlicer 2.3.x crashea (SIGSEGV) en
-        # update_values_to_printer_extruders_for_multiple_filaments cuando
-        # recibe filamentos via CLI con extruder_count=1. Mejor dejar que
-        # OrcaSlicer use su filamento default interno.
 
     cmd.append(str(effective_path))
 
