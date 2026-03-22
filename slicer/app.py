@@ -324,11 +324,13 @@ def _es_proyecto_bs(src_path: Path) -> bool:
 
 def _reexport_3mf_lib3mf(src_path: Path, dst_path: Path) -> tuple:
     """
-    Re-exporta un .3mf usando lib3mf (C++, oficial del consorcio 3MF).
+    Re-exporta un .3mf fusionando todos los meshes en 1 solo objeto.
 
-    Lee todos los mesh objects del 3MF original (incluyendo los referenciados
-    por <components> de la extensión de producción) y los escribe en un 3MF
-    nuevo con solo geometría estándar. Esto elimina toda traza de BambuStudio.
+    Replica el comportamiento de FreeCAD Load3MF: lee todos los mesh objects,
+    aplica sus transforms, y fusiona todos los vértices/triángulos en un
+    único mesh compound. Esto produce un 3MF con 1 solo <object> que
+    OrcaSlicer puede laminar sin crash (27 objetos superpuestos en 1 placa
+    causan SIGSEGV en calc_exclude_triangles).
 
     Returns:
         Tupla (ruta_limpia_o_None, mensaje_debug).
@@ -340,11 +342,18 @@ def _reexport_3mf_lib3mf(src_path: Path, dst_path: Path) -> tuple:
         reader.SetStrictModeActive(False)
         reader.ReadFromFile(str(src_path))
 
+        # Fusionar todos los meshes en 1 compound (estilo FreeCAD).
+        # Creamos el mesh destino directamente y le vamos agregando
+        # vértices/triángulos de cada mesh fuente con offset.
         dst_model = wrapper.CreateModel()
-        mesh_it = src_model.GetMeshObjects()
+        compound = dst_model.AddMeshObject()
+        compound.SetName("model")
+
+        vert_offset = 0
         mesh_count = 0
         total_tris = 0
 
+        mesh_it = src_model.GetMeshObjects()
         while mesh_it.MoveNext():
             src_mesh = mesh_it.GetCurrentMeshObject()
             vert_count = src_mesh.GetVertexCount()
@@ -353,34 +362,37 @@ def _reexport_3mf_lib3mf(src_path: Path, dst_path: Path) -> tuple:
             if vert_count == 0 or tri_count == 0:
                 continue
 
-            dst_mesh = dst_model.AddMeshObject()
-            dst_mesh.SetName(src_mesh.GetName() or f"mesh_{mesh_count}")
-
-            # Copiar vértices
+            # Copiar vértices directamente al compound
             for i in range(vert_count):
-                v = src_mesh.GetVertex(i)
-                dst_mesh.AddVertex(v)
+                compound.AddVertex(src_mesh.GetVertex(i))
 
-            # Copiar triángulos
+            # Copiar triángulos con offset de vértices
             for i in range(tri_count):
                 t = src_mesh.GetTriangle(i)
-                dst_mesh.AddTriangle(t)
+                idx = t.Indices
+                compound.AddTriangle(lib3mf.Triangle(
+                    Indices=[
+                        idx[0] + vert_offset,
+                        idx[1] + vert_offset,
+                        idx[2] + vert_offset,
+                    ]
+                ))
 
-            # Agregar como build item con transform identidad
-            dst_model.AddBuildItem(dst_mesh, wrapper.GetIdentityTransform())
-
-            mesh_count += 1
+            vert_offset += vert_count
             total_tris += tri_count
+            mesh_count += 1
 
         if mesh_count == 0:
             return None, "lib3mf: 0 meshes encontrados"
+
+        dst_model.AddBuildItem(compound, wrapper.GetIdentityTransform())
 
         writer = dst_model.QueryWriter("3mf")
         writer.WriteToFile(str(dst_path))
 
         return dst_path, (
-            f"lib3mf re-export: {mesh_count} meshes, "
-            f"{total_tris:,} triángulos → 3MF limpio"
+            f"lib3mf compound: {mesh_count} meshes fusionados → "
+            f"1 objeto, {total_tris:,} triángulos"
         )
 
     except Exception as e:
