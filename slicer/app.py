@@ -608,16 +608,10 @@ async def slice_model(request: SliceRequest):
                 "--load-settings",
                 f"{DEFAULT_MACHINE_JSON};{DEFAULT_PROCESS_JSON}",
             ])
-        if DEFAULT_FILAMENT_JSON.exists():
-            # Pasar 4 copias del filamento para cubrir los 4 slots del AMS.
-            # Sin esto, modelos multi-color causan SIGSEGV en
-            # update_values_to_printer_extruders_for_multiple_filaments
-            # porque OrcaSlicer intenta mapear N colores a 1 filamento.
-            filament_str = ";".join([str(DEFAULT_FILAMENT_JSON)] * 4)
-            cmd.extend([
-                "--load-filaments",
-                filament_str,
-            ])
+        # NO pasar --load-filaments: OrcaSlicer 2.3.x crashea (SIGSEGV) en
+        # update_values_to_printer_extruders_for_multiple_filaments cuando
+        # recibe filamentos via CLI con extruder_count=1. Mejor dejar que
+        # OrcaSlicer use su filamento default interno.
 
     cmd.append(str(effective_path))
 
