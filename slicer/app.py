@@ -26,6 +26,12 @@ JOBS_DIR.mkdir(exist_ok=True)
 
 ORCA_BIN = Path("/usr/local/bin/OrcaSlicer")
 
+# Presets BBL embebidos en el AppImage (usados para proyectos BS sin config)
+ORCA_PROFILES = Path("/opt/squashfs-root/resources/profiles/BBL")
+DEFAULT_MACHINE_JSON = ORCA_PROFILES / "machine" / "Bambu Lab P2S 0.4 nozzle.json"
+DEFAULT_PROCESS_JSON = ORCA_PROFILES / "process" / "0.20mm Standard @BBL P2S.json"
+DEFAULT_FILAMENT_JSON = ORCA_PROFILES / "filament" / "Bambu PLA Basic @BBL P2S.json"
+
 
 class SliceRequest(BaseModel):
     """Solicitud de laminado de un archivo STL."""
@@ -457,15 +463,17 @@ async def slice_model(request: SliceRequest):
     effective_path = stl_path
     patched_path: Optional[Path] = None
     patch_debug = "sin parche (no es .3mf)"
+    needs_presets = False
     if stl_path.suffix.lower() == ".3mf":
         if _es_proyecto_bs(stl_path):
             # Proyecto BS sin gcode: OrcaSlicer no puede cargar la estructura de
             # proyecto BS 2.5.x (0 objects, crash). Creamos 3MF limpio solo con
-            # geometría para que OrcaSlicer lo lamine con sus defaults.
+            # geometría para que OrcaSlicer lo lamine con presets BBL explícitos.
             cleaned, patch_debug = _strip_3mf_to_geometry(stl_path)
             if cleaned:
                 patched_path = cleaned
                 effective_path = patched_path
+                needs_presets = True
         else:
             # 3MF genérico o con gcode parcial: parchear configs incompatibles
             patched, patch_debug = _patch_3mf_params(stl_path)
@@ -477,8 +485,8 @@ async def slice_model(request: SliceRequest):
     #   --slice 0             → lamina todas las placas (0=all, N=placa N)
     #   --outputdir           → directorio de salida (NO es -o)
     #   --allow-newer-file    → acepta 3MF creados con versiones más recientes
-    #   --load-settings       → archivos JSON de proceso/máquina (para presets futuros)
-    #   --load-filaments      → archivos JSON de filamento (para presets futuros)
+    #   --load-settings       → "machine.json;process.json" de máquina/proceso
+    #   --load-filaments      → "filament.json" de filamento
     cmd = [
         str(ORCA_BIN),
         "--slice", "0",
@@ -486,8 +494,25 @@ async def slice_model(request: SliceRequest):
         "--no-check",
         "--debug", "5",
         "--outputdir", str(JOBS_DIR),
-        str(effective_path),
     ]
+
+    # Proyectos BS stripped necesitan presets explícitos porque el 3MF limpio
+    # no tiene configs — sin ellos OrcaSlicer usa defaults genéricos que fallan
+    # con "G92 E0" validation error.
+    # STL también necesita presets (no tiene ninguna config embebida).
+    if needs_presets or stl_path.suffix.lower() == ".stl":
+        if DEFAULT_MACHINE_JSON.exists() and DEFAULT_PROCESS_JSON.exists():
+            cmd.extend([
+                "--load-settings",
+                f"{DEFAULT_MACHINE_JSON};{DEFAULT_PROCESS_JSON}",
+            ])
+        if DEFAULT_FILAMENT_JSON.exists():
+            cmd.extend([
+                "--load-filaments",
+                str(DEFAULT_FILAMENT_JSON),
+            ])
+
+    cmd.append(str(effective_path))
 
     print(f"[SLICER] cmd: {' '.join(cmd)}", flush=True)
     print(f"[SLICER] patch: {patch_debug}", flush=True)
