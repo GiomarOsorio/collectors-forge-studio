@@ -351,14 +351,32 @@ def _strip_3mf_to_geometry(src_path: Path) -> tuple:
                 if ext in SKIP_EXTS:
                     continue
                 raw = zin.read(item.filename)
-                # Limpiar custom_supports/seam/color de los .model
                 if item.filename.endswith(".model"):
                     try:
                         text = raw.decode("utf-8")
+                        # Limpiar custom_supports/seam/color
                         text = re.sub(
                             r'<(?:\w+:)?custom_(?:supports|seam|color)\b[^/]*'
                             r'(?:/>|>[\s\S]*?</[^>]+>)',
                             '', text, flags=re.IGNORECASE)
+                        # Eliminar metadata de BambuStudio del modelo principal
+                        # para que OrcaSlicer no entre en modo "proyecto BS"
+                        # y trate el 3MF como geometría genérica
+                        if item.filename == "3D/3dmodel.model":
+                            # Quitar <metadata> que identifica como BambuStudio
+                            text = re.sub(
+                                r'\s*<metadata\s+name="[^"]*[Bb]ambu[^"]*">[^<]*</metadata>',
+                                '', text)
+                            text = re.sub(
+                                r'\s*<metadata\s+name="Application">[^<]*</metadata>',
+                                '', text)
+                            # Quitar namespace BambuStudio del tag <model>
+                            text = re.sub(
+                                r'\s+xmlns:BambuStudio="[^"]*"', '', text)
+                            # Quitar requiredextensions que podrían incluir BS
+                            text = re.sub(
+                                r'\s+requiredextensions="[^"]*"', '', text,
+                                flags=re.IGNORECASE)
                         raw = text.encode("utf-8")
                     except (UnicodeDecodeError, TypeError):
                         pass
