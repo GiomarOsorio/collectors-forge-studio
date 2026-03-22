@@ -375,6 +375,7 @@ async def slice_model(request: SliceRequest):
         "--slice", "0",
         "--allow-newer-file",
         "--no-check",
+        "--debug", "5",
         "--outputdir", str(JOBS_DIR),
         str(effective_path),
     ]
@@ -400,9 +401,12 @@ async def slice_model(request: SliceRequest):
         combined = (stdout_text + stderr_text).strip()
 
         # Log completo de OrcaSlicer para depuración
+        # Con --debug 5 puede generar mucho output; mostrar inicio y final
         print(f"[SLICER] returncode: {proc.returncode}", flush=True)
-        print(f"[SLICER] stdout ({len(stdout_text)} chars):\n{stdout_text[:5000]}", flush=True)
-        print(f"[SLICER] stderr ({len(stderr_text)} chars):\n{stderr_text[:5000]}", flush=True)
+        print(f"[SLICER] stdout ({len(stdout_text)} chars) FIRST 3000:\n{stdout_text[:3000]}", flush=True)
+        if len(stdout_text) > 3000:
+            print(f"[SLICER] stdout LAST 5000:\n{stdout_text[-5000:]}", flush=True)
+        print(f"[SLICER] stderr ({len(stderr_text)} chars):\n{stderr_text[:3000]}", flush=True)
 
         if proc.returncode != 0:
             # Crash por señal (SIGSEGV=-11, SIGABRT=-6): mensaje específico
