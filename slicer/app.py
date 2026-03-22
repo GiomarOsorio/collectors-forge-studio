@@ -292,6 +292,88 @@ def _patch_3mf_params(src_path: Path) -> tuple:
         return None, f"parche falló: {e}"
 
 
+def _es_proyecto_bs(src_path: Path) -> bool:
+    """
+    Detecta si un .3mf es un proyecto de BambuStudio (sin gcode dentro).
+
+    Un proyecto BS tiene modelos 3D y configs de proyecto pero no tiene
+    archivos .gcode ya generados.
+    """
+    try:
+        with zipfile.ZipFile(src_path, "r") as z:
+            names = z.namelist()
+            tiene_modelos = any(n.endswith(".model") for n in names)
+            tiene_gcode = any(n.endswith(".gcode") for n in names)
+            tiene_proyecto = any(n == "Metadata/project_settings.config" for n in names)
+            return tiene_modelos and tiene_proyecto and not tiene_gcode
+    except Exception:
+        return False
+
+
+def _strip_3mf_to_geometry(src_path: Path) -> tuple:
+    """
+    Crea un 3MF limpio con solo la geometría, sin metadata de BambuStudio.
+
+    OrcaSlicer 2.3.x no puede interpretar proyectos de BS 2.5.x correctamente
+    (0 objects, crash en calc_exclude_triangles). Este método extrae solo los
+    archivos de geometría y estructura 3MF necesarios para que OrcaSlicer
+    cargue los modelos como geometría genérica y los lamine con defaults.
+
+    Pierde: asignaciones de placa, multi-extruder, configs de proyecto.
+    Gana: OrcaSlicer puede laminar sin crash.
+
+    Args:
+        src_path: Ruta al archivo .3mf original.
+
+    Returns:
+        Tupla (ruta_limpia_o_None, mensaje_debug).
+    """
+    # Archivos que OrcaSlicer necesita para cargar un 3MF genérico
+    KEEP_PREFIXES = (
+        "[Content_Types].xml",
+        "_rels/",
+        "3D/",
+    )
+    SKIP_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
+
+    dst_path = src_path.with_name(f"clean_{src_path.name}")
+    kept = []
+
+    try:
+        with zipfile.ZipFile(src_path, "r") as zin, \
+             zipfile.ZipFile(dst_path, "w", zipfile.ZIP_DEFLATED) as zout:
+            for item in zin.infolist():
+                # Solo mantener archivos de estructura 3MF y geometría
+                if not any(item.filename.startswith(p) for p in KEEP_PREFIXES):
+                    continue
+                # Excluir imágenes dentro de 3D/ (thumbnails embebidos)
+                ext = Path(item.filename).suffix.lower()
+                if ext in SKIP_EXTS:
+                    continue
+                raw = zin.read(item.filename)
+                # Limpiar custom_supports/seam/color de los .model
+                if item.filename.endswith(".model"):
+                    try:
+                        text = raw.decode("utf-8")
+                        text = re.sub(
+                            r'<(?:\w+:)?custom_(?:supports|seam|color)\b[^/]*'
+                            r'(?:/>|>[\s\S]*?</[^>]+>)',
+                            '', text, flags=re.IGNORECASE)
+                        raw = text.encode("utf-8")
+                    except (UnicodeDecodeError, TypeError):
+                        pass
+                zout.writestr(item, raw)
+                kept.append(item.filename)
+
+        debug = f"3MF limpio: {len(kept)} archivos (solo geometría, sin Metadata BS)"
+        return dst_path, debug
+
+    except Exception as e:
+        if dst_path.exists():
+            dst_path.unlink()
+        return None, f"limpieza falló: {e}"
+
+
 @app.get("/health")
 async def health():
     """Verifica que el servicio esta activo y OrcaSlicer accesible."""
@@ -353,16 +435,25 @@ async def slice_model(request: SliceRequest):
     if not ORCA_BIN.exists():
         raise HTTPException(status_code=503, detail="OrcaSlicer no disponible en el contenedor")
 
-    # Para archivos .3mf de Bambu Studio 2.5+, parchear params centinela fuera
-    # de rango antes de pasar a OrcaSlicer 2.3.x (raft_first_layer_expansion=-1, etc.)
+    # Para archivos .3mf: dos estrategias según el tipo
     effective_path = stl_path
     patched_path: Optional[Path] = None
     patch_debug = "sin parche (no es .3mf)"
     if stl_path.suffix.lower() == ".3mf":
-        patched, patch_debug = _patch_3mf_params(stl_path)
-        if patched:
-            patched_path = patched
-            effective_path = patched_path
+        if _es_proyecto_bs(stl_path):
+            # Proyecto BS sin gcode: OrcaSlicer no puede cargar la estructura de
+            # proyecto BS 2.5.x (0 objects, crash). Creamos 3MF limpio solo con
+            # geometría para que OrcaSlicer lo lamine con sus defaults.
+            cleaned, patch_debug = _strip_3mf_to_geometry(stl_path)
+            if cleaned:
+                patched_path = cleaned
+                effective_path = patched_path
+        else:
+            # 3MF genérico o con gcode parcial: parchear configs incompatibles
+            patched, patch_debug = _patch_3mf_params(stl_path)
+            if patched:
+                patched_path = patched
+                effective_path = patched_path
 
     # OrcaSlicer 2.3.x CLI flags correctos (verificados en --help):
     #   --slice 0             → lamina todas las placas (0=all, N=placa N)
