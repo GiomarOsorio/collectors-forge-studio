@@ -445,19 +445,28 @@ async def slice_model(request: SliceRequest):
     patched_path: Optional[Path] = None
     patch_debug = "sin parche (no es .3mf)"
     needs_presets = False
+    print(f"[SLICER] recibido: {request.stl_filename} (job {request.job_id})", flush=True)
+
     if stl_path.suffix.lower() == ".3mf":
         if _es_proyecto_bs(stl_path):
             # Proyecto BS sin gcode: OrcaSlicer no puede cargar la estructura de
-            # proyecto BS 2.5.x (0 objects, crash). Creamos 3MF limpio solo con
-            # geometría para que OrcaSlicer lo lamine con presets BBL explícitos.
-            cleaned, patch_debug = _strip_3mf_to_geometry(stl_path)
+            # proyecto BS 2.5.x (0 objects, crash). Re-exportamos con trimesh
+            # para obtener un 3MF limpio. Se ejecuta en thread para no bloquear
+            # el event loop de uvicorn (puede tardar minutos en archivos grandes).
+            print(f"[SLICER] proyecto BS detectado, iniciando re-export con trimesh...", flush=True)
+            cleaned, patch_debug = await asyncio.to_thread(
+                _strip_3mf_to_geometry, stl_path
+            )
+            print(f"[SLICER] trimesh resultado: {patch_debug}", flush=True)
             if cleaned:
                 patched_path = cleaned
                 effective_path = patched_path
                 needs_presets = True
         else:
             # 3MF genérico o con gcode parcial: parchear configs incompatibles
-            patched, patch_debug = _patch_3mf_params(stl_path)
+            patched, patch_debug = await asyncio.to_thread(
+                _patch_3mf_params, stl_path
+            )
             if patched:
                 patched_path = patched
                 effective_path = patched_path
