@@ -3,6 +3,12 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV DISPLAY=
 
+# Version de OrcaSlicer — cambiar aquí para actualizar
+# ORCA_TAG = tag de GitHub (ej: v2.3.2-rc2)
+# ORCA_FILE_VERSION = sufijo del AppImage (ej: V2.3.2-rc2)
+ARG ORCA_TAG=v2.3.2-rc2
+ARG ORCA_FILE_VERSION=V2.3.2-rc2
+
 # Dependencias del sistema
 # GTK3 y libs de display son necesarias porque OrcaSlicer las enlaza dinámicamente
 # incluso en modo CLI (--slice). Las AppImages de OrcaSlicer no empaquetan GTK.
@@ -19,14 +25,12 @@ RUN apt-get update && apt-get install -y \
     libwebkit2gtk-4.1-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Descargar y extraer OrcaSlicer nightly (AppImage Ubuntu 24.04)
+# Descargar y extraer OrcaSlicer (AppImage Ubuntu 24.04)
 # El AppImage se extrae con --appimage-extract porque FUSE no esta en contenedores.
 # Se enlaza a AppRun (no al binario directamente) para que configure LD_LIBRARY_PATH
 # con las libs empaquetadas dentro del AppImage antes de lanzar el binario.
-# REBUILD: 2026-02-26 — forzar descarga de nightly reciente (>=2.5.x) para
-# compatibilidad con archivos de MakerWorld creados con OrcaSlicer 2.5.x
 RUN wget -q -O /tmp/OrcaSlicer.AppImage \
-    "https://github.com/OrcaSlicer/OrcaSlicer/releases/download/nightly-builds/OrcaSlicer_Linux_AppImage_Ubuntu2404_nightly.AppImage" \
+    "https://github.com/OrcaSlicer/OrcaSlicer/releases/download/${ORCA_TAG}/OrcaSlicer_Linux_AppImage_Ubuntu2404_${ORCA_FILE_VERSION}.AppImage" \
     && chmod +x /tmp/OrcaSlicer.AppImage \
     && cd /opt && /tmp/OrcaSlicer.AppImage --appimage-extract \
     && rm /tmp/OrcaSlicer.AppImage \
