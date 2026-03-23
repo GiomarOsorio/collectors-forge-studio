@@ -552,34 +552,60 @@ def _flatten_preset(name: str, profiles_dir: Path) -> dict:
     return data
 
 
+# Arrays que son listas legítimas de geometría/config, NO de extrusores.
+# Estos NO se deben truncar a 1 elemento.
+_KEEP_FULL_ARRAYS = {
+    "printable_area", "bed_exclude_area", "wrapping_exclude_area",
+    "upward_compatible_machine", "thumbnails",
+}
+
+
+def _single_extruder(preset: dict) -> dict:
+    """Trunca arrays multi-extruder a 1 elemento para evitar SIGSEGV.
+
+    Los presets BBL P2S definen 2 slots de extrusor (arrays de 2 elems)
+    pero la P2S tiene 1 extrusor físico (nozzle_diameter: ["0.4"]).
+    OrcaSlicer CLI crashea cuando extruder_count=1 pero encuentra
+    arrays de >1 elemento (different_extruder=1 → SIGSEGV).
+    """
+    for key, val in preset.items():
+        if key in _KEEP_FULL_ARRAYS:
+            continue
+        if isinstance(val, list) and len(val) > 1:
+            preset[key] = [val[0]]
+    return preset
+
+
 def _write_flat_presets(output_dir: Path) -> list[Path]:
     """Genera presets BBL aplanados (sin 'inherits') para OrcaSlicer CLI.
 
-    Resuelve la cadena de herencia de los presets embebidos en el AppImage
-    y escribe JSONs planos que OrcaSlicer acepta sin activar el código
-    multi-extruder que causa SIGSEGV.
+    Resuelve la cadena de herencia de los presets embebidos en el AppImage,
+    trunca arrays multi-extruder a 1 elemento, y escribe JSONs planos que
+    OrcaSlicer acepta sin activar el código multi-extruder que causa SIGSEGV.
     """
     machine_dir = ORCA_PROFILES / "machine"
     process_dir = ORCA_PROFILES / "process"
 
     paths = []
 
-    # Machine: Bambu Lab P2S 0.4 nozzle (aplanado)
+    # Machine: Bambu Lab P2S 0.4 nozzle (aplanado + single extruder)
     if machine_dir.exists():
         flat_machine = _flatten_preset("Bambu Lab P2S 0.4 nozzle", machine_dir)
         if flat_machine:
             flat_machine.pop("inherits", None)
             flat_machine["instantiation"] = "true"
+            _single_extruder(flat_machine)
             p = output_dir / "machine_flat.json"
             p.write_text(json.dumps(flat_machine, indent=2))
             paths.append(p)
 
-    # Process: 0.20mm Standard @BBL P2S (aplanado)
+    # Process: 0.20mm Standard @BBL P2S (aplanado + single extruder)
     if process_dir.exists():
         flat_process = _flatten_preset("0.20mm Standard @BBL P2S", process_dir)
         if flat_process:
             flat_process.pop("inherits", None)
             flat_process["instantiation"] = "true"
+            _single_extruder(flat_process)
             p = output_dir / "process_flat.json"
             p.write_text(json.dumps(flat_process, indent=2))
             paths.append(p)
