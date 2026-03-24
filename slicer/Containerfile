@@ -23,7 +23,6 @@ RUN apt-get update && apt-get install -y \
     libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
     ca-certificates libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 \
     libwebkit2gtk-4.1-0 \
-    freecad \
     && rm -rf /var/lib/apt/lists/*
 
 # Descargar y extraer OrcaSlicer (AppImage Ubuntu 24.04)
@@ -34,10 +33,23 @@ RUN wget -q -O /tmp/OrcaSlicer.AppImage \
     "https://github.com/OrcaSlicer/OrcaSlicer/releases/download/${ORCA_TAG}/OrcaSlicer_Linux_AppImage_Ubuntu2404_${ORCA_FILE_VERSION}.AppImage" \
     && chmod +x /tmp/OrcaSlicer.AppImage \
     && cd /opt && /tmp/OrcaSlicer.AppImage --appimage-extract \
+    && mv /opt/squashfs-root /opt/orcaslicer \
     && rm /tmp/OrcaSlicer.AppImage \
-    && test -f /opt/squashfs-root/AppRun \
-    && chmod +x /opt/squashfs-root/AppRun \
-    && ln -sf /opt/squashfs-root/AppRun /usr/local/bin/OrcaSlicer
+    && test -f /opt/orcaslicer/AppRun \
+    && chmod +x /opt/orcaslicer/AppRun \
+    && ln -sf /opt/orcaslicer/AppRun /usr/local/bin/OrcaSlicer
+
+# Descargar y extraer FreeCAD 1.0.2 (AppImage, headless para re-export 3MF→STL)
+# Mismo patrón que OrcaSlicer: --appimage-extract porque no hay FUSE en contenedores.
+ARG FREECAD_VERSION=1.0.2
+RUN wget -q -O /tmp/FreeCAD.AppImage \
+    "https://github.com/FreeCAD/FreeCAD/releases/download/${FREECAD_VERSION}/FreeCAD_${FREECAD_VERSION}-conda-Linux-x86_64-py311.AppImage" \
+    && chmod +x /tmp/FreeCAD.AppImage \
+    && cd /opt && /tmp/FreeCAD.AppImage --appimage-extract \
+    && mv /opt/squashfs-root /opt/freecad \
+    && rm /tmp/FreeCAD.AppImage \
+    && chmod +x /opt/freecad/AppRun \
+    && ln -sf /opt/freecad/AppRun /usr/local/bin/freecadcmd
 
 # Mismo usuario que el backend (UID 1000) para compartir slicer_jobs sin conflictos de permisos.
 # Ubuntu 24.04 incluye un usuario 'ubuntu' con UID 1000 en la imagen base,
