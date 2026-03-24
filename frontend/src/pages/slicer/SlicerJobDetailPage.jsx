@@ -12,7 +12,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Loader2, CheckCircle, AlertCircle, Clock, Layers,
-  ArrowRight, ArrowLeft, Calculator,
+  ArrowLeft, Calculator, Box,
 } from 'lucide-react';
 import { getSlicingJob } from '../../services/api';
 import toast from 'react-hot-toast';
@@ -191,46 +191,163 @@ export default function SlicerJobDetailPage() {
       {/* Datos extraídos */}
       {job.status === 'done' && (
         <div className="space-y-6">
-          {/* Totales */}
+          {/* Vista de camas — sección principal */}
           <div className="bg-[#13171c] border border-[#1e2125] rounded-xl p-6">
             <h2 className="text-steel text-xs font-medium uppercase tracking-wider mb-4">
-              {hasPlates ? 'Totales' : 'Datos extraídos'}
+              {hasPlates ? `${job.plates_data.length} placas` : 'Vista de cama'}
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <div className="bg-[#0d1014] rounded-lg p-4">
-                <p className="text-gunmetal text-xs mb-1">Tiempo de impresión</p>
-                <p className="text-tech-white font-semibold text-sm">{formatTime(job.print_time_seconds)}</p>
-              </div>
-              <div className="bg-[#0d1014] rounded-lg p-4">
-                <p className="text-gunmetal text-xs mb-1">Peso de filamento</p>
-                <p className="text-tech-white font-semibold text-sm">
-                  {job.filament_weight_g ? `${Number(job.filament_weight_g).toFixed(2)} g` : '—'}
-                </p>
-              </div>
-              <div className="bg-[#0d1014] rounded-lg p-4">
-                <p className="text-gunmetal text-xs mb-1">Filamento</p>
-                <p className="text-tech-white font-semibold text-sm">{job.filament_type || '—'}</p>
-              </div>
-              {job.layer_height_mm && (
-                <div className="bg-[#0d1014] rounded-lg p-4">
-                  <p className="text-gunmetal text-xs mb-1">Altura de capa</p>
-                  <p className="text-tech-white font-semibold text-sm">{job.layer_height_mm} mm</p>
+            <div className={`grid gap-4 ${hasPlates ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+              {(hasPlates ? job.plates_data : [{ plate_number: 1 }]).map((plate) => (
+                <div
+                  key={plate.plate_number}
+                  className="bg-[#0d1014] border border-[#1e2125] rounded-lg overflow-hidden"
+                >
+                  {/* Thumbnail de la cama */}
+                  <div className="relative aspect-square bg-[#080a0d] flex items-center justify-center">
+                    <img
+                      src={`/api/slicer/jobs/${job.id}/plate/${plate.plate_number}/thumbnail`}
+                      alt={`Cama placa ${plate.plate_number}`}
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'flex';
+                      }}
+                    />
+                    <div className="hidden flex-col items-center justify-center gap-2 text-gunmetal absolute inset-0">
+                      <Layers size={32} className="opacity-30" />
+                      <span className="text-xs">Sin vista previa</span>
+                    </div>
+                    {/* Botón 3D flotante */}
+                    <button
+                      onClick={() => setViewerPlate(plate.plate_number)}
+                      className="absolute top-2 right-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[#1a1d21]/90 border border-[#2a2d31] text-steel hover:text-tech-white hover:border-[#3a3d41] transition-colors backdrop-blur-sm"
+                      title="Vista 3D interactiva"
+                    >
+                      <Box size={12} />
+                      3D
+                    </button>
+                  </div>
+                  {/* Info de la placa debajo del thumbnail */}
+                  <div className="p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {hasPlates && (
+                          <span className="text-tech-white font-semibold text-sm">
+                            Placa {plate.plate_number}
+                          </span>
+                        )}
+                        {plate.filaments?.length > 0 && (
+                          <div className="flex items-center gap-1">
+                            {plate.filaments.map((f, i) => (
+                              <div
+                                key={i}
+                                className="w-3 h-3 rounded-full border border-[#3a3d41]"
+                                style={{ backgroundColor: f.colour_hex || '#888' }}
+                                title={`${f.filament_type} ${f.colour_hex}`}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {plate.objects?.length > 0 && (
+                      <p className="text-gunmetal text-xs truncate" title={plate.objects.join(', ')}>
+                        {plate.objects.join(', ')}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className="text-steel font-medium">
+                        {formatTime(plate.print_time_seconds || job.print_time_seconds)}
+                      </span>
+                      <span className="text-gunmetal">·</span>
+                      <span className="text-steel font-medium">
+                        {(plate.filament_weight_g || job.filament_weight_g)
+                          ? `${Number(plate.filament_weight_g || job.filament_weight_g).toFixed(1)} g`
+                          : '—'}
+                      </span>
+                    </div>
+                    {hasPlates && (
+                      <button
+                        onClick={() => goToCalc(plate)}
+                        className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs text-amber-400/80 hover:text-amber-400 border border-[#1e2125] hover:border-amber-400/30 hover:bg-amber-400/5 transition-colors"
+                      >
+                        <Calculator size={12} />
+                        Usar placa {plate.plate_number}
+                      </button>
+                    )}
+                  </div>
                 </div>
-              )}
-              {job.nozzle_temp && (
-                <div className="bg-[#0d1014] rounded-lg p-4">
-                  <p className="text-gunmetal text-xs mb-1">Temp. boquilla</p>
-                  <p className="text-tech-white font-semibold text-sm">{job.nozzle_temp} °C</p>
-                </div>
-              )}
-              {job.bed_temp && (
-                <div className="bg-[#0d1014] rounded-lg p-4">
-                  <p className="text-gunmetal text-xs mb-1">Temp. cama</p>
-                  <p className="text-tech-white font-semibold text-sm">{job.bed_temp} °C</p>
-                </div>
-              )}
+              ))}
             </div>
           </div>
+
+          {/* Totales (solo multi-placa) */}
+          {hasPlates && (
+            <div className="bg-[#13171c] border border-[#1e2125] rounded-xl p-6">
+              <h2 className="text-steel text-xs font-medium uppercase tracking-wider mb-4">
+                Totales
+              </h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="bg-[#0d1014] rounded-lg p-4">
+                  <p className="text-gunmetal text-xs mb-1">Tiempo de impresión</p>
+                  <p className="text-tech-white font-semibold text-sm">{formatTime(job.print_time_seconds)}</p>
+                </div>
+                <div className="bg-[#0d1014] rounded-lg p-4">
+                  <p className="text-gunmetal text-xs mb-1">Peso de filamento</p>
+                  <p className="text-tech-white font-semibold text-sm">
+                    {job.filament_weight_g ? `${Number(job.filament_weight_g).toFixed(2)} g` : '—'}
+                  </p>
+                </div>
+                <div className="bg-[#0d1014] rounded-lg p-4">
+                  <p className="text-gunmetal text-xs mb-1">Filamento</p>
+                  <p className="text-tech-white font-semibold text-sm">{job.filament_type || '—'}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Datos extraídos (single plate) */}
+          {!hasPlates && (
+            <div className="bg-[#13171c] border border-[#1e2125] rounded-xl p-6">
+              <h2 className="text-steel text-xs font-medium uppercase tracking-wider mb-4">
+                Datos extraídos
+              </h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="bg-[#0d1014] rounded-lg p-4">
+                  <p className="text-gunmetal text-xs mb-1">Tiempo de impresión</p>
+                  <p className="text-tech-white font-semibold text-sm">{formatTime(job.print_time_seconds)}</p>
+                </div>
+                <div className="bg-[#0d1014] rounded-lg p-4">
+                  <p className="text-gunmetal text-xs mb-1">Peso de filamento</p>
+                  <p className="text-tech-white font-semibold text-sm">
+                    {job.filament_weight_g ? `${Number(job.filament_weight_g).toFixed(2)} g` : '—'}
+                  </p>
+                </div>
+                <div className="bg-[#0d1014] rounded-lg p-4">
+                  <p className="text-gunmetal text-xs mb-1">Filamento</p>
+                  <p className="text-tech-white font-semibold text-sm">{job.filament_type || '—'}</p>
+                </div>
+                {job.layer_height_mm && (
+                  <div className="bg-[#0d1014] rounded-lg p-4">
+                    <p className="text-gunmetal text-xs mb-1">Altura de capa</p>
+                    <p className="text-tech-white font-semibold text-sm">{job.layer_height_mm} mm</p>
+                  </div>
+                )}
+                {job.nozzle_temp && (
+                  <div className="bg-[#0d1014] rounded-lg p-4">
+                    <p className="text-gunmetal text-xs mb-1">Temp. boquilla</p>
+                    <p className="text-tech-white font-semibold text-sm">{job.nozzle_temp} °C</p>
+                  </div>
+                )}
+                {job.bed_temp && (
+                  <div className="bg-[#0d1014] rounded-lg p-4">
+                    <p className="text-gunmetal text-xs mb-1">Temp. cama</p>
+                    <p className="text-tech-white font-semibold text-sm">{job.bed_temp} °C</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Filamentos detectados */}
           {filamentGroups.length > 0 && (
@@ -260,93 +377,6 @@ export default function SlicerJobDetailPage() {
                         ? `placa ${f.plates[0]}`
                         : `${f.plates.length} placas`}
                     </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Desglose por placa */}
-          {hasPlates && (
-            <div className="bg-[#13171c] border border-[#1e2125] rounded-xl p-6">
-              <h2 className="text-steel text-xs font-medium uppercase tracking-wider mb-4">
-                {job.plates_data.length} placas encontradas
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {job.plates_data.map((plate) => (
-                  <div
-                    key={plate.plate_number}
-                    className="bg-[#0d1014] border border-[#1e2125] rounded-lg p-4 space-y-3"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Layers size={14} className="text-amber-400" />
-                        <span className="text-tech-white font-semibold text-sm">
-                          Placa {plate.plate_number}
-                        </span>
-                      </div>
-                      {plate.filaments?.length > 0 && (
-                        <div className="flex items-center gap-1">
-                          {plate.filaments.map((f, i) => (
-                            <div
-                              key={i}
-                              className="w-3 h-3 rounded-full border border-[#3a3d41]"
-                              style={{ backgroundColor: f.colour_hex || '#888' }}
-                              title={`${f.filament_type} ${f.colour_hex}`}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {plate.objects?.length > 0 && (
-                      <p className="text-gunmetal text-xs truncate" title={plate.objects.join(', ')}>
-                        {plate.objects.join(', ')}
-                      </p>
-                    )}
-
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <span className="text-gunmetal">Tiempo</span>
-                        <p className="text-steel font-medium">{formatTime(plate.print_time_seconds)}</p>
-                      </div>
-                      <div>
-                        <span className="text-gunmetal">Peso</span>
-                        <p className="text-steel font-medium">
-                          {plate.filament_weight_g
-                            ? `${Number(plate.filament_weight_g).toFixed(1)} g`
-                            : '—'}
-                        </p>
-                      </div>
-                      {plate.filaments?.length > 0 && plate.filaments.map((f, i) => (
-                        <div key={i} className="col-span-2 flex items-center gap-2">
-                          <div
-                            className="w-2.5 h-2.5 rounded-full border border-[#3a3d41]"
-                            style={{ backgroundColor: f.colour_hex || '#888' }}
-                          />
-                          <span className="text-gunmetal">
-                            {f.filament_type} — {f.weight_g?.toFixed(1) || '?'} g
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setViewerPlate(plate.plate_number)}
-                        className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs text-steel hover:text-tech-white border border-[#1e2125] hover:border-[#3a3d41] hover:bg-[#1a1d21] transition-colors"
-                        title="Vista 3D"
-                      >
-                        3D
-                      </button>
-                      <button
-                        onClick={() => goToCalc(plate)}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs text-amber-400/80 hover:text-amber-400 border border-[#1e2125] hover:border-amber-400/30 hover:bg-amber-400/5 transition-colors"
-                      >
-                        <Calculator size={12} />
-                        Usar placa {plate.plate_number}
-                      </button>
-                    </div>
                   </div>
                 ))}
               </div>
