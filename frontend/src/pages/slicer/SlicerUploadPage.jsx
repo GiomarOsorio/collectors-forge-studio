@@ -362,52 +362,54 @@ export default function SlicerUploadPage() {
               </p>
             </div>
 
-            {/* Configuración de laminado — siempre visible, se usa para STL/OBJ/AMF/STEP */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs text-gunmetal font-medium mb-1">Boquilla</label>
-                <div className="flex gap-1">
-                  {Object.keys(NOZZLE_CONFIGS).map((size) => (
-                    <button
-                      key={size}
-                      type="button"
-                      onClick={() => handleNozzleChange(size)}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
-                        nozzleSize === size
-                          ? 'bg-amber-400/20 text-amber-400 border-amber-400/40'
-                          : 'text-steel border-[#2a2d31] hover:border-amber-400/30'
-                      }`}
-                    >
-                      {size}mm
-                    </button>
-                  ))}
+            {/* Configuración de laminado — oculta para .gcode y .gcode.3mf (ya laminados) */}
+            {(needsSlicing || !selectedFile) && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-gunmetal font-medium mb-1">Boquilla</label>
+                  <div className="flex gap-1">
+                    {Object.keys(NOZZLE_CONFIGS).map((size) => (
+                      <button
+                        key={size}
+                        type="button"
+                        onClick={() => handleNozzleChange(size)}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                          nozzleSize === size
+                            ? 'bg-amber-400/20 text-amber-400 border-amber-400/40'
+                            : 'text-steel border-[#2a2d31] hover:border-amber-400/30'
+                        }`}
+                      >
+                        {size}mm
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-gunmetal font-medium mb-1">Material</label>
+                  <select
+                    value={filamentPreset}
+                    onChange={(e) => setFilamentPreset(e.target.value)}
+                    className="tf-input text-sm py-1.5"
+                  >
+                    {FILAMENT_PRESETS.map((p) => (
+                      <option key={p.value} value={p.value}>{p.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gunmetal font-medium mb-1">Calidad</label>
+                  <select
+                    value={configPreset}
+                    onChange={(e) => setConfigPreset(e.target.value)}
+                    className="tf-input text-sm py-1.5"
+                  >
+                    {NOZZLE_CONFIGS[nozzleSize].qualities.map((q) => (
+                      <option key={q.value} value={q.value}>{q.label}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
-              <div>
-                <label className="block text-xs text-gunmetal font-medium mb-1">Material</label>
-                <select
-                  value={filamentPreset}
-                  onChange={(e) => setFilamentPreset(e.target.value)}
-                  className="tf-input text-sm py-1.5"
-                >
-                  {FILAMENT_PRESETS.map((p) => (
-                    <option key={p.value} value={p.value}>{p.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-gunmetal font-medium mb-1">Calidad</label>
-                <select
-                  value={configPreset}
-                  onChange={(e) => setConfigPreset(e.target.value)}
-                  className="tf-input text-sm py-1.5"
-                >
-                  {NOZZLE_CONFIGS[nozzleSize].qualities.map((q) => (
-                    <option key={q.value} value={q.value}>{q.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
+            )}
 
             <input
               ref={fileInputRef}
