@@ -50,7 +50,7 @@ export default function SlicerJobDetailPage() {
   const [mapperData, setMapperData] = useState(null);
   /** Placa a visualizar en 3D (null = cerrado). */
   const [viewerPlate, setViewerPlate] = useState(null);
-  /** Blob URLs de thumbnails por plate_number. */
+  /** URLs de thumbnails por plate_number (blob o data URI). */
   const [thumbUrls, setThumbUrls] = useState({});
 
   useEffect(() => {
@@ -68,18 +68,17 @@ export default function SlicerJobDetailPage() {
       : [1];
 
     plates.forEach((pn) => {
-      api.get(`/slicer/jobs/${job.id}/plate/${pn}/thumbnail`, { responseType: 'blob' })
+      api.get(`/slicer/jobs/${job.id}/plate/${pn}/thumbnail`, { responseType: 'arraybuffer' })
         .then((res) => {
-          const url = URL.createObjectURL(res.data);
-          setThumbUrls((prev) => ({ ...prev, [pn]: url }));
+          const contentType = res.headers['content-type'] || 'image/png';
+          const base64 = btoa(
+            new Uint8Array(res.data).reduce((data, byte) => data + String.fromCharCode(byte), '')
+          );
+          const dataUri = `data:${contentType};base64,${base64}`;
+          setThumbUrls((prev) => ({ ...prev, [pn]: dataUri }));
         })
         .catch(() => {/* Sin thumbnail disponible */});
     });
-
-    return () => {
-      // Limpiar blob URLs al desmontar
-      Object.values(thumbUrls).forEach((url) => URL.revokeObjectURL(url));
-    };
   }, [job]);
 
   const hasPlates = job?.plates_data?.length > 1;
