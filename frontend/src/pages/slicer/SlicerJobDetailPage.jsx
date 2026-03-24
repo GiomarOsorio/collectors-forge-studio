@@ -15,6 +15,7 @@ import {
   ArrowLeft, Calculator, Box,
 } from 'lucide-react';
 import { getSlicingJob } from '../../services/api';
+import api from '../../services/api';
 import toast from 'react-hot-toast';
 import FilamentMapperModal from '../../components/slicer/FilamentMapperModal';
 import GcodeViewerDialog from '../../components/slicer/GcodeViewerDialog';
@@ -49,6 +50,8 @@ export default function SlicerJobDetailPage() {
   const [mapperData, setMapperData] = useState(null);
   /** Placa a visualizar en 3D (null = cerrado). */
   const [viewerPlate, setViewerPlate] = useState(null);
+  /** Blob URLs de thumbnails por plate_number. */
+  const [thumbUrls, setThumbUrls] = useState({});
 
   useEffect(() => {
     getSlicingJob(id)
@@ -56,6 +59,28 @@ export default function SlicerJobDetailPage() {
       .catch(() => toast.error('Error al cargar el trabajo'))
       .finally(() => setLoading(false));
   }, [id]);
+
+  // Cargar thumbnails de camas via axios (necesita JWT)
+  useEffect(() => {
+    if (!job || job.status !== 'done') return;
+    const plates = job.plates_data?.length > 0
+      ? job.plates_data.map((p) => p.plate_number)
+      : [1];
+
+    plates.forEach((pn) => {
+      api.get(`/slicer/jobs/${job.id}/plate/${pn}/thumbnail`, { responseType: 'blob' })
+        .then((res) => {
+          const url = URL.createObjectURL(res.data);
+          setThumbUrls((prev) => ({ ...prev, [pn]: url }));
+        })
+        .catch(() => {/* Sin thumbnail disponible */});
+    });
+
+    return () => {
+      // Limpiar blob URLs al desmontar
+      Object.values(thumbUrls).forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [job]);
 
   const hasPlates = job?.plates_data?.length > 1;
 
@@ -204,19 +229,18 @@ export default function SlicerJobDetailPage() {
                 >
                   {/* Thumbnail de la cama */}
                   <div className="relative aspect-square bg-[#080a0d] flex items-center justify-center">
-                    <img
-                      src={`/api/slicer/jobs/${job.id}/plate/${plate.plate_number}/thumbnail`}
-                      alt={`Cama placa ${plate.plate_number}`}
-                      className="w-full h-full object-contain"
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                        e.target.nextSibling.style.display = 'flex';
-                      }}
-                    />
-                    <div className="hidden flex-col items-center justify-center gap-2 text-gunmetal absolute inset-0">
-                      <Layers size={32} className="opacity-30" />
-                      <span className="text-xs">Sin vista previa</span>
-                    </div>
+                    {thumbUrls[plate.plate_number] ? (
+                      <img
+                        src={thumbUrls[plate.plate_number]}
+                        alt={`Cama placa ${plate.plate_number}`}
+                        className="w-full h-full object-contain"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center gap-2 text-gunmetal">
+                        <Layers size={32} className="opacity-30" />
+                        <span className="text-xs">Sin vista previa</span>
+                      </div>
+                    )}
                     {/* Botón 3D flotante */}
                     <button
                       onClick={() => setViewerPlate(plate.plate_number)}
