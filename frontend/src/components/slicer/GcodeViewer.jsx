@@ -9,8 +9,8 @@
  * @module components/slicer/GcodeViewer
  */
 
-import { useMemo, useState, useRef, useEffect } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 
@@ -210,15 +210,69 @@ function BuildPlate({ size }) {
 }
 
 /**
- * Visor 3D de G-code con toggle de color (altura / filamento).
+ * Controlador de cámara: anima transición entre vista cama (top-down) y 3D.
+ */
+function CameraController({ viewMode, camDist, centerY, controlsRef }) {
+  const { camera } = useThree();
+  const prevMode = useRef(viewMode);
+
+  useEffect(() => {
+    if (prevMode.current === viewMode) return;
+    prevMode.current = viewMode;
+
+    const target = new THREE.Vector3(0, centerY, 0);
+    let pos;
+    if (viewMode === 'bed') {
+      // Top-down: cámara arriba mirando hacia abajo
+      pos = new THREE.Vector3(0, camDist * 1.5, 0.01);
+    } else {
+      // 3D: perspectiva isométrica
+      pos = new THREE.Vector3(camDist * 0.7, centerY + camDist * 0.6, camDist * 0.7);
+    }
+
+    // Animar suavemente
+    const startPos = camera.position.clone();
+    const startTarget = controlsRef.current?.target?.clone() || target.clone();
+    let frame = 0;
+    const totalFrames = 30;
+
+    const animate = () => {
+      frame++;
+      const t = frame / totalFrames;
+      const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      camera.position.lerpVectors(startPos, pos, ease);
+      if (controlsRef.current) {
+        controlsRef.current.target.lerpVectors(startTarget, target, ease);
+        controlsRef.current.update();
+      }
+      if (frame < totalFrames) requestAnimationFrame(animate);
+    };
+    requestAnimationFrame(animate);
+  }, [viewMode, camDist, centerY, camera, controlsRef]);
+
+  return null;
+}
+
+/**
+ * Visor 3D de G-code con toggle de vista (cama / 3D) y color (altura / filamento).
  *
  * @param {Object} props
  * @param {string} props.gcodeText - Texto del G-code a renderizar
  * @param {string} [props.className] - Clases CSS adicionales
+ * @param {'bed'|'3d'} [props.initialView='bed'] - Vista inicial
+ * @param {Function} [props.onViewChange] - Callback cuando cambia la vista
  */
-export default function GcodeViewer({ gcodeText, className = '' }) {
+export default function GcodeViewer({ gcodeText, className = '', initialView = 'bed', onViewChange }) {
   const parsed = useMemo(() => parseGcode(gcodeText || ''), [gcodeText]);
   const [colorMode, setColorMode] = useState('height');
+  const [viewMode, setViewMode] = useState(initialView);
+  const controlsRef = useRef();
+
+  const toggleView = useCallback(() => {
+    const next = viewMode === 'bed' ? '3d' : 'bed';
+    setViewMode(next);
+    onViewChange?.(next);
+  }, [viewMode, onViewChange]);
 
   if (!gcodeText) return null;
 
@@ -226,10 +280,27 @@ export default function GcodeViewer({ gcodeText, className = '' }) {
   const camDist = Math.max(size * 1.2, 50);
   const centerY = height / 2;
 
+  // Posición inicial según modo
+  const initialPos = initialView === 'bed'
+    ? [0, camDist * 1.5, 0.01]
+    : [camDist * 0.7, centerY + camDist * 0.6, camDist * 0.7];
+
   return (
     <div className={`relative w-full h-full bg-[#0a0c0f] rounded-lg overflow-hidden ${className}`}>
-      {/* Controles de color */}
+      {/* Controles */}
       <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
+        {/* Toggle vista */}
+        <button
+          onClick={toggleView}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors backdrop-blur-sm ${
+            viewMode === '3d'
+              ? 'bg-amber-400/20 border-amber-400/40 text-amber-400'
+              : 'bg-[#1a1d21]/80 border-[#2a2d31] text-steel hover:text-tech-white hover:border-[#3a3d41]'
+          }`}
+        >
+          {viewMode === 'bed' ? '3D' : 'Cama'}
+        </button>
+        {/* Toggle color */}
         <button
           onClick={() => setColorMode(colorMode === 'height' ? 'filament' : 'height')}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors backdrop-blur-sm ${
@@ -263,7 +334,7 @@ export default function GcodeViewer({ gcodeText, className = '' }) {
 
       <Canvas
         camera={{
-          position: [camDist * 0.7, centerY + camDist * 0.6, camDist * 0.7],
+          position: initialPos,
           fov: 45,
           near: 0.1,
           far: camDist * 10,
@@ -271,9 +342,16 @@ export default function GcodeViewer({ gcodeText, className = '' }) {
         gl={{ antialias: true }}
       >
         <ambientLight intensity={0.6} />
+        <CameraController
+          viewMode={viewMode}
+          camDist={camDist}
+          centerY={centerY}
+          controlsRef={controlsRef}
+        />
         <Toolpath gcodeText={gcodeText} colorMode={colorMode} />
         <BuildPlate size={size * 1.2} />
         <OrbitControls
+          ref={controlsRef}
           target={[0, centerY, 0]}
           enableDamping
           dampingFactor={0.1}

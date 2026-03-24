@@ -87,7 +87,7 @@ export default function GcodeViewerDialog({ open, onClose, jobId, plateNumber })
                 </div>
               }
             >
-              <GcodeViewer gcodeText={gcodeText} className="h-full" />
+              <GcodeViewer gcodeText={gcodeText} className="h-full" initialView="3d" />
             </Suspense>
           )}
         </div>

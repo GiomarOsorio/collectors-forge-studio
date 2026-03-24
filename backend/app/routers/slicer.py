@@ -733,6 +733,60 @@ async def get_plate_gcode(
     )
 
 
+@router.get("/jobs/{job_id}/plate/{plate_number}/thumbnail")
+async def get_plate_thumbnail(
+    job_id: int,
+    plate_number: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Extrae y sirve el thumbnail PNG de una placa desde el .gcode.3mf.
+
+    OrcaSlicer genera Metadata/plate_{N}.png dentro del 3MF de salida.
+    Retorna la imagen como image/png.
+
+    Args:
+        job_id:       ID del trabajo de laminado.
+        plate_number: Número de placa (1-based).
+        db:           Sesión de base de datos.
+        current_user: Usuario autenticado.
+
+    Returns:
+        Response con la imagen PNG.
+    """
+    await _get_company_slicing_job(db, job_id, current_user.company_id)
+
+    archivos = list(SLICER_JOBS_DIR.glob(f"job{job_id}_*.3mf"))
+    if not archivos:
+        raise HTTPException(status_code=404, detail="Archivo .3mf no encontrado en disco")
+
+    archivo_3mf = archivos[0]
+    thumb_nombres = [
+        f"Metadata/plate_{plate_number}.png",
+        f"Auxiliaries/Profile Pictures/plate_{plate_number}.webp",
+    ]
+
+    try:
+        with zipfile.ZipFile(str(archivo_3mf), "r") as zf:
+            for nombre in thumb_nombres:
+                if nombre in zf.namelist():
+                    contenido = zf.read(nombre)
+                    media = "image/webp" if nombre.endswith(".webp") else "image/png"
+                    return Response(
+                        content=contenido,
+                        media_type=media,
+                        headers={"Cache-Control": "public, max-age=86400"},
+                    )
+    except (zipfile.BadZipFile, OSError) as e:
+        raise HTTPException(status_code=500, detail=f"Error al leer el archivo: {e}")
+
+    raise HTTPException(
+        status_code=404,
+        detail=f"Thumbnail de placa {plate_number} no encontrado",
+    )
+
+
 @router.delete("/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_job(
     job_id: int,
