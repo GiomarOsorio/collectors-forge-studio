@@ -35,7 +35,7 @@ ORCA_BIN = Path("/usr/local/bin/OrcaSlicer")
 FREECAD_BIN = Path("/usr/bin/freecadcmd")
 
 # Presets BBL embebidos en el AppImage (usados para proyectos BS sin config)
-ORCA_PROFILES = Path("/opt/squashfs-root/resources/profiles/BBL")
+ORCA_PROFILES = Path("/opt/orcaslicer/resources/profiles/BBL")
 DEFAULT_MACHINE_JSON = ORCA_PROFILES / "machine" / "Bambu Lab P2S 0.4 nozzle.json"
 DEFAULT_PROCESS_JSON = ORCA_PROFILES / "process" / "0.20mm Standard @BBL P2S.json"
 DEFAULT_FILAMENT_JSON = ORCA_PROFILES / "filament" / "Bambu PLA Basic @BBL P2S.json"
