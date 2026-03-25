@@ -687,21 +687,57 @@ async def slice_model(request: SliceRequest):
     settings_files: list[Path] = []
     if needs_presets or stl_path.suffix.lower() == ".stl":
         if needs_presets:
-            # Proyecto BS: solo machine mínimo con volumen P2S
+            # Proyecto BS: machine + process mínimos para P2S.
+            # Nombres genéricos para evitar que OrcaSlicer intente resolver
+            # herencia contra los presets BBL embebidos.
             machine_minimal = {
                 "type": "machine",
-                "name": "Bambu Lab P2S 0.4 nozzle",
-                "from": "system",
+                "name": "P2S Minimal",
                 "instantiation": "true",
                 "nozzle_diameter": ["0.4"],
                 "printable_area": [
                     "0x0", "256x0", "256x256", "0x256"
                 ],
                 "printable_height": "256",
+                "machine_max_speed_x": ["500"],
+                "machine_max_speed_y": ["500"],
+                "machine_max_speed_z": ["30"],
+                "machine_max_speed_e": ["30"],
+                "machine_max_acceleration_x": ["20000"],
+                "machine_max_acceleration_y": ["20000"],
+                "machine_max_acceleration_z": ["500"],
+                "machine_max_acceleration_e": ["5000"],
+                "machine_max_jerk_x": ["9"],
+                "machine_max_jerk_y": ["9"],
+                "machine_max_jerk_z": ["3"],
+                "machine_max_jerk_e": ["2.5"],
+                "retraction_length": ["0.8"],
+                "retraction_speed": ["30"],
+                "gcode_flavor": "marlin",
             }
-            p = JOBS_DIR / "machine_minimal.json"
-            p.write_text(json.dumps(machine_minimal, indent=2))
-            settings_files = [p]
+            process_minimal = {
+                "type": "process",
+                "name": "0.20mm Standard Minimal",
+                "instantiation": "true",
+                "layer_height": "0.2",
+                "initial_layer_print_height": "0.2",
+                "wall_loops": "2",
+                "top_shell_layers": "4",
+                "bottom_shell_layers": "3",
+                "sparse_infill_density": "15%",
+                "sparse_infill_pattern": "grid",
+                "initial_layer_speed": "50",
+                "outer_wall_speed": "200",
+                "inner_wall_speed": "300",
+                "sparse_infill_speed": "300",
+                "travel_speed": "500",
+                "compatible_printers": ["P2S Minimal"],
+            }
+            pm = JOBS_DIR / "machine_minimal.json"
+            pp = JOBS_DIR / "process_minimal.json"
+            pm.write_text(json.dumps(machine_minimal, indent=2))
+            pp.write_text(json.dumps(process_minimal, indent=2))
+            settings_files = [pm, pp]
         else:
             # STL: presets completos aplanados
             settings_files = _write_flat_presets(JOBS_DIR)
