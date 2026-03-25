@@ -32,7 +32,6 @@ JOBS_DIR = Path("/slicer_jobs")
 JOBS_DIR.mkdir(exist_ok=True)
 
 ORCA_BIN = Path("/usr/local/bin/OrcaSlicer")
-FREECAD_BIN = Path("/usr/bin/freecadcmd")
 
 # Presets BBL embebidos en el AppImage (usados para proyectos BS sin config)
 ORCA_PROFILES = Path("/opt/orcaslicer/resources/profiles/BBL")
@@ -324,112 +323,6 @@ def _es_proyecto_bs(src_path: Path) -> bool:
         return False
 
 
-async def _reexport_freecad(src_path: Path, dst_stl: Path) -> tuple:
-    """
-    Re-exporta un .3mf a STL usando FreeCAD headless (freecadcmd).
-
-    FreeCAD importa el 3MF de BambuStudio con toda su estructura de
-    componentes/transforms y exporta un STL limpio con toda la geometría
-    fusionada. Esto produce un archivo que OrcaSlicer puede laminar
-    sin crash porque no tiene metadata de BS ni estructura multi-objeto.
-
-    Args:
-        src_path: Ruta al archivo .3mf original.
-        dst_stl: Ruta de salida para el .stl.
-
-    Returns:
-        Tupla (ruta_stl_o_None, mensaje_debug).
-    """
-    if not FREECAD_BIN.exists():
-        return None, "FreeCAD no disponible"
-
-    # Script Python que FreeCAD ejecuta en modo headless
-    script_content = f'''
-import sys
-import FreeCAD
-import Mesh
-import Import
-
-doc = FreeCAD.newDocument("conv")
-
-try:
-    Import.insert("{src_path}", doc.Name)
-except Exception as e:
-    print(f"FREECAD_ERROR: import fallo: {{e}}")
-    sys.exit(1)
-
-# Recopilar todos los objetos con malla o shape
-meshes = []
-for obj in doc.Objects:
-    if hasattr(obj, "Mesh") and obj.Mesh.CountPoints > 0:
-        meshes.append(obj)
-    elif hasattr(obj, "Shape"):
-        try:
-            m = doc.addObject("Mesh::Feature", "tmp_mesh")
-            m.Mesh = Mesh.Mesh(obj.Shape.tessellate(0.1))
-            if m.Mesh.CountPoints > 0:
-                meshes.append(m)
-            else:
-                doc.removeObject(m.Name)
-        except Exception:
-            pass
-
-if not meshes:
-    print("FREECAD_ERROR: 0 objetos con geometria")
-    sys.exit(1)
-
-Mesh.export(meshes, "{dst_stl}")
-total_pts = sum(m.Mesh.CountPoints for m in meshes if hasattr(m, "Mesh"))
-total_faces = sum(m.Mesh.CountFacets for m in meshes if hasattr(m, "Mesh"))
-print(f"FREECAD_OK: {{len(meshes)}} objetos, {{total_pts}} vertices, {{total_faces}} caras")
-'''
-    script_path = src_path.with_suffix(".py")
-    script_path.write_text(script_content)
-
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            str(FREECAD_BIN), str(script_path),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env={
-                "DISPLAY": "",
-                "HOME": "/tmp",
-                "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-                "QT_QPA_PLATFORM": "offscreen",
-            },
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
-
-        stdout_text = stdout.decode(errors="replace")
-        stderr_text = stderr.decode(errors="replace")
-        combined = stdout_text + stderr_text
-        print(f"[SLICER] FreeCAD stdout: {stdout_text[:2000]}", flush=True)
-        print(f"[SLICER] FreeCAD stderr: {stderr_text[:2000]}", flush=True)
-
-        if "FREECAD_OK:" in combined and dst_stl.exists():
-            # Extraer info del mensaje de éxito
-            for line in combined.splitlines():
-                if "FREECAD_OK:" in line:
-                    debug = f"FreeCAD: {line.split('FREECAD_OK:')[1].strip()}"
-                    return dst_stl, debug
-            return dst_stl, "FreeCAD: exportado OK"
-
-        error_msg = "desconocido"
-        for line in combined.splitlines():
-            if "FREECAD_ERROR:" in line:
-                error_msg = line.split("FREECAD_ERROR:")[1].strip()
-                break
-        return None, f"FreeCAD falló: {error_msg}"
-
-    except asyncio.TimeoutError:
-        return None, "FreeCAD timeout (>120s)"
-    except Exception as e:
-        return None, f"FreeCAD excepción: {e}"
-    finally:
-        if script_path.exists():
-            script_path.unlink()
-
-
 def _reexport_3mf_lib3mf(src_path: Path, dst_path: Path) -> tuple:
     """
     Re-exporta un .3mf fusionando todos los meshes en 1 solo objeto.
@@ -572,14 +465,12 @@ def _strip_3mf_manual(src_path: Path, dst_path: Path) -> tuple:
         return None, f"manual strip falló: {e}"
 
 
-async def _strip_3mf_to_geometry(src_path: Path) -> tuple:
+def _strip_3mf_to_geometry(src_path: Path) -> tuple:
     """
-    Crea un archivo de geometría limpia de un proyecto BambuStudio.
+    Crea un 3MF limpio de un proyecto BambuStudio.
 
-    Cadena de intentos:
-    1. FreeCAD (headless): importa 3MF completo → exporta STL limpio
-    2. lib3mf (C++): fusiona meshes → re-exporta 3MF
-    3. Manual: limpieza por ZIP (fallback)
+    Intenta lib3mf (C++, re-export completo) y si falla usa limpieza manual
+    por ZIP como fallback.
 
     Args:
         src_path: Ruta al archivo .3mf original.
@@ -587,22 +478,16 @@ async def _strip_3mf_to_geometry(src_path: Path) -> tuple:
     Returns:
         Tupla (ruta_limpia_o_None, mensaje_debug).
     """
-    # 1. Intentar FreeCAD primero (exporta a STL — sin metadata 3MF)
-    stl_path = src_path.with_name(f"clean_{src_path.stem}.stl")
-    result, debug = await _reexport_freecad(src_path, stl_path)
-    if result:
-        return result, debug
-    print(f"[SLICER] {debug}, intentando lib3mf...", flush=True)
-
-    # 2. Intentar lib3mf (re-export 3MF con meshes fusionados)
     dst_path = src_path.with_name(f"clean_{src_path.name}")
+
+    # Intentar lib3mf primero (re-export completo, sin restos de BS)
     if HAS_LIB3MF:
         result, debug = _reexport_3mf_lib3mf(src_path, dst_path)
         if result:
             return result, debug
         print(f"[SLICER] {debug}, intentando fallback manual...", flush=True)
 
-    # 3. Fallback: limpieza manual por ZIP
+    # Fallback: limpieza manual por ZIP
     return _strip_3mf_manual(src_path, dst_path)
 
 
@@ -762,7 +647,9 @@ async def slice_model(request: SliceRequest):
             # (o fallback manual) para obtener un 3MF limpio. Se ejecuta en
             # thread para no bloquear el event loop de uvicorn.
             print(f"[SLICER] proyecto BS detectado, iniciando re-export...", flush=True)
-            cleaned, patch_debug = await _strip_3mf_to_geometry(stl_path)
+            cleaned, patch_debug = await asyncio.to_thread(
+                _strip_3mf_to_geometry, stl_path
+            )
             print(f"[SLICER] re-export resultado: {patch_debug}", flush=True)
             if cleaned:
                 patched_path = cleaned
@@ -792,13 +679,13 @@ async def slice_model(request: SliceRequest):
         "--outputdir", str(JOBS_DIR),
     ]
 
-    # Proyectos BS stripped y STL necesitan presets (no tienen config embebida).
-    # NO usar los JSONs BBL del AppImage directamente — su cadena "inherits"
-    # activa código multi-extruder en OrcaSlicer 2.3.x que crashea (SIGSEGV)
-    # en update_values_to_printer_extruders_for_multiple_filaments.
-    # En su lugar, usamos JSONs mínimos sin herencia.
+    # Solo STL necesita --load-settings (no tiene config embebida).
+    # Proyectos BS re-exportados NO usan --load-settings porque los presets
+    # BBL aplanados causan SIGSEGV en update_values_to_printer_extruders_for_
+    # multiple_filaments (different_extruder=1 incluso con arrays truncados).
+    # Sin --load-settings, OrcaSlicer usa sus defaults internos.
     settings_files: list[Path] = []
-    if needs_presets or stl_path.suffix.lower() == ".stl":
+    if stl_path.suffix.lower() == ".stl":
         settings_files = _write_flat_presets(JOBS_DIR)
         if settings_files:
             cmd.extend([
