@@ -56,6 +56,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN python3 -m pip install --no-cache-dir --break-system-packages -r requirements.txt
 
+# Copiar perfiles BBL P2S (BambuStudio 2.5.x) para aplanar en runtime
+COPY profiles/ /app/profiles/
+
 # Copiar aplicacion wrapper
 COPY app.py .
 RUN chown -R appuser:appuser /app

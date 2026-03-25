@@ -33,11 +33,29 @@ JOBS_DIR.mkdir(exist_ok=True)
 
 ORCA_BIN = Path("/usr/local/bin/OrcaSlicer")
 
-# Presets BBL embebidos en el AppImage (usados para proyectos BS sin config)
-ORCA_PROFILES = Path("/opt/orcaslicer/resources/profiles/BBL")
-DEFAULT_MACHINE_JSON = ORCA_PROFILES / "machine" / "Bambu Lab P2S 0.4 nozzle.json"
-DEFAULT_PROCESS_JSON = ORCA_PROFILES / "process" / "0.20mm Standard @BBL P2S.json"
-DEFAULT_FILAMENT_JSON = ORCA_PROFILES / "filament" / "Bambu PLA Basic @BBL P2S.json"
+# Perfiles BBL P2S copiados del repo (BambuStudio 2.5.x).
+# Se usan para aplanar y generar JSONs sin herencia en runtime.
+BBL_PROFILES = Path("/app/profiles/BBL")
+
+# Mapa boquilla → preset de máquina y proceso por defecto
+NOZZLE_PRESETS = {
+    "0.2": {
+        "machine": "Bambu Lab P2S 0.2 nozzle",
+        "process": "0.08mm High Quality @BBL P2S 0.2 nozzle",
+    },
+    "0.4": {
+        "machine": "Bambu Lab P2S 0.4 nozzle",
+        "process": "0.20mm Standard @BBL P2S",
+    },
+    "0.6": {
+        "machine": "Bambu Lab P2S 0.6 nozzle",
+        "process": "0.18mm Balanced Quality @BBL P2S 0.6 nozzle",
+    },
+    "0.8": {
+        "machine": "Bambu Lab P2S 0.8 nozzle",
+        "process": "0.24mm Balanced Quality @BBL P2S 0.8 nozzle",
+    },
+}
 
 
 class SliceRequest(BaseModel):
@@ -575,35 +593,57 @@ def _single_extruder(preset: dict) -> dict:
     return preset
 
 
-def _write_flat_presets(output_dir: Path) -> list[Path]:
+def _write_flat_presets(
+    output_dir: Path,
+    nozzle: str = "0.4",
+    process_name: Optional[str] = None,
+) -> list[Path]:
     """Genera presets BBL aplanados (sin 'inherits') para OrcaSlicer CLI.
 
-    Resuelve la cadena de herencia de los presets embebidos en el AppImage,
-    trunca arrays multi-extruder a 1 elemento, y escribe JSONs planos que
-    OrcaSlicer acepta sin activar el código multi-extruder que causa SIGSEGV.
+    Resuelve la cadena de herencia de los presets del repo (profiles/BBL),
+    trunca arrays multi-extruder a 1 elemento, y renombra los presets
+    para que OrcaSlicer no intente resolver herencia contra sus presets
+    BBL internos (lo que causa SIGSEGV).
+
+    Args:
+        output_dir: Directorio donde escribir los JSONs.
+        nozzle: Tamaño de boquilla ("0.2", "0.4", "0.6", "0.8").
+        process_name: Nombre del process preset. Si es None, usa el
+                      default para la boquilla.
     """
-    machine_dir = ORCA_PROFILES / "machine"
-    process_dir = ORCA_PROFILES / "process"
+    machine_dir = BBL_PROFILES / "machine"
+    process_dir = BBL_PROFILES / "process"
+
+    preset_info = NOZZLE_PRESETS.get(nozzle, NOZZLE_PRESETS["0.4"])
+    machine_name = preset_info["machine"]
+    if process_name is None:
+        process_name = preset_info["process"]
 
     paths = []
+    flat_machine_name = f"TF P2S {nozzle}"
 
-    # Machine: Bambu Lab P2S 0.4 nozzle (aplanado + single extruder)
+    # Machine aplanado + single extruder + nombre genérico
     if machine_dir.exists():
-        flat_machine = _flatten_preset("Bambu Lab P2S 0.4 nozzle", machine_dir)
+        flat_machine = _flatten_preset(machine_name, machine_dir)
         if flat_machine:
             flat_machine.pop("inherits", None)
+            flat_machine.pop("from", None)
+            flat_machine["name"] = flat_machine_name
             flat_machine["instantiation"] = "true"
             _single_extruder(flat_machine)
             p = output_dir / "machine_flat.json"
             p.write_text(json.dumps(flat_machine, indent=2))
             paths.append(p)
 
-    # Process: 0.20mm Standard @BBL P2S (aplanado + single extruder)
+    # Process aplanado + single extruder + compatible con machine renombrado
     if process_dir.exists():
-        flat_process = _flatten_preset("0.20mm Standard @BBL P2S", process_dir)
+        flat_process = _flatten_preset(process_name, process_dir)
         if flat_process:
             flat_process.pop("inherits", None)
+            flat_process.pop("from", None)
+            flat_process["name"] = f"TF {process_name}"
             flat_process["instantiation"] = "true"
+            flat_process["compatible_printers"] = [flat_machine_name]
             _single_extruder(flat_process)
             p = output_dir / "process_flat.json"
             p.write_text(json.dumps(flat_process, indent=2))
@@ -680,67 +720,14 @@ async def slice_model(request: SliceRequest):
     ]
 
     # Presets para OrcaSlicer CLI:
-    # - STL: presets completos aplanados (machine + process)
-    # - Proyectos BS re-exportados: SOLO machine mínimo (volumen P2S 256³)
-    #   Los presets BBL completos causan SIGSEGV por arrays multi-extruder.
-    #   El machine mínimo solo define el volumen de construcción y nozzle.
+    # Tanto proyectos BS re-exportados como STL necesitan presets aplanados.
+    # _write_flat_presets() aplana la cadena de herencia BBL completa,
+    # renombra con prefijo "TF" para evitar que OrcaSlicer resuelva herencia
+    # por nombre contra sus presets internos (causa SIGSEGV por arrays
+    # multi-extruder).
     settings_files: list[Path] = []
     if needs_presets or stl_path.suffix.lower() == ".stl":
-        if needs_presets:
-            # Proyecto BS: machine + process mínimos para P2S.
-            # Nombres genéricos para evitar que OrcaSlicer intente resolver
-            # herencia contra los presets BBL embebidos.
-            machine_minimal = {
-                "type": "machine",
-                "name": "P2S Minimal",
-                "instantiation": "true",
-                "nozzle_diameter": ["0.4"],
-                "printable_area": [
-                    "0x0", "256x0", "256x256", "0x256"
-                ],
-                "printable_height": "256",
-                "machine_max_speed_x": ["500"],
-                "machine_max_speed_y": ["500"],
-                "machine_max_speed_z": ["30"],
-                "machine_max_speed_e": ["30"],
-                "machine_max_acceleration_x": ["20000"],
-                "machine_max_acceleration_y": ["20000"],
-                "machine_max_acceleration_z": ["500"],
-                "machine_max_acceleration_e": ["5000"],
-                "machine_max_jerk_x": ["9"],
-                "machine_max_jerk_y": ["9"],
-                "machine_max_jerk_z": ["3"],
-                "machine_max_jerk_e": ["2.5"],
-                "retraction_length": ["0.8"],
-                "retraction_speed": ["30"],
-                "gcode_flavor": "marlin",
-            }
-            process_minimal = {
-                "type": "process",
-                "name": "0.20mm Standard Minimal",
-                "instantiation": "true",
-                "layer_height": "0.2",
-                "initial_layer_print_height": "0.2",
-                "wall_loops": "2",
-                "top_shell_layers": "4",
-                "bottom_shell_layers": "3",
-                "sparse_infill_density": "15%",
-                "sparse_infill_pattern": "grid",
-                "initial_layer_speed": "50",
-                "outer_wall_speed": "200",
-                "inner_wall_speed": "300",
-                "sparse_infill_speed": "300",
-                "travel_speed": "500",
-                "compatible_printers": ["P2S Minimal"],
-            }
-            pm = JOBS_DIR / "machine_minimal.json"
-            pp = JOBS_DIR / "process_minimal.json"
-            pm.write_text(json.dumps(machine_minimal, indent=2))
-            pp.write_text(json.dumps(process_minimal, indent=2))
-            settings_files = [pm, pp]
-        else:
-            # STL: presets completos aplanados
-            settings_files = _write_flat_presets(JOBS_DIR)
+        settings_files = _write_flat_presets(JOBS_DIR)
         if settings_files:
             cmd.extend([
                 "--load-settings",
