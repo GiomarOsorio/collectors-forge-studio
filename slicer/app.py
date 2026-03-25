@@ -679,14 +679,32 @@ async def slice_model(request: SliceRequest):
         "--outputdir", str(JOBS_DIR),
     ]
 
-    # Solo STL necesita --load-settings (no tiene config embebida).
-    # Proyectos BS re-exportados NO usan --load-settings porque los presets
-    # BBL aplanados causan SIGSEGV en update_values_to_printer_extruders_for_
-    # multiple_filaments (different_extruder=1 incluso con arrays truncados).
-    # Sin --load-settings, OrcaSlicer usa sus defaults internos.
+    # Presets para OrcaSlicer CLI:
+    # - STL: presets completos aplanados (machine + process)
+    # - Proyectos BS re-exportados: SOLO machine mínimo (volumen P2S 256³)
+    #   Los presets BBL completos causan SIGSEGV por arrays multi-extruder.
+    #   El machine mínimo solo define el volumen de construcción y nozzle.
     settings_files: list[Path] = []
-    if stl_path.suffix.lower() == ".stl":
-        settings_files = _write_flat_presets(JOBS_DIR)
+    if needs_presets or stl_path.suffix.lower() == ".stl":
+        if needs_presets:
+            # Proyecto BS: solo machine mínimo con volumen P2S
+            machine_minimal = {
+                "type": "machine",
+                "name": "Bambu Lab P2S 0.4 nozzle",
+                "from": "system",
+                "instantiation": "true",
+                "nozzle_diameter": ["0.4"],
+                "printable_area": [
+                    "0x0", "256x0", "256x256", "0x256"
+                ],
+                "printable_height": "256",
+            }
+            p = JOBS_DIR / "machine_minimal.json"
+            p.write_text(json.dumps(machine_minimal, indent=2))
+            settings_files = [p]
+        else:
+            # STL: presets completos aplanados
+            settings_files = _write_flat_presets(JOBS_DIR)
         if settings_files:
             cmd.extend([
                 "--load-settings",
