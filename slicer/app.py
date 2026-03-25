@@ -627,7 +627,7 @@ def _write_flat_presets(
         flat_machine = _flatten_preset(machine_name, machine_dir)
         if flat_machine:
             flat_machine.pop("inherits", None)
-            flat_machine.pop("from", None)
+            flat_machine["from"] = "system"
             flat_machine["name"] = flat_machine_name
             flat_machine["instantiation"] = "true"
             _single_extruder(flat_machine)
@@ -640,7 +640,7 @@ def _write_flat_presets(
         flat_process = _flatten_preset(process_name, process_dir)
         if flat_process:
             flat_process.pop("inherits", None)
-            flat_process.pop("from", None)
+            flat_process["from"] = "system"
             flat_process["name"] = f"TF {process_name}"
             flat_process["instantiation"] = "true"
             flat_process["compatible_printers"] = [flat_machine_name]
