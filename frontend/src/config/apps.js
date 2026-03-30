@@ -30,7 +30,7 @@ export const APPS = [
     description: 'Calculadora de costos de impresión 3D. Gestiona filamentos, impresoras, insumos y genera cotizaciones.',
     icon: Calculator,
     route: '/cost/calculator',
-    color: '#3FAF4C',
+    color: '#2DD4BF',
     badge: null,
   },
   {

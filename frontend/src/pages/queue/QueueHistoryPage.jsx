@@ -90,10 +90,10 @@ export default function QueueHistoryPage() {
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-[#1e2125]">
+        <div className="overflow-x-auto rounded-xl border border-[#222630]">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-[#1e2125] text-gunmetal">
+              <tr className="border-b border-[#222630] text-gunmetal">
                 <th className="text-left px-4 py-3 font-medium">Pieza</th>
                 <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Impresora</th>
                 <th className="text-left px-4 py-3 font-medium hidden lg:table-cell">Duración</th>
@@ -107,8 +107,8 @@ export default function QueueHistoryPage() {
                 return (
                   <tr
                     key={item.id}
-                    className={`border-b border-[#1e2125] last:border-0 ${
-                      idx % 2 === 0 ? 'bg-[#0d1014]' : 'bg-[#111418]'
+                    className={`border-b border-[#222630] last:border-0 ${
+                      idx % 2 === 0 ? 'bg-[#0A0E16]' : 'bg-[#0D1018]'
                     }`}
                   >
                     {/* Pieza */}

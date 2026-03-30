@@ -181,8 +181,8 @@ export default function AccountPage() {
             onClick={() => setActiveTab(id)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === id
-                ? 'bg-forge-green text-black'
-                : 'bg-[#0d1014] border border-[#1e2125] text-steel hover:text-tech-white'
+                ? 'bg-forge-teal text-black'
+                : 'bg-[#0A0E16] border border-[#222630] text-steel hover:text-tech-white'
             }`}
           >
             <Icon size={15} />
@@ -284,10 +284,10 @@ export default function AccountPage() {
                 <img
                   src={company.logo_url}
                   alt="Logo"
-                  className="h-16 w-auto rounded-lg border border-[#2a2d31] object-contain bg-[#0d1014] p-1"
+                  className="h-16 w-auto rounded-lg border border-[#2A2F38] object-contain bg-[#0A0E16] p-1"
                 />
               ) : (
-                <div className="h-16 w-24 rounded-lg border border-[#2a2d31] bg-[#0d1014] flex items-center justify-center text-gunmetal text-xs">
+                <div className="h-16 w-24 rounded-lg border border-[#2A2F38] bg-[#0A0E16] flex items-center justify-center text-gunmetal text-xs">
                   Sin logo
                 </div>
               )}
@@ -502,20 +502,20 @@ export default function AccountPage() {
                     <td className="tf-td font-medium text-tech-white">
                       {u.username}
                       {u.id === user?.id && (
-                        <span className="ml-2 text-xs text-forge-green">(tú)</span>
+                        <span className="ml-2 text-xs text-forge-teal">(tú)</span>
                       )}
                     </td>
                     <td className="tf-td text-steel">{u.email}</td>
                     <td className="tf-td-right">
                       {u.is_admin ? (
-                        <span className="text-xs bg-forge-green/20 text-forge-green border border-forge-green/30 rounded px-2 py-0.5">Admin</span>
+                        <span className="text-xs bg-forge-teal/20 text-forge-teal border border-forge-teal/30 rounded px-2 py-0.5">Admin</span>
                       ) : (
                         <span className="text-xs text-gunmetal">—</span>
                       )}
                     </td>
                     <td className="tf-td-right">
                       {u.is_active ? (
-                        <span className="text-xs text-forge-green">Activo</span>
+                        <span className="text-xs text-forge-teal">Activo</span>
                       ) : (
                         <span className="text-xs text-red-400">Inactivo</span>
                       )}

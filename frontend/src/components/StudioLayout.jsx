@@ -29,7 +29,7 @@ export default function StudioLayout() {
   return (
     <div className="min-h-screen bg-forge-black flex flex-col">
       {/* Header */}
-      <header className="bg-[#0d1014] border-b border-[#1e2125] px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+      <header className="bg-[#0A0E16] border-b border-[#222630] px-6 py-4 flex items-center justify-between sticky top-0 z-10">
         <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
           <img src="/logo.png" alt="TurtleForge" className="h-9 w-9 object-contain" />
           <div>
@@ -64,7 +64,7 @@ export default function StudioLayout() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-[#0d1014] border-t border-[#1e2125] py-2 px-6 text-center">
+      <footer className="bg-[#0A0E16] border-t border-[#222630] py-2 px-6 text-center">
         <p className="text-gunmetal text-xs">TurtleForge Studio · Medellín, Colombia</p>
       </footer>
     </div>

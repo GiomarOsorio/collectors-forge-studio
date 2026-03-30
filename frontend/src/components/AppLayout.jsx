@@ -23,7 +23,7 @@ import Breadcrumb from './Breadcrumb';
 
 const PageFallback = () => (
   <div className="flex items-center justify-center min-h-[60vh]">
-    <div className="w-7 h-7 border-2 border-forge-green/20 border-t-forge-green rounded-full animate-spin" />
+    <div className="w-7 h-7 border-2 border-forge-teal/20 border-t-forge-teal rounded-full animate-spin" />
   </div>
 );
 
@@ -33,7 +33,7 @@ const PageFallback = () => (
  * @param {Object} props
  * @param {string} props.appName - Nombre de la app mostrado en el sidebar (ej. "Cost", "Archive")
  * @param {Array<{to:string, icon:React.ComponentType, label:string, end?:boolean}>} props.navItems
- * @param {string} props.activeClass - Clases Tailwind para el enlace activo (ej. "bg-forge-green/10 text-forge-green")
+ * @param {string} props.activeClass - Clases Tailwind para el enlace activo (ej. "bg-forge-teal/10 text-forge-teal")
  * @param {boolean} [props.useAppSwitcher=true] - false en Settings (el logo vuelve a "/")
  * @returns {JSX.Element}
  */
@@ -83,10 +83,10 @@ export default function AppLayout({ appName, navItems, activeClass, useAppSwitch
       )}
 
       {/* Barra lateral de navegación */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#0d1014] text-tech-white flex flex-col transition-transform duration-300 border-r border-[#1e2125] ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} xl:translate-x-0`}>
+      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#0A0E16] text-tech-white flex flex-col transition-transform duration-300 border-r border-[#222630] ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} xl:translate-x-0`}>
 
         {/* Encabezado: abre AppSwitcher o vuelve al Studio Home */}
-        <div className="p-5 border-b border-[#1e2125]">
+        <div className="p-5 border-b border-[#222630]">
           {useAppSwitcher ? (
             <button
               onClick={() => setSwitcherOpen(true)}
@@ -119,7 +119,7 @@ export default function AppLayout({ appName, navItems, activeClass, useAppSwitch
                 `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                   isActive
                     ? `${activeClass} font-medium`
-                    : 'text-steel hover:bg-[#1e2125] hover:text-tech-white'
+                    : 'text-steel hover:bg-[#222630] hover:text-tech-white'
                 }`
               }
             >
@@ -130,7 +130,7 @@ export default function AppLayout({ appName, navItems, activeClass, useAppSwitch
         </nav>
 
         {/* Pie: nombre de usuario y logout */}
-        <div className="p-4 border-t border-[#1e2125]">
+        <div className="p-4 border-t border-[#222630]">
           <div className="flex items-center justify-between gap-2">
             <NavLink
               to="/settings/account"
@@ -155,7 +155,7 @@ export default function AppLayout({ appName, navItems, activeClass, useAppSwitch
       {/* Área de contenido principal */}
       <div className="flex-1 flex flex-col xl:ml-64">
         {/* Header con hamburger: visible en pantallas menores a xl */}
-        <header className="xl:hidden bg-[#0d1014] text-tech-white px-4 py-3 flex items-center gap-3 sticky top-0 z-20 border-b border-[#1e2125]">
+        <header className="xl:hidden bg-[#0A0E16] text-tech-white px-4 py-3 flex items-center gap-3 sticky top-0 z-20 border-b border-[#222630]">
           <button
             onClick={() => setSidebarOpen(true)}
             className="text-steel hover:text-tech-white shrink-0"
@@ -194,7 +194,7 @@ export default function AppLayout({ appName, navItems, activeClass, useAppSwitch
         </main>
 
         {/* Footer */}
-        <footer className="bg-[#0d1014] border-t border-[#1e2125] py-2 px-6 text-center shrink-0">
+        <footer className="bg-[#0A0E16] border-t border-[#222630] py-2 px-6 text-center shrink-0">
           <p className="text-gunmetal text-xs">TurtleForge Studio · Medellín, Colombia</p>
         </footer>
       </div>

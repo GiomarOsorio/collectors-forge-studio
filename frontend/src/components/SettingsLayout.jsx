@@ -23,7 +23,7 @@ export default function SettingsLayout() {
     <AppLayout
       appName="Configuración"
       navItems={navItems}
-      activeClass="bg-forge-green/10 text-forge-green"
+      activeClass="bg-forge-teal/10 text-forge-teal"
       useAppSwitcher={false}
     />
   );

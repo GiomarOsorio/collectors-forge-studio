@@ -101,7 +101,7 @@ function PrintingCard({ item, onDone, onCancel }) {
           </button>
           <button
             onClick={() => onCancel(item.id)}
-            className="flex items-center gap-1.5 px-3 py-2 bg-[#1e2125] hover:bg-red-500/20 text-steel hover:text-red-400 text-sm rounded-lg transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 bg-[#222630] hover:bg-red-500/20 text-steel hover:text-red-400 text-sm rounded-lg transition-colors"
           >
             <XCircle size={15} />
             Cancelar
@@ -119,7 +119,7 @@ function PrintingCard({ item, onDone, onCancel }) {
 function PendingCard({ item, onStart, onRemove }) {
   const q = item.quote;
   return (
-    <div className="bg-[#0d1014] border border-[#1e2125] rounded-xl p-4 flex items-center gap-4">
+    <div className="bg-[#0A0E16] border border-[#222630] rounded-xl p-4 flex items-center gap-4">
       <div className="text-gunmetal text-lg font-mono w-6 text-center shrink-0">
         {item.position}
       </div>
@@ -200,9 +200,9 @@ function AddToQueueModal({ onClose, onAdded }) {
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-[#0d1014] border border-[#1e2125] rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
+      <div className="bg-[#0A0E16] border border-[#222630] rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-[#1e2125]">
+        <div className="flex items-center justify-between p-5 border-b border-[#222630]">
           <h2 className="text-tech-white font-semibold">Agregar a la cola</h2>
           <button onClick={onClose} className="text-gunmetal hover:text-tech-white transition-colors">
             <X size={20} />
@@ -210,7 +210,7 @@ function AddToQueueModal({ onClose, onAdded }) {
         </div>
 
         {/* Búsqueda */}
-        <div className="p-4 border-b border-[#1e2125]">
+        <div className="p-4 border-b border-[#222630]">
           <div className="relative">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gunmetal" />
             <input
@@ -218,7 +218,7 @@ function AddToQueueModal({ onClose, onAdded }) {
               placeholder="Buscar por nombre de pieza..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-[#1a1d21] border border-[#2a2d31] rounded-lg pl-9 pr-3 py-2 text-sm text-tech-white placeholder-gunmetal focus:outline-none focus:border-teal-500"
+              className="w-full bg-[#1A1D25] border border-[#2A2F38] rounded-lg pl-9 pr-3 py-2 text-sm text-tech-white placeholder-gunmetal focus:outline-none focus:border-teal-500"
             />
           </div>
         </div>
@@ -240,7 +240,7 @@ function AddToQueueModal({ onClose, onAdded }) {
                 key={q.id}
                 onClick={() => handleAdd(q.id)}
                 disabled={adding === q.id}
-                className="w-full text-left px-4 py-3 rounded-xl hover:bg-[#1e2125] transition-colors group"
+                className="w-full text-left px-4 py-3 rounded-xl hover:bg-[#222630] transition-colors group"
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">

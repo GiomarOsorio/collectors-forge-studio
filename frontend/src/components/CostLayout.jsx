@@ -21,7 +21,7 @@ export default function CostLayout() {
     <AppLayout
       appName="Cost"
       navItems={navItems}
-      activeClass="bg-forge-green/10 text-forge-green"
+      activeClass="bg-forge-teal/10 text-forge-teal"
     />
   );
 }

@@ -242,7 +242,7 @@ export default function InventoryPurchasesPage() {
           <button
             onClick={handleScanTracking}
             disabled={scanning}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#2a2d31] text-steel hover:text-tech-white hover:border-[#3a3d41] transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#2A2F38] text-steel hover:text-tech-white hover:border-[#363C47] transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             title="Consulta parcelsapp.com para todos los pedidos activos"
           >
             {scanning
@@ -351,7 +351,7 @@ export default function InventoryPurchasesPage() {
                 {selected.carrier && <span className="text-steel">{selected.carrier}</span>}
               </div>
               {selected.tracking_number && (
-                <div className="bg-[#0d1014] rounded-lg px-3 py-2">
+                <div className="bg-[#0A0E16] rounded-lg px-3 py-2">
                   <p className="text-xs text-gunmetal mb-0.5">Número de tracking</p>
                   <p className="font-mono text-blue-400 font-medium">{selected.tracking_number}</p>
                   {selected.tracking_checked_at && (
@@ -391,7 +391,7 @@ export default function InventoryPurchasesPage() {
                     return (
                       <div>
                         <p className="text-xs text-gunmetal font-medium uppercase tracking-wider mb-2">Info de tracking</p>
-                        <pre className="text-xs text-steel bg-[#0d1014] rounded-lg p-3 max-h-40 overflow-y-auto whitespace-pre-wrap">{rawText.slice(0, 1500)}</pre>
+                        <pre className="text-xs text-steel bg-[#0A0E16] rounded-lg p-3 max-h-40 overflow-y-auto whitespace-pre-wrap">{rawText.slice(0, 1500)}</pre>
                       </div>
                     );
                   }
@@ -586,7 +586,7 @@ export default function InventoryPurchasesPage() {
 
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setModalOpen(false)}
-                  className="flex-1 px-4 py-2 rounded-lg border border-[#2a2d31] text-steel hover:text-tech-white transition-colors text-sm">
+                  className="flex-1 px-4 py-2 rounded-lg border border-[#2A2F38] text-steel hover:text-tech-white transition-colors text-sm">
                   Cancelar
                 </button>
                 <button type="submit" disabled={saving}

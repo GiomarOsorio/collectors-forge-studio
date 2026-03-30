@@ -74,7 +74,7 @@ export default function MaintenancePrintersPage() {
         </div>
         <button
           onClick={() => navigate('/cost/printers')}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#2a2d31] text-steel hover:text-tech-white hover:border-violet-500/50 text-sm transition-colors shrink-0"
+          className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#2A2F38] text-steel hover:text-tech-white hover:border-violet-500/50 text-sm transition-colors shrink-0"
           title="Gestionar impresoras en Cost"
         >
           <ExternalLink size={14} /> Gestionar en Cost
@@ -95,10 +95,10 @@ export default function MaintenancePrintersPage() {
           </button>
         </div>
       ) : (
-        <div className="bg-[#0d1014] rounded-xl border border-[#1e2125] overflow-x-auto">
+        <div className="bg-[#0A0E16] rounded-xl border border-[#222630] overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-[#1e2125]">
+              <tr className="border-b border-[#222630]">
                 <th className="text-left px-4 py-3 text-gunmetal font-medium">Nombre</th>
                 <th className="text-left px-4 py-3 text-gunmetal font-medium">Modelo</th>
                 <th className="text-right px-4 py-3 text-gunmetal font-medium">Horas actuales</th>
@@ -114,7 +114,7 @@ export default function MaintenancePrintersPage() {
                 const pctColor = pct >= 80 ? 'text-red-400' : pct >= 60 ? 'text-amber-400' : 'text-violet-400';
 
                 return (
-                  <tr key={p.id} className="border-b border-[#1e2125] hover:bg-[#1a1d21] transition-colors">
+                  <tr key={p.id} className="border-b border-[#222630] hover:bg-[#1A1D25] transition-colors">
                     <td className="px-4 py-3 text-tech-white font-medium">{p.name}</td>
                     <td className="px-4 py-3 text-steel">{p.model}</td>
                     <td className="px-4 py-3 text-right">
@@ -128,7 +128,7 @@ export default function MaintenancePrintersPage() {
                     <td className="px-4 py-3">
                       <button
                         onClick={() => openHoursModal(p)}
-                        className="flex items-center gap-1.5 ml-auto px-3 py-1.5 rounded-lg text-xs border border-[#2a2d31] text-steel hover:text-violet-400 hover:border-violet-500/50 transition-colors"
+                        className="flex items-center gap-1.5 ml-auto px-3 py-1.5 rounded-lg text-xs border border-[#2A2F38] text-steel hover:text-violet-400 hover:border-violet-500/50 transition-colors"
                         title="Actualizar horas"
                       >
                         <Clock size={13} /> Actualizar horas
@@ -145,8 +145,8 @@ export default function MaintenancePrintersPage() {
       {/* Modal actualizar horas */}
       {hoursModalOpen && hoursTarget && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0d1014] border border-[#1e2125] rounded-xl w-full max-w-sm">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#1e2125]">
+          <div className="bg-[#0A0E16] border border-[#222630] rounded-xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#222630]">
               <h2 className="text-tech-white font-semibold">Actualizar horas</h2>
               <button onClick={() => setHoursModalOpen(false)} className="text-steel hover:text-tech-white">
                 <X size={20} />
@@ -164,7 +164,7 @@ export default function MaintenancePrintersPage() {
                   min="0"
                   step="0.1"
                   required
-                  className="w-full bg-[#1a1d21] border border-[#2a2d31] rounded-lg px-3 py-2 text-tech-white text-sm focus:outline-none focus:border-violet-500"
+                  className="w-full bg-[#1A1D25] border border-[#2A2F38] rounded-lg px-3 py-2 text-tech-white text-sm focus:outline-none focus:border-violet-500"
                   value={hoursValue}
                   onChange={(e) => setHoursValue(e.target.value)}
                 />
@@ -173,7 +173,7 @@ export default function MaintenancePrintersPage() {
                 <button
                   type="button"
                   onClick={() => setHoursModalOpen(false)}
-                  className="flex-1 px-4 py-2 rounded-lg border border-[#2a2d31] text-steel hover:text-tech-white text-sm transition-colors"
+                  className="flex-1 px-4 py-2 rounded-lg border border-[#2A2F38] text-steel hover:text-tech-white text-sm transition-colors"
                 >
                   Cancelar
                 </button>

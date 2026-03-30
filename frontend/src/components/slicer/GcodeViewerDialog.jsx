@@ -47,9 +47,9 @@ export default function GcodeViewerDialog({ open, onClose, jobId, plateNumber })
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-      <div className="relative bg-[#13171c] border border-[#1e2125] rounded-xl w-full max-w-4xl h-[80vh] flex flex-col">
+      <div className="relative bg-[#111520] border border-[#222630] rounded-xl w-full max-w-4xl h-[80vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-[#1e2125] shrink-0">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-[#222630] shrink-0">
           <div className="flex items-center gap-2">
             <Box size={16} className="text-amber-400" />
             <h2 className="text-tech-white font-semibold text-sm">
@@ -93,7 +93,7 @@ export default function GcodeViewerDialog({ open, onClose, jobId, plateNumber })
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-2 border-t border-[#1e2125] text-gunmetal text-xs shrink-0">
+        <div className="px-5 py-2 border-t border-[#222630] text-gunmetal text-xs shrink-0">
           Arrastra para rotar · Scroll para zoom · Click derecho para desplazar
         </div>
       </div>

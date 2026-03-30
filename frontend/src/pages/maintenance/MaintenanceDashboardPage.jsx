@@ -51,7 +51,7 @@ const STATUS_CONFIG = {
   ok:          { color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', icon: CheckCircle2, label: 'OK' },
   soon:        { color: 'text-amber-400',   bg: 'bg-amber-500/10',   border: 'border-amber-500/20',   icon: Clock,        label: 'Próximo' },
   overdue:     { color: 'text-red-400',     bg: 'bg-red-500/10',     border: 'border-red-500/20',     icon: AlertTriangle, label: 'Vencido' },
-  no_interval: { color: 'text-steel',       bg: 'bg-[#1a1d21]',      border: 'border-[#2a2d31]',      icon: HelpCircle,   label: null },
+  no_interval: { color: 'text-steel',       bg: 'bg-[#1A1D25]',      border: 'border-[#2A2F38]',      icon: HelpCircle,   label: null },
 };
 
 /**
@@ -133,7 +133,7 @@ function PrinterCard({ summary, onUpdateHours }) {
   }).length;
 
   return (
-    <div className="bg-[#0d1014] border border-[#1e2125] rounded-xl p-5">
+    <div className="bg-[#0A0E16] border border-[#222630] rounded-xl p-5">
       {/* Encabezado */}
       <div className="flex items-start justify-between mb-4">
         <div>
@@ -263,8 +263,8 @@ export default function MaintenanceDashboardPage() {
       {/* Modal actualizar horas */}
       {hoursTarget && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0d1014] border border-[#1e2125] rounded-xl w-full max-w-sm">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#1e2125]">
+          <div className="bg-[#0A0E16] border border-[#222630] rounded-xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#222630]">
               <h2 className="text-tech-white font-semibold">Actualizar horas</h2>
               <button onClick={() => setHoursTarget(null)} className="text-steel hover:text-tech-white">
                 <X size={20} />
@@ -283,7 +283,7 @@ export default function MaintenanceDashboardPage() {
                   step="0.1"
                   required
                   autoFocus
-                  className="w-full bg-[#1a1d21] border border-[#2a2d31] rounded-lg px-3 py-2 text-tech-white text-sm focus:outline-none focus:border-violet-500"
+                  className="w-full bg-[#1A1D25] border border-[#2A2F38] rounded-lg px-3 py-2 text-tech-white text-sm focus:outline-none focus:border-violet-500"
                   value={hoursValue}
                   onChange={(e) => setHoursValue(e.target.value)}
                 />
@@ -292,7 +292,7 @@ export default function MaintenanceDashboardPage() {
                 <button
                   type="button"
                   onClick={() => setHoursTarget(null)}
-                  className="flex-1 px-4 py-2 rounded-lg border border-[#2a2d31] text-steel hover:text-tech-white text-sm transition-colors"
+                  className="flex-1 px-4 py-2 rounded-lg border border-[#2A2F38] text-steel hover:text-tech-white text-sm transition-colors"
                 >
                   Cancelar
                 </button>

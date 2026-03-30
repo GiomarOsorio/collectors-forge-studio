@@ -202,7 +202,7 @@ function Toolpath({ gcodeText, colorMode }) {
 function BuildPlate({ size }) {
   return (
     <gridHelper
-      args={[size, 20, '#2a2d31', '#1a1d21']}
+      args={[size, 20, '#2A2F38', '#1A1D25']}
       rotation={[0, 0, 0]}
       position={[0, 0, 0]}
     />
@@ -295,7 +295,7 @@ export default function GcodeViewer({ gcodeText, className = '', initialView = '
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors backdrop-blur-sm ${
             viewMode === '3d'
               ? 'bg-amber-400/20 border-amber-400/40 text-amber-400'
-              : 'bg-[#1a1d21]/80 border-[#2a2d31] text-steel hover:text-tech-white hover:border-[#3a3d41]'
+              : 'bg-[#1A1D25]/80 border-[#2A2F38] text-steel hover:text-tech-white hover:border-[#363C47]'
           }`}
         >
           {viewMode === 'bed' ? '3D' : 'Cama'}
@@ -306,7 +306,7 @@ export default function GcodeViewer({ gcodeText, className = '', initialView = '
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors backdrop-blur-sm ${
             colorMode === 'filament'
               ? 'bg-amber-400/20 border-amber-400/40 text-amber-400'
-              : 'bg-[#1a1d21]/80 border-[#2a2d31] text-steel hover:text-tech-white hover:border-[#3a3d41]'
+              : 'bg-[#1A1D25]/80 border-[#2A2F38] text-steel hover:text-tech-white hover:border-[#363C47]'
           }`}
           title={colorMode === 'height' ? 'Cambiar a color por filamento' : 'Cambiar a color por altura'}
         >

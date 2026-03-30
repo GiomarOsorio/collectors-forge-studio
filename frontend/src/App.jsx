@@ -227,8 +227,8 @@ export default function App() {
           <ConfirmProvider>
             <AppRoutes />
             <Toaster position="top-right" toastOptions={{
-            style: { background: '#1a1d21', color: '#F2F4F6', border: '1px solid #2a2d31' },
-            success: { iconTheme: { primary: '#3FAF4C', secondary: '#F2F4F6' } },
+            style: { background: '#1A1D25', color: '#F2F4F6', border: '1px solid #2A2F38' },
+            success: { iconTheme: { primary: '#2DD4BF', secondary: '#F2F4F6' } },
           }} />
           </ConfirmProvider>
         </DirtyStateProvider>

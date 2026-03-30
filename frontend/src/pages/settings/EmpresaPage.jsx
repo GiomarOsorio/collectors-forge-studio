@@ -88,10 +88,10 @@ export default function EmpresaPage() {
               <img
                 src={company.logo_url}
                 alt="Logo"
-                className="h-16 w-auto rounded-lg border border-[#2a2d31] object-contain bg-[#0d1014] p-1"
+                className="h-16 w-auto rounded-lg border border-[#2A2F38] object-contain bg-[#0A0E16] p-1"
               />
             ) : (
-              <div className="h-16 w-24 rounded-lg border border-[#2a2d31] bg-[#0d1014] flex items-center justify-center text-gunmetal text-xs">
+              <div className="h-16 w-24 rounded-lg border border-[#2A2F38] bg-[#0A0E16] flex items-center justify-center text-gunmetal text-xs">
                 Sin logo
               </div>
             )}
