@@ -181,7 +181,7 @@ export default function SlicerHistoryPage() {
         </div>
         <button
           onClick={() => fetchJobs()}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-[#2a2d31] text-steel hover:text-tech-white hover:border-[#3a3d41] transition-colors text-sm"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-[#2A2F38] text-steel hover:text-tech-white hover:border-[#363C47] transition-colors text-sm"
         >
           <RefreshCw size={14} />
           Actualizar
@@ -204,10 +204,10 @@ export default function SlicerHistoryPage() {
       ) : (
         <>
           {/* Tabla de trabajos */}
-          <div className="overflow-x-auto rounded-xl border border-[#1e2125]">
+          <div className="overflow-x-auto rounded-xl border border-[#222630]">
             <table className="w-full min-w-[650px]">
               <thead>
-                <tr className="border-b border-[#1e2125] text-gunmetal text-xs uppercase tracking-wider">
+                <tr className="border-b border-[#222630] text-gunmetal text-xs uppercase tracking-wider">
                   <th className="text-left px-4 py-3">Archivo / Fuente</th>
                   <th className="text-left px-4 py-3">Tipo</th>
                   <th className="text-left px-4 py-3">Estado</th>
@@ -220,7 +220,7 @@ export default function SlicerHistoryPage() {
                 {jobs.map((job) => (
                   <tr
                     key={job.id}
-                    className="border-b border-[#1e2125] hover:bg-[#1a1d21] transition-colors"
+                    className="border-b border-[#222630] hover:bg-[#1A1D25] transition-colors"
                   >
                     <td className="px-4 py-3">
                       <p className="text-tech-white text-sm font-medium truncate max-w-[180px]">
@@ -292,14 +292,14 @@ export default function SlicerHistoryPage() {
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="px-3 py-1.5 rounded-lg border border-[#2a2d31] hover:border-[#3a3d41] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="px-3 py-1.5 rounded-lg border border-[#2A2F38] hover:border-[#363C47] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   Anterior
                 </button>
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="px-3 py-1.5 rounded-lg border border-[#2a2d31] hover:border-[#3a3d41] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="px-3 py-1.5 rounded-lg border border-[#2A2F38] hover:border-[#363C47] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   Siguiente
                 </button>

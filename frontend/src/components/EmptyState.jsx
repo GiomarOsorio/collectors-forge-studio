@@ -25,7 +25,7 @@ export default function EmptyState({ icon: Icon, title, description, actionLabel
   return (
     <div className={`flex flex-col items-center justify-center text-center ${isSmall ? 'py-10 px-4' : 'py-16 px-6'}`}>
       {Icon && (
-        <div className={`${isSmall ? 'mb-3' : 'mb-4'} p-4 rounded-2xl bg-[#1e2125]`}>
+        <div className={`${isSmall ? 'mb-3' : 'mb-4'} p-4 rounded-2xl bg-[#222630]`}>
           <Icon
             size={isSmall ? 24 : 32}
             className="text-gunmetal"

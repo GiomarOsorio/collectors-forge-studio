@@ -50,10 +50,10 @@ export default function StudioHomePage() {
                   animation: 'fadeInUp 0.4s ease-out both',
                   animationDelay: `${0.08 + index * 0.055}s`,
                 }}
-                className="relative flex flex-col items-center gap-4 p-6 rounded-2xl bg-[#13171c] border border-[#1e2125] hover:border-forge-green/40 hover:bg-forge-green/5 transition-all group text-center"
+                className="relative flex flex-col items-center gap-4 p-6 rounded-2xl bg-[#111520] border border-[#222630] hover:border-forge-teal/40 hover:bg-forge-teal/5 transition-all group text-center"
               >
                 {app.badge && (
-                  <span className="absolute top-3 right-3 text-xs font-medium px-2 py-0.5 rounded-full bg-forge-green/20 text-forge-green">
+                  <span className="absolute top-3 right-3 text-xs font-medium px-2 py-0.5 rounded-full bg-forge-teal/20 text-forge-teal">
                     {app.badge}
                   </span>
                 )}
@@ -69,7 +69,7 @@ export default function StudioHomePage() {
                 </div>
                 {/* Nombre y descripción */}
                 <div>
-                  <p className="font-bold text-tech-white text-base group-hover:text-forge-green transition-colors">
+                  <p className="font-bold text-tech-white text-base group-hover:text-forge-teal transition-colors">
                     {app.name}
                   </p>
                   <p className="text-xs text-gunmetal mt-1 leading-relaxed">{app.description}</p>

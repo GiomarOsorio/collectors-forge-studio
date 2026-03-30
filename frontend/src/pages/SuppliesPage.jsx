@@ -227,7 +227,7 @@ export default function SuppliesPage() {
                   $ {s.price_per_unit.toFixed(6)}
                 </td>
                 <td className="tf-td-right">
-                  <button onClick={() => handleEdit(s)} className="text-forge-green hover:text-deep-green mr-3 transition-colors"><Pencil size={16} /></button>
+                  <button onClick={() => handleEdit(s)} className="text-forge-teal hover:text-deep-teal mr-3 transition-colors"><Pencil size={16} /></button>
                   <button onClick={() => handleDelete(s.id)} className="tf-btn-danger"><Trash2 size={16} /></button>
                 </td>
               </tr>
@@ -286,9 +286,9 @@ export default function SuppliesPage() {
               </div>
 
               {/* Preview del precio por unidad calculado en tiempo real */}
-              <div className={`rounded-lg px-4 py-3 text-sm flex justify-between items-center ${computedUnitPrice !== null ? 'bg-forge-green/10 border border-forge-green/20' : 'bg-[#0d1014] border border-[#2e3238]'}`}>
+              <div className={`rounded-lg px-4 py-3 text-sm flex justify-between items-center ${computedUnitPrice !== null ? 'bg-forge-teal/10 border border-forge-teal/20' : 'bg-[#0A0E16] border border-[#303642]'}`}>
                 <span className="text-steel">Precio por {form.unit}:</span>
-                <span className={`font-bold font-mono text-base ${computedUnitPrice !== null ? 'text-forge-green' : 'text-gunmetal'}`}>
+                <span className={`font-bold font-mono text-base ${computedUnitPrice !== null ? 'text-forge-teal' : 'text-gunmetal'}`}>
                   {computedUnitPrice !== null
                     ? `$ ${computedUnitPrice.toFixed(6)}`
                     : '—'}

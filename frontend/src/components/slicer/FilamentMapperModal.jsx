@@ -121,9 +121,9 @@ export default function FilamentMapperModal({ open, onClose, slicerFilaments, pr
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative bg-[#13171c] border border-[#1e2125] rounded-xl w-full max-w-lg max-h-[85vh] overflow-y-auto">
+      <div className="relative bg-[#111520] border border-[#222630] rounded-xl w-full max-w-lg max-h-[85vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-[#13171c] border-b border-[#1e2125] px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-[#111520] border-b border-[#222630] px-6 py-4 flex items-center justify-between">
           <h2 className="text-tech-white font-semibold">Mapear filamentos</h2>
           <button onClick={onClose} className="text-gunmetal hover:text-tech-white transition-colors">
             <X size={18} />
@@ -156,14 +156,14 @@ export default function FilamentMapperModal({ open, onClose, slicerFilaments, pr
                       key={gf.key}
                       className={`rounded-lg border p-4 space-y-2 ${
                         isMapped
-                          ? 'border-[#1e2125] bg-[#0d1014]'
+                          ? 'border-[#222630] bg-[#0A0E16]'
                           : 'border-amber-400/30 bg-amber-400/5'
                       }`}
                     >
                       {/* Filamento del slicer */}
                       <div className="flex items-center gap-2">
                         <div
-                          className="w-4 h-4 rounded-full border border-[#3a3d41] shrink-0"
+                          className="w-4 h-4 rounded-full border border-[#363C47] shrink-0"
                           style={{ backgroundColor: gf.colour_hex || '#888' }}
                         />
                         <span className="text-tech-white text-sm font-medium">
@@ -201,10 +201,10 @@ export default function FilamentMapperModal({ open, onClose, slicerFilaments, pr
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-[#13171c] border-t border-[#1e2125] px-6 py-4 flex items-center justify-end gap-3">
+        <div className="sticky bottom-0 bg-[#111520] border-t border-[#222630] px-6 py-4 flex items-center justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm text-steel hover:text-tech-white border border-[#2a2d31] hover:border-[#3a3d41] transition-colors"
+            className="px-4 py-2 rounded-lg text-sm text-steel hover:text-tech-white border border-[#2A2F38] hover:border-[#363C47] transition-colors"
           >
             Cancelar
           </button>

@@ -334,7 +334,7 @@ export default function SlicerUploadPage() {
               className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 activeTab === tab.id
                   ? 'bg-amber-400/15 text-amber-400 border border-amber-400/30'
-                  : 'bg-[#13171c] text-steel border border-[#1e2125] hover:text-tech-white'
+                  : 'bg-[#111520] text-steel border border-[#222630] hover:text-tech-white'
               }`}
             >
               <Icon size={16} />
@@ -345,7 +345,7 @@ export default function SlicerUploadPage() {
       </div>
 
       {/* Panel de contenido de la pestaña activa */}
-      <div className="bg-[#13171c] border border-[#1e2125] rounded-xl p-6">
+      <div className="bg-[#111520] border border-[#222630] rounded-xl p-6">
 
         {/* Pestaña: Archivo único */}
         {activeTab === 'file' && (
@@ -376,7 +376,7 @@ export default function SlicerUploadPage() {
                         className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
                           nozzleSize === size
                             ? 'bg-amber-400/20 text-amber-400 border-amber-400/40'
-                            : 'text-steel border-[#2a2d31] hover:border-amber-400/30'
+                            : 'text-steel border-[#2A2F38] hover:border-amber-400/30'
                         }`}
                       >
                         {size}mm
@@ -424,7 +424,7 @@ export default function SlicerUploadPage() {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={loading}
-                className="w-full border-2 border-dashed border-[#2a2d31] rounded-xl p-10 text-center hover:border-amber-400/40 hover:bg-amber-400/5 transition-all group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full border-2 border-dashed border-[#2A2F38] rounded-xl p-10 text-center hover:border-amber-400/40 hover:bg-amber-400/5 transition-all group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Upload size={36} className="mx-auto mb-3 text-gunmetal group-hover:text-amber-400 transition-colors" />
                 <p className="text-steel group-hover:text-tech-white transition-colors font-medium text-sm">
@@ -435,7 +435,7 @@ export default function SlicerUploadPage() {
             ) : (
               <div className="space-y-3">
                 {/* Info del archivo */}
-                <div className="flex items-center gap-3 bg-[#0d1014] border border-[#2a2d31] rounded-xl px-4 py-3">
+                <div className="flex items-center gap-3 bg-[#0A0E16] border border-[#2A2F38] rounded-xl px-4 py-3">
                   {needsSlicing
                     ? <Box size={22} className="text-amber-400 shrink-0" />
                     : <FileCode size={22} className="text-amber-400 shrink-0" />
@@ -488,7 +488,7 @@ export default function SlicerUploadPage() {
                   value={makerworldUrl}
                   onChange={(e) => setMakerworldUrl(e.target.value)}
                   placeholder="https://makerworld.com/en/models/12345"
-                  className="w-full bg-[#0d1014] border border-[#2a2d31] rounded-lg px-4 py-3 text-tech-white text-sm focus:outline-none focus:border-amber-400/50 placeholder-gunmetal"
+                  className="w-full bg-[#0A0E16] border border-[#2A2F38] rounded-lg px-4 py-3 text-tech-white text-sm focus:outline-none focus:border-amber-400/50 placeholder-gunmetal"
                 />
               </div>
               <button
@@ -510,7 +510,7 @@ export default function SlicerUploadPage() {
 
       {/* Panel de resultados */}
       {result && (
-        <div className="mt-6 bg-[#13171c] border border-[#1e2125] rounded-xl p-6">
+        <div className="mt-6 bg-[#111520] border border-[#222630] rounded-xl p-6">
           {/* Encabezado del resultado */}
           <div className="flex items-center gap-3 mb-5">
             {result.status === 'done' ? (
@@ -534,11 +534,11 @@ export default function SlicerUploadPage() {
             <>
               {/* Totales generales */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
-                <div className="bg-[#0d1014] rounded-lg p-4">
+                <div className="bg-[#0A0E16] rounded-lg p-4">
                   <p className="text-gunmetal text-xs mb-1">Tiempo total</p>
                   <p className="text-tech-white font-semibold text-sm">{formatTime(result.print_time_seconds)}</p>
                 </div>
-                <div className="bg-[#0d1014] rounded-lg p-4">
+                <div className="bg-[#0A0E16] rounded-lg p-4">
                   <p className="text-gunmetal text-xs mb-1">Peso total</p>
                   <p className="text-tech-white font-semibold text-sm">
                     {result.filament_weight_g
@@ -546,24 +546,24 @@ export default function SlicerUploadPage() {
                       : '—'}
                   </p>
                 </div>
-                <div className="bg-[#0d1014] rounded-lg p-4">
+                <div className="bg-[#0A0E16] rounded-lg p-4">
                   <p className="text-gunmetal text-xs mb-1">Filamento</p>
                   <p className="text-tech-white font-semibold text-sm">{result.filament_type || '—'}</p>
                 </div>
                 {result.layer_height_mm && (
-                  <div className="bg-[#0d1014] rounded-lg p-4">
+                  <div className="bg-[#0A0E16] rounded-lg p-4">
                     <p className="text-gunmetal text-xs mb-1">Altura de capa</p>
                     <p className="text-tech-white font-semibold text-sm">{result.layer_height_mm} mm</p>
                   </div>
                 )}
                 {result.nozzle_temp && (
-                  <div className="bg-[#0d1014] rounded-lg p-4">
+                  <div className="bg-[#0A0E16] rounded-lg p-4">
                     <p className="text-gunmetal text-xs mb-1">Temp. boquilla</p>
                     <p className="text-tech-white font-semibold text-sm">{result.nozzle_temp} °C</p>
                   </div>
                 )}
                 {result.bed_temp && (
-                  <div className="bg-[#0d1014] rounded-lg p-4">
+                  <div className="bg-[#0A0E16] rounded-lg p-4">
                     <p className="text-gunmetal text-xs mb-1">Temp. cama</p>
                     <p className="text-tech-white font-semibold text-sm">{result.bed_temp} °C</p>
                   </div>
@@ -599,9 +599,9 @@ export default function SlicerUploadPage() {
                         </h4>
                         <div className="space-y-2">
                           {filaments.map((f, i) => (
-                            <div key={i} className="flex items-center gap-3 bg-[#0d1014] rounded-lg px-4 py-3">
+                            <div key={i} className="flex items-center gap-3 bg-[#0A0E16] rounded-lg px-4 py-3">
                               <div
-                                className="w-4 h-4 rounded-full border border-[#3a3d41] shrink-0"
+                                className="w-4 h-4 rounded-full border border-[#363C47] shrink-0"
                                 style={{ backgroundColor: f.colour_hex || '#888' }}
                                 title={f.colour_hex}
                               />
@@ -635,7 +635,7 @@ export default function SlicerUploadPage() {
                       {result.plates_data.map((plate) => (
                         <div
                           key={plate.plate_number}
-                          className="bg-[#0d1014] border border-[#1e2125] rounded-lg p-4 space-y-3"
+                          className="bg-[#0A0E16] border border-[#222630] rounded-lg p-4 space-y-3"
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
@@ -649,7 +649,7 @@ export default function SlicerUploadPage() {
                                 {plate.filaments.map((f, i) => (
                                   <div
                                     key={i}
-                                    className="w-3 h-3 rounded-full border border-[#3a3d41]"
+                                    className="w-3 h-3 rounded-full border border-[#363C47]"
                                     style={{ backgroundColor: f.colour_hex || '#888' }}
                                     title={`${f.filament_type} ${f.colour_hex}`}
                                   />
@@ -682,7 +682,7 @@ export default function SlicerUploadPage() {
                             {plate.filaments?.length > 0 && plate.filaments.map((f, i) => (
                               <div key={i} className="col-span-2 flex items-center gap-2">
                                 <div
-                                  className="w-2.5 h-2.5 rounded-full border border-[#3a3d41]"
+                                  className="w-2.5 h-2.5 rounded-full border border-[#363C47]"
                                   style={{ backgroundColor: f.colour_hex || '#888' }}
                                 />
                                 <span className="text-gunmetal">
@@ -697,7 +697,7 @@ export default function SlicerUploadPage() {
                             {result?.id && (
                               <button
                                 onClick={() => setViewerPlate(plate.plate_number)}
-                                className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs text-steel hover:text-tech-white border border-[#1e2125] hover:border-[#3a3d41] hover:bg-[#1a1d21] transition-colors"
+                                className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs text-steel hover:text-tech-white border border-[#222630] hover:border-[#363C47] hover:bg-[#1A1D25] transition-colors"
                                 title="Vista 3D"
                               >
                                 3D
@@ -705,7 +705,7 @@ export default function SlicerUploadPage() {
                             )}
                             <button
                               onClick={() => handleUseInCalculator(plate)}
-                              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs text-amber-400/80 hover:text-amber-400 border border-[#1e2125] hover:border-amber-400/30 hover:bg-amber-400/5 transition-colors"
+                              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs text-amber-400/80 hover:text-amber-400 border border-[#222630] hover:border-amber-400/30 hover:bg-amber-400/5 transition-colors"
                             >
                               Usar placa {plate.plate_number} <ArrowRight size={12} />
                             </button>

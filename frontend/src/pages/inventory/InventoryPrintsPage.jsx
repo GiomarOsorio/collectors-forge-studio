@@ -50,7 +50,7 @@ function PrintCard({ item, onEdit, onDelete, onSell }) {
   return (
     <div className="tf-card rounded-xl overflow-hidden flex flex-col group hover:border-blue-500/30 transition-colors">
       {/* Imagen o placeholder */}
-      <div className="relative bg-[#0d1014] h-44 flex items-center justify-center overflow-hidden">
+      <div className="relative bg-[#0A0E16] h-44 flex items-center justify-center overflow-hidden">
         {item.image_url ? (
           <img
             src={item.image_url}
@@ -97,7 +97,7 @@ function PrintCard({ item, onEdit, onDelete, onSell }) {
         </div>
 
         {/* Precio y acciones */}
-        <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#1e2125]">
+        <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#222630]">
           <span className="text-tech-white font-bold text-sm">
             {item.unit_price ? `$ ${parseFloat(item.unit_price).toFixed(2)}` : '—'}
           </span>
@@ -341,7 +341,7 @@ export default function InventoryPrintsPage() {
               <div>
                 <label className="tf-label">Imagen</label>
                 <div
-                  className="relative bg-[#0d1014] border-2 border-dashed border-[#2a2d31] rounded-xl h-36 flex items-center justify-center cursor-pointer hover:border-blue-500/50 transition-colors overflow-hidden"
+                  className="relative bg-[#0A0E16] border-2 border-dashed border-[#2A2F38] rounded-xl h-36 flex items-center justify-center cursor-pointer hover:border-blue-500/50 transition-colors overflow-hidden"
                   onClick={() => fileInputRef.current?.click()}
                 >
                   {imagePreview ? (
@@ -458,7 +458,7 @@ export default function InventoryPrintsPage() {
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="flex-1 px-4 py-2 rounded-lg border border-[#2a2d31] text-steel hover:text-tech-white transition-colors text-sm"
+                  className="flex-1 px-4 py-2 rounded-lg border border-[#2A2F38] text-steel hover:text-tech-white transition-colors text-sm"
                 >
                   Cancelar
                 </button>
@@ -489,7 +489,7 @@ export default function InventoryPrintsPage() {
               </button>
             </div>
 
-            <div className="bg-[#0d1014] rounded-xl p-4 mb-4">
+            <div className="bg-[#0A0E16] rounded-xl p-4 mb-4">
               <p className="text-tech-white font-semibold">{sellItem.name}</p>
               <p className="text-gunmetal text-sm mt-1">
                 Stock disponible: <span className="text-green-400 font-bold">{sellItem.quantity}</span>
@@ -521,7 +521,7 @@ export default function InventoryPrintsPage() {
             <div className="flex gap-3">
               <button
                 onClick={() => setSellItem(null)}
-                className="flex-1 px-4 py-2 rounded-lg border border-[#2a2d31] text-steel hover:text-tech-white transition-colors text-sm"
+                className="flex-1 px-4 py-2 rounded-lg border border-[#2A2F38] text-steel hover:text-tech-white transition-colors text-sm"
               >
                 Cancelar
               </button>

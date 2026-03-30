@@ -137,14 +137,14 @@ export default function HistoryPage() {
               {/* Total en COP */}
               {selected.total_price_cop && (
                 <>
-                  <div className="flex justify-between items-baseline gap-2 bg-[#0d2b14] border border-forge-green/20 px-3 py-2 rounded-lg">
-                    <span className="font-semibold text-forge-green min-w-0">Total cotización (COP)</span>
-                    <span className="font-bold text-forge-green text-lg shrink-0">$ {Math.round(selected.total_price_cop).toLocaleString('es-CO')}</span>
+                  <div className="flex justify-between items-baseline gap-2 bg-[#0A2530] border border-forge-teal/20 px-3 py-2 rounded-lg">
+                    <span className="font-semibold text-forge-teal min-w-0">Total cotización (COP)</span>
+                    <span className="font-bold text-forge-teal text-lg shrink-0">$ {Math.round(selected.total_price_cop).toLocaleString('es-CO')}</span>
                   </div>
                   {selected.quantity > 1 && (
-                    <div className="flex justify-between items-baseline gap-2 bg-[#0d2b14]/60 px-3 py-1 rounded">
-                      <span className="font-semibold text-forge-green text-sm min-w-0">Por pieza COP (÷{selected.quantity})</span>
-                      <span className="font-bold text-forge-green shrink-0">$ {Math.round(selected.total_per_unit_cop).toLocaleString('es-CO')}</span>
+                    <div className="flex justify-between items-baseline gap-2 bg-[#0A2530]/60 px-3 py-1 rounded">
+                      <span className="font-semibold text-forge-teal text-sm min-w-0">Por pieza COP (÷{selected.quantity})</span>
+                      <span className="font-bold text-forge-teal shrink-0">$ {Math.round(selected.total_per_unit_cop).toLocaleString('es-CO')}</span>
                     </div>
                   )}
                   <p className="text-xs text-gunmetal">Tasa: 1 USD = {selected.usd_to_cop_rate?.toLocaleString('es-CO')} COP</p>
@@ -212,7 +212,7 @@ export default function HistoryPage() {
                 <td className="tf-td font-medium text-tech-white">{q.piece_name}</td>
                 <td className="tf-td text-steel hidden sm:table-cell">{q.client_name || '-'}</td>
                 <td className="tf-td-right text-steel font-mono">{q.quantity}</td>
-                <td className="tf-td-right font-semibold font-mono text-forge-green">
+                <td className="tf-td-right font-semibold font-mono text-forge-teal">
                   {q.total_price_cop
                     ? `$ ${Math.round(q.total_price_cop).toLocaleString('es-CO')} COP`
                     : `$ ${q.total_price.toFixed(2)}`}
@@ -257,9 +257,9 @@ export default function HistoryPage() {
  */
 function Row({ label, value, bold, highlight }) {
   return (
-    <div className={`tf-cost-row ${highlight ? 'bg-forge-green/10 -mx-2 px-2 py-2 rounded-lg' : ''}`}>
+    <div className={`tf-cost-row ${highlight ? 'bg-forge-teal/10 -mx-2 px-2 py-2 rounded-lg' : ''}`}>
       <span className={`${bold ? 'font-semibold text-tech-white' : 'text-steel'} min-w-0`}>{label}</span>
-      <span className={`${bold ? 'font-bold' : ''} ${highlight ? 'text-forge-green' : 'text-tech-white'} shrink-0`}>$ {value.toFixed(2)}</span>
+      <span className={`${bold ? 'font-bold' : ''} ${highlight ? 'text-forge-teal' : 'text-tech-white'} shrink-0`}>$ {value.toFixed(2)}</span>
     </div>
   );
 }

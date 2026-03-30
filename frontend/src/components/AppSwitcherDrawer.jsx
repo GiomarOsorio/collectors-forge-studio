@@ -71,9 +71,9 @@ export default function AppSwitcherDrawer({ isOpen, onClose }) {
 
       {/* Panel del cajón (z-50) */}
       {isOpen && (
-        <div className="fixed inset-y-0 left-0 z-50 w-80 bg-[#0d1014] border-r border-[#1e2125] flex flex-col shadow-2xl">
+        <div className="fixed inset-y-0 left-0 z-50 w-80 bg-[#0A0E16] border-r border-[#222630] flex flex-col shadow-2xl">
           {/* Encabezado del cajón */}
-          <div className="p-6 border-b border-[#1e2125] flex items-center justify-between">
+          <div className="p-6 border-b border-[#222630] flex items-center justify-between">
             <div>
               <h2 className="text-lg font-bold text-tech-white">TurtleForge Studio</h2>
               <p className="text-sm text-gunmetal">Selecciona una aplicación</p>
@@ -92,13 +92,13 @@ export default function AppSwitcherDrawer({ isOpen, onClose }) {
             {/* Botón de regreso al Studio Home */}
             <button
               onClick={() => handleSelectApp('/')}
-              className="flex items-center gap-3 w-full px-4 py-3 rounded-xl bg-[#13171c] border border-[#1e2125] hover:border-forge-green/40 hover:bg-forge-green/5 transition-all group mb-5"
+              className="flex items-center gap-3 w-full px-4 py-3 rounded-xl bg-[#111520] border border-[#222630] hover:border-forge-teal/40 hover:bg-forge-teal/5 transition-all group mb-5"
             >
-              <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-[#1e2125] group-hover:bg-forge-green/10 transition-colors">
-                <Home size={18} className="text-gunmetal group-hover:text-forge-green transition-colors" />
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-[#222630] group-hover:bg-forge-teal/10 transition-colors">
+                <Home size={18} className="text-gunmetal group-hover:text-forge-teal transition-colors" />
               </div>
               <div className="text-left">
-                <p className="font-semibold text-tech-white text-sm group-hover:text-forge-green transition-colors">
+                <p className="font-semibold text-tech-white text-sm group-hover:text-forge-teal transition-colors">
                   Studio Home
                 </p>
                 <p className="text-xs text-gunmetal">Lanzador de aplicaciones</p>
@@ -113,7 +113,7 @@ export default function AppSwitcherDrawer({ isOpen, onClose }) {
                   <button
                     key={app.id}
                     onClick={() => handleSelectApp(app.route)}
-                    className="flex flex-col items-center gap-3 p-4 rounded-xl bg-[#13171c] border border-[#1e2125] hover:border-forge-green/40 hover:bg-forge-green/5 transition-all group text-center"
+                    className="flex flex-col items-center gap-3 p-4 rounded-xl bg-[#111520] border border-[#222630] hover:border-forge-teal/40 hover:bg-forge-teal/5 transition-all group text-center"
                   >
                     <div
                       className="w-12 h-12 rounded-xl flex items-center justify-center"
@@ -122,7 +122,7 @@ export default function AppSwitcherDrawer({ isOpen, onClose }) {
                       <Icon size={24} style={{ color: app.color }} />
                     </div>
                     <div>
-                      <p className="font-semibold text-tech-white text-sm group-hover:text-forge-green transition-colors">
+                      <p className="font-semibold text-tech-white text-sm group-hover:text-forge-teal transition-colors">
                         {app.name}
                       </p>
                       <p className="text-xs text-gunmetal mt-0.5 leading-tight">{app.shortDescription}</p>
@@ -135,7 +135,7 @@ export default function AppSwitcherDrawer({ isOpen, onClose }) {
           </div>
 
           {/* Pie del cajón */}
-          <div className="p-4 border-t border-[#1e2125]">
+          <div className="p-4 border-t border-[#222630]">
             <p className="text-xs text-gunmetal text-center">TurtleForge Studio · v1.0</p>
           </div>
         </div>
@@ -145,7 +145,7 @@ export default function AppSwitcherDrawer({ isOpen, onClose }) {
       {pendingRoute !== null && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70" onClick={handleCancelSwitch} />
-          <div className="relative bg-[#13171c] border border-[#2a2d31] rounded-xl p-6 max-w-sm w-full shadow-2xl">
+          <div className="relative bg-[#111520] border border-[#2A2F38] rounded-xl p-6 max-w-sm w-full shadow-2xl">
             <h3 className="text-tech-white font-semibold mb-2">¿Cambiar de aplicación?</h3>
             <p className="text-steel text-sm mb-6">
               Tienes datos sin guardar. Si cambias de aplicación, perderás los cambios actuales.
@@ -153,7 +153,7 @@ export default function AppSwitcherDrawer({ isOpen, onClose }) {
             <div className="flex gap-3">
               <button
                 onClick={handleCancelSwitch}
-                className="flex-1 px-4 py-2 rounded-lg border border-[#2a2d31] text-steel hover:text-tech-white hover:border-[#3a3d41] transition-colors text-sm"
+                className="flex-1 px-4 py-2 rounded-lg border border-[#2A2F38] text-steel hover:text-tech-white hover:border-[#363C47] transition-colors text-sm"
               >
                 Cancelar
               </button>

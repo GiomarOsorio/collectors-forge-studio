@@ -122,7 +122,7 @@ export default function CompanyTemplatesPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[#1e2125]">
+                <tr className="border-b border-[#222630]">
                   <th className="text-left px-4 py-3 text-gunmetal font-medium">Nombre</th>
                   <th className="text-left px-4 py-3 text-gunmetal font-medium">Tipo</th>
                   <th className="text-left px-4 py-3 text-gunmetal font-medium">Estado</th>
@@ -132,7 +132,7 @@ export default function CompanyTemplatesPage() {
               </thead>
               <tbody>
                 {templates.map((tpl) => (
-                  <tr key={tpl.id} className="border-b border-[#1e2125] hover:bg-[#0d1014] transition-colors">
+                  <tr key={tpl.id} className="border-b border-[#222630] hover:bg-[#0A0E16] transition-colors">
                     <td className="px-4 py-3">
                       <span className="text-tech-white font-medium">{tpl.name}</span>
                       {tpl.description && (
@@ -140,7 +140,7 @@ export default function CompanyTemplatesPage() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="px-2 py-0.5 rounded text-xs font-mono bg-[#1e2125] text-steel">
+                      <span className="px-2 py-0.5 rounded text-xs font-mono bg-[#222630] text-steel">
                         {TYPE_LABELS[tpl.template_type] || tpl.template_type}
                       </span>
                     </td>

@@ -144,7 +144,7 @@ export default function CompanyBrandingPage() {
                   value={color.hex}
                   onChange={(e) => updateColor(idx, 'hex', e.target.value)}
                   disabled={!user?.is_admin}
-                  className="w-10 h-9 rounded-lg border border-[#2a2d31] cursor-pointer bg-transparent p-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-10 h-9 rounded-lg border border-[#2A2F38] cursor-pointer bg-transparent p-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
                   title={color.name || 'Elegir color'}
                 />
 

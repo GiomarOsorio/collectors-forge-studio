@@ -95,9 +95,9 @@ export default function Layout() {
       )}
 
       {/* Barra lateral de navegacion */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#0d1014] text-tech-white flex flex-col transition-transform duration-300 border-r border-[#1e2125] ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} xl:translate-x-0`}>
+      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#0A0E16] text-tech-white flex flex-col transition-transform duration-300 border-r border-[#222630] ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} xl:translate-x-0`}>
         {/* Encabezado con logo y nombre de la aplicacion */}
-        <div className="p-6 border-b border-[#1e2125]">
+        <div className="p-6 border-b border-[#222630]">
           <div className="flex items-center gap-3">
             <img src="/logo.png" alt="TurtleForge" className="h-10 w-10 object-contain" />
             <div>
@@ -116,8 +116,8 @@ export default function Layout() {
               className={({ isActive }) =>
                 `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                   isActive
-                    ? 'bg-forge-green/10 text-forge-green font-medium'
-                    : 'text-steel hover:bg-[#1e2125] hover:text-tech-white'
+                    ? 'bg-forge-teal/10 text-forge-teal font-medium'
+                    : 'text-steel hover:bg-[#222630] hover:text-tech-white'
                 }`
               }
             >
@@ -127,7 +127,7 @@ export default function Layout() {
           ))}
         </nav>
         {/* Pie de la barra lateral: nombre de usuario y boton de logout */}
-        <div className="p-4 border-t border-[#1e2125]">
+        <div className="p-4 border-t border-[#222630]">
           <div className="flex items-center justify-between">
             <span className="text-gunmetal text-sm">{user?.username}</span>
             <button
@@ -145,7 +145,7 @@ export default function Layout() {
       {/* Area de contenido principal */}
       <div className="flex-1 flex flex-col xl:ml-64">
         {/* Header con hamburger: visible en todas las pantallas menores a xl (1280px) */}
-        <header className="xl:hidden bg-[#0d1014] text-tech-white px-4 py-3 flex items-center gap-3 sticky top-0 z-20 border-b border-[#1e2125]">
+        <header className="xl:hidden bg-[#0A0E16] text-tech-white px-4 py-3 flex items-center gap-3 sticky top-0 z-20 border-b border-[#222630]">
           <button
             onClick={() => setSidebarOpen(true)}
             className="text-steel hover:text-tech-white"

@@ -252,20 +252,20 @@ export default function UsuariosPage() {
                 <td className="tf-td font-medium text-tech-white">
                   {u.username}
                   {u.id === user?.id && (
-                    <span className="ml-2 text-xs text-forge-green">(tú)</span>
+                    <span className="ml-2 text-xs text-forge-teal">(tú)</span>
                   )}
                 </td>
                 <td className="tf-td text-steel">{u.email}</td>
                 <td className="tf-td-right">
                   {u.is_admin ? (
-                    <span className="text-xs bg-forge-green/20 text-forge-green border border-forge-green/30 rounded px-2 py-0.5">Admin</span>
+                    <span className="text-xs bg-forge-teal/20 text-forge-teal border border-forge-teal/30 rounded px-2 py-0.5">Admin</span>
                   ) : (
                     <span className="text-xs text-gunmetal">—</span>
                   )}
                 </td>
                 <td className="tf-td-right">
                   {u.is_active ? (
-                    <span className="text-xs text-forge-green">Activo</span>
+                    <span className="text-xs text-forge-teal">Activo</span>
                   ) : (
                     <span className="text-xs text-red-400">Inactivo</span>
                   )}

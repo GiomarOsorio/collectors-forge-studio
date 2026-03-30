@@ -164,7 +164,7 @@ export default function ManualQuotePage() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <FileEdit size={24} className="text-forge-green" />
+        <FileEdit size={24} className="text-forge-teal" />
         <h2 className="tf-page-title mb-0">Nueva Cotización</h2>
       </div>
 
@@ -198,7 +198,7 @@ export default function ManualQuotePage() {
                 name="expiry_days" type="number" min="1" value={form.expiry_days}
                 onChange={handleChange} required className="tf-input" placeholder="15" />
               {expiryLabel && (
-                <p className="text-xs text-gunmetal mt-1">Válida hasta: <span className="text-forge-green">{expiryLabel}</span></p>
+                <p className="text-xs text-gunmetal mt-1">Válida hasta: <span className="text-forge-teal">{expiryLabel}</span></p>
               )}
             </div>
           </div>
@@ -293,7 +293,7 @@ export default function ManualQuotePage() {
                 aria-pressed={includeIva}
               >
                 {includeIva
-                  ? <ToggleRight size={26} className="text-forge-green" />
+                  ? <ToggleRight size={26} className="text-forge-teal" />
                   : <ToggleLeft size={26} className="text-gunmetal" />}
                 Aplicar IVA
               </button>
@@ -328,7 +328,7 @@ export default function ManualQuotePage() {
                   </div>
                   <div className="flex items-center justify-end gap-4 border-t border-dark-border pt-1 mt-1">
                     <p className="text-sm text-gunmetal font-medium">Total (USD)</p>
-                    <p className="text-2xl font-bold text-forge-green w-28">$ {totalConIva.toFixed(2)}</p>
+                    <p className="text-2xl font-bold text-forge-teal w-28">$ {totalConIva.toFixed(2)}</p>
                   </div>
                 </>
               ) : (
@@ -377,13 +377,13 @@ export default function ManualQuotePage() {
                   key={p.id}
                   type="button"
                   onClick={() => selectPrint(selectorOpen, p)}
-                  className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-[#1e2125] transition-colors group"
+                  className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-[#222630] transition-colors group"
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-tech-white text-sm font-medium group-hover:text-blue-400 transition-colors">
                       {p.name}
                     </span>
-                    <span className="text-forge-green text-sm font-bold ml-2 shrink-0">
+                    <span className="text-forge-teal text-sm font-bold ml-2 shrink-0">
                       {p.unit_price != null ? `$ ${parseFloat(p.unit_price).toFixed(2)}` : '—'}
                     </span>
                   </div>

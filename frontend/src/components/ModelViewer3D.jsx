@@ -44,7 +44,7 @@ function LoadingMesh() {
   return (
     <mesh>
       <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial color="#2a2d31" wireframe />
+      <meshStandardMaterial color="#2A2F38" wireframe />
     </mesh>
   );
 }
@@ -61,7 +61,7 @@ function LoadingMesh() {
 export default function ModelViewer3D({ url, fileName = 'modelo.stl', className = '' }) {
   if (!url) {
     return (
-      <div className={`w-full h-64 rounded-xl overflow-hidden bg-[#0d1014] border border-[#1e2125] flex items-center justify-center ${className}`}>
+      <div className={`w-full h-64 rounded-xl overflow-hidden bg-[#0A0E16] border border-[#222630] flex items-center justify-center ${className}`}>
         <div className="text-center">
           <Box size={40} className="mx-auto mb-3 text-gunmetal opacity-40" />
           <p className="text-gunmetal text-sm">Sin vista previa</p>
@@ -71,7 +71,7 @@ export default function ModelViewer3D({ url, fileName = 'modelo.stl', className 
   }
 
   return (
-    <div className={`w-full h-64 rounded-xl overflow-hidden bg-[#0d1014] border border-[#1e2125] ${className}`}>
+    <div className={`w-full h-64 rounded-xl overflow-hidden bg-[#0A0E16] border border-[#222630] ${className}`}>
       <Canvas
         camera={{ position: [0, 0, 5], fov: 50 }}
         shadows

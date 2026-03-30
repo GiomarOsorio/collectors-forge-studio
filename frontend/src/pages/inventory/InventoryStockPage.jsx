@@ -490,7 +490,7 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
                   </td>
                   {!categoryFilter && (
                     <td className="tf-td hidden md:table-cell">
-                      <span className="px-2 py-0.5 rounded text-xs bg-[#1e2125] text-steel">{item.category}</span>
+                      <span className="px-2 py-0.5 rounded text-xs bg-[#222630] text-steel">{item.category}</span>
                     </td>
                   )}
                   <td className="tf-td-right">
@@ -805,7 +805,7 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
 
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setModalOpen(false)}
-                  className="flex-1 px-4 py-2 rounded-lg border border-[#2a2d31] text-steel hover:text-tech-white transition-colors text-sm">
+                  className="flex-1 px-4 py-2 rounded-lg border border-[#2A2F38] text-steel hover:text-tech-white transition-colors text-sm">
                   Cancelar
                 </button>
                 <button type="submit" disabled={saving}
@@ -859,7 +859,7 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
             )}
             <div className="flex gap-3">
               <button onClick={() => setAdjustModal(null)}
-                className="flex-1 px-4 py-2 rounded-lg border border-[#2a2d31] text-steel hover:text-tech-white transition-colors text-sm">
+                className="flex-1 px-4 py-2 rounded-lg border border-[#2A2F38] text-steel hover:text-tech-white transition-colors text-sm">
                 Cancelar
               </button>
               <button onClick={handleAdjust}

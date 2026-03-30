@@ -114,7 +114,7 @@ export default function InventoryImportExportPage() {
       <div className="grid gap-6 md:grid-cols-2">
 
         {/* ── Exportar ── */}
-        <div className="bg-[#0d1014] border border-[#1e2125] rounded-xl p-6 space-y-4">
+        <div className="bg-[#0A0E16] border border-[#222630] rounded-xl p-6 space-y-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-500/10 rounded-lg">
               <Download size={22} className="text-blue-400" />
@@ -141,7 +141,7 @@ export default function InventoryImportExportPage() {
         </div>
 
         {/* ── Importar ── */}
-        <div className="bg-[#0d1014] border border-[#1e2125] rounded-xl p-6 space-y-4">
+        <div className="bg-[#0A0E16] border border-[#222630] rounded-xl p-6 space-y-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-green-500/10 rounded-lg">
               <Upload size={22} className="text-green-400" />
@@ -169,7 +169,7 @@ export default function InventoryImportExportPage() {
           {/* Botón seleccionar archivo */}
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-[#2a2d31] hover:border-[#3a3d41] text-steel hover:text-tech-white rounded-lg font-medium transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-[#2A2F38] hover:border-[#363C47] text-steel hover:text-tech-white rounded-lg font-medium transition-colors"
           >
             <FileJson size={16} />
             Seleccionar archivo .json
@@ -177,7 +177,7 @@ export default function InventoryImportExportPage() {
 
           {/* Preview del archivo seleccionado */}
           {preview && (
-            <div className="bg-[#1a1d21] border border-[#2a2d31] rounded-lg p-3 space-y-3">
+            <div className="bg-[#1A1D25] border border-[#2A2F38] rounded-lg p-3 space-y-3">
               <p className="text-sm text-steel">
                 <span className="text-tech-white font-medium">{preview.itemCount}</span> ítems de stock
                 {' · '}

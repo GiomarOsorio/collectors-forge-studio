@@ -220,13 +220,13 @@ export default function SettingsPage() {
           const estratosDisponibles = Object.keys(source?.estratos || {}).sort();
 
           return (
-            <div className="mt-6 bg-[#0d2b14] border border-forge-green/20 rounded-xl p-5">
-              <h3 className="font-semibold text-forge-green mb-3">Tarifa Eléctrica EPM</h3>
+            <div className="mt-6 bg-[#0A2530] border border-forge-teal/20 rounded-xl p-5">
+              <h3 className="font-semibold text-forge-teal mb-3">Tarifa Eléctrica EPM</h3>
 
               {/* Dropdowns de mes y estrato */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                 <div>
-                  <label className="block text-xs text-forge-green/70 mb-1">Mes</label>
+                  <label className="block text-xs text-forge-teal/70 mb-1">Mes</label>
                   {tariffHistory.length > 0 ? (
                     <select
                       value={selectedMonthIdx}
@@ -238,13 +238,13 @@ export default function SettingsPage() {
                       ))}
                     </select>
                   ) : (
-                    <div className="text-sm text-steel px-2 py-1.5 border border-[#2e3238] rounded-lg bg-[#0d1014]">
+                    <div className="text-sm text-steel px-2 py-1.5 border border-[#303642] rounded-lg bg-[#0A0E16]">
                       {epmTariff?.month_label ?? '—'}
                     </div>
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs text-forge-green/70 mb-1">Estrato</label>
+                  <label className="block text-xs text-forge-teal/70 mb-1">Estrato</label>
                   <select
                     value={selectedEstrato}
                     onChange={(e) => setSelectedEstrato(e.target.value)}
@@ -275,14 +275,14 @@ export default function SettingsPage() {
                     <span className="text-steel/70">Tarifa usada en estimación</span>
                     <span className="font-medium text-steel">{copUsed?.toLocaleString('es-CO')} COP/kWh</span>
                   </div>
-                  <hr className="border-forge-green/20 my-2" />
+                  <hr className="border-forge-teal/20 my-2" />
                   <div className="flex justify-between">
-                    <span className="font-semibold text-forge-green">Equivalente en USD/kWh</span>
+                    <span className="font-semibold text-forge-teal">Equivalente en USD/kWh</span>
                     <span className="font-bold text-tech-white text-base">{usdRate} USD/kWh</span>
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-forge-green/60">Estrato no disponible para este mes.</p>
+                <p className="text-sm text-forge-teal/60">Estrato no disponible para este mes.</p>
               )}
 
               <button onClick={handleApplyEpmTariff} disabled={!estratoData}
@@ -290,7 +290,7 @@ export default function SettingsPage() {
                 <Zap size={16} />
                 Aplicar {source?.month_label} · Estrato {selectedEstrato} → {usdRate ?? '—'} USD/kWh
               </button>
-              <p className="text-xs text-forge-green/60 mt-2">Fuente: epm.com.co — PDF oficial de tarifas. Los meses se guardan automáticamente.</p>
+              <p className="text-xs text-forge-teal/60 mt-2">Fuente: epm.com.co — PDF oficial de tarifas. Los meses se guardan automáticamente.</p>
             </div>
           );
         })()}

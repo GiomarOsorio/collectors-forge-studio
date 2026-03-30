@@ -424,7 +424,7 @@ export default function CalculatorPage() {
           <div>
             <div className="flex items-center gap-2 mb-3">
               <span className="text-xs font-semibold text-gunmetal uppercase tracking-wider">Pieza</span>
-              <div className="flex-1 h-px bg-[#1e2125]" />
+              <div className="flex-1 h-px bg-[#222630]" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="col-span-1 sm:col-span-2">
@@ -474,7 +474,7 @@ export default function CalculatorPage() {
           <div>
             <div className="flex items-center gap-2 mb-3">
               <span className="text-xs font-semibold text-gunmetal uppercase tracking-wider">Material &amp; equipo</span>
-              <div className="flex-1 h-px bg-[#1e2125]" />
+              <div className="flex-1 h-px bg-[#222630]" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -573,7 +573,7 @@ export default function CalculatorPage() {
           <div>
             <div className="flex items-center gap-2 mb-3">
               <span className="text-xs font-semibold text-gunmetal uppercase tracking-wider">Tiempos</span>
-              <div className="flex-1 h-px bg-[#1e2125]" />
+              <div className="flex-1 h-px bg-[#222630]" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
@@ -623,14 +623,14 @@ export default function CalculatorPage() {
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-xs font-semibold text-gunmetal uppercase tracking-wider">Filamentos adicionales</span>
                   <span className="text-xs text-gunmetal">(multicolor)</span>
-                  <div className="flex-1 h-px bg-[#1e2125]" />
+                  <div className="flex-1 h-px bg-[#222630]" />
                 </div>
                 {additionalFilaments.map((af, i) => {
                   const f = filaments.find((x) => x.id === af.inventory_item_id);
                   return (
                     <div
                       key={i}
-                      className="flex items-center gap-2 mb-1 text-sm bg-[#0d1014] border border-[#1e2125] px-3 py-1.5 rounded-lg"
+                      className="flex items-center gap-2 mb-1 text-sm bg-[#0A0E16] border border-[#222630] px-3 py-1.5 rounded-lg"
                     >
                       <span className="flex-1 text-steel">
                         {f ? filamentLabel(f) : af.inventory_item_id}
@@ -690,7 +690,7 @@ export default function CalculatorPage() {
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-xs font-semibold text-gunmetal uppercase tracking-wider">Insumos adicionales</span>
-                  <div className="flex-1 h-px bg-[#1e2125]" />
+                  <div className="flex-1 h-px bg-[#222630]" />
                 </div>
                 {selectedSupplies.map((si) => {
                   const sup = supplies.find((x) => x.id === si.inventory_item_id);
@@ -700,14 +700,14 @@ export default function CalculatorPage() {
                   return (
                     <div
                       key={si.inventory_item_id}
-                      className="flex items-center gap-2 mb-1 text-sm bg-[#0d1014] border border-[#1e2125] px-3 py-1.5 rounded-lg"
+                      className="flex items-center gap-2 mb-1 text-sm bg-[#0A0E16] border border-[#222630] px-3 py-1.5 rounded-lg"
                     >
                       <span className="flex-1 text-steel">{sup ? sup.name : si.inventory_item_id}</span>
                       <span className="text-gunmetal">
                         {si.quantity} {sup?.unit || ''}
                       </span>
                       {sup && (
-                        <span className="text-forge-green font-mono text-xs">
+                        <span className="text-forge-teal font-mono text-xs">
                           ${(price * si.quantity).toFixed(4)}
                         </span>
                       )}
@@ -778,7 +778,7 @@ export default function CalculatorPage() {
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-xs font-semibold text-gunmetal uppercase tracking-wider">Consumibles</span>
                 <span className="text-xs text-gunmetal">(desgaste por horas)</span>
-                <div className="flex-1 h-px bg-[#1e2125]" />
+                <div className="flex-1 h-px bg-[#222630]" />
               </div>
               {selectedConsumables.map((c) => {
                 const printHours = (parseFloat(form.print_time_minutes) || 0) / 60;
@@ -788,7 +788,7 @@ export default function CalculatorPage() {
                 return (
                   <div
                     key={c.id}
-                    className="flex items-center gap-2 mb-1 text-sm bg-[#0d1014] border border-[#1e2125] px-3 py-1.5 rounded-lg"
+                    className="flex items-center gap-2 mb-1 text-sm bg-[#0A0E16] border border-[#222630] px-3 py-1.5 rounded-lg"
                   >
                     <span className="flex-1 text-steel">{c.name}</span>
                     <span className="text-gunmetal text-xs">{c.useful_life_hours}h vida útil</span>
@@ -860,7 +860,7 @@ export default function CalculatorPage() {
             <div className="tf-card p-6">
               <h3 className="tf-section-title mb-4">Desglose de Costos</h3>
               {result.quantity > 1 && (
-                <p className="text-xs text-forge-green bg-forge-green/10 border border-forge-green/20 rounded px-2 py-1 mb-3">
+                <p className="text-xs text-forge-teal bg-forge-teal/10 border border-forge-teal/20 rounded px-2 py-1 mb-3">
                   Costos calculados para el trabajo completo ({result.quantity} piezas en la placa)
                 </p>
               )}
@@ -891,8 +891,8 @@ export default function CalculatorPage() {
                 )}
               </div>
               {result.supplies_detail && result.supplies_detail.length > 0 && (
-                <div className="mt-3 p-3 bg-[#0d1014] border border-[#2a2d31] rounded-lg">
-                  <p className="text-forge-green text-xs font-semibold mb-1">Desglose de insumos</p>
+                <div className="mt-3 p-3 bg-[#0A0E16] border border-[#2A2F38] rounded-lg">
+                  <p className="text-forge-teal text-xs font-semibold mb-1">Desglose de insumos</p>
                   {result.supplies_detail.map((sd, i) => (
                     <div key={i} className="flex justify-between text-xs text-steel mt-0.5">
                       <span>
@@ -904,8 +904,8 @@ export default function CalculatorPage() {
                 </div>
               )}
               {result.usd_to_cop_rate && (
-                <div className="mt-4 p-3 bg-[#0d2b14] border border-forge-green/20 rounded-lg">
-                  <p className="text-forge-green text-xs font-semibold mb-1">
+                <div className="mt-4 p-3 bg-[#0A2530] border border-forge-teal/20 rounded-lg">
+                  <p className="text-forge-teal text-xs font-semibold mb-1">
                     Equivalente en Pesos Colombianos
                   </p>
                   <div className="flex justify-between text-sm">
@@ -968,12 +968,12 @@ export default function CalculatorPage() {
 function CostRow({ label, value, bold, highlight }) {
   return (
     <div
-      className={`tf-cost-row ${highlight ? 'bg-forge-green/10 -mx-2 px-2 py-2 rounded-lg' : ''}`}
+      className={`tf-cost-row ${highlight ? 'bg-forge-teal/10 -mx-2 px-2 py-2 rounded-lg' : ''}`}
     >
       <span className={bold ? 'font-semibold text-tech-white' : 'text-steel'}>{label}</span>
       <span
         className={`${bold ? 'font-bold' : ''} ${
-          highlight ? 'text-forge-green text-xl' : 'text-tech-white'
+          highlight ? 'text-forge-teal text-xl' : 'text-tech-white'
         }`}
       >
         $ {value.toFixed(2)}

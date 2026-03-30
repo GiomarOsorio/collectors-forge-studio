@@ -216,7 +216,7 @@ export default function SlicerJobDetailPage() {
       {job.status === 'done' && (
         <div className="space-y-6">
           {/* Vista de camas — sección principal */}
-          <div className="bg-[#13171c] border border-[#1e2125] rounded-xl p-6">
+          <div className="bg-[#111520] border border-[#222630] rounded-xl p-6">
             <h2 className="text-steel text-xs font-medium uppercase tracking-wider mb-4">
               {hasPlates ? `${job.plates_data.length} placas` : 'Vista de cama'}
             </h2>
@@ -224,7 +224,7 @@ export default function SlicerJobDetailPage() {
               {(hasPlates ? job.plates_data : [{ plate_number: 1 }]).map((plate) => (
                 <div
                   key={plate.plate_number}
-                  className="bg-[#0d1014] border border-[#1e2125] rounded-lg overflow-hidden"
+                  className="bg-[#0A0E16] border border-[#222630] rounded-lg overflow-hidden"
                 >
                   {/* Thumbnail de la cama */}
                   <div className="relative aspect-square bg-[#080a0d] flex items-center justify-center">
@@ -243,7 +243,7 @@ export default function SlicerJobDetailPage() {
                     {/* Botón 3D flotante */}
                     <button
                       onClick={() => setViewerPlate(plate.plate_number)}
-                      className="absolute top-2 right-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[#1a1d21]/90 border border-[#2a2d31] text-steel hover:text-tech-white hover:border-[#3a3d41] transition-colors backdrop-blur-sm"
+                      className="absolute top-2 right-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[#1A1D25]/90 border border-[#2A2F38] text-steel hover:text-tech-white hover:border-[#363C47] transition-colors backdrop-blur-sm"
                       title="Vista 3D interactiva"
                     >
                       <Box size={12} />
@@ -264,7 +264,7 @@ export default function SlicerJobDetailPage() {
                             {plate.filaments.map((f, i) => (
                               <div
                                 key={i}
-                                className="w-3 h-3 rounded-full border border-[#3a3d41]"
+                                className="w-3 h-3 rounded-full border border-[#363C47]"
                                 style={{ backgroundColor: f.colour_hex || '#888' }}
                                 title={`${f.filament_type} ${f.colour_hex}`}
                               />
@@ -292,7 +292,7 @@ export default function SlicerJobDetailPage() {
                     {hasPlates && (
                       <button
                         onClick={() => goToCalc(plate)}
-                        className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs text-amber-400/80 hover:text-amber-400 border border-[#1e2125] hover:border-amber-400/30 hover:bg-amber-400/5 transition-colors"
+                        className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs text-amber-400/80 hover:text-amber-400 border border-[#222630] hover:border-amber-400/30 hover:bg-amber-400/5 transition-colors"
                       >
                         <Calculator size={12} />
                         Usar placa {plate.plate_number}
@@ -306,22 +306,22 @@ export default function SlicerJobDetailPage() {
 
           {/* Totales (solo multi-placa) */}
           {hasPlates && (
-            <div className="bg-[#13171c] border border-[#1e2125] rounded-xl p-6">
+            <div className="bg-[#111520] border border-[#222630] rounded-xl p-6">
               <h2 className="text-steel text-xs font-medium uppercase tracking-wider mb-4">
                 Totales
               </h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <div className="bg-[#0d1014] rounded-lg p-4">
+                <div className="bg-[#0A0E16] rounded-lg p-4">
                   <p className="text-gunmetal text-xs mb-1">Tiempo de impresión</p>
                   <p className="text-tech-white font-semibold text-sm">{formatTime(job.print_time_seconds)}</p>
                 </div>
-                <div className="bg-[#0d1014] rounded-lg p-4">
+                <div className="bg-[#0A0E16] rounded-lg p-4">
                   <p className="text-gunmetal text-xs mb-1">Peso de filamento</p>
                   <p className="text-tech-white font-semibold text-sm">
                     {job.filament_weight_g ? `${Number(job.filament_weight_g).toFixed(2)} g` : '—'}
                   </p>
                 </div>
-                <div className="bg-[#0d1014] rounded-lg p-4">
+                <div className="bg-[#0A0E16] rounded-lg p-4">
                   <p className="text-gunmetal text-xs mb-1">Filamento</p>
                   <p className="text-tech-white font-semibold text-sm">{job.filament_type || '—'}</p>
                 </div>
@@ -331,39 +331,39 @@ export default function SlicerJobDetailPage() {
 
           {/* Datos extraídos (single plate) */}
           {!hasPlates && (
-            <div className="bg-[#13171c] border border-[#1e2125] rounded-xl p-6">
+            <div className="bg-[#111520] border border-[#222630] rounded-xl p-6">
               <h2 className="text-steel text-xs font-medium uppercase tracking-wider mb-4">
                 Datos extraídos
               </h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <div className="bg-[#0d1014] rounded-lg p-4">
+                <div className="bg-[#0A0E16] rounded-lg p-4">
                   <p className="text-gunmetal text-xs mb-1">Tiempo de impresión</p>
                   <p className="text-tech-white font-semibold text-sm">{formatTime(job.print_time_seconds)}</p>
                 </div>
-                <div className="bg-[#0d1014] rounded-lg p-4">
+                <div className="bg-[#0A0E16] rounded-lg p-4">
                   <p className="text-gunmetal text-xs mb-1">Peso de filamento</p>
                   <p className="text-tech-white font-semibold text-sm">
                     {job.filament_weight_g ? `${Number(job.filament_weight_g).toFixed(2)} g` : '—'}
                   </p>
                 </div>
-                <div className="bg-[#0d1014] rounded-lg p-4">
+                <div className="bg-[#0A0E16] rounded-lg p-4">
                   <p className="text-gunmetal text-xs mb-1">Filamento</p>
                   <p className="text-tech-white font-semibold text-sm">{job.filament_type || '—'}</p>
                 </div>
                 {job.layer_height_mm && (
-                  <div className="bg-[#0d1014] rounded-lg p-4">
+                  <div className="bg-[#0A0E16] rounded-lg p-4">
                     <p className="text-gunmetal text-xs mb-1">Altura de capa</p>
                     <p className="text-tech-white font-semibold text-sm">{job.layer_height_mm} mm</p>
                   </div>
                 )}
                 {job.nozzle_temp && (
-                  <div className="bg-[#0d1014] rounded-lg p-4">
+                  <div className="bg-[#0A0E16] rounded-lg p-4">
                     <p className="text-gunmetal text-xs mb-1">Temp. boquilla</p>
                     <p className="text-tech-white font-semibold text-sm">{job.nozzle_temp} °C</p>
                   </div>
                 )}
                 {job.bed_temp && (
-                  <div className="bg-[#0d1014] rounded-lg p-4">
+                  <div className="bg-[#0A0E16] rounded-lg p-4">
                     <p className="text-gunmetal text-xs mb-1">Temp. cama</p>
                     <p className="text-tech-white font-semibold text-sm">{job.bed_temp} °C</p>
                   </div>
@@ -374,15 +374,15 @@ export default function SlicerJobDetailPage() {
 
           {/* Filamentos detectados */}
           {filamentGroups.length > 0 && (
-            <div className="bg-[#13171c] border border-[#1e2125] rounded-xl p-6">
+            <div className="bg-[#111520] border border-[#222630] rounded-xl p-6">
               <h2 className="text-steel text-xs font-medium uppercase tracking-wider mb-4">
                 Filamentos detectados
               </h2>
               <div className="space-y-2">
                 {filamentGroups.map((f, i) => (
-                  <div key={i} className="flex items-center gap-3 bg-[#0d1014] rounded-lg px-4 py-3">
+                  <div key={i} className="flex items-center gap-3 bg-[#0A0E16] rounded-lg px-4 py-3">
                     <div
-                      className="w-4 h-4 rounded-full border border-[#3a3d41] shrink-0"
+                      className="w-4 h-4 rounded-full border border-[#363C47] shrink-0"
                       style={{ backgroundColor: f.colour_hex || '#888' }}
                       title={f.colour_hex}
                     />

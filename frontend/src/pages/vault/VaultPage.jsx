@@ -126,7 +126,7 @@ function EditModal({ file, onSave, onReplace, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-[#1a1d21] border border-[#2a2d31] rounded-2xl p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-[#1A1D25] border border-[#2A2F38] rounded-2xl p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-steel">Editar archivo</h3>
           <button className="tf-btn-ghost" onClick={onClose} disabled={busy}>
@@ -182,12 +182,12 @@ function EditModal({ file, onSave, onReplace, onClose }) {
         </div>
 
         {/* Separador */}
-        <div className="border-t border-[#2a2d31] my-5" />
+        <div className="border-t border-[#2A2F38] my-5" />
 
         {/* Nueva versión del archivo */}
         <p className="text-xs font-medium text-steel mb-3">Nueva versión del archivo</p>
         <div
-          className="border border-dashed border-[#2a2d31] rounded-xl p-4 flex flex-col items-center gap-2 cursor-pointer hover:border-rose-500/40 transition-colors"
+          className="border border-dashed border-[#2A2F38] rounded-xl p-4 flex flex-col items-center gap-2 cursor-pointer hover:border-rose-500/40 transition-colors"
           onClick={() => !busy && fileInputRef.current?.click()}
         >
           <UploadCloud size={22} className="text-gunmetal" />
@@ -209,7 +209,7 @@ function EditModal({ file, onSave, onReplace, onClose }) {
 
         {uploading && (
           <div className="mt-3">
-            <div className="h-1.5 bg-[#2a2d31] rounded-full overflow-hidden">
+            <div className="h-1.5 bg-[#2A2F38] rounded-full overflow-hidden">
               <div
                 className="h-full bg-rose-500 rounded-full transition-all"
                 style={{ width: `${uploadProgress}%` }}

@@ -152,7 +152,7 @@ export default function InventoryCategoriesPage() {
                       Sí (ej: gramos)
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-[#1e2125] text-steel border border-[#2a2d31]">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-[#222630] text-steel border border-[#2A2F38]">
                       No (enteros)
                     </span>
                   )}
@@ -257,7 +257,7 @@ export default function InventoryCategoriesPage() {
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="flex-1 px-4 py-2 rounded-lg border border-[#2a2d31] text-steel hover:text-tech-white transition-colors text-sm"
+                  className="flex-1 px-4 py-2 rounded-lg border border-[#2A2F38] text-steel hover:text-tech-white transition-colors text-sm"
                 >
                   Cancelar
                 </button>

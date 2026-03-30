@@ -107,7 +107,7 @@ export default function QuotesPage() {
 
             <div className="flex gap-4 text-xs text-gunmetal mb-4">
               <span>Fecha: <span className="text-tech-white">{fmt(selected.quote_date)}</span></span>
-              <span>Válida hasta: <span className="text-forge-green">{fmt(selected.expiry_date)}</span></span>
+              <span>Válida hasta: <span className="text-forge-teal">{fmt(selected.expiry_date)}</span></span>
               <span>Vigencia: <span className="text-tech-white">{selected.expiry_days} días</span></span>
             </div>
 
@@ -138,9 +138,9 @@ export default function QuotesPage() {
             </div>
 
             {/* Total */}
-            <div className="flex justify-between items-center bg-forge-green/10 border border-forge-green/20 rounded-lg px-4 py-3 mb-4">
-              <span className="font-semibold text-forge-green">Total</span>
-              <span className="text-xl font-bold text-forge-green">$ {parseFloat(selected.subtotal).toFixed(2)}</span>
+            <div className="flex justify-between items-center bg-forge-teal/10 border border-forge-teal/20 rounded-lg px-4 py-3 mb-4">
+              <span className="font-semibold text-forge-teal">Total</span>
+              <span className="text-xl font-bold text-forge-teal">$ {parseFloat(selected.subtotal).toFixed(2)}</span>
             </div>
 
             {selected.notes && (
@@ -178,7 +178,7 @@ export default function QuotesPage() {
                 <td className="tf-td-right text-steel hidden sm:table-cell">
                   {q.items?.length ?? 0}
                 </td>
-                <td className="tf-td-right font-semibold font-mono text-forge-green">
+                <td className="tf-td-right font-semibold font-mono text-forge-teal">
                   $ {parseFloat(q.subtotal).toFixed(2)}
                 </td>
                 <td className="tf-td-right">

@@ -265,7 +265,7 @@ export default function CompanyTemplateEditorPage() {
             onChange={(e) => setForm((p) => ({ ...p, content: e.target.value }))}
             disabled={!user?.is_admin}
             rows={28}
-            className="w-full bg-[#0d1014] border border-[#1e2125] rounded-lg p-4 text-xs font-mono text-tech-white focus:outline-none focus:border-indigo-500 resize-y leading-relaxed"
+            className="w-full bg-[#0A0E16] border border-[#222630] rounded-lg p-4 text-xs font-mono text-tech-white focus:outline-none focus:border-indigo-500 resize-y leading-relaxed"
             placeholder="<!DOCTYPE html>..."
             spellCheck={false}
           />
