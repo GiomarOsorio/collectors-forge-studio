@@ -9,7 +9,6 @@ Exec=tunnel --no-autoupdate run
 Network=calculator3d.network
 Network=kumistudio.network
 Network=championsapp.network
-Network=books.network
 EnvironmentFile=__DEPLOY_PATH__/.env
 
 [Service]
