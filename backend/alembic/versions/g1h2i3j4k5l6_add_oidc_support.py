@@ -16,17 +16,43 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Usar SQL raw con IF NOT EXISTS para hacer la migración idempotente.
+    # La DB del servidor puede ya tener estas columnas/constraints de un deploy anterior.
+
     # Agregar columna oidc_sub (nullable, para JIT provisioning)
-    op.add_column("users", sa.Column("oidc_sub", sa.String(255), nullable=True))
-    op.create_unique_constraint("uq_users_oidc_sub", "users", ["oidc_sub"])
-    op.create_index("ix_users_oidc_sub", "users", ["oidc_sub"])
-    # Hacer hashed_password nullable (usuarios OIDC no tienen contraseña local)
-    op.alter_column(
-        "users",
-        "hashed_password",
-        existing_type=sa.String(255),
-        nullable=True,
-    )
+    op.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS oidc_sub VARCHAR(255)")
+
+    # Crear unique constraint si no existe
+    op.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint WHERE conname = 'uq_users_oidc_sub'
+            ) THEN
+                ALTER TABLE users ADD CONSTRAINT uq_users_oidc_sub UNIQUE (oidc_sub);
+            END IF;
+        END
+        $$;
+    """)
+
+    # Crear índice si no existe
+    op.execute("CREATE INDEX IF NOT EXISTS ix_users_oidc_sub ON users (oidc_sub)")
+
+    # Hacer hashed_password nullable si aún no lo es
+    op.execute("""
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'users'
+                  AND column_name = 'hashed_password'
+                  AND is_nullable = 'NO'
+            ) THEN
+                ALTER TABLE users ALTER COLUMN hashed_password DROP NOT NULL;
+            END IF;
+        END
+        $$;
+    """)
 
 
 def downgrade() -> None:
