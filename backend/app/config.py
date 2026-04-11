@@ -50,8 +50,15 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     ENABLE_DOCS: bool = False  # Habilitar /docs y /redoc solo en desarrollo
     ADMIN_USERNAME: str = "admin"
-    ADMIN_PASSWORD: str  # Requerida — define en .env o variable de entorno
+    ADMIN_PASSWORD: str = ""  # Ya no requerida — login via OIDC
     ADMIN_EMAIL: str = "admin@calculator3d.local"
+
+    # OIDC / SSO
+    OIDC_ISSUER: str = ""             # ej. https://auth.example.com/application/o/slug/
+    OIDC_CLIENT_ID: str = ""
+    OIDC_CLIENT_SECRET: str = ""
+    OIDC_REDIRECT_URI: str = ""       # https://3d.turtledev.dev/api/auth/oidc/callback
+    SESSION_SECRET_KEY: str = ""      # clave para SessionMiddleware; usa SECRET_KEY si está vacía
 
     # MinIO (Vault)
     MINIO_ENDPOINT: str = "http://calculator3d-minio:9000"

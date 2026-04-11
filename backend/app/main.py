@@ -2,11 +2,11 @@
 Punto de entrada principal de la API TurtleForge Cost.
 
 Este módulo crea y configura la instancia de FastAPI, registra el middleware
-de CORS para permitir solicitudes desde el frontend, incluye todos los
-routers de la aplicación y define el ciclo de vida (lifespan) que se encarga
-de crear los datos por defecto (usuario admin, configuración inicial e
-impresora BambuLab P1S Combo) si aún no existen.
+de CORS y SessionMiddleware, incluye todos los routers de la aplicación y
+define el ciclo de vida (lifespan) que crea la empresa por defecto, la
+configuración inicial y la impresora BambuLab P2S Combo si aún no existen.
 
+Los usuarios se crean automáticamente vía JIT provisioning en el callback OIDC.
 Las tablas de la base de datos se crean y migran a través de Alembic
 (alembic upgrade head) ANTES de arrancar el servidor, no en tiempo de ejecución.
 """
@@ -27,12 +27,12 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
 from app.database import async_session
 from app.limiter import limiter
-from app.models import Company, User, AppSettings, Printer
-from app.services.auth import get_password_hash
+from app.models import Company, AppSettings, Printer
 from app.routers import (
     auth, printers, settings as settings_router, quotes,
     client_quotes, inventory, purchase_orders, slicer, printed_items,
@@ -44,6 +44,7 @@ from app.routers.maintenance import router as maintenance_router
 from app.routers.queue import router as queue_router
 from app.routers.inventory_categories import router as inventory_categories_router
 from app.routers.vault import router as vault_router
+from app.routers.oidc import router as oidc_router
 from app.routers.slicer import cleanup_old_slicer_files
 from app.services.vault_storage import ensure_bucket
 
@@ -114,6 +115,15 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# SessionMiddleware requerido por Authlib para almacenar state/nonce/PKCE durante el flujo OIDC
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.SESSION_SECRET_KEY or settings.SECRET_KEY,
+    https_only=not settings.ENABLE_DOCS,  # False en dev, True en prod
+    same_site="lax",
+    max_age=600,  # 10 minutos, suficiente para completar el flujo OIDC
+)
+
 # CORS: permite el frontend local (Vite/CRA) y el dominio de producción
 app.add_middleware(
     CORSMiddleware,
@@ -160,6 +170,7 @@ async def audit_log_middleware(request: Request, call_next):
 
 # Registrar routers con sus respectivos prefijos y etiquetas
 app.include_router(auth.router)
+app.include_router(oidc_router)
 app.include_router(printers.router)
 app.include_router(settings_router.router)
 app.include_router(quotes.router)
@@ -193,81 +204,72 @@ async def health_check():
 
 async def create_default_data():
     """
-    Crea el usuario administrador y los datos iniciales si aún no existen.
+    Crea los datos iniciales de la empresa por defecto si aún no existen.
 
-    Esta función es idempotente: si el usuario admin ya existe en la base de
-    datos, no realiza ninguna acción. En caso contrario crea:
+    Esta función es idempotente. Crea:
+    - Empresa por defecto "The Collector Forge" (UUID fijo).
+    - AppSettings por defecto para la empresa.
+    - Impresora BambuLab P2S Combo por defecto.
 
-    - Usuario administrador con credenciales definidas en la configuración.
-    - Configuración de aplicación por defecto asociada al admin (tarifas,
-      márgenes, moneda, etc.).
-    - Impresora BambuLab P1S Combo con parámetros técnicos preconfigurados.
+    Los usuarios se crean automáticamente vía JIT provisioning en el callback OIDC.
     """
     async with async_session() as db:
-        # Verificar si ya existe el usuario admin para evitar duplicados
-        result = await db.execute(
-            select(User).where(User.username == settings.ADMIN_USERNAME)
-        )
-        if result.scalar_one_or_none():
-            return
-
-        # Crear empresa por defecto si aún no existe (la migración la crea en upgrade,
-        # pero en una instalación fresca sin datos previos puede no estar presente)
+        # Crear empresa por defecto si aún no existe
         company_result = await db.execute(
             select(Company).where(Company.id == DEFAULT_COMPANY_ID)
         )
         default_company = company_result.scalar_one_or_none()
         if not default_company:
-            default_company = Company(id=DEFAULT_COMPANY_ID, name="Calculator3D")
+            default_company = Company(id=DEFAULT_COMPANY_ID, name="The Collector Forge")
             db.add(default_company)
-            await db.commit()
-            await db.refresh(default_company)
+            try:
+                await db.commit()
+            except IntegrityError:
+                await db.rollback()
+            await db.refresh(default_company) if default_company.id else None
 
-        # Crear usuario admin con contraseña hasheada usando bcrypt
-        admin = User(
-            username=settings.ADMIN_USERNAME,
-            email=settings.ADMIN_EMAIL,
-            hashed_password=get_password_hash(settings.ADMIN_PASSWORD),
-            is_admin=True,
-            company_id=DEFAULT_COMPANY_ID,
+        # Crear AppSettings por defecto si aún no existe
+        settings_result = await db.execute(
+            select(AppSettings).where(AppSettings.company_id == DEFAULT_COMPANY_ID)
         )
-        db.add(admin)
-        try:
-            await db.commit()
-        except IntegrityError:
-            # Otra instancia creó el usuario entre la verificación y el INSERT
-            await db.rollback()
-            return
-        await db.refresh(admin)
+        if not settings_result.scalar_one_or_none():
+            default_settings = AppSettings(
+                user_id=None,
+                company_id=DEFAULT_COMPANY_ID,
+                electricity_rate=0.15,
+                failure_rate_percent=5.0,
+                labor_cost_per_hour=10.0,
+                default_margin_percent=30.0,
+                currency="USD",
+            )
+            db.add(default_settings)
+            try:
+                await db.commit()
+            except IntegrityError:
+                await db.rollback()
 
-        # Crear configuración de la empresa con valores por defecto razonables
-        default_settings = AppSettings(
-            user_id=admin.id,
-            company_id=DEFAULT_COMPANY_ID,
-            electricity_rate=0.15,        # USD por kWh
-            failure_rate_percent=5.0,      # 5% de absorción por fallos de impresión
-            labor_cost_per_hour=10.0,      # USD por hora de trabajo manual
-            default_margin_percent=30.0,   # Margen de ganancia del 30%
-            currency="USD",
+        # Crear impresora BambuLab P2S Combo por defecto si aún no existe
+        printer_result = await db.execute(
+            select(Printer).where(Printer.company_id == DEFAULT_COMPANY_ID)
         )
-        db.add(default_settings)
-
-        # Crear la impresora BambuLab P1S Combo con sus especificaciones reales
-        default_printer = Printer(
-            name="Mi BambuLab P1S Combo",
-            model="BambuLab P1S Combo",
-            purchase_price=699.0,              # Precio de compra en USD
-            power_consumption_watts=180.0,     # Consumo promedio durante impresión
-            estimated_lifespan_hours=5000.0,   # Vida útil estimada del equipo
-            current_hours=0.0,                 # Horas de uso acumuladas al inicio
-            nozzle_price=8.0,                  # Costo de reemplazo de boquilla
-            nozzle_lifespan_hours=500.0,       # Horas de vida útil de la boquilla
-            buildplate_price=35.0,             # Costo de la placa de construcción
-            buildplate_lifespan_hours=2000.0,  # Horas de vida útil de la placa
-            other_maintenance_per_hour=0.01,   # Otros costos de mantenimiento por hora
-            notes="Impresora principal - BambuLab P2S Combo con AMS 2 Pro",
-            company_id=DEFAULT_COMPANY_ID,
-        )
-        db.add(default_printer)
-
-        await db.commit()
+        if not printer_result.scalar_one_or_none():
+            default_printer = Printer(
+                name="Mi BambuLab P2S Combo",
+                model="BambuLab P2S Combo",
+                purchase_price=799.0,
+                power_consumption_watts=180.0,
+                estimated_lifespan_hours=5000.0,
+                current_hours=0.0,
+                nozzle_price=8.0,
+                nozzle_lifespan_hours=500.0,
+                buildplate_price=35.0,
+                buildplate_lifespan_hours=2000.0,
+                other_maintenance_per_hour=0.01,
+                notes="Impresora principal - BambuLab P2S Combo con AMS 2 Pro",
+                company_id=DEFAULT_COMPANY_ID,
+            )
+            db.add(default_printer)
+            try:
+                await db.commit()
+            except IntegrityError:
+                await db.rollback()

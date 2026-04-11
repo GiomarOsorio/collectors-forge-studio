@@ -1,70 +1,45 @@
 /**
- * @file Pagina de inicio de sesion de Calculator3D.
+ * @file Pagina de inicio de sesion de TurtleForge Studio.
  *
- * Presenta un formulario de autenticacion con campos de usuario y contrasena.
- * Al enviar el formulario, se autentica contra el backend (JWT),
- * obtiene los datos del usuario y actualiza el contexto de autenticacion.
- * En caso de exito, redirige a la pagina principal de la calculadora.
+ * Presenta un botón de SSO que inicia el flujo OIDC con PKCE.
+ * El backend maneja todo el intercambio de tokens; el frontend solo redirige.
  *
  * @module pages/Login
  */
 
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { login, getMe } from '../services/api';
+import { useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Loader2 } from 'lucide-react';
+import { LogIn } from 'lucide-react';
 
 /**
- * Componente de la pagina de inicio de sesion.
+ * Componente de la pagina de inicio de sesion via SSO.
  *
- * @description Renderiza un formulario centrado en pantalla con los campos
- * de usuario y contrasena. Gestiona el flujo completo de autenticacion:
- * 1. Envia las credenciales al endpoint de login
- * 2. Almacena el token JWT recibido
- * 3. Obtiene los datos del usuario autenticado
- * 4. Actualiza el contexto de autenticacion global
- * 5. Redirige a la pagina principal
- *
- * Muestra notificaciones de error si las credenciales son incorrectas.
- *
- * @returns {JSX.Element} Formulario de inicio de sesion
+ * @returns {JSX.Element} Pantalla de login con botón SSO
  */
 export default function Login() {
-  /** @type {[string, Function]} Nombre de usuario ingresado */
-  const [username, setUsername] = useState('');
-  /** @type {[string, Function]} Contrasena ingresada */
-  const [password, setPassword] = useState('');
-  /** @type {[boolean, Function]} Estado de carga durante el proceso de autenticacion */
-  const [loading, setLoading] = useState(false);
-  const { loginUser } = useAuth();
-  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Mostrar error si el callback OIDC redirigió con ?error=
+  useEffect(() => {
+    const error = searchParams.get('error');
+    if (error) {
+      const mensajes = {
+        oidc_callback_failed: 'Error al completar el inicio de sesión. Intenta de nuevo.',
+        missing_sub:          'El proveedor de identidad no devolvió un identificador de usuario.',
+        provisioning_failed:  'Error al crear tu cuenta. Contacta al administrador.',
+        user_inactive:        'Tu cuenta está desactivada. Contacta al administrador.',
+      };
+      toast.error(mensajes[error] || 'Error de autenticación');
+    }
+  }, [searchParams]);
 
   /**
-   * Maneja el envio del formulario de login.
-   * Realiza la autenticacion en dos pasos: primero obtiene el token JWT
-   * y luego consulta los datos del usuario autenticado.
-   *
-   * @param {React.FormEvent<HTMLFormElement>} e - Evento del formulario
+   * Inicia el flujo OIDC redirigiendo al backend.
+   * El backend generará state/nonce/PKCE y redirigirá al proveedor de identidad.
    */
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      // Paso 1: Autenticar y obtener el token JWT
-      const res = await login(username, password);
-      localStorage.setItem('token', res.data.access_token);
-      // Paso 2: Obtener los datos del usuario con el token recien obtenido
-      const userRes = await getMe();
-      // Paso 3: Actualizar el contexto global de autenticacion
-      loginUser(res.data.access_token, userRes.data);
-      navigate('/');
-    } catch {
-      toast.error('Usuario o contraseña incorrectos');
-    } finally {
-      setLoading(false);
-    }
+  const handleSSOLogin = () => {
+    window.location.href = '/api/auth/oidc/login';
   };
 
   return (
@@ -76,24 +51,14 @@ export default function Login() {
           <h1 className="text-3xl font-bold text-tech-white tracking-tight">TurtleForge Studio</h1>
           <p className="text-gunmetal mt-2 text-sm">Inicio de sesión</p>
         </div>
-        {/* Formulario de autenticacion */}
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="tf-label">Usuario</label>
-            <input type="text" value={username} onChange={(e) => setUsername(e.target.value)}
-              className="tf-input py-3" required />
-          </div>
-          <div>
-            <label className="tf-label">Contraseña</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-              className="tf-input py-3" required />
-          </div>
-          <button type="submit" disabled={loading}
-            className="tf-btn-primary w-full py-3 text-base gap-2">
-            {loading && <Loader2 size={18} className="animate-spin" />}
-            {loading ? 'Ingresando...' : 'Ingresar'}
-          </button>
-        </form>
+        {/* Botón SSO */}
+        <button
+          onClick={handleSSOLogin}
+          className="tf-btn-primary w-full py-3 text-base gap-2 flex items-center justify-center"
+        >
+          <LogIn size={18} />
+          Iniciar sesión con SSO
+        </button>
       </div>
     </div>
   );

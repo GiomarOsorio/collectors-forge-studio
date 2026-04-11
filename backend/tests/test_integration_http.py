@@ -149,98 +149,6 @@ class TestAuthRequired:
         assert r.status_code == 401
 
 
-# ---------------------------------------------------------------------------
-# 2. Flujo de login
-# ---------------------------------------------------------------------------
-
-class TestLoginFlow:
-    """Verifica el endpoint POST /api/auth/login."""
-
-    async def test_login_sin_campos_retorna_422(self):
-        """Enviar JSON vacío (no es form-data) → 422."""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            r = await c.post("/api/auth/login", json={})
-        # login usa OAuth2PasswordRequestForm (multipart/form-data), no JSON
-        assert r.status_code == 422
-
-    async def test_login_credenciales_invalidas_retorna_401(self):
-        """Usuario inexistente → 401."""
-        async def _db_usuario_inexistente():
-            session = AsyncMock()
-            result = MagicMock()
-            result.scalar_one_or_none.return_value = None  # usuario no encontrado
-            session.execute.return_value = result
-            yield session
-
-        _set_overrides({get_db: _db_usuario_inexistente})
-        try:
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-                r = await c.post(
-                    "/api/auth/login",
-                    data={"username": "noexiste", "password": "wrongpass"},
-                )
-        finally:
-            _clear_overrides()
-        assert r.status_code == 401
-
-    async def test_login_usuario_desactivado_retorna_403(self):
-        """Usuario desactivado (is_active=False) → 403."""
-        from app.services.auth import get_password_hash
-
-        inactive_user = MagicMock()
-        inactive_user.username = "inactivo"
-        inactive_user.hashed_password = get_password_hash("secret")
-        inactive_user.is_active = False
-
-        async def _db_usuario_inactivo():
-            session = AsyncMock()
-            result = MagicMock()
-            result.scalar_one_or_none.return_value = inactive_user
-            session.execute.return_value = result
-            yield session
-
-        _set_overrides({get_db: _db_usuario_inactivo})
-        try:
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-                r = await c.post(
-                    "/api/auth/login",
-                    data={"username": "inactivo", "password": "secret"},
-                )
-        finally:
-            _clear_overrides()
-        assert r.status_code == 403
-
-    async def test_login_exitoso_retorna_token(self):
-        """Credenciales correctas → 200 con access_token."""
-        from app.services.auth import get_password_hash
-
-        active_user = MagicMock()
-        active_user.username = "admin"
-        active_user.hashed_password = get_password_hash("correctpassword")
-        active_user.is_active = True
-
-        async def _db_usuario_activo():
-            session = AsyncMock()
-            result = MagicMock()
-            result.scalar_one_or_none.return_value = active_user
-            session.execute.return_value = result
-            yield session
-
-        _set_overrides({get_db: _db_usuario_activo})
-        try:
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-                r = await c.post(
-                    "/api/auth/login",
-                    data={"username": "admin", "password": "correctpassword"},
-                )
-        finally:
-            _clear_overrides()
-        assert r.status_code == 200
-        body = r.json()
-        assert "access_token" in body
-        assert body["token_type"] == "bearer"
-        assert len(body["access_token"]) > 10  # token no vacío
-
 
 # ---------------------------------------------------------------------------
 # 3. Validación de esquema (422)
@@ -313,24 +221,6 @@ class TestSchemaValidation:
         try:
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
                 r = await c.post("/api/inventory/prints/1/sell", json={"quantity": 0})
-        finally:
-            _clear_overrides()
-        assert r.status_code == 422
-
-    async def test_register_password_corta_422(self):
-        """password menor a 8 caracteres → 422 (A-04)."""
-        admin_user = _fake_user(is_admin=True)
-        _set_overrides({
-            get_current_user: lambda: admin_user,
-            get_db: _fake_db_empty,
-        })
-        try:
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-                r = await c.post("/api/auth/register", json={
-                    "username": "newuser",
-                    "email": "new@test.com",
-                    "password": "short",  # < 8 caracteres
-                })
         finally:
             _clear_overrides()
         assert r.status_code == 422

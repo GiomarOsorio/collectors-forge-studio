@@ -64,6 +64,7 @@ import QueueLayout from './components/QueueLayout';
 import CompanyLayout from './components/CompanyLayout';
 import VaultLayout from './components/VaultLayout';
 import Login from './pages/Login';
+import AuthSuccess from './pages/AuthSuccess';
 
 const StudioHomePage           = lazy(() => import('./pages/StudioHomePage'));
 const CalculatorPage           = lazy(() => import('./pages/CalculatorPage'));
@@ -133,8 +134,9 @@ function AppRoutes() {
 
   return (
     <Routes>
-      {/* Ruta pública: redirige al dashboard si ya hay sesión */}
+      {/* Rutas públicas */}
       <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
+      <Route path="/auth/success" element={<AuthSuccess />} />
 
       {/* TurtleForge Studio Home: lanzador de aplicaciones */}
       <Route path="/" element={<PrivateRoute><StudioLayout /></PrivateRoute>}>

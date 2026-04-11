@@ -74,10 +74,26 @@ export function AuthProvider({ children }) {
   };
 
   /**
-   * Cierra la sesion del usuario eliminando el token de localStorage
-   * y limpiando el estado del usuario.
+   * Cierra la sesion del usuario.
+   * Llama al endpoint OIDC para obtener la URL de logout del IdP y redirige.
+   * Si falla, simplemente limpia el estado local.
    */
-  const logout = () => {
+  const logout = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        const res = await fetch('/api/auth/oidc/logout', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        localStorage.removeItem('token');
+        setUser(null);
+        window.location.href = data.logout_url || '/login';
+        return;
+      }
+    } catch {
+      // Fallthrough: limpiar estado local aunque el endpoint falle
+    }
     localStorage.removeItem('token');
     setUser(null);
   };
