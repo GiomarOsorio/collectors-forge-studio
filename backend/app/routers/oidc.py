@@ -10,7 +10,6 @@ Endpoints:
     GET /api/auth/oidc/logout    — Retorna la URL de logout del IdP.
 """
 
-import uuid
 import logging
 from typing import Optional
 
@@ -23,15 +22,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.models.user import User
-from app.models.settings import AppSettings
 from app.services.auth import create_access_token, get_current_user
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth/oidc", tags=["oidc"])
-
-# UUID fijo de la empresa por defecto
-DEFAULT_COMPANY_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
 # Cliente OAuth registrado con Authlib
 oauth = OAuth()
@@ -110,10 +105,8 @@ async def oidc_callback(request: Request, db: AsyncSession = Depends(get_db)):
     user = result.scalar_one_or_none()
 
     if user is None:
-        # Verificar si es el primer usuario de la empresa (será admin)
-        count_result = await db.execute(
-            select(User).where(User.company_id == DEFAULT_COMPANY_ID)
-        )
+        # Verificar si es el primer usuario del sistema (será admin)
+        count_result = await db.execute(select(User))
         is_first_user = count_result.scalar_one_or_none() is None
 
         # Generar username único si ya existe uno igual
@@ -127,8 +120,7 @@ async def oidc_callback(request: Request, db: AsyncSession = Depends(get_db)):
             email=email or f"{oidc_sub}@oidc.local",
             hashed_password=None,
             oidc_sub=oidc_sub,
-            is_admin=is_first_user,
-            company_id=DEFAULT_COMPANY_ID,
+            role="admin" if is_first_user else "operator",
         )
         db.add(user)
         try:

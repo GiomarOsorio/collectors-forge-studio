@@ -23,7 +23,7 @@ from app.database import get_db
 from app.models.user import User
 from app.models.supply import Supply
 from app.schemas.supply import SupplyCreate, SupplyUpdate, SupplyResponse
-from app.services.auth import get_current_user
+from app.services.auth import get_current_user, get_operator_user
 
 router = APIRouter(prefix="/api/supplies", tags=["supplies"])
 
@@ -59,7 +59,6 @@ async def list_supplies(
     """Lista los insumos de la empresa del usuario, ordenados por nombre."""
     result = await db.execute(
         select(Supply)
-        .where(Supply.company_id == current_user.company_id)
         .order_by(Supply.name)
     )
     return result.scalars().all()
@@ -69,7 +68,7 @@ async def list_supplies(
 async def create_supply(
     data: SupplyCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Crea un nuevo insumo en el catálogo de la empresa del usuario.
@@ -84,7 +83,7 @@ async def create_supply(
 
     payload = data.model_dump(exclude={"price_per_unit"})
     payload["price_per_unit"] = computed_price
-    supply = Supply(**payload, company_id=current_user.company_id)
+    supply = Supply(**payload)
     db.add(supply)
     await db.commit()
     await db.refresh(supply)
@@ -96,7 +95,7 @@ async def update_supply(
     supply_id: int,
     data: SupplyUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Actualiza parcialmente un insumo de la empresa del usuario autenticado.
@@ -104,10 +103,7 @@ async def update_supply(
     Recalcula price_per_unit si se actualizan pack_qty o pack_price.
     """
     result = await db.execute(
-        select(Supply).where(
-            Supply.id == supply_id,
-            Supply.company_id == current_user.company_id,
-        )
+        select(Supply).where(Supply.id == supply_id)
     )
     supply = result.scalar_one_or_none()
     if not supply:
@@ -136,14 +132,11 @@ async def update_supply(
 async def delete_supply(
     supply_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """Elimina un insumo de la empresa del usuario autenticado."""
     result = await db.execute(
-        select(Supply).where(
-            Supply.id == supply_id,
-            Supply.company_id == current_user.company_id,
-        )
+        select(Supply).where(Supply.id == supply_id)
     )
     supply = result.scalar_one_or_none()
     if not supply:

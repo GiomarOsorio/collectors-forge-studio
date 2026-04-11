@@ -10,7 +10,6 @@ se actualiza automáticamente.
 Estados posibles de una orden: pendiente, en_transito, llegado, cancelado.
 """
 
-import uuid
 from datetime import datetime, date, timezone
 from decimal import Decimal
 from typing import Optional, List
@@ -19,7 +18,6 @@ from sqlalchemy import (
     String, Numeric, DateTime, Date, Text, Integer, ForeignKey, text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
 from app.database import Base
 
@@ -36,9 +34,6 @@ class PurchaseOrder(Base):
     __tablename__ = "purchase_orders"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True
-    )
 
     # Datos del pedido
     supplier: Mapped[str] = mapped_column(String(200), nullable=False)

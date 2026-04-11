@@ -84,7 +84,7 @@ export default function CompanyTemplatesPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="tf-page-title mb-0">Templates PDF</h2>
-        {user?.is_admin && (
+        {user?.role === 'admin' && (
           <button
             onClick={() => navigate('/company/templates/new')}
             className="tf-btn-primary gap-2 text-sm"
@@ -107,7 +107,7 @@ export default function CompanyTemplatesPage() {
         <div className="tf-card p-10 text-center">
           <FileCode size={40} className="mx-auto text-gunmetal mb-3" />
           <p className="text-steel mb-4">No hay templates creados.</p>
-          {user?.is_admin && (
+          {user?.role === 'admin' && (
             <button
               onClick={() => navigate('/company/templates/new')}
               className="tf-btn-primary gap-2"
@@ -169,7 +169,7 @@ export default function CompanyTemplatesPage() {
                           <Eye size={16} />
                         </button>
                         {/* Editar */}
-                        {user?.is_admin && (
+                        {user?.role === 'admin' && (
                           <button
                             onClick={() => navigate(`/company/templates/${tpl.id}`)}
                             className="text-gunmetal hover:text-steel transition-colors"
@@ -179,7 +179,7 @@ export default function CompanyTemplatesPage() {
                           </button>
                         )}
                         {/* Marcar como default */}
-                        {user?.is_admin && !tpl.is_default && (
+                        {user?.role === 'admin' && !tpl.is_default && (
                           <button
                             onClick={() => handleSetDefault(tpl.id)}
                             className="text-gunmetal hover:text-emerald-400 transition-colors"
@@ -189,7 +189,7 @@ export default function CompanyTemplatesPage() {
                           </button>
                         )}
                         {/* Eliminar */}
-                        {user?.is_admin && (
+                        {user?.role === 'admin' && (
                           <button
                             onClick={() => handleDelete(tpl.id)}
                             className="text-gunmetal hover:text-red-400 transition-colors"

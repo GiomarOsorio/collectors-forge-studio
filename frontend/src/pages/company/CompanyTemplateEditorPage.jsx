@@ -189,7 +189,7 @@ export default function CompanyTemplateEditorPage() {
               onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
               placeholder="Ej: Plantilla estándar TurtleForge"
               required
-              disabled={!user?.is_admin}
+              disabled={!user?.role === 'admin'}
             />
           </div>
           <div>
@@ -198,7 +198,7 @@ export default function CompanyTemplateEditorPage() {
               className="tf-input"
               value={form.template_type}
               onChange={(e) => setForm((p) => ({ ...p, template_type: e.target.value }))}
-              disabled={!user?.is_admin}
+              disabled={!user?.role === 'admin'}
             >
               {TYPE_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -211,7 +211,7 @@ export default function CompanyTemplateEditorPage() {
               id="is_default"
               checked={form.is_default}
               onChange={(e) => setForm((p) => ({ ...p, is_default: e.target.checked }))}
-              disabled={!user?.is_admin}
+              disabled={!user?.role === 'admin'}
               className="w-4 h-4 rounded"
             />
             <label htmlFor="is_default" className="text-sm text-steel cursor-pointer">
@@ -225,7 +225,7 @@ export default function CompanyTemplateEditorPage() {
               value={form.description}
               onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
               placeholder="Ej: Plantilla con diseño oscuro para cotizaciones premium"
-              disabled={!user?.is_admin}
+              disabled={!user?.role === 'admin'}
             />
           </div>
         </div>
@@ -263,7 +263,7 @@ export default function CompanyTemplateEditorPage() {
           <textarea
             value={form.content}
             onChange={(e) => setForm((p) => ({ ...p, content: e.target.value }))}
-            disabled={!user?.is_admin}
+            disabled={!user?.role === 'admin'}
             rows={28}
             className="w-full bg-[#0A0E16] border border-[#222630] rounded-lg p-4 text-xs font-mono text-tech-white focus:outline-none focus:border-indigo-500 resize-y leading-relaxed"
             placeholder="<!DOCTYPE html>..."
@@ -320,7 +320,7 @@ export default function CompanyTemplateEditorPage() {
         </div>
 
         {/* Acciones */}
-        {user?.is_admin && (
+        {user?.role === 'admin' && (
           <div className="flex gap-3">
             <button
               type="submit"

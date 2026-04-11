@@ -27,32 +27,30 @@ from app.schemas.inventory_category import (
     InventoryCategoryUpdate,
     InventoryCategoryResponse,
 )
-from app.services.auth import get_current_user
+from app.services.auth import get_admin_user, get_current_user
 
 router = APIRouter(prefix="/api/inventory/categories", tags=["inventory-categories"])
 
 
 async def _get_company_category(
-    db: AsyncSession, category_id: int, company_id
+    db: AsyncSession, category_id: int
 ) -> InventoryCategory:
     """
-    Obtiene una categoría verificando que pertenezca a la empresa.
+    Obtiene una categoría por ID.
 
     Args:
         db:          Sesión de base de datos.
         category_id: ID de la categoría.
-        company_id:  UUID de la empresa del usuario autenticado.
 
     Returns:
-        Instancia de InventoryCategory si existe y pertenece a la empresa.
+        Instancia de InventoryCategory si existe.
 
     Raises:
-        HTTPException 404: Si no existe o no pertenece a la empresa.
+        HTTPException 404: Si no existe.
     """
     result = await db.execute(
         select(InventoryCategory).where(
             InventoryCategory.id == category_id,
-            InventoryCategory.company_id == company_id,
         )
     )
     cat = result.scalar_one_or_none()
@@ -81,7 +79,6 @@ async def list_inventory_categories(
     """
     result = await db.execute(
         select(InventoryCategory)
-        .where(InventoryCategory.company_id == current_user.company_id)
         .order_by(InventoryCategory.name)
     )
     return result.scalars().all()
@@ -91,7 +88,7 @@ async def list_inventory_categories(
 async def create_inventory_category(
     data: InventoryCategoryCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_admin_user),
 ):
     """
     Crea una nueva categoría de inventario para la empresa.
@@ -112,7 +109,6 @@ async def create_inventory_category(
     # Verificar nombre duplicado
     existing = await db.execute(
         select(InventoryCategory).where(
-            InventoryCategory.company_id == current_user.company_id,
             InventoryCategory.name == data.name,
         )
     )
@@ -123,7 +119,6 @@ async def create_inventory_category(
         )
 
     cat = InventoryCategory(
-        company_id=current_user.company_id,
         name=data.name,
         allows_decimals=data.allows_decimals,
         is_system=False,
@@ -139,7 +134,7 @@ async def update_inventory_category(
     category_id: int,
     data: InventoryCategoryUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_admin_user),
 ):
     """
     Actualiza el nombre o el flag allows_decimals de una categoría.
@@ -161,7 +156,7 @@ async def update_inventory_category(
         HTTPException 403: Si se intenta renombrar una categoría de sistema.
         HTTPException 409: Si el nuevo nombre ya está en uso.
     """
-    cat = await _get_company_category(db, category_id, current_user.company_id)
+    cat = await _get_company_category(db, category_id)
 
     update_data = data.model_dump(exclude_unset=True)
 
@@ -174,7 +169,6 @@ async def update_inventory_category(
         # Verificar nombre duplicado
         existing = await db.execute(
             select(InventoryCategory).where(
-                InventoryCategory.company_id == current_user.company_id,
                 InventoryCategory.name == update_data["name"],
                 InventoryCategory.id != category_id,
             )
@@ -197,7 +191,7 @@ async def update_inventory_category(
 async def delete_inventory_category(
     category_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_admin_user),
 ):
     """
     Elimina una categoría de inventario.
@@ -215,7 +209,7 @@ async def delete_inventory_category(
         HTTPException 403: Si es una categoría de sistema.
         HTTPException 409: Si tiene ítems de inventario asociados.
     """
-    cat = await _get_company_category(db, category_id, current_user.company_id)
+    cat = await _get_company_category(db, category_id)
 
     if cat.is_system:
         raise HTTPException(
@@ -226,7 +220,6 @@ async def delete_inventory_category(
     # Verificar que no haya ítems usando esta categoría
     items_result = await db.execute(
         select(InventoryItem).where(
-            InventoryItem.company_id == current_user.company_id,
             InventoryItem.category == cat.name,
         )
     )

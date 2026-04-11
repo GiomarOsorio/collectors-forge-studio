@@ -21,7 +21,7 @@ from app.database import get_db
 from app.models.user import User
 from app.models.filament import Filament
 from app.schemas.filament import FilamentCreate, FilamentUpdate, FilamentResponse
-from app.services.auth import get_current_user
+from app.services.auth import get_current_user, get_operator_user
 
 router = APIRouter(prefix="/api/filaments", tags=["filaments"])
 
@@ -39,7 +39,6 @@ async def list_filaments(
     """
     result = await db.execute(
         select(Filament)
-        .where(Filament.company_id == current_user.company_id)
         .order_by(Filament.brand, Filament.type)
     )
     return result.scalars().all()
@@ -58,10 +57,7 @@ async def get_filament(
         HTTPException 404: Si no existe o no pertenece a la empresa del usuario.
     """
     result = await db.execute(
-        select(Filament).where(
-            Filament.id == filament_id,
-            Filament.company_id == current_user.company_id,
-        )
+        select(Filament).where(Filament.id == filament_id)
     )
     filament = result.scalar_one_or_none()
     if not filament:
@@ -73,14 +69,14 @@ async def get_filament(
 async def create_filament(
     data: FilamentCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Crea un nuevo filamento asociado a la empresa del usuario autenticado.
 
     El company_id se asigna automáticamente desde el usuario autenticado.
     """
-    filament = Filament(**data.model_dump(), company_id=current_user.company_id)
+    filament = Filament(**data.model_dump())
     db.add(filament)
     await db.commit()
     await db.refresh(filament)
@@ -92,7 +88,7 @@ async def update_filament(
     filament_id: int,
     data: FilamentUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Actualiza parcialmente un filamento de la empresa del usuario autenticado.
@@ -103,10 +99,7 @@ async def update_filament(
         HTTPException 404: Si no existe o no pertenece a la empresa del usuario.
     """
     result = await db.execute(
-        select(Filament).where(
-            Filament.id == filament_id,
-            Filament.company_id == current_user.company_id,
-        )
+        select(Filament).where(Filament.id == filament_id)
     )
     filament = result.scalar_one_or_none()
     if not filament:
@@ -124,7 +117,7 @@ async def update_filament(
 async def delete_filament(
     filament_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Elimina un filamento de la empresa del usuario autenticado.
@@ -133,10 +126,7 @@ async def delete_filament(
         HTTPException 404: Si no existe o no pertenece a la empresa del usuario.
     """
     result = await db.execute(
-        select(Filament).where(
-            Filament.id == filament_id,
-            Filament.company_id == current_user.company_id,
-        )
+        select(Filament).where(Filament.id == filament_id)
     )
     filament = result.scalar_one_or_none()
     if not filament:

@@ -10,14 +10,12 @@ El modelo fue diseñado tomando como referencia la BambuLab P1S Combo, pero
 es compatible con cualquier impresora FDM.
 """
 
-import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import String, DateTime, Text, Numeric, CheckConstraint, ForeignKey, text
+from sqlalchemy import String, DateTime, Text, Numeric, CheckConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
 from app.database import Base
 
@@ -80,7 +78,4 @@ class Printer(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
-    )
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True
     )

@@ -20,7 +20,6 @@ Cubre:
     - 409 al eliminar categoría con ítems asociados
 """
 
-import uuid
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
@@ -31,28 +30,23 @@ from app.database import get_db
 from app.main import app
 from app.services.auth import get_current_user
 
-# UUID de empresa para los tests
-COMPANY_A = uuid.UUID("aaaaaaaa-0000-0000-0000-000000000001")
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _fake_user(company_id=COMPANY_A):
+def _fake_user(role="admin"):
     """Crea un usuario MagicMock para inyectar como current_user."""
     u = MagicMock()
     u.id = 1
     u.username = "testuser"
-    u.company_id = company_id
-    u.is_admin = True
+    u.role = role
     u.is_active = True
     return u
 
 
 def _fake_category(
     cat_id: int = 1,
-    company_id=COMPANY_A,
     name: str = "General",
     allows_decimals: bool = False,
     is_system: bool = False,
@@ -60,7 +54,6 @@ def _fake_category(
     """Crea un mock de InventoryCategory con los atributos mínimos requeridos."""
     c = MagicMock()
     c.id = cat_id
-    c.company_id = company_id
     c.name = name
     c.allows_decimals = allows_decimals
     c.is_system = is_system

@@ -7,16 +7,14 @@ Cada ítem tiene stock actual, stock mínimo, costo unitario y datos del
 proveedor. Se vincula a la empresa mediante company_id (multi-tenant).
 """
 
-import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional, List, TYPE_CHECKING
 
 from sqlalchemy import (
-    String, Numeric, DateTime, Text, Boolean, Integer, ForeignKey, text,
+    String, Numeric, DateTime, Text, Boolean, Integer, text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
 from app.database import Base
 
@@ -37,9 +35,6 @@ class InventoryItem(Base):
     __tablename__ = "inventory_items"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True
-    )
 
     # Identificación del artículo
     name: Mapped[str] = mapped_column(String(200), nullable=False)

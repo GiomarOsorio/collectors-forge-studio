@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.user import User
 from app.schemas.user import UserResponse, UserUpdate, UserAdminUpdate
-from app.services.auth import get_current_admin, get_current_user, verify_password, get_password_hash
+from app.services.auth import get_admin_user, get_current_user, verify_password, get_password_hash
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -29,10 +29,10 @@ router = APIRouter(prefix="/api/users", tags=["users"])
 @router.get("/", response_model=List[UserResponse])
 async def list_users(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin),
+    current_user: User = Depends(get_admin_user),
 ):
     """
-    Lista todos los usuarios de la empresa del administrador autenticado.
+    Lista todos los usuarios del sistema (solo administradores).
 
     Args:
         db:           Sesión de base de datos.
@@ -41,11 +41,7 @@ async def list_users(
     Returns:
         Lista de UserResponse ordenada por ID ascendente.
     """
-    result = await db.execute(
-        select(User)
-        .where(User.company_id == current_user.company_id)
-        .order_by(User.id)
-    )
+    result = await db.execute(select(User).order_by(User.id))
     return result.scalars().all()
 
 
@@ -122,18 +118,17 @@ async def admin_update_user(
     user_id: int,
     data: UserAdminUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin),
+    current_user: User = Depends(get_admin_user),
 ):
     """
-    Actualiza la contraseña y/o el rol de administrador de otro usuario.
+    Actualiza la contraseña y/o el rol de otro usuario.
 
-    Solo los administradores pueden usar este endpoint. El usuario objetivo
-    debe pertenecer a la misma empresa. Un administrador no puede quitarse
-    su propio rol de administrador para evitar quedarse sin acceso.
+    Solo los administradores pueden usar este endpoint. Un administrador no
+    puede quitarse su propio rol de admin para evitar quedarse sin acceso.
 
     Args:
         user_id:      ID del usuario a modificar.
-        data:         Campos a actualizar (new_password y/o is_admin).
+        data:         Campos a actualizar (new_password y/o role).
         db:           Sesión de base de datos.
         current_user: Administrador autenticado.
 
@@ -141,15 +136,10 @@ async def admin_update_user(
         UserResponse con los datos actualizados.
 
     Raises:
-        HTTPException 400: Si el admin intenta quitarse su propio rol.
-        HTTPException 404: Si el usuario no existe en la empresa.
+        HTTPException 400: Si el admin intenta degradar su propio rol.
+        HTTPException 404: Si el usuario no existe.
     """
-    result = await db.execute(
-        select(User).where(
-            User.id == user_id,
-            User.company_id == current_user.company_id,
-        )
-    )
+    result = await db.execute(select(User).where(User.id == user_id))
     target = result.scalar_one_or_none()
     if not target:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
@@ -157,13 +147,13 @@ async def admin_update_user(
     if data.new_password is not None:
         target.hashed_password = get_password_hash(data.new_password)
 
-    if data.is_admin is not None:
-        if target.id == current_user.id and not data.is_admin:
+    if data.role is not None:
+        if target.id == current_user.id and data.role != "admin":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No puedes quitarte tu propio rol de administrador",
             )
-        target.is_admin = data.is_admin
+        target.role = data.role
 
     await db.commit()
     await db.refresh(target)

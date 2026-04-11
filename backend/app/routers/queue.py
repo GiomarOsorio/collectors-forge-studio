@@ -34,7 +34,7 @@ from app.schemas.queue import (
     PrintQueueStatusUpdate,
     QueueQuoteSnapshot,
 )
-from app.services.auth import get_current_user
+from app.services.auth import get_current_user, get_operator_user
 
 router = APIRouter(prefix="/api/queue", tags=["queue"])
 
@@ -45,18 +45,15 @@ _TERMINAL_STATUSES = ("done", "cancelled")
 
 # ─── Helpers privados ─────────────────────────────────────────────────────────
 
-async def _get_item(db: AsyncSession, item_id: int, company_id) -> PrintQueueItem:
+async def _get_item(db: AsyncSession, item_id: int) -> PrintQueueItem:
     """
-    Recupera un ítem de la cola por ID filtrando por company_id.
+    Recupera un ítem de la cola por ID.
 
     Raises:
-        HTTPException 404: Si no existe el ítem o no pertenece a la empresa.
+        HTTPException 404: Si no existe el ítem.
     """
     result = await db.execute(
-        select(PrintQueueItem).where(
-            PrintQueueItem.id == item_id,
-            PrintQueueItem.company_id == company_id,
-        )
+        select(PrintQueueItem).where(PrintQueueItem.id == item_id)
     )
     item = result.scalar_one_or_none()
     if not item:
@@ -281,7 +278,6 @@ async def list_queue_history(
     result = await db.execute(
         select(PrintQueueItem)
         .where(
-            PrintQueueItem.company_id == current_user.company_id,
             PrintQueueItem.status.in_(list(_TERMINAL_STATUSES)),
         )
         .order_by(PrintQueueItem.completed_at.desc())
@@ -304,7 +300,6 @@ async def list_queue(
     result = await db.execute(
         select(PrintQueueItem)
         .where(
-            PrintQueueItem.company_id == current_user.company_id,
             PrintQueueItem.status.in_(list(_ACTIVE_STATUSES)),
         )
         .order_by(PrintQueueItem.position.asc())
@@ -317,7 +312,7 @@ async def list_queue(
 async def add_to_queue(
     data: PrintQueueItemCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Agrega una cotización guardada a la cola de impresión.
@@ -327,12 +322,9 @@ async def add_to_queue(
     Raises:
         HTTPException 404: Si la cotización no existe o no pertenece a la empresa.
     """
-    # Verificar que la cotización existe y pertenece a la empresa
+    # Verificar que la cotización existe
     q_result = await db.execute(
-        select(Quote).where(
-            Quote.id == data.quote_id,
-            Quote.company_id == current_user.company_id,
-        )
+        select(Quote).where(Quote.id == data.quote_id)
     )
     if q_result.scalar_one_or_none() is None:
         raise HTTPException(status_code=404, detail="Cotización no encontrada")
@@ -340,14 +332,12 @@ async def add_to_queue(
     # Calcular la siguiente posición en la cola
     max_result = await db.execute(
         select(func.max(PrintQueueItem.position)).where(
-            PrintQueueItem.company_id == current_user.company_id,
             PrintQueueItem.status.in_(list(_ACTIVE_STATUSES)),
         )
     )
     max_pos = max_result.scalar() or 0
 
     item = PrintQueueItem(
-        company_id=current_user.company_id,
         quote_id=data.quote_id,
         status="pending",
         position=max_pos + 1,
@@ -364,7 +354,7 @@ async def update_queue_status(
     item_id: int,
     data: PrintQueueStatusUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Cambia el estado de un ítem de la cola de impresión.
@@ -388,7 +378,7 @@ async def update_queue_status(
             detail=f"Estado inválido: '{new_status}'. Use 'printing', 'done' o 'cancelled'.",
         )
 
-    item = await _get_item(db, item_id, current_user.company_id)
+    item = await _get_item(db, item_id)
     now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     # Bloquear transiciones desde estados terminales
@@ -418,16 +408,13 @@ async def update_queue_status(
                 detail="No se puede marcar como hecho: la cotización original fue eliminada.",
             )
         q_result = await db.execute(
-            select(Quote).where(
-                Quote.id == item.quote_id,
-                Quote.company_id == current_user.company_id,
-            )
+            select(Quote).where(Quote.id == item.quote_id)
         )
         quote = q_result.scalar_one_or_none()
         if quote is None:
             raise HTTPException(
                 status_code=404,
-                detail="Cotización original no encontrada en la empresa.",
+                detail="Cotización original no encontrada.",
             )
         await _deduct_inventory_and_update_printer(db, quote)
         item.completed_at = now
@@ -448,7 +435,7 @@ async def update_queue_status(
 async def delete_queue_item(
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Elimina un ítem de la cola.
@@ -459,7 +446,7 @@ async def delete_queue_item(
         HTTPException 400: Si el ítem está en estado 'printing' o 'done'.
         HTTPException 404: Si el ítem no existe o no pertenece a la empresa.
     """
-    item = await _get_item(db, item_id, current_user.company_id)
+    item = await _get_item(db, item_id)
     if item.status not in ("pending", "cancelled"):
         raise HTTPException(
             status_code=400,

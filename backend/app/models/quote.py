@@ -7,14 +7,13 @@ parámetros de entrada (peso, tiempo, cantidad) como el desglose detallado de
 todos los componentes del costo.
 """
 
-import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import String, Numeric, DateTime, Text, Integer, ForeignKey, CheckConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.database import Base
 
@@ -38,9 +37,6 @@ class Quote(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"))
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True
-    )
 
     # Información de la pieza
     piece_name: Mapped[str] = mapped_column(String(200))

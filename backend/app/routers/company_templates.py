@@ -17,6 +17,7 @@ Endpoints:
 """
 
 import asyncio
+import uuid
 from datetime import datetime, timezone
 from typing import List
 
@@ -36,23 +37,22 @@ from app.schemas.company_template import (
     TemplateValidateRequest,
     TemplateValidateResponse,
 )
-from app.services.auth import get_current_admin, get_current_user
+from app.services.auth import get_admin_user, get_current_user
 from app.services.liquid_pdf import DEFAULT_COT_TEMPLATE, validate_template
 
 router = APIRouter(prefix="/api/company/templates", tags=["company-templates"])
 
 
-async def _get_template(db: AsyncSession, template_id: int, company_id) -> CompanyTemplate:
+async def _get_template(db: AsyncSession, template_id: int) -> CompanyTemplate:
     """
-    Obtiene un template verificando que pertenezca a la empresa.
+    Obtiene un template por ID.
 
     Raises:
-        HTTPException 404: Si no existe o no pertenece a la empresa.
+        HTTPException 404: Si no existe.
     """
     result = await db.execute(
         select(CompanyTemplate).where(
             CompanyTemplate.id == template_id,
-            CompanyTemplate.company_id == company_id,
         )
     )
     tpl = result.scalar_one_or_none()
@@ -78,7 +78,6 @@ async def list_templates(
     """
     result = await db.execute(
         select(CompanyTemplate)
-        .where(CompanyTemplate.company_id == current_user.company_id)
         .order_by(CompanyTemplate.created_at.desc())
     )
     return result.scalars().all()
@@ -88,7 +87,7 @@ async def list_templates(
 async def create_template(
     data: CompanyTemplateCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin),
+    current_user: User = Depends(get_admin_user),
 ):
     """
     Crea un nuevo template de cotización (solo administradores).
@@ -104,10 +103,9 @@ async def create_template(
         CompanyTemplateResponse con el template creado.
     """
     if data.is_default:
-        await _clear_default(db, current_user.company_id, data.template_type)
+        await _clear_default(db, data.template_type)
 
     tpl = CompanyTemplate(
-        company_id=current_user.company_id,
         name=data.name,
         description=data.description,
         template_type=data.template_type,
@@ -158,7 +156,7 @@ async def get_template(
     Raises:
         HTTPException 404: Si no existe.
     """
-    return await _get_template(db, template_id, current_user.company_id)
+    return await _get_template(db, template_id)
 
 
 @router.put("/{template_id}", response_model=CompanyTemplateResponse)
@@ -166,7 +164,7 @@ async def update_template(
     template_id: int,
     data: CompanyTemplateUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin),
+    current_user: User = Depends(get_admin_user),
 ):
     """
     Actualiza un template de cotización (solo administradores).
@@ -185,14 +183,14 @@ async def update_template(
     Raises:
         HTTPException 404: Si no existe.
     """
-    tpl = await _get_template(db, template_id, current_user.company_id)
+    tpl = await _get_template(db, template_id)
 
     update_data = data.model_dump(exclude_unset=True)
 
     # Si se activa is_default, limpiar el default previo del mismo tipo
     if update_data.get("is_default"):
         tipo = update_data.get("template_type", tpl.template_type)
-        await _clear_default(db, current_user.company_id, tipo, exclude_id=template_id)
+        await _clear_default(db, tipo, exclude_id=template_id)
 
     for field, value in update_data.items():
         setattr(tpl, field, value)
@@ -207,7 +205,7 @@ async def update_template(
 async def delete_template(
     template_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin),
+    current_user: User = Depends(get_admin_user),
 ):
     """
     Elimina un template de cotización (solo administradores).
@@ -220,7 +218,7 @@ async def delete_template(
     Raises:
         HTTPException 404: Si no existe.
     """
-    tpl = await _get_template(db, template_id, current_user.company_id)
+    tpl = await _get_template(db, template_id)
     await db.delete(tpl)
     await db.commit()
 
@@ -229,7 +227,7 @@ async def delete_template(
 async def set_default_template(
     template_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin),
+    current_user: User = Depends(get_admin_user),
 ):
     """
     Marca un template como default para su tipo (desactiva el anterior).
@@ -247,8 +245,8 @@ async def set_default_template(
     Raises:
         HTTPException 404: Si no existe.
     """
-    tpl = await _get_template(db, template_id, current_user.company_id)
-    await _clear_default(db, current_user.company_id, tpl.template_type, exclude_id=template_id)
+    tpl = await _get_template(db, template_id)
+    await _clear_default(db, tpl.template_type, exclude_id=template_id)
     tpl.is_default = True
     tpl.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
@@ -313,10 +311,11 @@ async def preview_template(
         HTTPException 404: Si el template no existe.
         HTTPException 500: Si la generación del PDF falla.
     """
-    tpl = await _get_template(db, template_id, current_user.company_id)
+    tpl = await _get_template(db, template_id)
 
+    DEFAULT_COMPANY_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
     company_result = await db.execute(
-        select(Company).where(Company.id == current_user.company_id)
+        select(Company).where(Company.id == DEFAULT_COMPANY_ID)
     )
     company = company_result.scalar_one_or_none()
 
@@ -348,19 +347,17 @@ async def preview_template(
 # ── Helpers internos ───────────────────────────────────────────────────────────
 
 async def _clear_default(
-    db: AsyncSession, company_id, template_type: str, exclude_id: int = None
+    db: AsyncSession, template_type: str, exclude_id: int = None
 ) -> None:
     """
     Desactiva el flag is_default de todos los templates del tipo indicado.
 
     Args:
         db:            Sesión de base de datos.
-        company_id:    UUID de la empresa.
         template_type: Tipo de template ('cot' | 'all').
         exclude_id:    ID a excluir (el que se está marcando como default).
     """
     q = select(CompanyTemplate).where(
-        CompanyTemplate.company_id == company_id,
         CompanyTemplate.template_type == template_type,
         CompanyTemplate.is_default == True,
     )

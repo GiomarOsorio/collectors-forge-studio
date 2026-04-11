@@ -40,33 +40,29 @@ from app.schemas.inventory import (
     InventoryImportResult,
 )
 from app.limiter import limiter
-from app.services.auth import get_current_user
+from app.services.auth import get_current_user, get_operator_user
 
 router = APIRouter(prefix="/api/inventory/items", tags=["inventory"])
 
 
 async def _get_company_inventory_item(
-    db: AsyncSession, item_id: int, company_id
+    db: AsyncSession, item_id: int
 ) -> InventoryItem:
     """
-    Obtiene un ítem de inventario verificando que pertenezca a la empresa.
+    Obtiene un ítem de inventario por ID.
 
     Args:
-        db:         Sesión de base de datos.
-        item_id:    ID del ítem de inventario.
-        company_id: UUID de la empresa del usuario autenticado.
+        db:      Sesión de base de datos.
+        item_id: ID del ítem de inventario.
 
     Returns:
-        Instancia de InventoryItem si existe y pertenece a la empresa.
+        Instancia de InventoryItem si existe.
 
     Raises:
-        HTTPException 404: Si no existe o no pertenece a la empresa.
+        HTTPException 404: Si no existe.
     """
     result = await db.execute(
-        select(InventoryItem).where(
-            InventoryItem.id == item_id,
-            InventoryItem.company_id == company_id,
-        )
+        select(InventoryItem).where(InventoryItem.id == item_id)
     )
     item = result.scalar_one_or_none()
     if not item:
@@ -100,7 +96,7 @@ async def list_inventory_items(
     Returns:
         Lista de InventoryItemResponse ordenada por created_at descendente.
     """
-    query = select(InventoryItem).where(InventoryItem.company_id == current_user.company_id)
+    query = select(InventoryItem)
     if category:
         query = query.where(InventoryItem.category == category)
     query = query.order_by(InventoryItem.created_at.desc()).offset(skip).limit(limit)
@@ -112,7 +108,7 @@ async def list_inventory_items(
 async def create_inventory_item(
     data: InventoryItemCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Crea un nuevo ítem en el inventario de la empresa.
@@ -126,7 +122,6 @@ async def create_inventory_item(
         InventoryItemResponse con los datos del ítem creado.
     """
     item = InventoryItem(
-        company_id=current_user.company_id,
         name=data.name,
         category=data.category,
         description=data.description,
@@ -174,15 +169,13 @@ async def export_inventory(
     Returns:
         JSONResponse con Content-Disposition: attachment para descarga directa.
     """
-    company_id = current_user.company_id
-
     items_result = await db.execute(
-        select(InventoryItem).where(InventoryItem.company_id == company_id)
+        select(InventoryItem)
     )
     items = items_result.scalars().all()
 
     prints_result = await db.execute(
-        select(PrintedItem).where(PrintedItem.company_id == company_id)
+        select(PrintedItem)
     )
     prints = prints_result.scalars().all()
 
@@ -210,7 +203,7 @@ async def import_inventory(
     request: Request,
     data: InventoryExportResponse,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Importa inventario desde un archivo JSON exportado previamente.
@@ -231,8 +224,6 @@ async def import_inventory(
     Returns:
         InventoryImportResult con los conteos de ítems creados y fusionados.
     """
-    company_id = current_user.company_id
-
     # --- inventory_items ---
     item_names = [i.name for i in data.inventory_items]
     items_created = 0
@@ -241,7 +232,6 @@ async def import_inventory(
     if item_names:
         existing_result = await db.execute(
             select(InventoryItem).where(
-                InventoryItem.company_id == company_id,
                 InventoryItem.name.in_(item_names),
             )
         )
@@ -259,7 +249,7 @@ async def import_inventory(
             items_merged += 1
         else:
             fields = item_data.model_dump()
-            new_item = InventoryItem(company_id=company_id, **fields)
+            new_item = InventoryItem(**fields)
             db.add(new_item)
             items_created += 1
 
@@ -271,7 +261,6 @@ async def import_inventory(
     if print_names:
         existing_prints_result = await db.execute(
             select(PrintedItem).where(
-                PrintedItem.company_id == company_id,
                 PrintedItem.name.in_(print_names),
             )
         )
@@ -288,7 +277,7 @@ async def import_inventory(
             prints_merged += 1
         else:
             fields = print_data.model_dump()
-            new_print = PrintedItem(company_id=company_id, **fields)
+            new_print = PrintedItem(**fields)
             db.add(new_print)
             prints_created += 1
 
@@ -322,7 +311,7 @@ async def get_inventory_item(
     Raises:
         HTTPException 404: Si no existe.
     """
-    return await _get_company_inventory_item(db, item_id, current_user.company_id)
+    return await _get_company_inventory_item(db, item_id)
 
 
 @router.put("/{item_id}", response_model=InventoryItemResponse)
@@ -330,7 +319,7 @@ async def update_inventory_item(
     item_id: int,
     data: InventoryItemUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Actualiza un ítem de inventario existente.
@@ -350,7 +339,7 @@ async def update_inventory_item(
     Raises:
         HTTPException 404: Si no existe.
     """
-    item = await _get_company_inventory_item(db, item_id, current_user.company_id)
+    item = await _get_company_inventory_item(db, item_id)
 
     # Actualizar solo los campos que se enviaron (exclude_unset=True)
     update_data = data.model_dump(exclude_unset=True)
@@ -366,7 +355,7 @@ async def update_inventory_item(
 async def delete_inventory_item(
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Elimina un ítem de inventario por ID.
@@ -379,7 +368,7 @@ async def delete_inventory_item(
     Raises:
         HTTPException 404: Si no existe.
     """
-    item = await _get_company_inventory_item(db, item_id, current_user.company_id)
+    item = await _get_company_inventory_item(db, item_id)
     await db.delete(item)
     await db.commit()
 
@@ -388,7 +377,7 @@ async def delete_inventory_item(
 async def toggle_needs_purchase(
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Alterna el flag needs_purchase del ítem (True <-> False).
@@ -404,7 +393,7 @@ async def toggle_needs_purchase(
     Raises:
         HTTPException 404: Si no existe.
     """
-    item = await _get_company_inventory_item(db, item_id, current_user.company_id)
+    item = await _get_company_inventory_item(db, item_id)
     item.needs_purchase = not item.needs_purchase
     await db.commit()
     await db.refresh(item)
@@ -416,7 +405,7 @@ async def adjust_inventory_quantity(
     item_id: int,
     data: InventoryItemAdjustRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Ajusta la cantidad del ítem sumando o restando al stock actual.
@@ -437,7 +426,7 @@ async def adjust_inventory_quantity(
         HTTPException 404: Si no existe.
         HTTPException 400: Si el ajuste resultaría en stock negativo.
     """
-    item = await _get_company_inventory_item(db, item_id, current_user.company_id)
+    item = await _get_company_inventory_item(db, item_id)
 
     new_quantity = item.quantity + data.quantity
     if new_quantity < Decimal("0"):

@@ -21,7 +21,7 @@ from app.database import get_db
 from app.models.user import User
 from app.models.printer import Printer
 from app.schemas.printer import PrinterCreate, PrinterUpdate, PrinterResponse
-from app.services.auth import get_current_user
+from app.services.auth import get_admin_user, get_current_user
 
 router = APIRouter(prefix="/api/printers", tags=["printers"])
 
@@ -31,17 +31,8 @@ async def list_printers(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Lista las impresoras de la empresa del usuario autenticado.
-
-    Filtra por company_id para garantizar el aislamiento multi-tenant.
-    Los resultados se ordenan alfabéticamente por nombre.
-    """
-    result = await db.execute(
-        select(Printer)
-        .where(Printer.company_id == current_user.company_id)
-        .order_by(Printer.name)
-    )
+    """Lista todas las impresoras del sistema, ordenadas por nombre."""
+    result = await db.execute(select(Printer).order_by(Printer.name))
     return result.scalars().all()
 
 
@@ -52,17 +43,12 @@ async def get_printer(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Obtiene una impresora específica de la empresa del usuario autenticado.
+    Obtiene una impresora por ID.
 
     Raises:
-        HTTPException 404: Si no existe o no pertenece a la empresa del usuario.
+        HTTPException 404: Si no existe.
     """
-    result = await db.execute(
-        select(Printer).where(
-            Printer.id == printer_id,
-            Printer.company_id == current_user.company_id,
-        )
-    )
+    result = await db.execute(select(Printer).where(Printer.id == printer_id))
     printer = result.scalar_one_or_none()
     if not printer:
         raise HTTPException(status_code=404, detail="Impresora no encontrada")
@@ -73,14 +59,10 @@ async def get_printer(
 async def create_printer(
     data: PrinterCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_admin_user),
 ):
-    """
-    Registra una nueva impresora asociada a la empresa del usuario autenticado.
-
-    El company_id se asigna automáticamente desde el usuario autenticado.
-    """
-    printer = Printer(**data.model_dump(), company_id=current_user.company_id)
+    """Registra una nueva impresora (solo administradores)."""
+    printer = Printer(**data.model_dump())
     db.add(printer)
     await db.commit()
     await db.refresh(printer)
@@ -92,22 +74,15 @@ async def update_printer(
     printer_id: int,
     data: PrinterUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_admin_user),
 ):
     """
-    Actualiza parcialmente una impresora de la empresa del usuario autenticado.
-
-    Solo se modifican los campos incluidos en la solicitud (exclude_unset=True).
+    Actualiza parcialmente una impresora (solo administradores).
 
     Raises:
-        HTTPException 404: Si no existe o no pertenece a la empresa del usuario.
+        HTTPException 404: Si no existe.
     """
-    result = await db.execute(
-        select(Printer).where(
-            Printer.id == printer_id,
-            Printer.company_id == current_user.company_id,
-        )
-    )
+    result = await db.execute(select(Printer).where(Printer.id == printer_id))
     printer = result.scalar_one_or_none()
     if not printer:
         raise HTTPException(status_code=404, detail="Impresora no encontrada")
@@ -124,20 +99,15 @@ async def update_printer(
 async def delete_printer(
     printer_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_admin_user),
 ):
     """
-    Elimina una impresora de la empresa del usuario autenticado.
+    Elimina una impresora (solo administradores).
 
     Raises:
-        HTTPException 404: Si no existe o no pertenece a la empresa del usuario.
+        HTTPException 404: Si no existe.
     """
-    result = await db.execute(
-        select(Printer).where(
-            Printer.id == printer_id,
-            Printer.company_id == current_user.company_id,
-        )
-    )
+    result = await db.execute(select(Printer).where(Printer.id == printer_id))
     printer = result.scalar_one_or_none()
     if not printer:
         raise HTTPException(status_code=404, detail="Impresora no encontrada")

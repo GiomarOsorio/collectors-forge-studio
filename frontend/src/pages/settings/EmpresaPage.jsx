@@ -99,13 +99,13 @@ export default function EmpresaPage() {
               <button
                 type="button"
                 onClick={() => logoInputRef.current?.click()}
-                disabled={uploadingLogo || !user?.is_admin}
+                disabled={uploadingLogo || !user?.role === 'admin'}
                 className="tf-btn-secondary gap-2 text-sm"
               >
                 <Upload size={14} />
                 {uploadingLogo ? 'Subiendo...' : 'Cambiar logo'}
               </button>
-              {!user?.is_admin && (
+              {!user?.role === 'admin' && (
                 <p className="text-xs text-gunmetal mt-1">Solo administradores</p>
               )}
               <input
@@ -128,7 +128,7 @@ export default function EmpresaPage() {
               value={companyForm.name}
               onChange={(e) => setCompanyForm((p) => ({ ...p, name: e.target.value }))}
               required
-              disabled={!user?.is_admin}
+              disabled={!user?.role === 'admin'}
             />
           </div>
           <div>
@@ -138,7 +138,7 @@ export default function EmpresaPage() {
               value={companyForm.slogan}
               onChange={(e) => setCompanyForm((p) => ({ ...p, slogan: e.target.value }))}
               placeholder="Ej: Impresión 3D de calidad"
-              disabled={!user?.is_admin}
+              disabled={!user?.role === 'admin'}
             />
           </div>
           <div>
@@ -148,7 +148,7 @@ export default function EmpresaPage() {
               value={companyForm.address}
               onChange={(e) => setCompanyForm((p) => ({ ...p, address: e.target.value }))}
               placeholder="Ej: Medellín, Antioquia, Colombia"
-              disabled={!user?.is_admin}
+              disabled={!user?.role === 'admin'}
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -159,7 +159,7 @@ export default function EmpresaPage() {
                 value={companyForm.phone}
                 onChange={(e) => setCompanyForm((p) => ({ ...p, phone: e.target.value }))}
                 placeholder="+57 300 000 0000"
-                disabled={!user?.is_admin}
+                disabled={!user?.role === 'admin'}
               />
             </div>
             <div>
@@ -170,7 +170,7 @@ export default function EmpresaPage() {
                 value={companyForm.contact_email}
                 onChange={(e) => setCompanyForm((p) => ({ ...p, contact_email: e.target.value }))}
                 placeholder="hola@empresa.com"
-                disabled={!user?.is_admin}
+                disabled={!user?.role === 'admin'}
               />
             </div>
           </div>
@@ -181,11 +181,11 @@ export default function EmpresaPage() {
               value={companyForm.nit}
               onChange={(e) => setCompanyForm((p) => ({ ...p, nit: e.target.value }))}
               placeholder="900.000.000-0"
-              disabled={!user?.is_admin}
+              disabled={!user?.role === 'admin'}
             />
           </div>
 
-          {user?.is_admin ? (
+          {user?.role === 'admin' ? (
             <button type="submit" disabled={saving} className="tf-btn-primary w-full py-2.5 mt-2">
               {saving ? 'Guardando...' : 'Guardar empresa'}
             </button>

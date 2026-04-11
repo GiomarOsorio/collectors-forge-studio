@@ -8,25 +8,22 @@ cantidades decimales (filamento en gramos) o solo enteros (accesorios,
 herramientas, insumos por unidad).
 """
 
-import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, UniqueConstraint, text
+from sqlalchemy import String, Boolean, DateTime, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
 from app.database import Base
 
 
 class InventoryCategory(Base):
     """
-    Categoría de inventario perteneciente a una empresa.
+    Categoría de inventario del sistema (mono-empresa).
 
     Atributos:
         id:              Identificador autoincremental.
-        company_id:      UUID de la empresa (multi-tenant).
-        name:            Nombre único dentro de la empresa (max 100 chars).
+        name:            Nombre único (max 100 chars).
         allows_decimals: True solo para Filamento (gramos fraccionados).
                          False = cantidades enteras (unidades, piezas, etc.).
         is_system:       True = creada por el sistema, no se puede eliminar.
@@ -35,13 +32,10 @@ class InventoryCategory(Base):
 
     __tablename__ = "inventory_categories"
     __table_args__ = (
-        UniqueConstraint("company_id", "name", name="uq_inventory_category_company_name"),
+        UniqueConstraint("name", name="uq_inventory_category_name"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True
-    )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     allows_decimals: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false")

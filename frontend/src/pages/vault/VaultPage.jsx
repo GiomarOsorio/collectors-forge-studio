@@ -332,7 +332,7 @@ function ModelCard({ file, isAdmin, onDownload, onEdit, onDelete, downloadingIds
 export default function VaultPage() {
   const { user } = useAuth();
   const confirm = useConfirm();
-  const isAdmin = user?.is_admin;
+  const isAdmin = user?.role === 'admin';
 
   const [files, setFiles] = useState([]);
   const [stats, setStats] = useState(null);

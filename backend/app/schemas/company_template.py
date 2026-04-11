@@ -38,7 +38,6 @@ class CompanyTemplateResponse(CompanyTemplateBase):
     """Datos completos del template retornados por la API."""
 
     id: int
-    company_id: uuid.UUID
     created_at: datetime
     updated_at: Optional[datetime] = None
 

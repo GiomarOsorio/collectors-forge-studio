@@ -180,26 +180,40 @@ async def get_current_user(
 
 
 async def get_current_admin(user: User = Depends(get_current_user)) -> User:
-    """
-    Dependencia de FastAPI que verifica que el usuario autenticado sea administrador.
-
-    Se construye sobre get_current_user añadiendo la comprobación del rol de
-    administrador. Se usa como dependencia en endpoints que requieren privilegios
-    elevados, como el registro de nuevos usuarios.
-
-    Args:
-        user: Usuario autenticado inyectado por get_current_user.
-
-    Returns:
-        User: El mismo usuario si tiene is_admin=True.
-
-    Raises:
-        HTTPException 403: Si el usuario autenticado no tiene privilegios de
-            administrador (is_admin=False).
-    """
-    if not user.is_admin:
+    """Alias de compatibilidad → get_admin_user. Usar get_admin_user en código nuevo."""
+    if user.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Se requieren permisos de administrador",
+        )
+    return user
+
+
+async def get_admin_user(user: User = Depends(get_current_user)) -> User:
+    """
+    Dependencia que requiere rol 'admin'.
+
+    Raises:
+        HTTPException 403: Si el usuario no tiene rol 'admin'.
+    """
+    if user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requieren permisos de administrador",
+        )
+    return user
+
+
+async def get_operator_user(user: User = Depends(get_current_user)) -> User:
+    """
+    Dependencia que requiere rol 'admin' o 'operator'.
+
+    Raises:
+        HTTPException 403: Si el usuario tiene rol 'viewer'.
+    """
+    if user.role not in ("admin", "operator"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requieren permisos de operador o superior",
         )
     return user

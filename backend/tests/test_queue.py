@@ -14,7 +14,6 @@ Cubre:
     - DELETE /{id} → ítem no encontrado retorna 404
 """
 
-import uuid
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -24,19 +23,16 @@ from app.database import get_db
 from app.main import app
 from app.services.auth import get_current_user
 
-COMPANY_A = uuid.UUID("aaaaaaaa-0000-0000-0000-000000000001")
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _fake_user(company_id=COMPANY_A):
+def _fake_user(role="operator"):
     u = MagicMock()
     u.id = 1
     u.username = "testuser"
-    u.company_id = company_id
-    u.is_admin = False
+    u.role = role
     u.is_active = True
     return u
 

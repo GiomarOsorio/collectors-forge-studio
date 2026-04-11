@@ -44,7 +44,6 @@ class ModelFileUpdate(BaseModel):
 class ModelFileResponse(BaseModel):
     """Respuesta completa de un archivo del Vault."""
     id: int
-    company_id: str
     uploaded_by: Optional[int]
     uploaded_by_username: Optional[str]
     file_name: str

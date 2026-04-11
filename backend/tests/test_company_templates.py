@@ -25,7 +25,6 @@ Cubre:
 """
 
 import base64
-import uuid
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -34,35 +33,30 @@ from httpx import ASGITransport, AsyncClient
 
 from app.database import get_db
 from app.main import app
-from app.services.auth import get_current_admin, get_current_user
-
-# UUID de empresa para los tests
-COMPANY_A = uuid.UUID("aaaaaaaa-0000-0000-0000-000000000001")
+from app.services.auth import get_current_user
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _fake_user(company_id=COMPANY_A, user_id=1, is_admin=False):
+def _fake_user(user_id=1, role="operator"):
     """Crea un usuario MagicMock para inyectar como current_user."""
     u = MagicMock()
     u.id = user_id
     u.username = "testuser"
-    u.company_id = company_id
-    u.is_admin = is_admin
+    u.role = role
     u.is_active = True
     return u
 
 
-def _fake_admin(company_id=COMPANY_A):
+def _fake_admin():
     """Crea un usuario administrador MagicMock."""
-    return _fake_user(company_id=company_id, is_admin=True)
+    return _fake_user(role="admin")
 
 
 def _fake_template(
     template_id: int = 1,
-    company_id=COMPANY_A,
     name: str = "Template de prueba",
     description: str = "Descripción de prueba",
     template_type: str = "cot",
@@ -72,7 +66,6 @@ def _fake_template(
     """Crea un mock de CompanyTemplate con los atributos mínimos requeridos."""
     t = MagicMock()
     t.id = template_id
-    t.company_id = company_id
     t.name = name
     t.description = description
     t.template_type = template_type
@@ -285,7 +278,7 @@ class TestCreateTemplate:
             yield session
 
         _set_overrides({
-            get_current_admin: lambda: _fake_admin(),
+            get_current_user: lambda: _fake_admin(),
             get_db: _db_create,
         })
         try:
@@ -303,7 +296,7 @@ class TestCreateTemplate:
     async def test_crear_template_sin_nombre_retorna_422(self):
         """POST sin campo 'name' requerido → 422."""
         _set_overrides({
-            get_current_admin: lambda: _fake_admin(),
+            get_current_user: lambda: _fake_admin(),
             get_db: _fake_db_empty,
         })
         try:
@@ -320,7 +313,7 @@ class TestCreateTemplate:
     async def test_crear_template_sin_content_retorna_422(self):
         """POST sin campo 'content' requerido → 422."""
         _set_overrides({
-            get_current_admin: lambda: _fake_admin(),
+            get_current_user: lambda: _fake_admin(),
             get_db: _fake_db_empty,
         })
         try:
@@ -376,7 +369,7 @@ class TestGetTemplate:
         """Template de empresa diferente (no encontrado en BD filtrada) → 404."""
         # La BD mockeada no devuelve nada (simula aislamiento multi-tenant)
         _set_overrides({
-            get_current_user: lambda: _fake_user(company_id=COMPANY_A),
+            get_current_user: lambda: _fake_user(),
             get_db: _fake_db_empty,
         })
         try:
@@ -420,7 +413,7 @@ class TestUpdateTemplate:
             yield session
 
         _set_overrides({
-            get_current_admin: lambda: _fake_admin(),
+            get_current_user: lambda: _fake_admin(),
             get_db: _db_with_tpl,
         })
         try:
@@ -433,7 +426,7 @@ class TestUpdateTemplate:
     async def test_update_template_inexistente_retorna_404(self):
         """PUT en template inexistente → 404."""
         _set_overrides({
-            get_current_admin: lambda: _fake_admin(),
+            get_current_user: lambda: _fake_admin(),
             get_db: _fake_db_empty,
         })
         try:
@@ -463,7 +456,7 @@ class TestDeleteTemplate:
             yield session
 
         _set_overrides({
-            get_current_admin: lambda: _fake_admin(),
+            get_current_user: lambda: _fake_admin(),
             get_db: _db_with_tpl,
         })
         try:
@@ -476,7 +469,7 @@ class TestDeleteTemplate:
     async def test_delete_template_inexistente_retorna_404(self):
         """DELETE en template inexistente → 404."""
         _set_overrides({
-            get_current_admin: lambda: _fake_admin(),
+            get_current_user: lambda: _fake_admin(),
             get_db: _fake_db_empty,
         })
         try:
@@ -519,7 +512,7 @@ class TestSetDefaultTemplate:
             yield session
 
         _set_overrides({
-            get_current_admin: lambda: _fake_admin(),
+            get_current_user: lambda: _fake_admin(),
             get_db: _db_with_tpl,
         })
         try:
@@ -533,7 +526,7 @@ class TestSetDefaultTemplate:
     async def test_set_default_inexistente_retorna_404(self):
         """POST set-default en template inexistente → 404."""
         _set_overrides({
-            get_current_admin: lambda: _fake_admin(),
+            get_current_user: lambda: _fake_admin(),
             get_db: _fake_db_empty,
         })
         try:

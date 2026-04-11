@@ -228,14 +228,11 @@ async def create_default_data():
                 await db.rollback()
             await db.refresh(default_company) if default_company.id else None
 
-        # Crear AppSettings por defecto si aún no existe
-        settings_result = await db.execute(
-            select(AppSettings).where(AppSettings.company_id == DEFAULT_COMPANY_ID)
-        )
+        # Crear AppSettings por defecto si aún no existe (singleton)
+        settings_result = await db.execute(select(AppSettings).limit(1))
         if not settings_result.scalar_one_or_none():
             default_settings = AppSettings(
                 user_id=None,
-                company_id=DEFAULT_COMPANY_ID,
                 electricity_rate=0.15,
                 failure_rate_percent=5.0,
                 labor_cost_per_hour=10.0,
@@ -249,9 +246,7 @@ async def create_default_data():
                 await db.rollback()
 
         # Crear impresora BambuLab P2S Combo por defecto si aún no existe
-        printer_result = await db.execute(
-            select(Printer).where(Printer.company_id == DEFAULT_COMPANY_ID)
-        )
+        printer_result = await db.execute(select(Printer).limit(1))
         if not printer_result.scalar_one_or_none():
             default_printer = Printer(
                 name="Mi BambuLab P2S Combo",
@@ -266,7 +261,6 @@ async def create_default_data():
                 buildplate_lifespan_hours=2000.0,
                 other_maintenance_per_hour=0.01,
                 notes="Impresora principal - BambuLab P2S Combo con AMS 2 Pro",
-                company_id=DEFAULT_COMPANY_ID,
             )
             db.add(default_printer)
             try:

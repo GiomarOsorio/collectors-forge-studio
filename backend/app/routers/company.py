@@ -22,10 +22,13 @@ from app.database import get_db
 from app.models.company import Company
 from app.models.user import User
 from app.schemas.company import CompanyResponse, CompanyUpdate
-from app.services.auth import get_current_admin, get_current_user
+from app.services.auth import get_admin_user, get_current_user
 from app.services.formatters import IMAGE_MAGIC_CHECKS, IMAGE_EXT_MAP
 
 router = APIRouter(prefix="/api/company", tags=["company"])
+
+# UUID fijo de la empresa singleton
+DEFAULT_COMPANY_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
 # Directorio donde se guardan los logos de empresa
 COMPANY_LOGO_DIR = Path("/app/static/companies")
@@ -55,7 +58,7 @@ async def get_company(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Retorna el perfil de la empresa del usuario autenticado.
+    Retorna el perfil de la empresa singleton.
 
     Args:
         db:           Sesión de base de datos.
@@ -64,14 +67,14 @@ async def get_company(
     Returns:
         CompanyResponse con los datos actuales de la empresa.
     """
-    return await _get_company(db, current_user.company_id)
+    return await _get_company(db, DEFAULT_COMPANY_ID)
 
 
 @router.put("/", response_model=CompanyResponse)
 async def update_company(
     data: CompanyUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin),
+    current_user: User = Depends(get_admin_user),
 ):
     """
     Actualiza el perfil de la empresa (solo administradores).
@@ -86,7 +89,7 @@ async def update_company(
     Returns:
         CompanyResponse con los datos actualizados.
     """
-    company = await _get_company(db, current_user.company_id)
+    company = await _get_company(db, DEFAULT_COMPANY_ID)
 
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -101,7 +104,7 @@ async def update_company(
 async def upload_company_logo(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin),
+    current_user: User = Depends(get_admin_user),
 ):
     """
     Sube el logo de la empresa (solo administradores).
@@ -128,7 +131,7 @@ async def upload_company_logo(
             detail=f"Tipo de archivo no permitido: {file.content_type}. Use JPEG, PNG, WebP o GIF.",
         )
 
-    company = await _get_company(db, current_user.company_id)
+    company = await _get_company(db, DEFAULT_COMPANY_ID)
 
     content = await file.read()
     if len(content) > MAX_IMAGE_BYTES:

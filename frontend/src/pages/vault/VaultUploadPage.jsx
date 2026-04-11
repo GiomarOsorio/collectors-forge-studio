@@ -24,7 +24,7 @@ export default function VaultUploadPage() {
 
   // Redirigir si no es admin
   useEffect(() => {
-    if (user && !user.is_admin) {
+    if (user && user.role !== 'admin') {
       navigate('/vault', { replace: true });
     }
   }, [user, navigate]);

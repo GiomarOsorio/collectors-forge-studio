@@ -36,37 +36,33 @@ from app.schemas.purchase_order import (
     PurchaseOrderUpdate,
     PurchaseOrderResponse,
 )
-from app.services.auth import get_current_user
+from app.services.auth import get_current_user, get_operator_user
 
 router = APIRouter(prefix="/api/inventory/purchases", tags=["purchase-orders"])
 
 
 async def _get_company_purchase_order(
-    db: AsyncSession, order_id: int, company_id
+    db: AsyncSession, order_id: int
 ) -> PurchaseOrder:
     """
-    Obtiene una orden de compra verificando que pertenezca a la empresa.
+    Obtiene una orden de compra por ID.
 
     Carga los ítems de la orden con selectinload para evitar lazy loading.
 
     Args:
-        db:         Sesión de base de datos.
-        order_id:   ID de la orden de compra.
-        company_id: UUID de la empresa del usuario autenticado.
+        db:       Sesión de base de datos.
+        order_id: ID de la orden de compra.
 
     Returns:
         Instancia de PurchaseOrder con ítems cargados.
 
     Raises:
-        HTTPException 404: Si no existe o no pertenece a la empresa.
+        HTTPException 404: Si no existe.
     """
     result = await db.execute(
         select(PurchaseOrder)
         .options(selectinload(PurchaseOrder.items))
-        .where(
-            PurchaseOrder.id == order_id,
-            PurchaseOrder.company_id == company_id,
-        )
+        .where(PurchaseOrder.id == order_id)
     )
     order = result.scalar_one_or_none()
     if not order:
@@ -98,7 +94,6 @@ async def list_purchase_orders(
     result = await db.execute(
         select(PurchaseOrder)
         .options(selectinload(PurchaseOrder.items))
-        .where(PurchaseOrder.company_id == current_user.company_id)
         .order_by(PurchaseOrder.created_at.desc())
     )
     return result.scalars().unique().all()
@@ -108,7 +103,7 @@ async def list_purchase_orders(
 async def create_purchase_order(
     data: PurchaseOrderCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Crea una nueva orden de compra con sus ítems.
@@ -125,7 +120,6 @@ async def create_purchase_order(
         PurchaseOrderResponse con la orden creada y sus ítems.
     """
     order = PurchaseOrder(
-        company_id=current_user.company_id,
         supplier=data.supplier,
         tracking_number=data.tracking_number,
         carrier=data.carrier,
@@ -149,7 +143,7 @@ async def create_purchase_order(
     await db.refresh(order)
 
     # Recargar con los ítems para la respuesta
-    return await _get_company_purchase_order(db, order.id, current_user.company_id)
+    return await _get_company_purchase_order(db, order.id)
 
 
 @router.get("/{order_id}", response_model=PurchaseOrderResponse)
@@ -172,7 +166,7 @@ async def get_purchase_order(
     Raises:
         HTTPException 404: Si no existe.
     """
-    return await _get_company_purchase_order(db, order_id, current_user.company_id)
+    return await _get_company_purchase_order(db, order_id)
 
 
 @router.put("/{order_id}", response_model=PurchaseOrderResponse)
@@ -180,7 +174,7 @@ async def update_purchase_order(
     order_id: int,
     data: PurchaseOrderUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Actualiza los campos de una orden de compra.
@@ -201,7 +195,7 @@ async def update_purchase_order(
     Raises:
         HTTPException 404: Si no existe.
     """
-    order = await _get_company_purchase_order(db, order_id, current_user.company_id)
+    order = await _get_company_purchase_order(db, order_id)
 
     update_data = data.model_dump(exclude_unset=True)
     new_items = update_data.pop("items", None)
@@ -224,14 +218,14 @@ async def update_purchase_order(
     await db.refresh(order)
 
     # Recargar con ítems
-    return await _get_company_purchase_order(db, order.id, current_user.company_id)
+    return await _get_company_purchase_order(db, order.id)
 
 
 @router.delete("/{order_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_purchase_order(
     order_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Elimina una orden de compra y todos sus ítems (cascade).
@@ -244,7 +238,7 @@ async def delete_purchase_order(
     Raises:
         HTTPException 404: Si no existe.
     """
-    order = await _get_company_purchase_order(db, order_id, current_user.company_id)
+    order = await _get_company_purchase_order(db, order_id)
     await db.delete(order)
     await db.commit()
 
@@ -253,7 +247,7 @@ async def delete_purchase_order(
 async def mark_order_arrived(
     order_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Marca una orden de compra como "llegado" y actualiza el stock.
@@ -279,7 +273,7 @@ async def mark_order_arrived(
         HTTPException 404: Si no existe.
         HTTPException 400: Si la orden ya fue marcada como llegada o cancelada.
     """
-    order = await _get_company_purchase_order(db, order_id, current_user.company_id)
+    order = await _get_company_purchase_order(db, order_id)
 
     # Validar que la orden esté en un estado que permita marcarla como llegada
     if order.status not in ("pendiente", "en_transito"):
@@ -299,7 +293,6 @@ async def mark_order_arrived(
             result = await db.execute(
                 select(InventoryItem).where(
                     InventoryItem.id == order_item.inventory_item_id,
-                    InventoryItem.company_id == current_user.company_id,
                 ).with_for_update()
             )
             inv_item = result.scalar_one_or_none()
@@ -312,7 +305,7 @@ async def mark_order_arrived(
     await db.commit()
 
     # Recargar la orden completa con ítems para la respuesta
-    return await _get_company_purchase_order(db, order.id, current_user.company_id)
+    return await _get_company_purchase_order(db, order.id)
 
 
 TRACKER_URL = os.environ.get("TRACKER_URL", "http://tracker:8002")

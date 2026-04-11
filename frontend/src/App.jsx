@@ -114,6 +114,21 @@ function PrivateRoute({ children }) {
 }
 
 /**
+ * Componente guardia de ruta administrativa.
+ * Si el usuario no tiene rol 'admin', redirige a /.
+ *
+ * @param {Object} props
+ * @param {React.ReactNode} props.children
+ * @returns {JSX.Element}
+ */
+function AdminRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="flex items-center justify-center h-screen" style={{ color: '#4B4F55' }}>Cargando...</div>;
+  if (!user) return <Navigate to="/login" />;
+  return user.role === 'admin' ? children : <Navigate to="/" />;
+}
+
+/**
  * Árbol de rutas de la aplicación.
  *
  * @returns {JSX.Element|null}
@@ -171,8 +186,8 @@ function AppRoutes() {
       <Route path="/settings" element={<PrivateRoute><SettingsLayout /></PrivateRoute>}>
         <Route index element={<Navigate to="/settings/account" replace />} />
         <Route path="account" element={<CuentaPage />} />
-        <Route path="company" element={<EmpresaPage />} />
-        <Route path="users" element={<UsuariosPage />} />
+        <Route path="company" element={<AdminRoute><EmpresaPage /></AdminRoute>} />
+        <Route path="users" element={<AdminRoute><UsuariosPage /></AdminRoute>} />
       </Route>
 
       {/* Aplicación Slicer: laminado de modelos 3D */}
@@ -197,8 +212,8 @@ function AppRoutes() {
         <Route path="history" element={<QueueHistoryPage />} />
       </Route>
 
-      {/* Aplicación Compañía: perfil, marca y templates PDF */}
-      <Route path="/company" element={<PrivateRoute><CompanyLayout /></PrivateRoute>}>
+      {/* Aplicación Compañía: perfil, marca y templates PDF (solo admins) */}
+      <Route path="/company" element={<AdminRoute><CompanyLayout /></AdminRoute>}>
         <Route index element={<Navigate to="/company/profile" replace />} />
         <Route path="profile"       element={<CompanyProfilePage />} />
         <Route path="branding"      element={<CompanyBrandingPage />} />
