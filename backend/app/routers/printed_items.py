@@ -35,7 +35,7 @@ from app.schemas.printed_item import (
     PrintedItemSellRequest,
     PrintedItemUpdate,
 )
-from app.services.auth import get_current_user
+from app.services.auth import get_current_user, get_operator_user
 
 # Directorio donde se guardan las imágenes de los ítems de impresión
 PRINTS_IMAGE_DIR = Path("/app/static/prints")
@@ -47,27 +47,23 @@ router = APIRouter(prefix="/api/inventory/prints", tags=["printed_items"])
 
 
 async def _get_company_printed_item(
-    db: AsyncSession, item_id: int, company_id
+    db: AsyncSession, item_id: int
 ) -> PrintedItem:
     """
-    Obtiene un ítem de impresión verificando que pertenezca a la empresa.
+    Obtiene un ítem de impresión por ID.
 
     Args:
-        db:         Sesión de base de datos.
-        item_id:    ID del ítem de impresión.
-        company_id: UUID de la empresa del usuario autenticado.
+        db:      Sesión de base de datos.
+        item_id: ID del ítem de impresión.
 
     Returns:
-        Instancia de PrintedItem si existe y pertenece a la empresa.
+        Instancia de PrintedItem si existe.
 
     Raises:
-        HTTPException 404: Si no existe o no pertenece a la empresa.
+        HTTPException 404: Si no existe.
     """
     result = await db.execute(
-        select(PrintedItem).where(
-            PrintedItem.id == item_id,
-            PrintedItem.company_id == company_id,
-        )
+        select(PrintedItem).where(PrintedItem.id == item_id)
     )
     item = result.scalar_one_or_none()
     if not item:
@@ -102,9 +98,7 @@ async def list_printed_items(
     Returns:
         PrintedItemListResponse con la lista paginada y el total de ítems.
     """
-    base_query = select(PrintedItem).where(
-        PrintedItem.company_id == current_user.company_id
-    )
+    base_query = select(PrintedItem)
     if category:
         base_query = base_query.where(PrintedItem.category == category)
 
@@ -127,7 +121,7 @@ async def list_printed_items(
 async def create_printed_item(
     data: PrintedItemCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Crea un nuevo ítem de impresión en el inventario de la empresa.
@@ -141,7 +135,6 @@ async def create_printed_item(
         PrintedItemResponse con los datos del ítem creado.
     """
     item = PrintedItem(
-        company_id=current_user.company_id,
         name=data.name,
         category=data.category,
         description=data.description,
@@ -177,7 +170,7 @@ async def get_printed_item(
     Raises:
         HTTPException 404: Si no existe.
     """
-    return await _get_company_printed_item(db, item_id, current_user.company_id)
+    return await _get_company_printed_item(db, item_id)
 
 
 @router.put("/{item_id}", response_model=PrintedItemResponse)
@@ -185,7 +178,7 @@ async def update_printed_item(
     item_id: int,
     data: PrintedItemUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Actualiza un ítem de impresión existente.
@@ -205,7 +198,7 @@ async def update_printed_item(
     Raises:
         HTTPException 404: Si no existe.
     """
-    item = await _get_company_printed_item(db, item_id, current_user.company_id)
+    item = await _get_company_printed_item(db, item_id)
 
     # Actualizar solo los campos que se enviaron (exclude_unset=True)
     update_data = data.model_dump(exclude_unset=True)
@@ -221,7 +214,7 @@ async def update_printed_item(
 async def delete_printed_item(
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Elimina un ítem de impresión por ID.
@@ -238,7 +231,7 @@ async def delete_printed_item(
     Raises:
         HTTPException 404: Si no existe.
     """
-    item = await _get_company_printed_item(db, item_id, current_user.company_id)
+    item = await _get_company_printed_item(db, item_id)
     await db.delete(item)
     await db.commit()
 
@@ -248,7 +241,7 @@ async def sell_printed_item(
     item_id: int,
     data: PrintedItemSellRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Registra la venta de unidades de un ítem de impresión.
@@ -269,7 +262,7 @@ async def sell_printed_item(
         HTTPException 404: Si el ítem no existe.
         HTTPException 400: Si el stock es insuficiente para la venta.
     """
-    item = await _get_company_printed_item(db, item_id, current_user.company_id)
+    item = await _get_company_printed_item(db, item_id)
 
     new_quantity = item.quantity - data.quantity
     if new_quantity < 0:
@@ -289,7 +282,7 @@ async def upload_printed_item_image(
     item_id: int,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Sube una imagen de referencia para un ítem de impresión.
@@ -320,7 +313,7 @@ async def upload_printed_item_image(
                    f"Use JPEG, PNG, WebP o GIF.",
         )
 
-    item = await _get_company_printed_item(db, item_id, current_user.company_id)
+    item = await _get_company_printed_item(db, item_id)
 
     # Leer contenido y validar magic bytes reales (segunda línea de defensa)
     # Evita que un atacante suba un archivo ejecutable con Content-Type: image/jpeg

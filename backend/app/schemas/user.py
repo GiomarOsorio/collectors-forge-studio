@@ -10,7 +10,7 @@ recibidos en las solicitudes HTTP y de los datos devueltos en las respuestas.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -55,15 +55,12 @@ class UserResponse(BaseModel):
     """
     Esquema de respuesta con los datos públicos de un usuario.
 
-    Devuelve únicamente los campos seguros para exponer al cliente, omitiendo
-    la contraseña hasheada y otros datos internos.
-
     Atributos:
         id: Identificador numérico único del usuario.
         username: Nombre de usuario.
         email: Correo electrónico del usuario.
         is_active: Estado de la cuenta (activa/inactiva).
-        is_admin: Indica si el usuario tiene privilegios de administrador.
+        role: Rol del usuario: 'admin' | 'operator' | 'viewer'.
         created_at: Fecha y hora UTC de creación de la cuenta.
     """
 
@@ -71,7 +68,7 @@ class UserResponse(BaseModel):
     username: str
     email: str
     is_active: bool
-    is_admin: bool
+    role: str
     created_at: datetime
 
     # Permite construir el schema a partir de instancias ORM (from_orm)
@@ -121,11 +118,11 @@ class UserAdminUpdate(BaseModel):
 
     Atributos:
         new_password: Nueva contraseña en texto plano (mín. 8, máx. 128).
-        is_admin:     Nuevo valor para el rol de administrador.
+        role:         Nuevo rol: 'admin' | 'operator' | 'viewer'.
     """
 
     new_password: Optional[str] = Field(default=None, min_length=8, max_length=128)
-    is_admin: Optional[bool] = None
+    role: Optional[Literal["admin", "operator", "viewer"]] = None
 
 
 class TokenData(BaseModel):

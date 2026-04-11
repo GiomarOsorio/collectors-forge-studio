@@ -12,7 +12,6 @@ de material, temperaturas y dimensiones del modelo.
 Se vincula a la empresa mediante company_id (multi-tenant).
 """
 
-import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
@@ -20,7 +19,7 @@ from typing import Optional
 import sqlalchemy as sa
 from sqlalchemy import String, Numeric, DateTime, Text, Integer, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.database import Base
 
@@ -41,9 +40,6 @@ class SlicingJob(Base):
     __tablename__ = "slicing_jobs"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True
-    )
     user_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=True
     )

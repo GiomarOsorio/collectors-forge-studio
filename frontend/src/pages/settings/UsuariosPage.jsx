@@ -1,36 +1,44 @@
 /**
- * @file Página de gestión de usuarios de la empresa.
+ * @file Página de gestión de usuarios.
  *
- * Lista los usuarios de la empresa y permite crear nuevos (solo admin).
+ * Lista los usuarios del sistema y permite al administrador cambiar
+ * el rol y la contraseña de cualquier usuario.
  * Ruta: /settings/users
  *
  * @module pages/settings/UsuariosPage
  */
 
 import { useState, useEffect } from 'react';
-import { getUsers, register, updateUser } from '../../services/api';
+import { getUsers, updateUser } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
-import { Users, X, Pencil } from 'lucide-react';
+import { X, Pencil } from 'lucide-react';
 import { apiErrorMsg } from '../../utils/apiError';
+
+const ROLE_LABELS = {
+  admin: 'Admin',
+  operator: 'Operador',
+  viewer: 'Visualizador',
+};
+
+const ROLE_COLORS = {
+  admin: 'bg-forge-teal/20 text-forge-teal border border-forge-teal/30',
+  operator: 'bg-blue-500/20 text-blue-400 border border-blue-500/30',
+  viewer: 'bg-gunmetal/40 text-steel border border-gunmetal/60',
+};
 
 export default function UsuariosPage() {
   const { user } = useAuth();
   const [users, setUsers] = useState([]);
-  const [newUserModal, setNewUserModal] = useState(false);
-  const [newUserForm, setNewUserForm] = useState({
-    username: '', email: '', password: '', is_admin: false,
-  });
-  const [creating, setCreating] = useState(false);
 
   const [editModal, setEditModal] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
-  const [editForm, setEditForm] = useState({ new_password: '', confirm: '', is_admin: false });
+  const [editForm, setEditForm] = useState({ new_password: '', confirm: '', role: 'operator' });
   const [saving, setSaving] = useState(false);
 
   const openEdit = (u) => {
     setEditTarget(u);
-    setEditForm({ new_password: '', confirm: '', is_admin: u.is_admin });
+    setEditForm({ new_password: '', confirm: '', role: u.role ?? 'operator' });
     setEditModal(true);
   };
 
@@ -47,7 +55,7 @@ export default function UsuariosPage() {
 
   const handleEdit = async (e) => {
     e.preventDefault();
-    const payload = { is_admin: editForm.is_admin };
+    const payload = { role: editForm.role };
     if (editForm.new_password) {
       if (editForm.new_password !== editForm.confirm) {
         toast.error('Las contraseñas no coinciden');
@@ -68,33 +76,9 @@ export default function UsuariosPage() {
     }
   };
 
-  const handleCreate = async (e) => {
-    e.preventDefault();
-    setCreating(true);
-    try {
-      await register(newUserForm);
-      toast.success('Usuario creado');
-      setNewUserModal(false);
-      setNewUserForm({ username: '', email: '', password: '', is_admin: false });
-      loadUsers();
-    } catch (err) {
-      toast.error(apiErrorMsg(err, 'Error al crear usuario'));
-    } finally {
-      setCreating(false);
-    }
-  };
-
   return (
     <div>
       <h2 className="tf-page-title">Usuarios</h2>
-
-      {user?.is_admin && (
-        <div className="flex justify-end mb-4">
-          <button onClick={() => setNewUserModal(true)} className="tf-btn-primary gap-2">
-            <Users size={16} /> Agregar usuario
-          </button>
-        </div>
-      )}
 
       {/* Modal editar usuario */}
       {editModal && editTarget && (
@@ -131,15 +115,22 @@ export default function UsuariosPage() {
                   />
                 </div>
               )}
-              <label className="flex items-center gap-2 cursor-pointer text-sm text-steel">
-                <input
-                  type="checkbox"
-                  checked={editForm.is_admin}
-                  onChange={(e) => setEditForm((p) => ({ ...p, is_admin: e.target.checked }))}
-                  className="rounded"
-                />
-                Administrador
-              </label>
+              <div>
+                <label className="tf-label">Rol</label>
+                <select
+                  className="tf-input"
+                  value={editForm.role}
+                  onChange={(e) => setEditForm((p) => ({ ...p, role: e.target.value }))}
+                  disabled={editTarget?.id === user?.id}
+                >
+                  <option value="admin">Admin</option>
+                  <option value="operator">Operador</option>
+                  <option value="viewer">Visualizador</option>
+                </select>
+                {editTarget?.id === user?.id && (
+                  <p className="text-xs text-gunmetal mt-1">No puedes cambiar tu propio rol.</p>
+                )}
+              </div>
               <div className="flex gap-3 justify-end pt-2">
                 <button
                   type="button"
@@ -161,79 +152,6 @@ export default function UsuariosPage() {
         </div>
       )}
 
-      {/* Modal nuevo usuario */}
-      {newUserModal && (
-        <div className="tf-modal-overlay">
-          <div className="tf-modal max-w-md">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="tf-section-title">Nuevo usuario</h3>
-              <button onClick={() => setNewUserModal(false)} className="tf-btn-ghost">
-                <X size={20} />
-              </button>
-            </div>
-            <form onSubmit={handleCreate} className="space-y-4">
-              <div>
-                <label className="tf-label">Nombre de usuario *</label>
-                <input
-                  className="tf-input"
-                  value={newUserForm.username}
-                  onChange={(e) => setNewUserForm((p) => ({ ...p, username: e.target.value }))}
-                  required
-                  minLength={3}
-                />
-              </div>
-              <div>
-                <label className="tf-label">Correo electrónico *</label>
-                <input
-                  type="email"
-                  className="tf-input"
-                  value={newUserForm.email}
-                  onChange={(e) => setNewUserForm((p) => ({ ...p, email: e.target.value }))}
-                  required
-                />
-              </div>
-              <div>
-                <label className="tf-label">Contraseña inicial *</label>
-                <input
-                  type="password"
-                  className="tf-input"
-                  value={newUserForm.password}
-                  onChange={(e) => setNewUserForm((p) => ({ ...p, password: e.target.value }))}
-                  required
-                  minLength={8}
-                  placeholder="Mín. 8 caracteres"
-                />
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer text-sm text-steel">
-                <input
-                  type="checkbox"
-                  checked={newUserForm.is_admin}
-                  onChange={(e) => setNewUserForm((p) => ({ ...p, is_admin: e.target.checked }))}
-                  className="rounded"
-                />
-                Administrador
-              </label>
-              <div className="flex gap-3 justify-end pt-2">
-                <button
-                  type="button"
-                  onClick={() => setNewUserModal(false)}
-                  className="tf-btn-ghost px-4 py-2"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="tf-btn-primary px-4 py-2"
-                >
-                  {creating ? 'Creando...' : 'Crear usuario'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* Tabla de usuarios */}
       <div className="tf-table-wrap">
         <table className="w-full min-w-[500px]">
@@ -241,7 +159,7 @@ export default function UsuariosPage() {
             <tr>
               <th className="tf-th">Usuario</th>
               <th className="tf-th">Email</th>
-              <th className="tf-th-right">Admin</th>
+              <th className="tf-th-right">Rol</th>
               <th className="tf-th-right">Estado</th>
               <th className="tf-th-right">Acciones</th>
             </tr>
@@ -257,11 +175,9 @@ export default function UsuariosPage() {
                 </td>
                 <td className="tf-td text-steel">{u.email}</td>
                 <td className="tf-td-right">
-                  {u.is_admin ? (
-                    <span className="text-xs bg-forge-teal/20 text-forge-teal border border-forge-teal/30 rounded px-2 py-0.5">Admin</span>
-                  ) : (
-                    <span className="text-xs text-gunmetal">—</span>
-                  )}
+                  <span className={`text-xs rounded px-2 py-0.5 ${ROLE_COLORS[u.role] ?? ROLE_COLORS.viewer}`}>
+                    {ROLE_LABELS[u.role] ?? u.role}
+                  </span>
                 </td>
                 <td className="tf-td-right">
                   {u.is_active ? (
@@ -283,7 +199,7 @@ export default function UsuariosPage() {
             ))}
             {users.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-5 py-12 text-center text-gunmetal">
+                <td colSpan={5} className="px-5 py-12 text-center text-gunmetal">
                   Cargando usuarios...
                 </td>
               </tr>

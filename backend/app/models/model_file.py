@@ -7,13 +7,12 @@ a una empresa (multi-tenant) y solo los usuarios de esa empresa pueden
 acceder a él.
 """
 
-import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import String, Text, BigInteger, DateTime, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.database import Base
 
@@ -44,9 +43,6 @@ class ModelFile(Base):
     __tablename__ = "model_files"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True
-    )
     uploaded_by: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

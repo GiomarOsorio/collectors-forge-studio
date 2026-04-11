@@ -133,7 +133,7 @@ export default function CompanyBrandingPage() {
                   type="text"
                   value={color.name}
                   onChange={(e) => updateColor(idx, 'name', e.target.value)}
-                  disabled={!user?.is_admin}
+                  disabled={!user?.role === 'admin'}
                   placeholder="ej: primary"
                   className="tf-input font-mono text-xs py-1.5"
                 />
@@ -143,7 +143,7 @@ export default function CompanyBrandingPage() {
                   type="color"
                   value={color.hex}
                   onChange={(e) => updateColor(idx, 'hex', e.target.value)}
-                  disabled={!user?.is_admin}
+                  disabled={!user?.role === 'admin'}
                   className="w-10 h-9 rounded-lg border border-[#2A2F38] cursor-pointer bg-transparent p-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
                   title={color.name || 'Elegir color'}
                 />
@@ -153,7 +153,7 @@ export default function CompanyBrandingPage() {
                   type="text"
                   value={color.hex}
                   onChange={(e) => updateColor(idx, 'hex', e.target.value)}
-                  disabled={!user?.is_admin}
+                  disabled={!user?.role === 'admin'}
                   pattern="^#[0-9A-Fa-f]{6}$"
                   maxLength={7}
                   className="tf-input font-mono text-xs py-1.5 w-24"
@@ -164,7 +164,7 @@ export default function CompanyBrandingPage() {
                 <button
                   type="button"
                   onClick={() => removeColor(idx)}
-                  disabled={!user?.is_admin || palette.length <= 1}
+                  disabled={!user?.role === 'admin' || palette.length <= 1}
                   className="p-1.5 text-gunmetal hover:text-red-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                   title="Eliminar color"
                 >
@@ -175,7 +175,7 @@ export default function CompanyBrandingPage() {
           </div>
 
           {/* Añadir color */}
-          {user?.is_admin && (
+          {user?.role === 'admin' && (
             <button
               type="button"
               onClick={addColor}
@@ -199,14 +199,14 @@ export default function CompanyBrandingPage() {
           <textarea
             value={pdfTerms}
             onChange={(e) => setPdfTerms(e.target.value)}
-            disabled={!user?.is_admin}
+            disabled={!user?.role === 'admin'}
             rows={5}
             className="tf-input resize-y font-mono text-xs"
             placeholder={`• Pago del 50% al aprobar la cotización.\n• Saldo antes del envío.\n• Los gastos de envío corren por cuenta del cliente.`}
           />
         </div>
 
-        {user?.is_admin ? (
+        {user?.role === 'admin' ? (
           <button type="submit" disabled={saving} className="tf-btn-primary w-full py-2.5">
             {saving ? 'Guardando...' : 'Guardar configuración de marca'}
           </button>

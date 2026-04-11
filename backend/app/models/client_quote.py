@@ -8,14 +8,13 @@ almacena el desglose técnico de costos sino una lista de ítems con
 precio unitario definido por el usuario.
 """
 
-import uuid
 from datetime import datetime, timezone, date
 from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import String, Numeric, DateTime, Date, Text, Integer, ForeignKey, Boolean, text
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.database import Base
 
@@ -33,9 +32,6 @@ class ClientQuote(Base):
     __tablename__ = "client_quotes"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True
-    )
     user_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=True
     )

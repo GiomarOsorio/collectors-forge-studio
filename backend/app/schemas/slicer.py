@@ -89,7 +89,6 @@ class SlicingJobResponse(BaseModel):
     """Respuesta completa de un trabajo de laminado."""
 
     id: int
-    company_id: str
     source: str
     original_filename: Optional[str] = None
     makerworld_url: Optional[str] = None
@@ -111,12 +110,6 @@ class SlicingJobResponse(BaseModel):
     plates_data: List[PlateData] = []
     created_at: datetime
     updated_at: datetime
-
-    @field_validator("company_id", mode="before")
-    @classmethod
-    def uuid_to_str(cls, v):
-        """Convierte UUID a string para la serialización JSON."""
-        return str(v)
 
     @field_validator("plates_data", mode="before")
     @classmethod

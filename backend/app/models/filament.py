@@ -7,14 +7,12 @@ cálculo de costos de impresión: a partir del precio por kilogramo y la
 densidad del material se determina el costo exacto de material por pieza.
 """
 
-import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import String, DateTime, Text, Numeric, ForeignKey, text
+from sqlalchemy import String, DateTime, Text, Numeric, text
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
 from app.database import Base
 
@@ -57,7 +55,4 @@ class Filament(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
-    )
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True
     )

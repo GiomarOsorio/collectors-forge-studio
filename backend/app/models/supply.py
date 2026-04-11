@@ -7,14 +7,12 @@ imanes, insertos de rosca, etc. Se catalogan con precio unitario en USD
 y se pueden añadir a cualquier cotización en la calculadora.
 """
 
-import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Integer, String, Numeric, Text, DateTime, CheckConstraint, ForeignKey
+from sqlalchemy import Integer, String, Numeric, Text, DateTime, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
 from app.database import Base
 
@@ -49,6 +47,3 @@ class Supply(Base):
     pack_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 4), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True
-    )

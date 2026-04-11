@@ -6,13 +6,11 @@ Solo se pueden encolar impresiones que tengan un costo calculado (Quote).
 Al marcar como 'done' se descuenta el inventario y se suman las horas a la impresora.
 """
 
-import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import String, DateTime, Integer, ForeignKey, text
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
 from app.database import Base
 
@@ -42,9 +40,6 @@ class PrintQueueItem(Base):
     __tablename__ = "print_queue"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True
-    )
     quote_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("quotes.id", ondelete="SET NULL"), nullable=True, index=True
     )

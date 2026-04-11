@@ -39,7 +39,7 @@ from app.schemas.maintenance import (
     MaintenanceLastEntry,
 )
 from app.schemas.printer import PrinterResponse
-from app.services.auth import get_current_user
+from app.services.auth import get_current_user, get_operator_user
 
 router = APIRouter(prefix="/api/maintenance", tags=["maintenance"])
 
@@ -47,21 +47,20 @@ router = APIRouter(prefix="/api/maintenance", tags=["maintenance"])
 # ─── Helper privado ────────────────────────────────────────────────────────────
 
 async def _get_log(
-    db: AsyncSession, log_id: int, company_id
+    db: AsyncSession, log_id: int
 ) -> MaintenanceLog:
     """
     Obtiene un registro de mantenimiento con sus ítems e impresora.
 
     Args:
-        db:         Sesión de base de datos.
-        log_id:     ID del registro.
-        company_id: UUID de la empresa del usuario autenticado.
+        db:     Sesión de base de datos.
+        log_id: ID del registro.
 
     Returns:
         Instancia de MaintenanceLog con items y printer cargados.
 
     Raises:
-        HTTPException 404: Si no existe o no pertenece a la empresa.
+        HTTPException 404: Si no existe.
     """
     result = await db.execute(
         select(MaintenanceLog)
@@ -69,10 +68,7 @@ async def _get_log(
             selectinload(MaintenanceLog.items),
             selectinload(MaintenanceLog.printer),
         )
-        .where(
-            MaintenanceLog.id == log_id,
-            MaintenanceLog.company_id == company_id,
-        )
+        .where(MaintenanceLog.id == log_id)
     )
     log = result.scalar_one_or_none()
     if not log:
@@ -84,27 +80,23 @@ async def _get_log(
 
 
 async def _get_company_printer(
-    db: AsyncSession, printer_id: int, company_id
+    db: AsyncSession, printer_id: int
 ) -> Printer:
     """
-    Obtiene una impresora verificando que pertenezca a la empresa.
+    Obtiene una impresora por ID.
 
     Args:
         db:         Sesión de base de datos.
         printer_id: ID de la impresora.
-        company_id: UUID de la empresa.
 
     Returns:
         Instancia de Printer.
 
     Raises:
-        HTTPException 404: Si no existe o no pertenece a la empresa.
+        HTTPException 404: Si no existe.
     """
     result = await db.execute(
-        select(Printer).where(
-            Printer.id == printer_id,
-            Printer.company_id == company_id,
-        )
+        select(Printer).where(Printer.id == printer_id)
     )
     printer = result.scalar_one_or_none()
     if not printer:
@@ -146,7 +138,6 @@ async def list_logs(
             selectinload(MaintenanceLog.items),
             selectinload(MaintenanceLog.printer),
         )
-        .where(MaintenanceLog.company_id == current_user.company_id)
     )
     if printer_id is not None:
         query = query.where(MaintenanceLog.printer_id == printer_id)
@@ -159,7 +150,7 @@ async def list_logs(
 async def create_log(
     data: MaintenanceLogCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Crea un registro de mantenimiento y descuenta ítems del inventario.
@@ -187,8 +178,8 @@ async def create_log(
         HTTPException 404: Si la impresora no existe.
         HTTPException 400: Si stock insuficiente para algún ítem.
     """
-    # Verificar que la impresora pertenece a la empresa
-    await _get_company_printer(db, data.printer_id, current_user.company_id)
+    # Verificar que la impresora existe
+    await _get_company_printer(db, data.printer_id)
 
     # Determinar fecha de realización
     performed_at = data.performed_at
@@ -199,7 +190,6 @@ async def create_log(
 
     # Crear el registro principal
     log = MaintenanceLog(
-        company_id=current_user.company_id,
         printer_id=data.printer_id,
         hours_at_maintenance=data.hours_at_maintenance,
         maintenance_type=data.maintenance_type,
@@ -226,7 +216,6 @@ async def create_log(
             inv_result = await db.execute(
                 select(InventoryItem).where(
                     InventoryItem.id == item_data.inventory_item_id,
-                    InventoryItem.company_id == current_user.company_id,
                 ).with_for_update()
             )
             inv_item = inv_result.scalar_one_or_none()
@@ -246,7 +235,7 @@ async def create_log(
     await db.commit()
 
     # Recargar con relaciones
-    return await _get_log(db, log.id, current_user.company_id)
+    return await _get_log(db, log.id)
 
 
 @router.get("/logs/{log_id}", response_model=MaintenanceLogResponse)
@@ -269,7 +258,7 @@ async def get_log(
     Raises:
         HTTPException 404: Si no existe.
     """
-    return await _get_log(db, log_id, current_user.company_id)
+    return await _get_log(db, log_id)
 
 
 @router.put("/logs/{log_id}", response_model=MaintenanceLogResponse)
@@ -277,7 +266,7 @@ async def update_log(
     log_id: int,
     data: MaintenanceLogUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Edita los campos no-inventario de un registro de mantenimiento.
@@ -297,20 +286,20 @@ async def update_log(
     Raises:
         HTTPException 404: Si el registro no existe.
     """
-    log = await _get_log(db, log_id, current_user.company_id)
+    log = await _get_log(db, log_id)
     log.performed_at = data.performed_at.replace(tzinfo=None)
     log.hours_at_maintenance = data.hours_at_maintenance
     log.maintenance_type = data.maintenance_type
     log.description = data.description
     await db.commit()
-    return await _get_log(db, log_id, current_user.company_id)
+    return await _get_log(db, log_id)
 
 
 @router.delete("/logs/{log_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_log(
     log_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Elimina un registro de mantenimiento y sus ítems (cascade).
@@ -325,7 +314,7 @@ async def delete_log(
     Raises:
         HTTPException 404: Si no existe.
     """
-    log = await _get_log(db, log_id, current_user.company_id)
+    log = await _get_log(db, log_id)
     await db.delete(log)
     await db.commit()
 
@@ -351,13 +340,9 @@ async def get_summary(
     Returns:
         Lista de MaintenancePrinterSummary con last_per_type por impresora.
     """
-    company_id = current_user.company_id
-
-    # Cargar todas las impresoras de la empresa (fuente: app Cost)
+    # Cargar todas las impresoras
     printers_result = await db.execute(
-        select(Printer)
-        .where(Printer.company_id == company_id)
-        .order_by(Printer.name)
+        select(Printer).order_by(Printer.name)
     )
     printers = printers_result.scalars().all()
 
@@ -370,7 +355,6 @@ async def get_summary(
     logs_result = await db.execute(
         select(MaintenanceLog)
         .where(
-            MaintenanceLog.company_id == company_id,
             MaintenanceLog.printer_id.in_(printer_ids),
         )
         .order_by(MaintenanceLog.performed_at.desc())

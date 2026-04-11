@@ -39,7 +39,6 @@ class PrintQueueItemResponse(BaseModel):
     """Respuesta completa de un ítem de la cola de impresión."""
 
     id: int
-    company_id: Optional[uuid.UUID]
     quote_id: Optional[int]
     status: str
     position: int

@@ -17,7 +17,7 @@ export default function VaultLayout() {
 
   const navItems = [
     { to: '/vault', icon: Archive, label: 'Galería', end: true },
-    ...(user?.is_admin
+    ...(user?.role === 'admin'
       ? [{ to: '/vault/upload', icon: Upload, label: 'Subir modelo' }]
       : []),
   ];

@@ -42,7 +42,7 @@ from app.schemas.slicer import (
     SlicingJobResponse,
 )
 from app.limiter import limiter
-from app.services.auth import get_current_user
+from app.services.auth import get_current_user, get_operator_user
 from app.services.makerworld_fetcher import extract_model_id, fetch_model_data
 from app.services.slicer_parser import parse_gcode_file, parse_3mf_file, parse_3mf_all_plates
 
@@ -165,27 +165,23 @@ def _es_3mf_proyecto(file_path: Path) -> bool:
 
 
 async def _get_company_slicing_job(
-    db: AsyncSession, job_id: int, company_id
+    db: AsyncSession, job_id: int
 ) -> SlicingJob:
     """
-    Obtiene un SlicingJob verificando que pertenezca a la empresa.
+    Obtiene un SlicingJob por ID.
 
     Args:
-        db:         Sesión de base de datos.
-        job_id:     ID del trabajo de laminado.
-        company_id: UUID de la empresa del usuario autenticado.
+        db:     Sesión de base de datos.
+        job_id: ID del trabajo de laminado.
 
     Returns:
-        Instancia de SlicingJob si existe y pertenece a la empresa.
+        Instancia de SlicingJob si existe.
 
     Raises:
-        HTTPException 404: Si no existe o no pertenece a la empresa.
+        HTTPException 404: Si no existe.
     """
     result = await db.execute(
-        select(SlicingJob).where(
-            SlicingJob.id == job_id,
-            SlicingJob.company_id == company_id,
-        )
+        select(SlicingJob).where(SlicingJob.id == job_id)
     )
     job = result.scalar_one_or_none()
     if not job:
@@ -215,7 +211,7 @@ async def _run_orca_slicer(
     Args:
         db_session_factory: Función para crear sesiones de DB.
         job_id:             ID del SlicingJob en la DB.
-        company_id:         UUID de la empresa (para multi-tenant).
+        company_id:         Parámetro conservado por compatibilidad (no usado).
         stl_filename:       Nombre del archivo STL en el volumen compartido.
         printer_preset:     Perfil de impresora OrcaSlicer.
         filament_preset:    Perfil de filamento OrcaSlicer.
@@ -226,10 +222,7 @@ async def _run_orca_slicer(
     async with async_session() as db:
         # Marcar como "slicing"
         result = await db.execute(
-            select(SlicingJob).where(
-                SlicingJob.id == job_id,
-                SlicingJob.company_id == company_id,
-            )
+            select(SlicingJob).where(SlicingJob.id == job_id)
         )
         job = result.scalar_one_or_none()
         if not job:
@@ -256,10 +249,7 @@ async def _run_orca_slicer(
             # Re-fetch para evitar condición de carrera (el job pudo ser eliminado
             # mientras esperábamos la respuesta del microservicio OrcaSlicer)
             r2 = await db.execute(
-                select(SlicingJob).where(
-                    SlicingJob.id == job_id,
-                    SlicingJob.company_id == company_id,
-                )
+                select(SlicingJob).where(SlicingJob.id == job_id)
             )
             job = r2.scalar_one_or_none()
             if not job:
@@ -309,10 +299,7 @@ async def _run_orca_slicer(
 
         except httpx.ConnectError:
             r2 = await db.execute(
-                select(SlicingJob).where(
-                    SlicingJob.id == job_id,
-                    SlicingJob.company_id == company_id,
-                )
+                select(SlicingJob).where(SlicingJob.id == job_id)
             )
             job = r2.scalar_one_or_none()
             if not job:
@@ -324,10 +311,7 @@ async def _run_orca_slicer(
             )
         except Exception as e:
             r2 = await db.execute(
-                select(SlicingJob).where(
-                    SlicingJob.id == job_id,
-                    SlicingJob.company_id == company_id,
-                )
+                select(SlicingJob).where(SlicingJob.id == job_id)
             )
             job = r2.scalar_one_or_none()
             if not job:
@@ -355,7 +339,7 @@ async def upload_gcode(
     request: Request,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Sube un archivo .gcode o .3mf ya laminado y extrae sus metadatos.
@@ -422,7 +406,6 @@ async def upload_gcode(
         error_msg = None
 
     job = SlicingJob(
-        company_id=current_user.company_id,
         user_id=current_user.id,
         source=source,
         original_filename=file.filename,
@@ -460,7 +443,7 @@ async def upload_stl(
     filament_preset: Optional[str] = Query(default=None),
     config_preset: Optional[str] = Query(default=None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Sube un archivo STL o .3mf crudo para laminar con OrcaSlicer.
@@ -518,7 +501,6 @@ async def upload_stl(
 
     # Crear job en DB
     job = SlicingJob(
-        company_id=current_user.company_id,
         user_id=current_user.id,
         source=source,
         original_filename=file.filename,
@@ -540,7 +522,7 @@ async def upload_stl(
         _run_orca_slicer,
         None,  # no se usa, se obtiene internamente
         job.id,
-        current_user.company_id,
+        None,  # company_id conservado por compatibilidad de firma, no usado
         stl_filename,
         p_preset,
         f_preset,
@@ -556,7 +538,7 @@ async def fetch_makerworld(
     request: Request,
     payload: MakerworldRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Extrae estimaciones de impresión de un modelo de MakerWorld.
@@ -586,7 +568,6 @@ async def fetch_makerworld(
     datos = await asyncio.to_thread(fetch_model_data, model_id)
 
     job = SlicingJob(
-        company_id=current_user.company_id,
         user_id=current_user.id,
         source="makerworld",
         makerworld_url=payload.url,
@@ -633,9 +614,7 @@ async def list_jobs(
     """
     # Total
     total_result = await db.execute(
-        select(func.count(SlicingJob.id)).where(
-            SlicingJob.company_id == current_user.company_id
-        )
+        select(func.count(SlicingJob.id))
     )
     total = total_result.scalar_one()
 
@@ -643,7 +622,6 @@ async def list_jobs(
     offset = (page - 1) * per_page
     result = await db.execute(
         select(SlicingJob)
-        .where(SlicingJob.company_id == current_user.company_id)
         .order_by(SlicingJob.created_at.desc())
         .offset(offset)
         .limit(per_page)
@@ -675,7 +653,7 @@ async def get_job(
     Returns:
         SlicingJobResponse con el estado actual del job.
     """
-    job = await _get_company_slicing_job(db, job_id, current_user.company_id)
+    job = await _get_company_slicing_job(db, job_id)
     return SlicingJobResponse.model_validate(job)
 
 
@@ -701,7 +679,7 @@ async def get_plate_gcode(
     Returns:
         Response con el contenido G-code como text/plain.
     """
-    await _get_company_slicing_job(db, job_id, current_user.company_id)
+    await _get_company_slicing_job(db, job_id)
 
     # Buscar el archivo .3mf del job
     archivos = list(SLICER_JOBS_DIR.glob(f"job{job_id}_*.3mf"))
@@ -755,7 +733,7 @@ async def get_plate_thumbnail(
     Returns:
         Response con la imagen PNG.
     """
-    await _get_company_slicing_job(db, job_id, current_user.company_id)
+    await _get_company_slicing_job(db, job_id)
 
     archivos = list(SLICER_JOBS_DIR.glob(f"job{job_id}_*.3mf"))
     if not archivos:
@@ -801,7 +779,7 @@ async def delete_job(
         db:           Sesión de base de datos.
         current_user: Usuario autenticado.
     """
-    job = await _get_company_slicing_job(db, job_id, current_user.company_id)
+    job = await _get_company_slicing_job(db, job_id)
 
     # Eliminar archivos en disco asociados al job (A-01: patrón preciso con job.id)
     for archivo in SLICER_JOBS_DIR.glob(f"job{job_id}_*"):

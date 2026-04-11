@@ -101,13 +101,13 @@ export default function CompanyProfilePage() {
               <button
                 type="button"
                 onClick={() => logoInputRef.current?.click()}
-                disabled={uploadingLogo || !user?.is_admin}
+                disabled={uploadingLogo || !user?.role === 'admin'}
                 className="tf-btn-secondary gap-2 text-sm"
               >
                 <Upload size={14} />
                 {uploadingLogo ? 'Subiendo...' : 'Cambiar logo'}
               </button>
-              {!user?.is_admin && (
+              {!user?.role === 'admin' && (
                 <p className="text-xs text-gunmetal mt-1">Solo administradores</p>
               )}
               <input
@@ -125,32 +125,32 @@ export default function CompanyProfilePage() {
         <form onSubmit={handleSave} className="tf-card p-6 space-y-4">
           <div>
             <label className="tf-label">Nombre de la empresa *</label>
-            <input className="tf-input" value={form.name} onChange={set('name')} required disabled={!user?.is_admin} />
+            <input className="tf-input" value={form.name} onChange={set('name')} required disabled={!user?.role === 'admin'} />
           </div>
           <div>
             <label className="tf-label">Slogan</label>
-            <input className="tf-input" value={form.slogan} onChange={set('slogan')} placeholder="Ej: Impresión 3D de calidad" disabled={!user?.is_admin} />
+            <input className="tf-input" value={form.slogan} onChange={set('slogan')} placeholder="Ej: Impresión 3D de calidad" disabled={!user?.role === 'admin'} />
           </div>
           <div>
             <label className="tf-label">Dirección</label>
-            <input className="tf-input" value={form.address} onChange={set('address')} placeholder="Ej: Medellín, Antioquia, Colombia" disabled={!user?.is_admin} />
+            <input className="tf-input" value={form.address} onChange={set('address')} placeholder="Ej: Medellín, Antioquia, Colombia" disabled={!user?.role === 'admin'} />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="tf-label">Teléfono</label>
-              <input className="tf-input" value={form.phone} onChange={set('phone')} placeholder="+57 300 000 0000" disabled={!user?.is_admin} />
+              <input className="tf-input" value={form.phone} onChange={set('phone')} placeholder="+57 300 000 0000" disabled={!user?.role === 'admin'} />
             </div>
             <div>
               <label className="tf-label">Email de contacto</label>
-              <input type="email" className="tf-input" value={form.contact_email} onChange={set('contact_email')} placeholder="hola@empresa.com" disabled={!user?.is_admin} />
+              <input type="email" className="tf-input" value={form.contact_email} onChange={set('contact_email')} placeholder="hola@empresa.com" disabled={!user?.role === 'admin'} />
             </div>
           </div>
           <div>
             <label className="tf-label">NIT</label>
-            <input className="tf-input" value={form.nit} onChange={set('nit')} placeholder="900.000.000-0" disabled={!user?.is_admin} />
+            <input className="tf-input" value={form.nit} onChange={set('nit')} placeholder="900.000.000-0" disabled={!user?.role === 'admin'} />
           </div>
 
-          {user?.is_admin ? (
+          {user?.role === 'admin' ? (
             <button type="submit" disabled={saving} className="tf-btn-primary w-full py-2.5 mt-2">
               {saving ? 'Guardando...' : 'Guardar empresa'}
             </button>

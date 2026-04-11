@@ -35,7 +35,7 @@ from app.models.company_template import CompanyTemplate
 from app.models.user import User
 from app.schemas.client_quote import ClientQuoteCreate, ClientQuoteResponse
 from app.limiter import limiter
-from app.services.auth import get_current_user
+from app.services.auth import get_current_user, get_operator_user
 from app.services.exchange_rate import get_usd_to_cop
 from app.services.pdf_generator import generate_client_quote_pdf
 
@@ -43,27 +43,23 @@ router = APIRouter(prefix="/api/client-quotes", tags=["client-quotes"])
 
 
 async def _get_company_client_quote(
-    db: AsyncSession, quote_id: int, company_id
+    db: AsyncSession, quote_id: int
 ) -> ClientQuote:
     """
-    Obtiene una cotización de cliente verificando que pertenezca a la empresa.
+    Obtiene una cotización de cliente por ID.
 
     Args:
-        db:         Sesión de base de datos.
-        quote_id:   ID de la cotización.
-        company_id: UUID de la empresa del usuario autenticado.
+        db:       Sesión de base de datos.
+        quote_id: ID de la cotización.
 
     Returns:
-        Instancia de ClientQuote si existe y pertenece a la empresa.
+        Instancia de ClientQuote si existe.
 
     Raises:
-        HTTPException 404: Si no existe o no pertenece a la empresa.
+        HTTPException 404: Si no existe.
     """
     result = await db.execute(
-        select(ClientQuote).where(
-            ClientQuote.id == quote_id,
-            ClientQuote.company_id == company_id,
-        )
+        select(ClientQuote).where(ClientQuote.id == quote_id)
     )
     cq = result.scalar_one_or_none()
     if not cq:
@@ -77,7 +73,7 @@ async def create_client_quote(
     request: Request,
     data: ClientQuoteCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Crea y guarda una cotización de cliente con múltiples líneas de producto.
@@ -111,7 +107,6 @@ async def create_client_quote(
     ]
 
     cq = ClientQuote(
-        company_id=current_user.company_id,
         user_id=current_user.id,
         client_name=data.client_name,
         description=data.description,
@@ -152,7 +147,6 @@ async def list_client_quotes(
     """
     result = await db.execute(
         select(ClientQuote)
-        .where(ClientQuote.company_id == current_user.company_id)
         .order_by(ClientQuote.created_at.desc())
         .offset(skip)
         .limit(limit)
@@ -180,14 +174,14 @@ async def get_client_quote(
     Raises:
         HTTPException 404: Si no existe.
     """
-    return await _get_company_client_quote(db, quote_id, current_user.company_id)
+    return await _get_company_client_quote(db, quote_id)
 
 
 @router.delete("/{quote_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_client_quote(
     quote_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Elimina una cotización de cliente por ID.
@@ -200,7 +194,7 @@ async def delete_client_quote(
     Raises:
         HTTPException 404: Si no existe.
     """
-    cq = await _get_company_client_quote(db, quote_id, current_user.company_id)
+    cq = await _get_company_client_quote(db, quote_id)
     await db.delete(cq)
     await db.commit()
 
@@ -225,8 +219,9 @@ async def download_client_quote_pdf(
     Raises:
         HTTPException 404: Si no existe.
     """
-    cq = await _get_company_client_quote(db, quote_id, current_user.company_id)
-    company_result = await db.execute(select(Company).where(Company.id == current_user.company_id))
+    import uuid as _uuid
+    cq = await _get_company_client_quote(db, quote_id)
+    company_result = await db.execute(select(Company).where(Company.id == _uuid.UUID("00000000-0000-0000-0000-000000000001")))
     company = company_result.scalar_one_or_none()
     # Usar tasa guardada al crear; si la cotización es anterior a este campo,
     # obtener la tasa actual como respaldo.
@@ -235,7 +230,6 @@ async def download_client_quote_pdf(
     # Buscar template activo (Liquid + WeasyPrint) si existe
     tpl_result = await db.execute(
         select(CompanyTemplate).where(
-            CompanyTemplate.company_id == current_user.company_id,
             CompanyTemplate.template_type.in_(["cot", "all"]),
             CompanyTemplate.is_default.is_(True),
         )
@@ -252,9 +246,8 @@ async def download_client_quote_pdf(
             # Fallback a ReportLab si WeasyPrint no está disponible o falla.
             # Se registra el error para que los fallos de templates sean visibles en logs.
             logger.error(
-                "WeasyPrint falló al renderizar template %s (empresa %s): %s",
+                "WeasyPrint falló al renderizar template %s: %s",
                 active_tpl.id,
-                current_user.company_id,
                 exc,
                 exc_info=True,
             )

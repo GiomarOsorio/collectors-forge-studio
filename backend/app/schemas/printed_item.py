@@ -95,7 +95,6 @@ class PrintedItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    company_id: uuid.UUID
     name: str
     category: Optional[str]
     description: Optional[str]

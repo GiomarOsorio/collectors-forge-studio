@@ -1,15 +1,11 @@
 """
 Router para el cálculo, gestión y descarga de cotizaciones de impresión 3D.
 
-Todos los endpoints filtran automáticamente por company_id del usuario
-autenticado, garantizando el aislamiento multi-tenant: cada empresa solo
-ve y gestiona sus propias cotizaciones.
-
 Endpoints disponibles bajo el prefijo /api/quotes:
 - POST /calculate     - Calcula el costo sin guardar (previsualización).
 - POST /              - Calcula y guarda la cotización en el historial.
-- GET  /              - Lista el historial de cotizaciones de la empresa.
-- GET  /{id}          - Obtiene una cotización específica de la empresa.
+- GET  /              - Lista el historial de cotizaciones.
+- GET  /{id}          - Obtiene una cotización específica.
 - PUT  /{id}          - Actualiza metadatos descriptivos de una cotización.
 - DELETE /{id}        - Elimina una cotización del historial.
 - GET  /{id}/pdf      - Descarga la cotización como archivo PDF.
@@ -34,7 +30,7 @@ from app.models.settings import AppSettings
 from app.models.quote import Quote
 from app.schemas.quote import QuoteCalculateRequest, QuoteManualRequest, QuoteResponse, QuoteCostBreakdown, QuoteUpdateMeta
 from app.limiter import limiter
-from app.services.auth import get_current_user
+from app.services.auth import get_current_user, get_operator_user
 from app.services.calculator import calculate_cost
 from app.services.pdf_generator import generate_quote_pdf
 from app.services.exchange_rate import get_usd_to_cop
@@ -131,15 +127,14 @@ async def calculate_quote_manual(
     Returns:
         QuoteCostBreakdown: Desglose completo de costos (no se guarda en BD).
     """
-    # Cargar configuración de la empresa para obtener defaults
+    # Cargar configuración global para obtener defaults
     settings_result = await db.execute(
-        select(AppSettings).where(AppSettings.company_id == current_user.company_id)
+        select(AppSettings).limit(1)
     )
     app_settings = settings_result.scalar_one_or_none()
     if not app_settings:
         app_settings = AppSettings(
             user_id=current_user.id,
-            company_id=current_user.company_id,
         )
         db.add(app_settings)
         await db.commit()
@@ -190,15 +185,13 @@ async def create_quote(
     request: Request,
     data: QuoteCalculateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
-    Calcula y guarda la cotización en el historial de la empresa.
-
-    El company_id se asigna automáticamente desde el usuario autenticado.
+    Calcula y guarda la cotización en el historial.
 
     Raises:
-        HTTPException 404: Si el filamento o la impresora no pertenecen a la empresa.
+        HTTPException 404: Si el filamento o la impresora no existen.
     """
     filament, printer, app_settings = await _get_dependencies(
         db, current_user, data.inventory_item_id, data.printer_id
@@ -229,7 +222,6 @@ async def create_quote(
 
     quote = Quote(
         user_id=current_user.id,
-        company_id=current_user.company_id,
         piece_name=data.piece_name,
         description=data.description,
         client_name=data.client_name,
@@ -295,7 +287,6 @@ async def list_quotes(
     """
     result = await db.execute(
         select(Quote)
-        .where(Quote.company_id == current_user.company_id)
         .order_by(Quote.created_at.desc())
         .offset(skip)
         .limit(limit)
@@ -315,7 +306,7 @@ async def get_quote(
     Raises:
         HTTPException 404: Si la cotización no existe o no pertenece a la empresa.
     """
-    quote = await _get_company_quote(db, quote_id, current_user.company_id)
+    quote = await _get_company_quote(db, quote_id)
     return quote
 
 
@@ -324,7 +315,7 @@ async def update_quote_meta(
     quote_id: int,
     data: QuoteUpdateMeta,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Actualiza los metadatos descriptivos de una cotización guardada.
@@ -335,7 +326,7 @@ async def update_quote_meta(
     Raises:
         HTTPException 404: Si la cotización no existe o no pertenece a la empresa.
     """
-    quote = await _get_company_quote(db, quote_id, current_user.company_id)
+    quote = await _get_company_quote(db, quote_id)
     quote.piece_name = data.piece_name
     quote.description = data.description
     quote.client_name = data.client_name
@@ -349,7 +340,7 @@ async def update_quote_meta(
 async def delete_quote(
     quote_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_operator_user),
 ):
     """
     Elimina una cotización de la empresa del usuario autenticado.
@@ -357,7 +348,7 @@ async def delete_quote(
     Raises:
         HTTPException 404: Si la cotización no existe o no pertenece a la empresa.
     """
-    quote = await _get_company_quote(db, quote_id, current_user.company_id)
+    quote = await _get_company_quote(db, quote_id)
     await db.delete(quote)
     await db.commit()
 
@@ -374,9 +365,10 @@ async def download_quote_pdf(
     Raises:
         HTTPException 404: Si la cotización no existe o no pertenece a la empresa.
     """
-    quote = await _get_company_quote(db, quote_id, current_user.company_id)
+    import uuid as _uuid
+    quote = await _get_company_quote(db, quote_id)
 
-    company_result = await db.execute(select(Company).where(Company.id == current_user.company_id))
+    company_result = await db.execute(select(Company).where(Company.id == _uuid.UUID("00000000-0000-0000-0000-000000000001")))
     company = company_result.scalar_one_or_none()
 
     pdf_bytes = await asyncio.to_thread(generate_quote_pdf, quote, company)
@@ -407,7 +399,6 @@ async def _get_dependencies(
     inv_result = await db.execute(
         select(InventoryItem).where(
             InventoryItem.id == inventory_item_id,
-            InventoryItem.company_id == current_user.company_id,
             InventoryItem.category == "Filamento",
         )
     )
@@ -416,23 +407,19 @@ async def _get_dependencies(
         raise HTTPException(status_code=404, detail="Filamento no encontrado en inventario")
 
     printer_result = await db.execute(
-        select(Printer).where(
-            Printer.id == printer_id,
-            Printer.company_id == current_user.company_id,
-        )
+        select(Printer).where(Printer.id == printer_id)
     )
     printer = printer_result.scalar_one_or_none()
     if not printer:
         raise HTTPException(status_code=404, detail="Impresora no encontrada")
 
     settings_result = await db.execute(
-        select(AppSettings).where(AppSettings.company_id == current_user.company_id)
+        select(AppSettings).limit(1)
     )
     app_settings = settings_result.scalar_one_or_none()
     if not app_settings:
         app_settings = AppSettings(
             user_id=current_user.id,
-            company_id=current_user.company_id,
         )
         db.add(app_settings)
         await db.commit()
@@ -441,18 +428,15 @@ async def _get_dependencies(
     return filament, printer, app_settings
 
 
-async def _get_company_quote(db: AsyncSession, quote_id: int, company_id) -> Quote:
+async def _get_company_quote(db: AsyncSession, quote_id: int) -> Quote:
     """
-    Recupera una cotización por ID filtrando por company_id.
+    Recupera una cotización por ID.
 
     Raises:
-        HTTPException 404: Si no existe una cotización con ese ID en la empresa.
+        HTTPException 404: Si no existe una cotización con ese ID.
     """
     result = await db.execute(
-        select(Quote).where(
-            Quote.id == quote_id,
-            Quote.company_id == company_id,
-        )
+        select(Quote).where(Quote.id == quote_id)
     )
     quote = result.scalar_one_or_none()
     if not quote:
@@ -470,7 +454,6 @@ async def _get_consumables(
     Si es una lista, solo carga los IDs indicados (selección manual del usuario).
     """
     query = select(InventoryItem).where(
-        InventoryItem.company_id == current_user.company_id,
         InventoryItem.category == "Consumible",
         InventoryItem.useful_life_hours.isnot(None),
         InventoryItem.useful_life_hours > 0,
@@ -501,12 +484,11 @@ async def _resolve_supplies(db: AsyncSession, current_user: User, supply_items) 
     r = await db.execute(
         select(InventoryItem).where(
             InventoryItem.id.in_(ids),
-            InventoryItem.company_id == current_user.company_id,
         )
     )
     inv_map = {inv.id: inv for inv in r.scalars().all()}
 
-    # Verificar que todos los IDs solicitados existen en la empresa
+    # Verificar que todos los IDs solicitados existen
     faltantes = [i for i in ids if i not in inv_map]
     if faltantes:
         raise HTTPException(
@@ -544,7 +526,6 @@ async def _resolve_additional_filaments(db: AsyncSession, current_user: User, fi
     r = await db.execute(
         select(InventoryItem).where(
             InventoryItem.id.in_(ids),
-            InventoryItem.company_id == current_user.company_id,
         )
     )
     inv_map = {inv.id: inv for inv in r.scalars().all()}

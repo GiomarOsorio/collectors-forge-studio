@@ -27,7 +27,7 @@ from app.models.settings import AppSettings
 from app.models.electricity_tariff import ElectricityTariff
 from app.schemas.settings import AppSettingsUpdate, AppSettingsResponse
 from app.limiter import limiter
-from app.services.auth import get_current_user
+from app.services.auth import get_admin_user, get_current_user
 from app.services.exchange_rate import get_usd_to_cop, COP_MARKUP, get_cache_timestamp
 from app.services.tariff_scraper import get_epm_estrato4_tariff, TARIFF_MULTIPLIER
 
@@ -37,32 +37,24 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 @router.get("/", response_model=AppSettingsResponse)
 async def get_settings(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_admin_user),
 ):
     """
-    Obtiene la configuración de la aplicación del usuario autenticado.
+    Obtiene la configuración singleton de la aplicación (solo admins).
 
-    Si el usuario no tiene configuración previa (caso poco frecuente), crea
-    automáticamente un registro con los valores por defecto y lo devuelve.
+    Si no existe configuración, la crea con valores por defecto.
 
     Args:
         db: Sesión de base de datos inyectada por FastAPI.
-        current_user: Usuario autenticado extraído del token JWT.
+        current_user: Usuario admin autenticado.
 
     Returns:
-        AppSettingsResponse: Configuración actual del usuario con todos sus
-            parámetros económicos (tarifa eléctrica, margen, moneda, etc.).
+        AppSettingsResponse con todos los parámetros económicos.
     """
-    result = await db.execute(
-        select(AppSettings).where(AppSettings.company_id == current_user.company_id)
-    )
+    result = await db.execute(select(AppSettings).limit(1))
     settings = result.scalar_one_or_none()
     if not settings:
-        # Crear configuración por defecto si no existe para esta empresa
-        settings = AppSettings(
-            user_id=current_user.id,
-            company_id=current_user.company_id,
-        )
+        settings = AppSettings(user_id=current_user.id)
         db.add(settings)
         await db.commit()
         await db.refresh(settings)
@@ -73,35 +65,23 @@ async def get_settings(
 async def update_settings(
     data: AppSettingsUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_admin_user),
 ):
     """
-    Actualiza parcialmente la configuración de la aplicación del usuario autenticado.
-
-    Solo se modifican los campos incluidos en la solicitud. Si el usuario aún
-    no tiene configuración, se crea primero con valores por defecto y luego
-    se aplican los cambios solicitados.
+    Actualiza parcialmente la configuración singleton (solo admins).
 
     Args:
-        data: Campos de configuración a actualizar con sus nuevos valores.
-            Los campos no incluidos mantienen sus valores actuales.
+        data: Campos de configuración a actualizar.
         db: Sesión de base de datos inyectada por FastAPI.
-        current_user: Usuario autenticado extraído del token JWT.
+        current_user: Usuario admin autenticado.
 
     Returns:
-        AppSettingsResponse: Configuración actualizada del usuario con todos
-            sus parámetros reflejando los cambios aplicados.
+        AppSettingsResponse con los parámetros actualizados.
     """
-    result = await db.execute(
-        select(AppSettings).where(AppSettings.company_id == current_user.company_id)
-    )
+    result = await db.execute(select(AppSettings).limit(1))
     settings = result.scalar_one_or_none()
     if not settings:
-        # Crear configuración base si no existe antes de aplicar los cambios
-        settings = AppSettings(
-            user_id=current_user.id,
-            company_id=current_user.company_id,
-        )
+        settings = AppSettings(user_id=current_user.id)
         db.add(settings)
         await db.commit()
         await db.refresh(settings)

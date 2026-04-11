@@ -8,10 +8,8 @@ FastAPI dependency_overrides.
 
 Cubre:
     - 401 sin autenticación (múltiples rutas protegidas)
-    - Flujo de login (éxito y credenciales inválidas)
     - Validación de esquema Pydantic → 422 en POST endpoints
-    - Aislamiento multi-tenant: las queries filtran por company_id
-      y los recursos de empresa ajena devuelven 404
+    - Recursos inexistentes → 404
 """
 
 import uuid
@@ -24,22 +22,17 @@ from app.database import get_db
 from app.main import app
 from app.services.auth import get_current_user
 
-# UUIDs de empresa para los tests de multi-tenant
-COMPANY_A = uuid.UUID("aaaaaaaa-0000-0000-0000-000000000001")
-COMPANY_B = uuid.UUID("bbbbbbbb-0000-0000-0000-000000000002")
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _fake_user(company_id=COMPANY_A, user_id=1, is_admin=False):
+def _fake_user(user_id=1, role="operator"):
     """Crea un usuario MagicMock para inyectar como current_user."""
     u = MagicMock()
     u.id = user_id
     u.username = "testuser"
-    u.company_id = company_id
-    u.is_admin = is_admin
+    u.role = role
     u.is_active = True
     return u
 
@@ -224,215 +217,6 @@ class TestSchemaValidation:
         finally:
             _clear_overrides()
         assert r.status_code == 422
-
-
-# ---------------------------------------------------------------------------
-# 4. Aislamiento multi-tenant
-# ---------------------------------------------------------------------------
-
-class TestMultiTenantIsolation:
-    """Cada empresa solo puede ver y modificar sus propios recursos."""
-
-    async def test_inventory_lista_filtra_por_company_id(self):
-        """
-        GET /inventory/items/ ejecuta query WHERE company_id = user.company_id.
-
-        Verificamos que el UUID de la empresa del usuario aparece en la
-        query SQL compilada para garantizar el aislamiento multi-tenant.
-        """
-        user_a = _fake_user(company_id=COMPANY_A)
-        captured: list[str] = []
-
-        async def _db_captura():
-            session = AsyncMock()
-
-            async def execute_captura(query, *args, **kwargs):
-                try:
-                    compiled = query.compile(compile_kwargs={"literal_binds": True})
-                    captured.append(str(compiled))
-                except Exception:
-                    pass
-                result = MagicMock()
-                result.scalars.return_value.all.return_value = []
-                result.scalar_one.return_value = 0
-                result.scalar_one_or_none.return_value = None
-                return result
-
-            session.execute = execute_captura
-            yield session
-
-        _set_overrides({
-            get_current_user: lambda: user_a,
-            get_db: _db_captura,
-        })
-        try:
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-                r = await c.get("/api/inventory/items/")
-        finally:
-            _clear_overrides()
-
-        assert r.status_code == 200
-        # SQLAlchemy compila UUIDs sin guiones; verificamos ambas formas
-        company_a_str = str(COMPANY_A)
-        company_a_nodash = company_a_str.replace("-", "")
-        assert any(company_a_str in q or company_a_nodash in q for q in captured), (
-            f"Ninguna query filtró por company_id={company_a_str}. "
-            f"Queries capturadas: {captured}"
-        )
-
-    async def test_get_inventory_item_empresa_ajena_retorna_404(self):
-        """
-        Un usuario de empresa A no puede acceder a un ítem de empresa B.
-
-        La query filtra por company_id del usuario autenticado, por lo que
-        scalar_one_or_none devuelve None → HTTPException 404.
-        """
-        user_a = _fake_user(company_id=COMPANY_A)
-        # El mock no devuelve ningún resultado (ítem existe pero con otro company_id)
-        _set_overrides({
-            get_current_user: lambda: user_a,
-            get_db: _fake_db_empty,
-        })
-        try:
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-                r = await c.get("/api/inventory/items/9999")
-        finally:
-            _clear_overrides()
-        assert r.status_code == 404
-
-    async def test_get_quote_empresa_ajena_retorna_404(self):
-        """Un usuario de empresa A no puede acceder a una cotización de empresa B → 404."""
-        user_a = _fake_user(company_id=COMPANY_A)
-        _set_overrides({
-            get_current_user: lambda: user_a,
-            get_db: _fake_db_empty,
-        })
-        try:
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-                r = await c.get("/api/quotes/9999")
-        finally:
-            _clear_overrides()
-        assert r.status_code == 404
-
-    async def test_get_client_quote_empresa_ajena_retorna_404(self):
-        """Un usuario de empresa A no puede acceder a una cotización de cliente de empresa B → 404."""
-        user_a = _fake_user(company_id=COMPANY_A)
-        _set_overrides({
-            get_current_user: lambda: user_a,
-            get_db: _fake_db_empty,
-        })
-        try:
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-                r = await c.get("/api/client-quotes/9999")
-        finally:
-            _clear_overrides()
-        assert r.status_code == 404
-
-    async def test_printed_items_lista_filtra_por_company_id(self):
-        """
-        GET /inventory/prints/ ejecuta query WHERE company_id = user.company_id.
-        """
-        user_a = _fake_user(company_id=COMPANY_A)
-        captured: list[str] = []
-
-        async def _db_captura_prints():
-            session = AsyncMock()
-
-            async def execute_captura(query, *args, **kwargs):
-                try:
-                    compiled = query.compile(compile_kwargs={"literal_binds": True})
-                    captured.append(str(compiled))
-                except Exception:
-                    pass
-                result = MagicMock()
-                result.scalars.return_value.all.return_value = []
-                result.scalar_one.return_value = 0
-                result.scalar_one_or_none.return_value = None
-                return result
-
-            session.execute = execute_captura
-            yield session
-
-        _set_overrides({
-            get_current_user: lambda: user_a,
-            get_db: _db_captura_prints,
-        })
-        try:
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-                r = await c.get("/api/inventory/prints/")
-        finally:
-            _clear_overrides()
-
-        assert r.status_code == 200
-        # SQLAlchemy compila UUIDs sin guiones; verificamos ambas formas
-        company_a_str = str(COMPANY_A)
-        company_a_nodash = company_a_str.replace("-", "")
-        assert any(company_a_str in q or company_a_nodash in q for q in captured), (
-            f"Ninguna query filtró por company_id={company_a_str}. "
-            f"Queries capturadas: {captured}"
-        )
-
-
-# ---------------------------------------------------------------------------
-# Helper compartido: captura de queries SQL para tests multi-tenant
-# ---------------------------------------------------------------------------
-
-def _make_db_captura(captured: list):
-    """
-    Crea un generador de sesión de BD que captura las queries SQL compiladas.
-
-    Las queries se almacenan como cadenas en la lista 'captured' para poder
-    verificar posteriormente que contengan el UUID de la empresa correcta.
-
-    Args:
-        captured: Lista mutable donde se acumularán las queries capturadas.
-
-    Returns:
-        Función generadora async compatible con dependency_overrides de FastAPI.
-    """
-    async def _db_captura():
-        session = AsyncMock()
-
-        async def execute_captura(query, *args, **kwargs):
-            try:
-                compiled = query.compile(compile_kwargs={"literal_binds": True})
-                captured.append(str(compiled))
-            except Exception:
-                pass
-            result = MagicMock()
-            result.scalars.return_value.all.return_value = []
-            result.scalars.return_value.unique.return_value.all.return_value = []
-            result.scalar_one.return_value = 0
-            result.scalar_one_or_none.return_value = None
-            result.scalar.return_value = None
-            return result
-
-        session.execute = execute_captura
-        yield session
-
-    return _db_captura
-
-
-def _assert_company_id_in_queries(captured: list, company_id) -> None:
-    """
-    Verifica que al menos una query capturada contenga el UUID de empresa.
-
-    SQLAlchemy puede compilar el UUID con o sin guiones según el backend,
-    por lo que se verifican ambas formas.
-
-    Args:
-        captured:   Lista de queries SQL capturadas.
-        company_id: UUID de empresa esperado en las queries.
-
-    Raises:
-        AssertionError: Si ninguna query contiene el UUID de la empresa.
-    """
-    company_str = str(company_id)
-    company_nodash = company_str.replace("-", "")
-    assert any(company_str in q or company_nodash in q for q in captured), (
-        f"Ninguna query filtró por company_id={company_str}. "
-        f"Queries capturadas: {captured}"
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -627,28 +411,6 @@ class TestQueueIntegration:
             _clear_overrides()
         assert r.status_code == 422
 
-    async def test_queue_filtra_por_company_id(self):
-        """
-        GET /api/queue/ ejecuta query WHERE company_id = user.company_id.
-
-        Verifica el aislamiento multi-tenant en la cola de impresión.
-        """
-        user_a = _fake_user(company_id=COMPANY_A)
-        captured: list[str] = []
-
-        _set_overrides({
-            get_current_user: lambda: user_a,
-            get_db: _make_db_captura(captured),
-        })
-        try:
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-                r = await c.get("/api/queue/")
-        finally:
-            _clear_overrides()
-
-        assert r.status_code == 200
-        _assert_company_id_in_queries(captured, COMPANY_A)
-
 
 # ---------------------------------------------------------------------------
 # 7. Mantenimiento de impresoras (Maintenance)
@@ -760,28 +522,6 @@ class TestMaintenanceIntegration:
             _clear_overrides()
         assert r.status_code == 422
 
-    async def test_maintenance_logs_filtra_por_company_id(self):
-        """
-        GET /api/maintenance/logs/ ejecuta query WHERE company_id = user.company_id.
-
-        Verifica el aislamiento multi-tenant en los registros de mantenimiento.
-        """
-        user_a = _fake_user(company_id=COMPANY_A)
-        captured: list[str] = []
-
-        _set_overrides({
-            get_current_user: lambda: user_a,
-            get_db: _make_db_captura(captured),
-        })
-        try:
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-                r = await c.get("/api/maintenance/logs/")
-        finally:
-            _clear_overrides()
-
-        assert r.status_code == 200
-        _assert_company_id_in_queries(captured, COMPANY_A)
-
 
 # ---------------------------------------------------------------------------
 # 8. Perfil de empresa (Company)
@@ -841,7 +581,7 @@ class TestCompanyIntegration:
             yield session
 
         _set_overrides({
-            get_current_user: lambda: _fake_user(company_id=empresa_mock.id),
+            get_current_user: lambda: _fake_user(),
             get_db: _db_con_empresa,
         })
         try:
@@ -857,11 +597,9 @@ class TestCompanyIntegration:
         """
         PUT /api/company/ con usuario no-admin → 403.
 
-        El endpoint usa get_current_admin que rechaza usuarios sin is_admin=True.
+        El endpoint usa get_admin_user que rechaza usuarios sin role='admin'.
         """
-        from app.services.auth import get_current_admin
-
-        usuario_normal = _fake_user(is_admin=False)
+        usuario_normal = _fake_user(role="operator")
         _set_overrides({
             get_current_user: lambda: usuario_normal,
             get_db: _fake_db_empty,
@@ -881,16 +619,10 @@ class TestCompanyIntegration:
 
         PaletteColor.valid_hex exige formato #RRGGBB (7 caracteres con #).
         """
-        admin_user = _fake_user(is_admin=True)
-
-        async def _fake_admin():
-            return admin_user
-
-        from app.services.auth import get_current_admin
+        admin_user = _fake_user(role="admin")
 
         _set_overrides({
             get_current_user: lambda: admin_user,
-            get_current_admin: _fake_admin,
             get_db: _fake_db_empty,
         })
         try:
@@ -951,16 +683,10 @@ class TestCompanyTemplatesIntegration:
         CompanyTemplateCreate hereda CompanyTemplateBase que requiere 'name'
         y 'content'. Sin ellos Pydantic rechaza con 422.
         """
-        admin_user = _fake_user(is_admin=True)
-
-        async def _fake_admin():
-            return admin_user
-
-        from app.services.auth import get_current_admin
+        admin_user = _fake_user(role="admin")
 
         _set_overrides({
             get_current_user: lambda: admin_user,
-            get_current_admin: _fake_admin,
             get_db: _fake_db_empty,
         })
         try:
@@ -1064,28 +790,6 @@ class TestCompanyTemplatesIntegration:
         finally:
             _clear_overrides()
         assert r.status_code == 422
-
-    async def test_templates_filtra_por_company_id(self):
-        """
-        GET /api/company/templates/ ejecuta query WHERE company_id = user.company_id.
-
-        Verifica el aislamiento multi-tenant en los templates de cotización.
-        """
-        user_a = _fake_user(company_id=COMPANY_A)
-        captured: list[str] = []
-
-        _set_overrides({
-            get_current_user: lambda: user_a,
-            get_db: _make_db_captura(captured),
-        })
-        try:
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-                r = await c.get("/api/company/templates/")
-        finally:
-            _clear_overrides()
-
-        assert r.status_code == 200
-        _assert_company_id_in_queries(captured, COMPANY_A)
 
 
 # ---------------------------------------------------------------------------
@@ -1197,24 +901,3 @@ class TestPurchaseOrdersIntegration:
             _clear_overrides()
         assert r.status_code == 422
 
-    async def test_purchases_filtra_por_company_id(self):
-        """
-        GET /api/inventory/purchases/ ejecuta query WHERE company_id = user.company_id.
-
-        Verifica el aislamiento multi-tenant en las órdenes de compra.
-        """
-        user_a = _fake_user(company_id=COMPANY_A)
-        captured: list[str] = []
-
-        _set_overrides({
-            get_current_user: lambda: user_a,
-            get_db: _make_db_captura(captured),
-        })
-        try:
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-                r = await c.get("/api/inventory/purchases/")
-        finally:
-            _clear_overrides()
-
-        assert r.status_code == 200
-        _assert_company_id_in_queries(captured, COMPANY_A)

@@ -40,7 +40,7 @@ from app.schemas.vault import (
     VaultMetadataResponse,
     VaultStatsResponse,
 )
-from app.services.auth import get_current_user
+from app.services.auth import get_admin_user, get_current_user
 from app.services.vault_metadata import fetch_metadata
 from app.services.vault_storage import delete_file, download_file, upload_file
 
@@ -52,26 +52,16 @@ router = APIRouter(prefix="/api/vault", tags=["vault"])
 MAX_VAULT_UPLOAD_BYTES = 1024 * 1024 * 1024
 
 
-def _require_admin(current_user: User) -> None:
-    """Lanza 403 si el usuario no es administrador."""
-    if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Se requieren permisos de administrador",
-        )
-
-
-async def _get_model_file(db: AsyncSession, file_id: int, company_id) -> ModelFile:
+async def _get_model_file(db: AsyncSession, file_id: int) -> ModelFile:
     """
-    Obtiene un ModelFile verificando que pertenezca a la empresa.
+    Obtiene un ModelFile por ID.
 
     Raises:
-        HTTPException 404: Si no existe o no es de la empresa.
+        HTTPException 404: Si no existe.
     """
     result = await db.execute(
         select(ModelFile).where(
             ModelFile.id == file_id,
-            ModelFile.company_id == company_id,
         )
     )
     model = result.scalar_one_or_none()
@@ -83,12 +73,10 @@ async def _get_model_file(db: AsyncSession, file_id: int, company_id) -> ModelFi
     return model
 
 
-async def _get_used_bytes(db: AsyncSession, company_id) -> int:
-    """Calcula el espacio usado (bytes) sumando file_size de todos los archivos de la empresa."""
+async def _get_used_bytes(db: AsyncSession) -> int:
+    """Calcula el espacio usado (bytes) sumando file_size de todos los archivos."""
     result = await db.execute(
-        select(func.coalesce(func.sum(ModelFile.file_size), 0)).where(
-            ModelFile.company_id == company_id
-        )
+        select(func.coalesce(func.sum(ModelFile.file_size), 0))
     )
     return result.scalar() or 0
 
@@ -125,7 +113,7 @@ async def list_vault_files(
     """
     Lista los archivos del Vault de la empresa, con paginación y búsqueda opcional.
     """
-    base_q = select(ModelFile).where(ModelFile.company_id == current_user.company_id)
+    base_q = select(ModelFile)
 
     if q:
         base_q = base_q.where(ModelFile.name.ilike(f"%{q}%"))
@@ -164,7 +152,7 @@ async def get_vault_stats(
     current_user: User = Depends(get_current_user),
 ):
     """Retorna el uso y cuota de almacenamiento para la empresa del usuario."""
-    used = await _get_used_bytes(db, current_user.company_id)
+    used = await _get_used_bytes(db)
     quota = settings.VAULT_QUOTA_GB * 1024 * 1024 * 1024
     percent = round(used / quota * 100, 2) if quota > 0 else 0.0
     return VaultStatsResponse(used_bytes=used, quota_bytes=quota, percent=percent)
@@ -188,7 +176,7 @@ async def upload_vault_file(
     file: UploadFile = File(...),
     metadata: str = Form(..., description="JSON con ModelFileCreate"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_admin_user),
 ):
     """
     Sube un archivo .3mf al Vault con sus metadatos.
@@ -198,8 +186,6 @@ async def upload_vault_file(
 
     Verifica la cuota antes de subir.
     """
-    _require_admin(current_user)
-
     # Validar extensión
     if not file.filename or not file.filename.lower().endswith(".3mf"):
         raise HTTPException(
@@ -234,7 +220,7 @@ async def upload_vault_file(
         )
 
     # Verificar cuota
-    used = await _get_used_bytes(db, current_user.company_id)
+    used = await _get_used_bytes(db)
     quota = settings.VAULT_QUOTA_GB * 1024 * 1024 * 1024
     if used + file_size > quota:
         raise HTTPException(
@@ -245,7 +231,7 @@ async def upload_vault_file(
     # Generar clave única en MinIO
     file_uuid = str(uuid.uuid4())
     safe_name = file.filename.replace(" ", "_")
-    file_key = f"{current_user.company_id}/{file_uuid}-{safe_name}"
+    file_key = f"{file_uuid}-{safe_name}"
 
     # Subir a MinIO
     await upload_file(file_key, content, content_type="model/3mf")
@@ -253,7 +239,6 @@ async def upload_vault_file(
     # Guardar en base de datos
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     model = ModelFile(
-        company_id=current_user.company_id,
         uploaded_by=current_user.id,
         file_key=file_key,
         file_name=file.filename,
@@ -287,7 +272,7 @@ async def download_vault_file(
 
     MinIO permanece en la red interna; el cliente solo interactúa con el backend autenticado.
     """
-    model = await _get_model_file(db, file_id, current_user.company_id)
+    model = await _get_model_file(db, file_id)
     data = await download_file(model.file_key)
     return Response(
         content=data,
@@ -301,11 +286,10 @@ async def update_vault_file(
     file_id: int,
     body: ModelFileUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_admin_user),
 ):
     """Actualiza los metadatos de un archivo del Vault. Solo admins."""
-    _require_admin(current_user)
-    model = await _get_model_file(db, file_id, current_user.company_id)
+    model = await _get_model_file(db, file_id)
 
     update_data = body.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -331,7 +315,7 @@ async def replace_vault_file(
     file_id: int,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_admin_user),
 ):
     """
     Reemplaza el archivo .3mf de un modelo existente conservando sus metadatos.
@@ -339,15 +323,13 @@ async def replace_vault_file(
     Sube el nuevo archivo a MinIO con una clave fresca, actualiza la DB y
     elimina el archivo anterior. Solo admins.
     """
-    _require_admin(current_user)
-
     if not file.filename or not file.filename.lower().endswith(".3mf"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Solo se permiten archivos .3mf",
         )
 
-    model = await _get_model_file(db, file_id, current_user.company_id)
+    model = await _get_model_file(db, file_id)
 
     content = await file.read()
     file_size = len(content)
@@ -359,7 +341,7 @@ async def replace_vault_file(
         )
 
     # Verificar cuota descontando el tamaño del archivo actual
-    used = await _get_used_bytes(db, current_user.company_id)
+    used = await _get_used_bytes(db)
     quota = settings.VAULT_QUOTA_GB * 1024 * 1024 * 1024
     if used - model.file_size + file_size > quota:
         raise HTTPException(
@@ -371,7 +353,7 @@ async def replace_vault_file(
     old_key = model.file_key
     file_uuid = str(uuid.uuid4())
     safe_name = file.filename.replace(" ", "_")
-    new_key = f"{current_user.company_id}/{file_uuid}-{safe_name}"
+    new_key = f"{file_uuid}-{safe_name}"
 
     await upload_file(new_key, content, content_type="model/3mf")
 
@@ -400,14 +382,13 @@ async def replace_vault_file(
 async def delete_vault_file(
     file_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_admin_user),
 ):
     """
     Elimina el archivo del Vault: borra el objeto en MinIO y el registro en DB.
     Solo admins.
     """
-    _require_admin(current_user)
-    model = await _get_model_file(db, file_id, current_user.company_id)
+    model = await _get_model_file(db, file_id)
 
     # Borrar de MinIO primero (si falla no borramos la DB)
     await delete_file(model.file_key)
