@@ -1,5 +1,5 @@
 """
-Router de ítems de inventario para TurtleForge Cost.
+Router de ítems de inventario para Collector's Forge Studio.
 
 Gestiona el CRUD de artículos del inventario de la empresa: materiales,
 herramientas, repuestos, accesorios, etc. Todos los endpoints filtran

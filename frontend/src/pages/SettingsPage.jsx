@@ -1,5 +1,5 @@
 /**
- * @file Pagina de configuracion general de Calculator3D.
+ * @file Pagina de configuracion general de collectors-forge-studio.
  *
  * Permite al usuario ajustar los parametros globales que afectan
  * el calculo de costos de impresion 3D:

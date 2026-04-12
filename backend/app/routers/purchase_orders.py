@@ -1,5 +1,5 @@
 """
-Router de órdenes de compra para TurtleForge Cost.
+Router de órdenes de compra para Collector's Forge Studio.
 
 Gestiona el CRUD de pedidos a proveedores y la lógica de recepción de
 mercancía. Al marcar una orden como "llegado", actualiza automáticamente

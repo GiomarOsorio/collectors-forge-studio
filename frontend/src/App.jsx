@@ -1,5 +1,5 @@
 /**
- * @file Componente raíz de TurtleForge Studio.
+ * @file Componente raíz de Collector's Forge Studio.
  *
  * Configura la estructura principal de la aplicación:
  * - BrowserRouter para navegación del lado del cliente
@@ -7,12 +7,12 @@
  * - DirtyStateProvider para rastrear formularios con datos sin guardar
  * - Toaster para notificaciones
  * - Dos zonas de rutas:
- *     /         → TurtleForge Studio (lanzador de apps)
+ *     /         → Collector's Forge Studio (lanzador de apps)
  *     /cost/*   → Aplicación Cost (calculadora de costos de impresión 3D)
  *
  * Estructura de rutas:
  * - /login                    → Página de inicio de sesión (pública)
- * - /                         → TurtleForge Studio Home (protegida)
+ * - /                         → Collector's Forge Studio Home (protegida)
  * - /cost/calculator          → Calculadora de costos (protegida)
  * - /cost/quotes              → Historial de cotizaciones de cliente (protegida)
  * - /cost/manual              → Nueva cotización de cliente (protegida)
@@ -153,7 +153,7 @@ function AppRoutes() {
       <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
       <Route path="/auth/success" element={<AuthSuccess />} />
 
-      {/* TurtleForge Studio Home: lanzador de aplicaciones */}
+      {/* Collector's Forge Studio Home: lanzador de aplicaciones */}
       <Route path="/" element={<PrivateRoute><StudioLayout /></PrivateRoute>}>
         <Route index element={<StudioHomePage />} />
       </Route>
@@ -232,7 +232,7 @@ function AppRoutes() {
 }
 
 /**
- * Componente raíz de TurtleForge Studio.
+ * Componente raíz de Collector's Forge Studio.
  *
  * @returns {JSX.Element}
  */

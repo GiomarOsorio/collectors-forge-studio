@@ -1,5 +1,5 @@
 """
-Tests de integración HTTP para TurtleForge Cost API (M-03).
+Tests de integración HTTP para Collector's Forge API (M-03).
 
 Usa httpx.AsyncClient con ASGITransport para ejercitar los endpoints
 HTTP reales sin necesidad de una base de datos PostgreSQL. Las
@@ -563,7 +563,7 @@ class TestCompanyIntegration:
 
         empresa_mock = MagicMock()
         empresa_mock.id = _uuid.UUID("aaaaaaaa-0000-0000-0000-000000000001")
-        empresa_mock.name = "TurtleForge Test"
+        empresa_mock.name = "Collector's Forge Test"
         empresa_mock.slogan = None
         empresa_mock.address = None
         empresa_mock.phone = None
@@ -591,7 +591,7 @@ class TestCompanyIntegration:
             _clear_overrides()
         assert r.status_code == 200
         body = r.json()
-        assert body["name"] == "TurtleForge Test"
+        assert body["name"] == "Collector's Forge Test"
 
     async def test_update_company_requiere_admin(self):
         """

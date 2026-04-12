@@ -1,8 +1,8 @@
-# Arquitectura del Sistema — TurtleForge Studio
+# Arquitectura del Sistema — Collector's Forge Studio
 
 ## Visión general
 
-TurtleForge Studio es una plataforma multi-aplicación para gestión de un negocio de impresión 3D. Está compuesta por varios microservicios en contenedores Podman, expuestos a internet a través de un Cloudflare Tunnel.
+Collector's Forge Studio es una plataforma multi-aplicación para gestión de un negocio de impresión 3D. Está compuesta por varios microservicios en contenedores Podman, expuestos a internet a través de un Cloudflare Tunnel.
 
 ---
 
@@ -19,18 +19,16 @@ TurtleForge Studio es una plataforma multi-aplicación para gestión de un negoc
                     ┌────────▼────────┐
                     │ Cloudflare Tunnel│
                     │  (cloudflared)   │
-                    │  calculator3d-   │
-                    │    tunnel        │
+                    │   cfs-tunnel     │
                     └────────┬────────┘
                              │ HTTP interno
               ───────────────┼───────────────────────────
-              Red: calculator3d (bridge)
+              Red: cfs (bridge)
                              │
                     ┌────────▼────────┐
                     │    Frontend      │
                     │  React + Nginx   │
-                    │  calculator3d-   │
-                    │    frontend      │
+                    │   cfs-frontend   │
                     │   :80 (3000)     │
                     └────────┬────────┘
                     /api/*   │   /static/*
@@ -39,7 +37,7 @@ TurtleForge Studio es una plataforma multi-aplicación para gestión de un negoc
               ┌──────────────▼─────────────────┐
               │            Backend              │
               │          FastAPI                │
-              │      calculator3d-backend       │
+              │         cfs-backend             │
               │            :8000                │
               │                                 │
               │  • Routers (Auth, Quotes, etc.) │
@@ -53,8 +51,7 @@ TurtleForge Studio es una plataforma multi-aplicación para gestión de un negoc
          ┌───────────▼──┐    ┌───▼──────────┐
          │  PostgreSQL  │    │    Slicer      │
          │      16       │    │  OrcaSlicer   │
-         │  calculator3d │    │  calculator3d │
-         │    -postgres  │    │    -slicer    │
+         │  cfs-postgres │    │  cfs-slicer   │
          │     :5432     │    │     :8001     │
          └───────────────┘    └──────┬────────┘
                                      │ volumen compartido
@@ -66,7 +63,7 @@ TurtleForge Studio es una plataforma multi-aplicación para gestión de un negoc
 
 **Tracker** (microservicio auxiliar):
 ```
-calculator3d-tracker (:8002)
+cfs-tracker (:8002)
   └─ Escanea tracking de pedidos cada N minutos
   └─ Escribe estado en PostgreSQL (purchase_orders)
   └─ Accedido por backend: POST /inventory/purchases/scan-tracking
@@ -87,14 +84,14 @@ Cada "app" es una sección de la SPA React con su propio layout y rutas:
 | Queue | `#14B8A6` | `/queue/` | Cola de impresión |
 | Compañía | `#6366F1` | `/company/` | Perfil, branding y templates PDF |
 
-La pantalla de inicio (`/`) es el **TurtleForge Studio**, que muestra todas las apps como un panel estilo Okta. El `AppSwitcherDrawer` permite navegar entre apps sin salir.
+La pantalla de inicio (`/`) es el **Collector's Forge Studio**, que muestra todas las apps como un panel estilo Okta. El `AppSwitcherDrawer` permite navegar entre apps sin salir.
 
 ---
 
 ## Estructura de archivos
 
 ```
-Calculator3D/
+collectors-forge-studio/
 ├── .github/
 │   └── workflows/deploy.yml          # CI/CD: tests → deploy
 │
@@ -139,7 +136,8 @@ Calculator3D/
 │   │   │   └── slicer.py             # SlicingJob schemas
 │   │   │
 │   │   ├── routers/                  # Endpoints FastAPI
-│   │   │   ├── auth.py               # POST /auth/login, /register, GET /me
+│   │   │   ├── auth.py               # GET /auth/me, POST /auth/logout
+│   │   │   ├── oidc.py               # GET /auth/oidc/login, /callback, /logout
 │   │   │   ├── company.py            # GET/PUT /company/, POST /company/logo
 │   │   │   ├── company_templates.py  # CRUD + /validate + /preview
 │   │   │   ├── users.py              # GET/PATCH /users/, PUT /users/me
@@ -286,15 +284,15 @@ Calculator3D/
 │   └── requirements.txt
 │
 ├── quadlet/                          # Definiciones systemd (Podman Quadlet)
-│   ├── calculator3d.network
-│   ├── calculator3d-data.volume
-│   ├── calculator3d-pgdata.volume
-│   ├── calculator3d-slicer-jobs.volume
-│   ├── calculator3d-postgres.container
-│   ├── calculator3d-backend.container
-│   ├── calculator3d-frontend.container
-│   ├── calculator3d-slicer.container
-│   └── calculator3d-tunnel.container
+│   ├── cfs.network
+│   ├── cfs-data.volume
+│   ├── cfs-pgdata.volume
+│   ├── cfs-slicer-jobs.volume
+│   ├── cfs-postgres.container
+│   ├── cfs-backend.container
+│   ├── cfs-frontend.container
+│   ├── cfs-slicer.container
+│   └── cfs-tunnel.container
 │
 ├── deploy.sh                         # Script de despliegue completo
 ├── podman-compose.yml                # Alternativa a Quadlet (desarrollo/staging)
@@ -305,34 +303,23 @@ Calculator3D/
 
 ## Modelo de datos — resumen
 
-### Multi-tenant
+### Empresa singleton
 
-Toda la data está aislada por `company_id` (UUID). La empresa por defecto tiene UUID fijo `00000000-0000-0000-0000-000000000001`.
+La app opera en modo mono-empresa. `Company` (UUID fijo `00000000-0000-0000-0000-000000000001`) existe como singleton para datos de perfil, branding y templates PDF. El `company_id` fue **eliminado** de todas las tablas operativas en la migración `h2i3j4k5l6m7`.
 
 ```
-Company (UUID PK)
-  ├── User (FK company_id)
-  ├── Printer (FK company_id)
-  ├── InventoryItem (FK company_id)
-  ├── PurchaseOrder (FK company_id)
-  ├── PrintedItem (FK company_id)
-  ├── Quote (FK company_id)
-  ├── ClientQuote (FK company_id)
-  ├── AppSettings (FK company_id, UNIQUE)
-  ├── SlicingJob (FK company_id)
-  ├── MaintenancePrinter (FK company_id)
-  ├── MaintenanceLog (FK company_id)
-  ├── PrintQueueItem (FK company_id)
-  └── CompanyTemplate (FK company_id)
+Company (UUID PK — singleton)
+  └── AppSettings (singleton, LIMIT 1)
+  └── CompanyTemplate (templates Liquid para PDF)
 ```
 
 ### Entidades principales
 
 | Entidad | Tabla | Descripción |
 |---------|-------|-------------|
-| `Company` | `companies` | Empresa: nombre, logo, pdf_palette (JSONB), pdf_terms |
+| `Company` | `companies` | Empresa singleton: nombre, logo, pdf_palette (JSONB), pdf_terms |
 | `CompanyTemplate` | `company_templates` | Template Liquid HTML para PDF de cotizaciones |
-| `User` | `users` | Usuario con hash bcrypt, is_admin |
+| `User` | `users` | Usuario OIDC: `oidc_sub`, `role` (admin/operator/viewer) |
 | `Printer` | `printers` | Impresora 3D con parámetros de costo |
 | `InventoryItem` | `inventory_items` | Stock unificado: filamentos, insumos, herramientas |
 | `PurchaseOrder` | `purchase_orders` | Pedido de compra con tracking internacional |
@@ -375,25 +362,39 @@ liquid_pdf.py   (fallback con
 ## Flujo de autenticación
 
 ```
-POST /api/auth/login (form: username + password)
+Usuario hace click en "Iniciar sesión con SSO"
           │
           ▼
-  Verificar bcrypt hash (passlib)
+GET /api/auth/oidc/login
+          │  genera state, nonce, code_verifier (PKCE)
+          │  guarda en SessionMiddleware
+          ▼
+Redirect → Authentik (o proveedor OIDC)
+          │  usuario se autentica en el IdP
+          ▼
+GET /api/auth/oidc/callback?code=...&state=...
+          │
+          ├─ Intercambia code por tokens (con PKCE)
+          ├─ Extrae claims: sub, email, preferred_username
+          ├─ Busca User por oidc_sub en DB
+          │    └─ Si no existe: JIT provisioning
+          │         └─ Primer usuario → role='admin'
+          │         └─ Siguientes   → role='operator'
+          ├─ Emite JWT local (python-jose, HS256, 24h)
+          ▼
+Redirect → /auth/success?token=<JWT>
           │
           ▼
-  Generar JWT (python-jose, HS256, 24h por defecto)
+Frontend guarda token en localStorage
           │
           ▼
-  access_token → localStorage (frontend)
+Cada request: Authorization: Bearer <token>
           │
           ▼
-  Cada request: Authorization: Bearer <token>
+Backend: oauth2_scheme → verify_token → current_user
           │
           ▼
-  Backend: oauth2_scheme → verify_token → current_user
-          │
-          ▼
-  Si 401 → frontend dispara 'auth:unauthorized' → redirect /login
+Si 401 → frontend dispara 'auth:unauthorized' → redirect /login
 ```
 
 ---
@@ -445,15 +446,15 @@ Ver [templates-liquid.md](templates-liquid.md) para la guía completa de variabl
 
 ## Red interna (Podman)
 
-Todos los contenedores se comunican en la red `calculator3d` (bridge). Los nombres de contenedor sirven como hostnames:
+Todos los contenedores se comunican en la red `cfs` (bridge). Los nombres de contenedor sirven como hostnames:
 
 | Hostname interno | Puerto | Quién lo usa |
 |---|---|---|
-| `calculator3d-postgres` | `5432` | backend, tracker |
-| `calculator3d-backend` | `8000` | frontend (nginx proxy) |
-| `calculator3d-slicer` | `8001` | backend (POST /slicer/*) |
-| `calculator3d-tracker` | `8002` | backend (POST /scan-tracking) |
-| `calculator3d-frontend` | `80` | cloudflared tunnel |
+| `cfs-postgres` | `5432` | backend, tracker |
+| `cfs-backend` | `8000` | frontend (nginx proxy) |
+| `cfs-slicer` | `8001` | backend (POST /slicer/*) |
+| `cfs-tracker` | `8002` | backend (POST /scan-tracking) |
+| `cfs-frontend` | `80` | cloudflared tunnel |
 
 ---
 
@@ -461,9 +462,9 @@ Todos los contenedores se comunican en la red `calculator3d` (bridge). Los nombr
 
 | Volumen | Montaje | Contenido |
 |---|---|---|
-| `calculator3d-pgdata` | `/var/lib/postgresql/data` | Datos PostgreSQL |
-| `calculator3d-data` | `/app/static` | Logos, imágenes de impresiones |
-| `calculator3d-slicer-jobs` | `/slicer_jobs` | Archivos STL/G-code temporales |
+| `cfs-pgdata` | `/var/lib/postgresql/data` | Datos PostgreSQL |
+| `cfs-data` | `/app/static` | Logos, imágenes de impresiones |
+| `cfs-slicer-jobs` | `/slicer_jobs` | Archivos STL/G-code temporales |
 
 ---
 
@@ -490,10 +491,10 @@ Self-hosted runner (Linux PC)
             ├─ podman build (backend, frontend, slicer)
             ├─ podman pull postgres:16-alpine
             ├─ Instalar Quadlets → systemctl daemon-reload
-            ├─ systemctl restart calculator3d-postgres
+            ├─ systemctl restart cfs-postgres
             ├─ Esperar PostgreSQL ready (pg_isready)
             ├─ podman run --rm → alembic upgrade head
             ├─ systemctl restart backend, slicer, frontend
             ├─ Verificar /api/health
-            └─ systemctl restart calculator3d-tunnel
+            └─ systemctl restart cfs-tunnel
 ```

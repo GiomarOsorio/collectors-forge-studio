@@ -1,5 +1,5 @@
 """
-Router de trabajos de laminado 3D (Slicer) para TurtleForge Studio.
+Router de trabajos de laminado 3D (Slicer) para Collector's Forge Studio.
 
 Gestiona la creación y consulta de trabajos de slicing. Soporta tres
 fuentes de entrada: archivos ya laminados (.gcode/.3mf de Bambu Studio),
@@ -56,7 +56,7 @@ except OSError:
     pass  # El directorio /slicer_jobs no existe en entorno de desarrollo
 
 # URL del microservicio OrcaSlicer en la red interna de Podman
-ORCA_SERVICE_URL = "http://calculator3d-slicer:8001"
+ORCA_SERVICE_URL = "http://cfs-slicer:8001"
 
 # Presets por defecto para la BambuLab P2S
 DEFAULT_PRINTER = "Bambu Lab P2S 0.4 nozzle"

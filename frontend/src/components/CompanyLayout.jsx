@@ -1,5 +1,5 @@
 /**
- * @file Layout de la aplicación Compañía dentro de TurtleForge Studio.
+ * @file Layout de la aplicación Compañía dentro de Collector's Forge Studio.
  * @module components/CompanyLayout
  */
 

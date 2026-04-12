@@ -1,5 +1,5 @@
 """
-Servicio de autenticación y autorización para Calculator3D.
+Servicio de autenticación y autorización para collectors-forge-studio.
 
 Este módulo implementa toda la lógica de seguridad de la aplicación:
 - Hashing y verificación de contraseñas con bcrypt (a través de passlib).

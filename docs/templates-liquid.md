@@ -1,4 +1,4 @@
-# Templates Liquid para Cotizaciones PDF — TurtleForge Studio
+# Templates Liquid para Cotizaciones PDF — Collector's Forge Studio
 
 Los templates de cotización son archivos HTML que usan la sintaxis [Liquid](https://shopify.github.io/liquid/) para insertar datos dinámicos. Se procesan con `python-liquid` y se convierten a PDF con **WeasyPrint**.
 

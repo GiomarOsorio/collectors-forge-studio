@@ -1,5 +1,5 @@
 """
-Paquete de modelos ORM de Calculator3D.
+Paquete de modelos ORM de collectors-forge-studio.
 
 Re-exporta todas las entidades de base de datos del proyecto para facilitar
 las importaciones desde otros módulos. Al importar desde app.models se obtiene

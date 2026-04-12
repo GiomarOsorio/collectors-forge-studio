@@ -1,5 +1,5 @@
 """
-Paquete de esquemas Pydantic de Calculator3D.
+Paquete de esquemas Pydantic de collectors-forge-studio.
 
 Re-exporta todos los schemas de validación y serialización de datos del
 proyecto para facilitar las importaciones desde otros módulos. Al importar

@@ -1,5 +1,5 @@
 """
-Modelo ORM para la tabla de usuarios de Calculator3D.
+Modelo ORM para la tabla de usuarios de collectors-forge-studio.
 
 Define la entidad User que representa a los usuarios del sistema, incluyendo
 sus credenciales de autenticación y su rol (admin / operator / viewer).

@@ -26,7 +26,7 @@ except ImportError:
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-app = FastAPI(title="TurtleForge Slicer Service", version="1.0.0")
+app = FastAPI(title="Collector's Forge Slicer Service", version="1.0.0")
 
 JOBS_DIR = Path("/slicer_jobs")
 JOBS_DIR.mkdir(exist_ok=True)

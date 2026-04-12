@@ -44,5 +44,10 @@ Thumbs.db
 # Alembic
 alembic/versions/__pycache__/
 
+# Coverage
+.coverage
+htmlcov/
+coverage.xml
+
 # Claude
 .claude

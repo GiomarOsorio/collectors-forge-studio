@@ -1,5 +1,5 @@
 """
-Servicio de scraping de tarifas de electricidad EPM para Calculator3D.
+Servicio de scraping de tarifas de electricidad EPM para collectors-forge-studio.
 
 Descarga automáticamente el PDF de tarifas mensuales publicado por
 Empresas Públicas de Medellín (EPM) en su sitio web oficial, extrae

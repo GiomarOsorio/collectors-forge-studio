@@ -1,4 +1,4 @@
-# Auditoría Completa — TurtleForge Studio
+# Auditoría Completa — Collector's Forge Studio
 
 **Fecha:** 2026-02-28
 **Alcance:** Backend FastAPI, Frontend React, Infraestructura Podman/Cloudflare
@@ -621,7 +621,7 @@ Recomendación: Modelo AuditLog con campos: user_id, action, resource_type,
 Descripción: No hay pg_dump periódico configurado. Si se corrompe el volumen
   PostgreSQL, se pierden todos los datos.
 Recomendación:
-  podman exec calculator3d-postgres pg_dump -U turtleforge turtleforge > backup_$(date +%Y%m%d).sql
+  podman exec cfs-postgres pg_dump -U collectorsforge collectorsforge > backup_$(date +%Y%m%d).sql
   Agregar cron job diario o usar pgBackRest para backups incrementales.
 ```
 

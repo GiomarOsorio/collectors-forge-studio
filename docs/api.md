@@ -1,4 +1,4 @@
-# Referencia de API — TurtleForge Studio
+# Referencia de API — Collector's Forge Studio
 
 Base URL: `https://3d.turtlenode.dev/api` (producción) · `http://localhost:8000/api` (local)
 
@@ -797,7 +797,7 @@ Verifica que la API está funcionando.
 ```json
 {
   "status": "ok",
-  "app": "TurtleForge Cost"
+  "app": "Collector's Forge Studio"
 }
 ```
 

@@ -1,5 +1,5 @@
 """
-Servicio de generación de PDFs de cotización para TurtleForge Cost.
+Servicio de generación de PDFs de cotización para Collector's Forge Studio.
 
 Genera documentos PDF con diseño de marca The Collector's Forge: tipografía
 Trajan Pro, paleta Carbón / Hierro / Bronce / Rojo Forja / Dorado, encabezado
@@ -147,7 +147,7 @@ def _fmt_usd(value: float) -> str:
 
 
 def _make_doc(buffer: io.BytesIO) -> SimpleDocTemplate:
-    """Crea el documento PDF con márgenes estándar TurtleForge."""
+    """Crea el documento PDF con márgenes estándar Collector's Forge."""
     return SimpleDocTemplate(
         buffer, pagesize=letter,
         topMargin=0.6 * inch, bottomMargin=0.75 * inch,
@@ -235,10 +235,10 @@ def _build_header(st: dict, company: Optional["Company"] = None) -> list:
     logo_cell = (
         Image(str(logo_path), width=_LOGO_W, height=_LOGO_H)
         if logo_path
-        else Paragraph("<b>TurtleForge</b>", st["base"]["Normal"])
+        else Paragraph("<b>Collector's Forge</b>", st["base"]["Normal"])
     )
 
-    company_name = (company.name if company and company.name else "TurtleForge Studio")
+    company_name = (company.name if company and company.name else "Collector's Forge Studio")
     company_addr = (company.address if company and company.address else "Medellín, Colombia")
 
     company_cell: list = [Paragraph(company_name, st["sCo"]), Spacer(1, 4)]
@@ -377,7 +377,7 @@ def _build_footer(notes: Optional[str], st: dict, company: Optional["Company"] =
         HRFlowable(width="100%", thickness=0.5, color=c["_BRONZE"], spaceAfter=6),
         Paragraph(
             f"Cotización generada el {datetime.now(timezone.utc).strftime('%d-%m-%Y')}"
-            f" · TurtleForge Cost · Medellín, Colombia",
+            f" · Collector's Forge Studio · Medellín, Colombia",
             st["sNote"],
         ),
     ]

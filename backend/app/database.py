@@ -1,5 +1,5 @@
 """
-Configuración de la base de datos y gestión de sesiones para TurtleForge Cost.
+Configuración de la base de datos y gestión de sesiones para Collector's Forge Studio.
 
 Este módulo establece la conexión asíncrona con PostgreSQL mediante
 SQLAlchemy 2.0 + asyncpg. Las tablas se crean y migran a través de

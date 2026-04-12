@@ -1,5 +1,5 @@
 """
-Router de ítems de impresiones para TurtleForge Cost.
+Router de ítems de impresiones para Collector's Forge Studio.
 
 Gestiona el CRUD de productos impresos en 3D del inventario de la empresa:
 llaveros, figuras, repuestos, etc. Todos los endpoints filtran por

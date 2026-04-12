@@ -187,7 +187,7 @@ export default function CompanyTemplateEditorPage() {
               className="tf-input"
               value={form.name}
               onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-              placeholder="Ej: Plantilla estándar TurtleForge"
+              placeholder="Ej: Plantilla estándar Collector's Forge"
               required
               disabled={!user?.role === 'admin'}
             />

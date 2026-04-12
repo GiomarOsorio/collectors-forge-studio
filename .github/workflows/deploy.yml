@@ -12,11 +12,9 @@ jobs:
     runs-on: self-hosted
 
     env:
-      DATABASE_URL: postgresql+asyncpg://turtleforge:ci_password@localhost:5433/turtleforge_test
+      DATABASE_URL: postgresql+asyncpg://collectorsforge:ci_password@localhost:5433/collectorsforge_test
       SECRET_KEY: ci-secret-key-not-for-production
-      ADMIN_USERNAME: admin
-      ADMIN_PASSWORD: adminpassword123
-      ADMIN_EMAIL: admin@ci.local
+      SESSION_SECRET_KEY: ci-session-key-not-for-production
 
     steps:
       - name: Checkout código
@@ -26,13 +24,13 @@ jobs:
         run: |
           podman run -d \
             --name pg-ci-${{ github.run_id }} \
-            -e POSTGRES_USER=turtleforge \
+            -e POSTGRES_USER=collectorsforge \
             -e POSTGRES_PASSWORD=ci_password \
-            -e POSTGRES_DB=turtleforge_test \
+            -e POSTGRES_DB=collectorsforge_test \
             -p 5433:5432 \
             docker.io/library/postgres:16
           for i in $(seq 1 30); do
-            podman exec pg-ci-${{ github.run_id }} pg_isready -U turtleforge && break
+            podman exec pg-ci-${{ github.run_id }} pg_isready -U collectorsforge && break
             sleep 1
           done
 
@@ -79,27 +77,24 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.test.result == 'success'
 
     env:
-      SECRET_KEY: ${{ secrets.SECRET_KEY }}
-      POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-      POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-      ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
-      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-      ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-      TUNNEL_TOKEN: ${{ secrets.TUNNEL_TOKEN }}
-      MINIO_ENDPOINT: ${{ secrets.MINIO_ENDPOINT }}
-      MINIO_ACCESS_KEY: ${{ secrets.MINIO_ACCESS_KEY }}
-      MINIO_SECRET_KEY: ${{ secrets.MINIO_SECRET_KEY }}
-      MINIO_BUCKET: ${{ secrets.MINIO_BUCKET }}
-      VAULT_QUOTA_GB: ${{ secrets.VAULT_QUOTA_GB }}
+      # Credenciales de Machine Identity en Infisical
+      # Crear en: Infisical → <proyecto> → Access Control → Machine Identities
+      INFISICAL_CLIENT_ID: ${{ secrets.INFISICAL_CLIENT_ID }}
+      INFISICAL_CLIENT_SECRET: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+      # Slug del proyecto en Infisical (default: homelab)
+      INFISICAL_PROJECT_SLUG: ${{ secrets.INFISICAL_PROJECT_SLUG || 'homelab' }}
+      # URL de Infisical (default: http://127.0.0.1:8080 — instancia local)
+      INFISICAL_URL: ${{ secrets.INFISICAL_URL || 'http://127.0.0.1:8080' }}
+      # Path de secretos dentro del proyecto (default: /collectorsforge)
+      INFISICAL_SECRET_PATH: ${{ secrets.INFISICAL_SECRET_PATH || '/collectorsforge' }}
 
     steps:
       - name: Pull latest changes
         run: |
-          cd $HOME/Calculator3D
+          cd $HOME/collectors-forge-studio
           git pull origin main
 
-      - name: Deploy
+      - name: Deploy (secretos vía Infisical)
         run: |
-          cd $HOME/Calculator3D
+          cd $HOME/collectors-forge-studio
           ./deploy.sh

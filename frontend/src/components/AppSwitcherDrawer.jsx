@@ -1,5 +1,5 @@
 /**
- * @file Cajón lateral para cambiar entre aplicaciones de TurtleForge Studio.
+ * @file Cajón lateral para cambiar entre aplicaciones de Collector's Forge Studio.
  *
  * Se desliza desde la izquierda (por encima del sidebar) mostrando todas las
  * aplicaciones disponibles. Si el usuario tiene datos sin guardar y trata de
@@ -75,7 +75,7 @@ export default function AppSwitcherDrawer({ isOpen, onClose }) {
           {/* Encabezado del cajón */}
           <div className="p-6 border-b border-[#222630] flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-bold text-tech-white">TurtleForge Studio</h2>
+              <h2 className="text-lg font-bold text-tech-white">Collector's Forge Studio</h2>
               <p className="text-sm text-gunmetal">Selecciona una aplicación</p>
             </div>
             <button
@@ -136,7 +136,7 @@ export default function AppSwitcherDrawer({ isOpen, onClose }) {
 
           {/* Pie del cajón */}
           <div className="p-4 border-t border-[#222630]">
-            <p className="text-xs text-gunmetal text-center">TurtleForge Studio · v1.0</p>
+            <p className="text-xs text-gunmetal text-center">Collector's Forge Studio · v1.0</p>
           </div>
         </div>
       )}

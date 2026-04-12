@@ -1,5 +1,5 @@
 """
-Modelo ORM para la cola de impresión de TurtleForge.
+Modelo ORM para la cola de impresión de Collector's Forge.
 
 Define PrintQueueItem, que representa un trabajo de impresión en cola.
 Solo se pueden encolar impresiones que tengan un costo calculado (Quote).

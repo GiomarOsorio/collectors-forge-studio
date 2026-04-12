@@ -1,5 +1,5 @@
 """
-Router de templates de cotización Liquid para TurtleForge Cost.
+Router de templates de cotización Liquid para Collector's Forge Studio.
 
 Permite a cada empresa gestionar sus plantillas personalizadas de PDF de
 cotización escritas en sintaxis Liquid. Incluye validación de sintaxis y

@@ -1,5 +1,5 @@
 """
-Entorno de ejecución de Alembic para TurtleForge Cost.
+Entorno de ejecución de Alembic para Collector's Forge Studio.
 
 Configura el motor asíncrono de SQLAlchemy 2.0 y conecta
 target_metadata con Base.metadata para que autogenerate

@@ -1,5 +1,5 @@
 /**
- * @file Layout de la aplicación Inventario (Archive) dentro de TurtleForge Studio.
+ * @file Layout de la aplicación Inventario (Archive) dentro de Collector's Forge Studio.
  * @module components/InventoryLayout
  */
 

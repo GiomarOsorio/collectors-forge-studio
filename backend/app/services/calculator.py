@@ -1,5 +1,5 @@
 """
-Motor de cálculo de costos de impresión 3D para TurtleForge Cost.
+Motor de cálculo de costos de impresión 3D para Collector's Forge Studio.
 
 Fórmula de cálculo aplicada:
     El peso y tiempo de impresión representan el trabajo completo (la placa con

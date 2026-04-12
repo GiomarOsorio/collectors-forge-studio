@@ -1,7 +1,7 @@
-# Calculator3D — Contexto del Proyecto
+# Collector's Forge Studio — Contexto del Proyecto
 
 ## Descripción General
-- **Repo**: github.com/GiomarOsorio/Calculator3D (privado)
+- **Repo**: github.com/GiomarOsorio/collectors-forge-studio (privado)
 - **Propósito**: App web para calcular costos reales de impresión 3D (material, electricidad, depreciación, mantenimiento, mano de obra, tasa de fallo, margen)
 - **Usuario**: GiomarOsorio (Giomar), habla español, UI en español
 - **Impresora**: BambuLab P2S Combo (oct 2025 — volumen 256³mm, DynaSense, pantalla 5", AMS 2 Pro, $799)
@@ -52,7 +52,7 @@
 - **Empresa default**: "The Collector Forge"
 - AppSettings: UNIQUE en `company_id` (no en `user_id`); `user_id` ahora nullable
 
-## Estructura de Apps (TurtleForge Studio)
+## Estructura de Apps (Collector's Forge Studio)
 | App | Ruta | Color | Ícono |
 |-----|------|-------|-------|
 | Studio Home | `/` | — | — |

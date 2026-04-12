@@ -1,5 +1,5 @@
 /**
- * @file Layout mínimo para la página principal de TurtleForge Studio.
+ * @file Layout mínimo para la página principal de Collector's Forge Studio.
  *
  * Solo muestra un header con el logo y el nombre del estudio,
  * más el área de contenido (Outlet) donde vive la página de inicio.
@@ -13,7 +13,7 @@ import { useAuth } from '../context/AuthContext';
 import { LogOut } from 'lucide-react';
 
 /**
- * Layout de la pantalla principal de TurtleForge Studio.
+ * Layout de la pantalla principal de Collector's Forge Studio.
  *
  * @returns {JSX.Element}
  */
@@ -31,9 +31,9 @@ export default function StudioLayout() {
       {/* Header */}
       <header className="bg-[#0A0E16] border-b border-[#222630] px-6 py-4 flex items-center justify-between sticky top-0 z-10">
         <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-          <img src="/logo.png" alt="TurtleForge" className="h-9 w-9 object-contain" />
+          <img src="/logo.png" alt="Collector's Forge" className="h-9 w-9 object-contain" />
           <div>
-            <h1 className="text-lg font-bold text-tech-white leading-none">TurtleForge Studio</h1>
+            <h1 className="text-lg font-bold text-tech-white leading-none">Collector's Forge Studio</h1>
             <p className="text-xs text-gunmetal">Panel de aplicaciones</p>
           </div>
         </Link>
@@ -65,7 +65,7 @@ export default function StudioLayout() {
 
       {/* Footer */}
       <footer className="bg-[#0A0E16] border-t border-[#222630] py-2 px-6 text-center">
-        <p className="text-gunmetal text-xs">TurtleForge Studio · Medellín, Colombia</p>
+        <p className="text-gunmetal text-xs">Collector's Forge Studio · Medellín, Colombia</p>
       </footer>
     </div>
   );

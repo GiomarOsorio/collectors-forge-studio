@@ -1,5 +1,5 @@
 """
-Esquemas Pydantic para los insumos adicionales de Calculator3D.
+Esquemas Pydantic para los insumos adicionales de collectors-forge-studio.
 
 Todos los campos financieros usan Decimal internamente y se serializan
 a float en JSON via PlainSerializer.

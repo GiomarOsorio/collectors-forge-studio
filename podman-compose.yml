@@ -2,25 +2,25 @@ version: "3"
 
 services:
   postgres:
-    container_name: calculator3d-postgres
+    container_name: cfs-postgres
     image: docker.io/postgres:16-alpine
     volumes:
-      - calculator3d-pgdata:/var/lib/postgresql/data
+      - cfs-pgdata:/var/lib/postgresql/data
     environment:
-      - POSTGRES_DB=turtleforge
-      - POSTGRES_USER=turtleforge
+      - POSTGRES_DB=collectorsforge
+      - POSTGRES_USER=collectorsforge
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     restart: unless-stopped
     networks:
-      - calculator3d
+      - cfs
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U turtleforge -d turtleforge"]
+      test: ["CMD-SHELL", "pg_isready -U collectorsforge -d collectorsforge"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   backend:
-    container_name: calculator3d-backend
+    container_name: cfs-backend
     build:
       context: ./backend
       dockerfile: Containerfile
@@ -28,22 +28,22 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      - DATABASE_URL=postgresql+asyncpg://turtleforge:${POSTGRES_PASSWORD}@postgres:5432/turtleforge
+      - DATABASE_URL=postgresql+asyncpg://collectorsforge:${POSTGRES_PASSWORD}@postgres:5432/collectorsforge
       - SECRET_KEY=${SECRET_KEY}
       - ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=1440
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
-      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@calculator3d.local}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@cfs.local}
       - TRACKER_URL=http://tracker:8002
     volumes:
       - slicer_jobs:/slicer_jobs
     restart: unless-stopped
     networks:
-      - calculator3d
+      - cfs
 
   tracker:
-    container_name: calculator3d-tracker
+    container_name: cfs-tracker
     build:
       context: ./tracker
       dockerfile: Containerfile
@@ -51,11 +51,11 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      - DATABASE_URL=postgresql+asyncpg://turtleforge:${POSTGRES_PASSWORD}@postgres:5432/turtleforge
+      - DATABASE_URL=postgresql+asyncpg://collectorsforge:${POSTGRES_PASSWORD}@postgres:5432/collectorsforge
       - SCAN_INTERVAL_MINUTES=${SCAN_INTERVAL_MINUTES:-300}
     restart: unless-stopped
     networks:
-      - calculator3d
+      - cfs
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
       interval: 30s
@@ -63,14 +63,14 @@ services:
       retries: 3
 
   slicer:
-    container_name: calculator3d-slicer
+    container_name: cfs-slicer
     build:
       context: ./slicer
       dockerfile: Containerfile
     volumes:
       - slicer_jobs:/slicer_jobs
     networks:
-      - calculator3d
+      - cfs
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
@@ -79,7 +79,7 @@ services:
       retries: 3
 
   frontend:
-    container_name: calculator3d-frontend
+    container_name: cfs-frontend
     build:
       context: ./frontend
       dockerfile: Containerfile
@@ -89,10 +89,10 @@ services:
       - backend
     restart: unless-stopped
     networks:
-      - calculator3d
+      - cfs
 
   tunnel:
-    container_name: calculator3d-tunnel
+    container_name: cfs-tunnel
     image: docker.io/cloudflare/cloudflared:latest
     command: tunnel run
     environment:
@@ -101,12 +101,12 @@ services:
       - frontend
     restart: unless-stopped
     networks:
-      - calculator3d
+      - cfs
 
 networks:
-  calculator3d:
+  cfs:
     driver: bridge
 
 volumes:
-  calculator3d-pgdata:
+  cfs-pgdata:
   slicer_jobs:

@@ -1,5 +1,5 @@
 """
-Router de mantenimiento de impresoras para TurtleForge.
+Router de mantenimiento de impresoras para Collector's Forge.
 
 Las impresoras se gestionan en la app Cost (GET/PUT /api/printers/).
 Este router solo gestiona registros de mantenimiento y el resumen del dashboard.

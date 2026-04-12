@@ -287,7 +287,7 @@ DEFAULT_COT_TEMPLATE = """\
   {% endif %}
   <hr class="hr-thin">
   <div class="stamp">
-    Cotización generada el {{ generated_date }} · TurtleForge Cost · Medellín, Colombia
+    Cotización generada el {{ generated_date }} · Collector's Forge Studio · Medellín, Colombia
   </div>
 </div>
 
@@ -388,7 +388,7 @@ def _build_cot_context(client_quote, company, usd_rate: float) -> dict:
     palette_dict, colors_list = _build_palette(company)
 
     company_ctx = {
-        "name":    company.name          if company else "TurtleForge Studio",
+        "name":    company.name          if company else "Collector's Forge Studio",
         "slogan":  company.slogan        if company else "",
         "address": company.address       if company else "Medellín, Colombia",
         "phone":   company.phone         if company else "",
@@ -434,7 +434,7 @@ def _build_sample_context(company=None) -> dict:
     palette_dict, colors_list = _build_palette(company)
 
     company_ctx = {
-        "name":    company.name          if company else "TurtleForge Studio",
+        "name":    company.name          if company else "Collector's Forge Studio",
         "slogan":  company.slogan        if company else "Impresión 3D de calidad",
         "address": company.address       if company else "Medellín, Colombia",
         "phone":   company.phone         if company else "+57 300 000 0000",

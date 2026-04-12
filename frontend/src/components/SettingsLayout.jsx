@@ -1,8 +1,8 @@
 /**
- * @file Layout de la aplicación Configuración dentro de TurtleForge Studio.
+ * @file Layout de la aplicación Configuración dentro de Collector's Forge Studio.
  *
  * App separada sin tarjeta en el dashboard. Se accede desde el nombre de usuario
- * en cualquier otra app. El logo lleva de vuelta a TurtleForge Studio (/),
+ * en cualquier otra app. El logo lleva de vuelta a Collector's Forge Studio (/),
  * sin AppSwitcherDrawer.
  *
  * @module components/SettingsLayout

@@ -1,5 +1,5 @@
 /**
- * @file Definición centralizada de las aplicaciones de TurtleForge Studio.
+ * @file Definición centralizada de las aplicaciones de Collector's Forge Studio.
  *
  * Fuente única de verdad para nombres, rutas, íconos y colores de cada app.
  * Importar desde aquí en lugar de duplicar el array en cada componente.

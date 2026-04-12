@@ -1,4 +1,4 @@
-# Base de Datos — TurtleForge Studio
+# Base de Datos — Collector's Forge Studio
 
 PostgreSQL 16 con SQLAlchemy 2.0 async + asyncpg. Migraciones gestionadas con Alembic.
 
@@ -9,16 +9,16 @@ PostgreSQL 16 con SQLAlchemy 2.0 async + asyncpg. Migraciones gestionadas con Al
 **En contenedor (producción):**
 ```bash
 # Shell interactivo
-podman exec -it calculator3d-postgres psql -U turtleforge -d turtleforge
+podman exec -it cfs-postgres psql -U collectorsforge -d collectorsforge
 
 # Consulta directa
-podman exec calculator3d-postgres \
-  psql -U turtleforge -d turtleforge -c "SELECT now();"
+podman exec cfs-postgres \
+  psql -U collectorsforge -d collectorsforge -c "SELECT now();"
 ```
 
 **URL de conexión:**
 ```
-postgresql+asyncpg://turtleforge:<password>@calculator3d-postgres:5432/turtleforge
+postgresql+asyncpg://collectorsforge:<password>@cfs-postgres:5432/collectorsforge
 ```
 
 ---
@@ -47,6 +47,8 @@ Las migraciones están en `backend/alembic/versions/`. Se aplican con `alembic u
 | `f7a8b9c0d1e2` | `f7a8b9c0d1e2_add_company_pdf_settings.py` | Tabla `company_templates`; campo `pdf_terms` en companies |
 | `a9b0c1d2e3f4` | `a9b0c1d2e3f4_palette_jsonb.py` | Campo `pdf_palette` JSONB en companies: `[{name, hex}]`; elimina los 4 campos de color fijos |
 | `a1b2c3d4e5f6` | `a1b2c3d4e5f6_add_usd_rate_to_client_quotes.py` | Campo `usd_rate` agregado en `client_quotes` para guardar la tasa USD/COP al momento de emisión |
+| `g1h2i3j4k5l6` | `g1h2i3j4k5l6_add_oidc_support.py` | Agrega `oidc_sub` (unique, indexed, nullable) y hace `hashed_password` nullable en `users` para soporte OIDC/JIT provisioning |
+| `h2i3j4k5l6m7` | `h2i3j4k5l6m7_remove_multitenant_add_roles.py` | **Head actual** — Elimina `company_id` de 17 tablas operativas. Reemplaza `is_admin` por `role` (`admin`/`operator`/`viewer`) en `users`. `companies` se mantiene como singleton |
 
 **Aplicar todas las migraciones:**
 ```bash
@@ -57,8 +59,8 @@ alembic upgrade head
 ```bash
 alembic current
 # o
-podman exec calculator3d-postgres \
-  psql -U turtleforge -d turtleforge \
+podman exec cfs-postgres \
+  psql -U collectorsforge -d collectorsforge \
   -c "SELECT version_num FROM alembic_version;"
 ```
 
@@ -100,12 +102,13 @@ podman exec calculator3d-postgres \
 
 | Columna | Tipo | Descripción |
 |---|---|---|
-| `id` | UUID PK | — |
-| `username` | VARCHAR(50) UNIQUE | — |
-| `email` | VARCHAR(200) UNIQUE | — |
-| `hashed_password` | VARCHAR(200) | bcrypt hash |
-| `is_admin` | BOOLEAN | Permisos de administrador |
-| `company_id` | UUID FK → companies | — |
+| `id` | INTEGER PK | — |
+| `username` | VARCHAR(50) UNIQUE | Tomado del claim `preferred_username` del IdP |
+| `email` | VARCHAR(100) UNIQUE | — |
+| `hashed_password` | VARCHAR(255) NULLABLE | Siempre NULL — login es solo vía OIDC |
+| `oidc_sub` | VARCHAR(255) UNIQUE NULLABLE | Claim `sub` del ID token; identifica al usuario en el IdP |
+| `is_active` | BOOLEAN | Si el usuario puede iniciar sesión |
+| `role` | VARCHAR(20) | `admin` \| `operator` \| `viewer` |
 | `created_at` | TIMESTAMP | — |
 
 ### `printers`
@@ -113,7 +116,6 @@ podman exec calculator3d-postgres \
 | Columna | Tipo | Descripción |
 |---|---|---|
 | `id` | INTEGER PK | — |
-| `company_id` | UUID FK → companies | — |
 | `name` | VARCHAR(200) | Nombre descriptivo |
 | `model` | VARCHAR(200) | Modelo del equipo |
 | `purchase_price` | NUMERIC(12,4) | Precio de compra en USD |
@@ -134,7 +136,6 @@ Tabla legacy reemplazada por `inventory_items` con `category="Filamento"`. Se ma
 | Columna | Tipo |
 |---|---|
 | `id` | INTEGER PK |
-| `company_id` | UUID FK |
 | `brand` | VARCHAR(100) |
 | `type` | VARCHAR(50) |
 | `color` | VARCHAR(50) |
@@ -151,7 +152,6 @@ Stock unificado para filamentos, insumos, herramientas y cualquier material.
 | Columna | Tipo | Descripción |
 |---|---|---|
 | `id` | UUID PK | — |
-| `company_id` | UUID FK → companies | — |
 | `name` | VARCHAR(200) | Nombre del ítem |
 | `category` | VARCHAR(50) | `Filamento` \| `Insumo` \| `Herramienta` \| `Otro` |
 | `brand` | VARCHAR(100) | Marca (opcional) |
@@ -172,7 +172,6 @@ Stock unificado para filamentos, insumos, herramientas y cualquier material.
 | Columna | Tipo | Descripción |
 |---|---|---|
 | `id` | UUID PK | — |
-| `company_id` | UUID FK | — |
 | `supplier` | VARCHAR(200) | Proveedor |
 | `order_date` | TIMESTAMP | Fecha de pedido |
 | `status` | VARCHAR(20) | `pending` \| `shipped` \| `arrived` |
@@ -200,7 +199,6 @@ Stock unificado para filamentos, insumos, herramientas y cualquier material.
 | Columna | Tipo | Descripción |
 |---|---|---|
 | `id` | UUID PK | — |
-| `company_id` | UUID FK | — |
 | `name` | VARCHAR(200) | Nombre del modelo |
 | `description` | TEXT | — |
 | `unit_price` | NUMERIC(10,2) | Precio de venta |
@@ -214,7 +212,6 @@ Stock unificado para filamentos, insumos, herramientas y cualquier material.
 | Columna | Tipo | Descripción |
 |---|---|---|
 | `id` | INTEGER PK | — |
-| `company_id` | UUID FK | — |
 | `piece_name` | VARCHAR(200) | Nombre de la pieza |
 | `description` | TEXT | — |
 | `client_name` | VARCHAR(200) | — |
@@ -235,8 +232,7 @@ Cotizaciones multi-producto para clientes (COT-XXXX).
 | Columna | Tipo | Descripción |
 |---|---|---|
 | `id` | INTEGER PK | — |
-| `company_id` | UUID FK | — |
-| `quote_number` | VARCHAR(20) | `COT-0001` (auto-incrementado por empresa) |
+| `quote_number` | VARCHAR(20) | `COT-0001` (auto-incrementado) |
 | `client_name` | VARCHAR(200) | — |
 | `description` | TEXT | — |
 | `quote_date` | TIMESTAMP | Fecha de emisión |
@@ -252,11 +248,11 @@ Cotizaciones multi-producto para clientes (COT-XXXX).
 
 ### `app_settings`
 
+Singleton — solo hay una fila (se consulta con `LIMIT 1`).
+
 | Columna | Tipo | Descripción |
 |---|---|---|
 | `id` | INTEGER PK | — |
-| `company_id` | UUID FK UNIQUE | Una config por empresa |
-| `user_id` | UUID FK nullable | Legacy |
 | `electricity_rate` | NUMERIC(12,4) | USD/kWh |
 | `failure_rate_percent` | NUMERIC(8,4) | % de absorción de fallos |
 | `labor_cost_per_hour` | NUMERIC(12,4) | USD/hora de trabajo |
@@ -280,7 +276,6 @@ Cotizaciones multi-producto para clientes (COT-XXXX).
 | Columna | Tipo | Descripción |
 |---|---|---|
 | `id` | UUID PK | — |
-| `company_id` | UUID FK | — |
 | `status` | VARCHAR(20) | `pending` \| `processing` \| `done` \| `failed` |
 | `source_type` | VARCHAR(20) | `gcode` \| `3mf` \| `stl` \| `makerworld` |
 | `filename` | VARCHAR(500) | Nombre del archivo original |
@@ -298,7 +293,6 @@ Cotizaciones multi-producto para clientes (COT-XXXX).
 | Columna | Tipo | Descripción |
 |---|---|---|
 | `id` | INTEGER PK | — |
-| `company_id` | UUID FK | — |
 | `printer_id` | INTEGER FK → printers | — |
 
 ### `maintenance_logs`
@@ -306,8 +300,7 @@ Cotizaciones multi-producto para clientes (COT-XXXX).
 | Columna | Tipo | Descripción |
 |---|---|---|
 | `id` | INTEGER PK | — |
-| `company_id` | UUID FK | — |
-| `maintenance_printer_id` | INTEGER FK | — |
+| `printer_id` | INTEGER FK → printers | — |
 | `maintenance_type` | VARCHAR(100) | Tipo de mantenimiento |
 | `notes` | TEXT | — |
 | `performed_at` | TIMESTAMP | Fecha del mantenimiento |
@@ -327,7 +320,6 @@ Cotizaciones multi-producto para clientes (COT-XXXX).
 | Columna | Tipo | Descripción |
 |---|---|---|
 | `id` | UUID PK | — |
-| `company_id` | UUID FK | — |
 | `quote_id` | INTEGER FK → quotes SET NULL | — |
 | `status` | VARCHAR(20) | `pending` \| `printing` \| `done` \| `cancelled` |
 | `position` | INTEGER | Orden en la cola (menor = primero) |
@@ -362,9 +354,10 @@ SELECT * FROM alembic_version;
 -- Ver todas las empresas
 SELECT id, name FROM companies;
 
--- Ver usuarios por empresa
-SELECT u.username, u.email, u.is_admin, c.name AS empresa
-FROM users u JOIN companies c ON u.company_id = c.id;
+-- Ver usuarios y sus roles
+SELECT username, email, role, is_active, created_at
+FROM users
+ORDER BY created_at;
 
 -- Ver templates de cotización
 SELECT id, name, template_type, is_default, length(content) AS content_len

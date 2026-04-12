@@ -1,5 +1,5 @@
 /**
- * @file Layout de la aplicación Vault dentro de TurtleForge Studio.
+ * @file Layout de la aplicación Vault dentro de Collector's Forge Studio.
  *
  * El ítem "Subir modelo" solo aparece en la navegación si el usuario
  * es administrador (is_admin=true). Los no-admins solo ven la galería.
