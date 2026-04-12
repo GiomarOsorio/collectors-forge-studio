@@ -1,5 +1,5 @@
 /**
- * @file Capa de servicio API para Calculator3D.
+ * @file Capa de servicio API para collectors-forge-studio.
  *
  * Configura una instancia de Axios con la URL base del backend,
  * interceptores de solicitud para inyectar el token JWT de autenticacion,

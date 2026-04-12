@@ -1,5 +1,5 @@
 /**
- * @file Pagina de inicio de sesion de TurtleForge Studio.
+ * @file Pagina de inicio de sesion de Collector's Forge Studio.
  *
  * Presenta un botón de SSO que inicia el flujo OIDC con PKCE.
  * El backend maneja todo el intercambio de tokens; el frontend solo redirige.
@@ -47,8 +47,8 @@ export default function Login() {
       <div className="tf-card rounded-2xl p-8 w-full max-w-md shadow-2xl">
         {/* Encabezado con logo, nombre y descripcion */}
         <div className="text-center mb-8">
-          <img src="/logo.png" alt="TurtleForge" className="h-20 w-20 object-contain mx-auto mb-4" />
-          <h1 className="text-3xl font-bold text-tech-white tracking-tight">TurtleForge Studio</h1>
+          <img src="/logo.png" alt="Collector's Forge" className="h-20 w-20 object-contain mx-auto mb-4" />
+          <h1 className="text-3xl font-bold text-tech-white tracking-tight">Collector's Forge Studio</h1>
           <p className="text-gunmetal mt-2 text-sm">Inicio de sesión</p>
         </div>
         {/* Botón SSO */}

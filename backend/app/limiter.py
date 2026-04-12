@@ -1,5 +1,5 @@
 """
-Instancia global del rate limiter para TurtleForge Cost.
+Instancia global del rate limiter para Collector's Forge Studio.
 
 Se define en un módulo separado para evitar importaciones circulares entre
 main.py (donde se registra el handler) y los routers que usan el decorador.

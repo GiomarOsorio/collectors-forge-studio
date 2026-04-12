@@ -1,5 +1,5 @@
 /**
- * @file Contexto de autenticacion para Calculator3D.
+ * @file Contexto de autenticacion para collectors-forge-studio.
  *
  * Provee un contexto React que gestiona el estado de autenticacion
  * del usuario en toda la aplicacion. Maneja:

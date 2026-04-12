@@ -1,5 +1,5 @@
 """
-Router de autenticación de TurtleForge Studio.
+Router de autenticación de Collector's Forge Studio.
 
 Endpoints disponibles:
     GET  /api/auth/me       — Devuelve los datos del usuario autenticado actual.

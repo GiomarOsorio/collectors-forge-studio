@@ -1,5 +1,5 @@
 """
-Configuración de la aplicación TurtleForge Cost.
+Configuración de la aplicación Collector's Forge Studio.
 
 Este módulo centraliza todos los parámetros de configuración de la aplicación
 utilizando Pydantic BaseSettings, que permite leer los valores desde variables
@@ -22,10 +22,10 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD (y opcionalmente las demás con sus defaults).
 
     Atributos:
-        POSTGRES_USER:     Usuario de PostgreSQL. Default: turtleforge.
+        POSTGRES_USER:     Usuario de PostgreSQL. Default: collectorsforge.
         POSTGRES_PASSWORD: Contraseña de PostgreSQL. Requerida en producción.
-        POSTGRES_DB:       Nombre de la base de datos. Default: turtleforge.
-        POSTGRES_HOST:     Host del servidor PostgreSQL. Default: calculator3d-postgres.
+        POSTGRES_DB:       Nombre de la base de datos. Default: collectorsforge.
+        POSTGRES_HOST:     Host del servidor PostgreSQL. Default: cfs-postgres.
         POSTGRES_PORT:     Puerto de PostgreSQL. Default: 5432.
         DATABASE_URL:      URL de conexión completa. Si no se define, se construye
                            automáticamente desde las variables POSTGRES_*.
@@ -37,10 +37,10 @@ class Settings(BaseSettings):
         ADMIN_EMAIL:       Email del administrador.
     """
 
-    POSTGRES_USER: str = "turtleforge"
+    POSTGRES_USER: str = "collectorsforge"
     POSTGRES_PASSWORD: str = ""
-    POSTGRES_DB: str = "turtleforge"
-    POSTGRES_HOST: str = "calculator3d-postgres"
+    POSTGRES_DB: str = "collectorsforge"
+    POSTGRES_HOST: str = "cfs-postgres"
     POSTGRES_PORT: int = 5432
 
     DATABASE_URL: str = ""
@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     ENABLE_DOCS: bool = False  # Habilitar /docs y /redoc solo en desarrollo
     ADMIN_USERNAME: str = "admin"
     ADMIN_PASSWORD: str = ""  # Ya no requerida — login via OIDC
-    ADMIN_EMAIL: str = "admin@calculator3d.local"
+    ADMIN_EMAIL: str = "admin@cfs.local"
 
     # OIDC / SSO
     OIDC_ISSUER: str = ""             # ej. https://auth.example.com/application/o/slug/
@@ -61,10 +61,10 @@ class Settings(BaseSettings):
     SESSION_SECRET_KEY: str = ""      # clave para SessionMiddleware; usa SECRET_KEY si está vacía
 
     # MinIO (Vault)
-    MINIO_ENDPOINT: str = "http://calculator3d-minio:9000"
+    MINIO_ENDPOINT: str = "http://cfs-minio:9000"
     MINIO_ACCESS_KEY: str = "minioadmin"
     MINIO_SECRET_KEY: str = "minioadmin"
-    MINIO_BUCKET: str = "turtleforge-models"
+    MINIO_BUCKET: str = "cfs-models"
     VAULT_QUOTA_GB: int = 50
 
     model_config = {"env_file": ".env"}

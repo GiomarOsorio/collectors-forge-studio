@@ -1,4 +1,4 @@
-# Guía de Desarrollo — TurtleForge Studio
+# Guía de Desarrollo — Collector's Forge Studio
 
 Setup del entorno local, convenciones, tests y flujo de trabajo.
 
@@ -36,19 +36,23 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-El `.env.example` ya tiene valores funcionales para desarrollo con SQLite:
+El `.env.example` tiene valores de plantilla. Para desarrollo local completar al menos:
 
 ```env
-DATABASE_URL=sqlite+aiosqlite:///./calculator3d.db
-SECRET_KEY=cambiar-esta-clave-secreta-en-produccion
+DATABASE_URL=sqlite+aiosqlite:///./cfs.db
+SECRET_KEY=una-clave-secreta-para-dev
+SESSION_SECRET_KEY=otra-clave-secreta-para-dev
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=admin123
-ADMIN_EMAIL=admin@calculator3d.local
+# OIDC — apuntar a tu instancia de Authentik (o cualquier proveedor OIDC)
+OIDC_ISSUER=https://auth.tudominio.com/application/o/collectorsforge/
+OIDC_CLIENT_ID=<client-id>
+OIDC_CLIENT_SECRET=<client-secret>
+OIDC_REDIRECT_URI=http://localhost:8000/api/auth/oidc/callback
 ```
 
 > Para desarrollo local con SQLite no se necesita PostgreSQL.
+> Para OIDC en local, registrar `http://localhost:8000/api/auth/oidc/callback` como Redirect URI adicional en Authentik.
 
 ### 1.3 Migraciones
 
@@ -74,9 +78,11 @@ uvicorn app.main:app --reload --port 8000
 - ReDoc: `http://localhost:8000/redoc`
 
 Al arrancar por primera vez, el lifespan crea automáticamente:
-- Usuario `admin` / `admin123`
+- Empresa singleton "The Collector Forge" (UUID `000...0001`)
 - AppSettings con valores por defecto
-- Impresora BambuLab P1S Combo
+- Impresora BambuLab P2S Combo
+
+Los usuarios se crean vía JIT provisioning al hacer login OIDC. No hay usuario `admin` predefinido — el primer usuario que inicia sesión recibe rol `admin`.
 
 ---
 
@@ -123,7 +129,7 @@ python3 -m pytest tests/test_calculator.py -v
 python3 -m pytest tests/ --cov --cov-fail-under=80
 ```
 
-**Resultado esperado:** 235 tests, todos PASS, coverage ≥ 80%.
+**Resultado esperado:** 405 tests, todos PASS, coverage ≥ 80%.
 
 ### Tests del frontend
 
@@ -388,17 +394,23 @@ engine = create_async_engine(settings.DATABASE_URL, echo=True)
 
 ### Probar un endpoint directamente
 
+El login es vía OIDC. Para obtener un token en desarrollo, hacer login en el navegador y copiarlo de `localStorage`:
+
+```js
+// En la consola del navegador (después de hacer login)
+localStorage.getItem('token')
+```
+
 ```bash
-# Obtener token
-TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=admin&password=admin123" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+# Usar el token copiado
+TOKEN="eyJ..."
 
 # Llamar endpoint
 curl -s -H "Authorization: Bearer $TOKEN" \
   http://localhost:8000/api/company/ | python3 -m json.tool
 ```
+
+Alternativamente, usar Swagger UI en `http://localhost:8000/docs` → Authorize → Bearer `<token>`.
 
 ### Frontend: ver estado de autenticación
 

@@ -1,5 +1,5 @@
 """
-Router de gestión de usuarios para TurtleForge Cost.
+Router de gestión de usuarios para Collector's Forge Studio.
 
 Permite a los administradores listar los usuarios de su empresa y a
 cualquier usuario autenticado actualizar su propio perfil (nombre,

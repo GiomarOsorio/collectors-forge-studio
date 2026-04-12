@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script de migración de datos de SQLite a PostgreSQL para TurtleForge Cost.
+Script de migración de datos de SQLite a PostgreSQL para Collector's Forge Studio.
 
 PREREQUISITO: Ejecutar `alembic upgrade head` en PostgreSQL ANTES de este script.
               Las tablas deben existir en PostgreSQL con el esquema correcto.
@@ -9,8 +9,8 @@ USO:
     # Desde el directorio backend/
     pip install psycopg2-binary  # solo para este script
     python scripts/migrate_sqlite_to_postgres.py \\
-        --sqlite ./data/calculator3d.db \\
-        --postgres "postgresql://turtleforge:password@localhost:5432/turtleforge"
+        --sqlite ./data/cfs.db \\
+        --postgres "postgresql://collectorsforge:password@localhost:5432/collectorsforge"
 
 ORDEN DE MIGRACIÓN (respeta FK):
     1. users
@@ -397,24 +397,24 @@ def validate_counts(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Migra datos de SQLite a PostgreSQL para TurtleForge Cost",
+        description="Migra datos de SQLite a PostgreSQL para Collector's Forge Studio",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
     parser.add_argument(
         "--sqlite",
         required=True,
-        help="Ruta al archivo SQLite. Ej: ./data/calculator3d.db",
+        help="Ruta al archivo SQLite. Ej: ./data/cfs.db",
     )
     parser.add_argument(
         "--postgres",
         required=True,
-        help='URL de PostgreSQL. Ej: "postgresql://user:pass@localhost:5432/turtleforge"',
+        help='URL de PostgreSQL. Ej: "postgresql://user:pass@localhost:5432/collectorsforge"',
     )
     args = parser.parse_args()
 
     print("=" * 60)
-    print("TurtleForge Cost — Migración SQLite → PostgreSQL")
+    print("Collector's Forge Studio — Migración SQLite → PostgreSQL")
     print("=" * 60)
     print(f"  SQLite:     {args.sqlite}")
     print(f"  PostgreSQL: {args.postgres}")

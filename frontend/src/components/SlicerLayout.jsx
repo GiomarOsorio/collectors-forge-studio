@@ -1,5 +1,5 @@
 /**
- * @file Layout de la aplicación Slicer dentro de TurtleForge Studio.
+ * @file Layout de la aplicación Slicer dentro de Collector's Forge Studio.
  * @module components/SlicerLayout
  */
 

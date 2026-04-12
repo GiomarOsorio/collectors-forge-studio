@@ -1,5 +1,5 @@
 /**
- * @file Componente de layout principal de Calculator3D.
+ * @file Componente de layout principal de collectors-forge-studio.
  *
  * Define la estructura visual de la aplicacion con un diseno de
  * barra lateral (sidebar) y area de contenido principal.
@@ -99,10 +99,10 @@ export default function Layout() {
         {/* Encabezado con logo y nombre de la aplicacion */}
         <div className="p-6 border-b border-[#222630]">
           <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="TurtleForge" className="h-10 w-10 object-contain" />
+            <img src="/logo.png" alt="Collector's Forge" className="h-10 w-10 object-contain" />
             <div>
-              <h1 className="text-xl font-bold text-tech-white">TurtleForge Cost</h1>
-              <p className="text-gunmetal text-sm">TurtleForge Studio</p>
+              <h1 className="text-xl font-bold text-tech-white">Collector's Forge Studio</h1>
+              <p className="text-gunmetal text-sm">Collector's Forge Studio</p>
             </div>
           </div>
         </div>
@@ -153,8 +153,8 @@ export default function Layout() {
           >
             <Menu size={24} />
           </button>
-          <img src="/logo.png" alt="TurtleForge" className="h-7 w-7 object-contain" />
-          <h1 className="text-lg font-bold text-tech-white">TurtleForge Cost</h1>
+          <img src="/logo.png" alt="Collector's Forge" className="h-7 w-7 object-contain" />
+          <h1 className="text-lg font-bold text-tech-white">Collector's Forge Studio</h1>
         </header>
 
         {/* Contenido de la pagina activa */}

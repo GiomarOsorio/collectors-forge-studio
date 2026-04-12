@@ -1,6 +1,8 @@
-# TurtleForge Studio
+# Collector's Forge Studio
 
-Plataforma web para gestión integral de un negocio de impresión 3D. Calcula costos de impresión, gestiona inventario, emite cotizaciones PDF en HTML/Liquid, registra mantenimientos y controla la cola de trabajo.
+> Plataforma de gestión integral para negocios de impresión 3D — desde el costo del filamento hasta la cotización en manos del cliente.
+
+Calcula costos de impresión con precisión Decimal (material, electricidad, depreciación, mantenimiento, mano de obra, fallos, margen). Gestiona inventario, emite cotizaciones PDF con templates Liquid personalizables, registra mantenimientos y controla la cola de trabajo. Desplegado en contenedores Podman con autenticación SSO vía Authentik.
 
 ---
 
@@ -25,7 +27,7 @@ Plataforma web para gestión integral de un negocio de impresión 3D. Calcula co
 | **Base de datos** | PostgreSQL 16 · Alembic (migraciones) |
 | **PDF** | ReportLab (fallback) · WeasyPrint + python-liquid (templates Liquid) |
 | **Frontend** | React 19 · Vite 7 · TailwindCSS 4 · Axios · React Router DOM |
-| **Auth** | JWT (python-jose) · bcrypt 4.0.1 (passlib) |
+| **Auth** | JWT (python-jose) · OIDC/SSO con PKCE (Authlib) |
 | **Contenedores** | Podman 5.x + Quadlet (systemd) — *no Docker* |
 | **Exposición** | Cloudflare Tunnel → `3d.turtlenode.dev` |
 | **CI/CD** | GitHub Actions (tests en Ubuntu) + self-hosted runner (deploy) |
@@ -49,13 +51,13 @@ Plataforma web para gestión integral de un negocio de impresión 3D. Calcula co
 
 ```bash
 # 1. Clonar
-git clone git@github.com:GiomarOsorio/Calculator3D.git ~/Calculator3D
-cd ~/Calculator3D
+git clone git@github.com:GiomarOsorio/collectors-forge-studio.git ~/collectors-forge-studio
+cd ~/collectors-forge-studio
 
 # 2. Configurar variables de entorno
-cp .env.example ~/Calculator3DENV
-nano ~/Calculator3DENV
-# Completar: SECRET_KEY, POSTGRES_PASSWORD, ADMIN_PASSWORD, TUNNEL_TOKEN
+cp .env.example ~/CollectorsForgeENV
+nano ~/CollectorsForgeENV
+# Completar: SECRET_KEY, POSTGRES_PASSWORD, SESSION_SECRET_KEY, vars OIDC, TUNNEL_TOKEN
 
 # 3. Desplegar (construye imágenes + aplica migraciones + inicia servicios)
 ./deploy.sh
@@ -70,11 +72,12 @@ Ver **[docs/despliegue.md](docs/despliegue.md)** para la guía completa, incluye
 ## Inicio rápido — desarrollo local
 
 ```bash
-# Backend (SQLite, sin PostgreSQL)
+# Backend
 cd backend
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env          # usa SQLite por defecto
+cp .env.example .env
+# Completar OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, SECRET_KEY
 alembic upgrade head
 uvicorn app.main:app --reload
 # API en http://localhost:8000 · Swagger en http://localhost:8000/docs
@@ -86,7 +89,7 @@ npm run dev
 # UI en http://localhost:5173 (proxy /api → :8000)
 ```
 
-Credenciales por defecto: `admin` / `admin123`
+El login se realiza vía SSO con el proveedor OIDC configurado. El primer usuario que inicia sesión recibe rol `admin`; los siguientes reciben `operator`.
 
 Ver **[docs/desarrollo.md](docs/desarrollo.md)** para convenciones, tests, migraciones y flujo de trabajo.
 
@@ -123,18 +126,20 @@ El motor (`backend/app/services/calculator.py`) opera en precisión `Decimal` pu
 |---|---|---|
 | `SECRET_KEY` | Clave JWT (**requerida**) | — |
 | `POSTGRES_PASSWORD` | Contraseña PostgreSQL (**requerida**) | — |
-| `ADMIN_PASSWORD` | Contraseña admin inicial (**requerida**) | — |
-| `ADMIN_USERNAME` | Usuario admin | `admin` |
-| `ADMIN_EMAIL` | Email admin | `admin@calculator3d.local` |
+| `SESSION_SECRET_KEY` | Clave SessionMiddleware (**requerida**) | usa `SECRET_KEY` si vacía |
+| `OIDC_ISSUER` | URL issuer OIDC (**requerida**) | — |
+| `OIDC_CLIENT_ID` | Client ID del proveedor OIDC (**requerido**) | — |
+| `OIDC_CLIENT_SECRET` | Client Secret del proveedor OIDC (**requerido**) | — |
+| `OIDC_REDIRECT_URI` | Redirect URI registrada en el proveedor | — |
 | `TUNNEL_TOKEN` | Token Cloudflare Tunnel | — (opcional) |
-| `POSTGRES_USER` | Usuario PostgreSQL | `turtleforge` |
-| `POSTGRES_DB` | Nombre de la base de datos | `turtleforge` |
-| `POSTGRES_HOST` | Host PostgreSQL | `calculator3d-postgres` |
+| `POSTGRES_USER` | Usuario PostgreSQL | `collectorsforge` |
+| `POSTGRES_DB` | Nombre de la base de datos | `collectorsforge` |
+| `POSTGRES_HOST` | Host PostgreSQL | `cfs-postgres` |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Duración del JWT | `1440` (24h) |
 
-Generar `SECRET_KEY`:
+Generar claves:
 ```bash
-openssl rand -hex 32
+openssl rand -hex 32  # usar para SECRET_KEY y SESSION_SECRET_KEY
 ```
 
 ---
@@ -143,23 +148,23 @@ openssl rand -hex 32
 
 ```bash
 # Estado de todos los servicios
-systemctl --user status calculator3d-{postgres,backend,frontend,slicer,tunnel}
+systemctl --user status cfs-{postgres,backend,frontend,slicer,tunnel}
 
 # Logs en tiempo real
-journalctl --user -u calculator3d-backend -f
+journalctl --user -u cfs-backend -f
 
 # Reiniciar backend
-systemctl --user restart calculator3d-backend
+systemctl --user restart cfs-backend
 
 # Conectar a PostgreSQL
-podman exec -it calculator3d-postgres psql -U turtleforge -d turtleforge
+podman exec -it cfs-postgres psql -U collectorsforge -d collectorsforge
 
 # Backup de la base de datos
-podman exec calculator3d-postgres pg_dump -U turtleforge -Fc turtleforge \
-  > ~/backups/turtleforge-$(date +%Y%m%d).dump
+podman exec cfs-postgres pg_dump -U collectorsforge -Fc collectorsforge \
+  > ~/backups/collectorsforge-$(date +%Y%m%d).dump
 
 # Aplicar migraciones manualmente
-podman exec calculator3d-backend alembic upgrade head
+podman exec cfs-backend alembic upgrade head
 
 # Ver todos los contenedores
 podman ps

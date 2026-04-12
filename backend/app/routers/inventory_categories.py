@@ -1,5 +1,5 @@
 """
-Router de categorías de inventario para TurtleForge Cost.
+Router de categorías de inventario para Collector's Forge Studio.
 
 Gestiona el CRUD de categorías de inventario configurables por empresa.
 Las categorías marcadas como is_system=True (ej: Filamento) no pueden eliminarse.

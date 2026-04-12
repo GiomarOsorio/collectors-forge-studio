@@ -57,12 +57,12 @@ async def lifespan(fastapi_app: FastAPI):
     task.cancel()
 
 
-app = FastAPI(title="TurtleForge Tracker Service", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Collector's Forge Tracker Service", version="1.0.0", lifespan=lifespan)
 
 # URL de la base de datos (misma que usa el backend)
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
-    "postgresql://postgres:postgres@db:5432/turtleforge",
+    "postgresql://postgres:postgres@db:5432/collectorsforge",
 )
 
 # Intervalo de escaneo automático en minutos (0 = desactivado)

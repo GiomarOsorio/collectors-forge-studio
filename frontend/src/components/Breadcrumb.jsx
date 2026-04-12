@@ -1,5 +1,5 @@
 /**
- * @file Breadcrumb de navegación para las apps de TurtleForge Studio.
+ * @file Breadcrumb de navegación para las apps de Collector's Forge Studio.
  *
  * Lee la ruta actual con useLocation() y muestra los segmentos en español.
  * Solo se renderiza cuando la ruta tiene 2 o más segmentos (ej. /cost/calculator).
@@ -14,7 +14,7 @@ import { ChevronRight } from 'lucide-react';
 
 /**
  * Mapa de segmentos de ruta a etiquetas legibles en español.
- * Cubre todas las apps de TurtleForge Studio.
+ * Cubre todas las apps de Collector's Forge Studio.
  */
 const SEGMENT_LABELS = {
   /* Apps */

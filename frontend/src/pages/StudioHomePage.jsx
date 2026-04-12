@@ -1,5 +1,5 @@
 /**
- * @file Página principal de TurtleForge Studio.
+ * @file Página principal de Collector's Forge Studio.
  *
  * Muestra un panel estilo launcher (similar a Okta) con todas las
  * aplicaciones disponibles. Cada app se representa como una tarjeta
@@ -12,7 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { APPS } from '../config/apps';
 
 /**
- * Página de inicio de TurtleForge Studio con launcher de aplicaciones.
+ * Página de inicio de Collector's Forge Studio con launcher de aplicaciones.
  *
  * @returns {JSX.Element}
  */
@@ -27,7 +27,7 @@ export default function StudioHomePage() {
         className="mb-10"
         style={{ animation: 'fadeInUp 0.4s ease-out both' }}
       >
-        <h2 className="text-3xl font-bold text-tech-white mb-2">Bienvenido a TurtleForge Studio</h2>
+        <h2 className="text-3xl font-bold text-tech-white mb-2">Bienvenido a Collector's Forge Studio</h2>
         <p className="text-steel text-lg">Selecciona una aplicación para comenzar.</p>
       </div>
 

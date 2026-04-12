@@ -128,10 +128,10 @@ class TestEncabezadoEmpresa:
         )
 
     def test_nombre_empresa_en_encabezado(self):
-        """'TurtleForge Studio' debe aparecer en el encabezado."""
+        """'Collector's Forge Studio' debe aparecer en el encabezado."""
         elements = _capturar_elements(_make_quote())
         textos   = _extraer_textos(elements)
-        assert any("TurtleForge Studio" in t for t in textos)
+        assert any("Collector's Forge Studio" in t for t in textos)
 
     def test_medellin_en_linea_generacion(self):
         """La línea de generación al pie también incluye 'Medellín, Colombia'."""

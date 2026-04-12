@@ -1,5 +1,5 @@
 """
-Router de perfil de empresa para TurtleForge Cost.
+Router de perfil de empresa para Collector's Forge Studio.
 
 Permite consultar y actualizar los datos de la empresa del usuario
 autenticado. La actualización de datos y la subida del logo están

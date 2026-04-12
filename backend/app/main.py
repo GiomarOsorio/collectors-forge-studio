@@ -1,5 +1,5 @@
 """
-Punto de entrada principal de la API TurtleForge Cost.
+Punto de entrada principal de la API Collector's Forge Studio.
 
 Este módulo crea y configura la instancia de FastAPI, registra el middleware
 de CORS y SessionMiddleware, incluye todos los routers de la aplicación y
@@ -103,7 +103,7 @@ async def lifespan(app: FastAPI):
 # Instancia principal de la aplicación FastAPI con metadatos para la documentación
 # /docs y /redoc se deshabilitan en producción (ENABLE_DOCS=False por defecto)
 app = FastAPI(
-    title="TurtleForge Cost API",
+    title="Collector's Forge API",
     description="API para calcular costos de impresión 3D",
     version="1.0.0",
     lifespan=lifespan,
@@ -199,7 +199,7 @@ async def health_check():
     Returns:
         dict: Diccionario con el campo 'status' en 'ok' y el nombre de la app.
     """
-    return {"status": "ok", "app": "TurtleForge Cost"}
+    return {"status": "ok", "app": "Collector's Forge Studio"}
 
 
 async def create_default_data():

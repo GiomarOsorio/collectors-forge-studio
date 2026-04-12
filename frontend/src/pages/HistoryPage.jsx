@@ -1,5 +1,5 @@
 /**
- * @file Pagina de historial de cotizaciones de Calculator3D.
+ * @file Pagina de historial de cotizaciones de collectors-forge-studio.
  *
  * Muestra una tabla con todos los costos de impresión guardados por el usuario.
  * Permite ver el detalle en un modal, editar campos descriptivos y eliminar registros.

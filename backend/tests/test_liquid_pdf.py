@@ -76,7 +76,7 @@ def _make_company(**overrides):
     Cualquier atributo puede sobreescribirse.
     """
     c = MagicMock()
-    c.name = "TurtleForge Studio"
+    c.name = "Collector's Forge Studio"
     c.slogan = "Impresión 3D de calidad"
     c.address = "Medellín, Colombia"
     c.phone = "+57 300 000 0000"
@@ -276,9 +276,9 @@ class TestBuildCotContext:
         assert "47.600" in ctx["total_fmt"]
 
     def test_company_none_usa_valores_defecto(self):
-        """Sin company, el ctx['company']['name'] debe ser 'TurtleForge Studio'."""
+        """Sin company, el ctx['company']['name'] debe ser 'Collector's Forge Studio'."""
         ctx = _build_cot_context(_make_client_quote(), None, 4000.0)
-        assert ctx["company"]["name"] == "TurtleForge Studio"
+        assert ctx["company"]["name"] == "Collector's Forge Studio"
         assert ctx["company"]["address"] == "Medellín, Colombia"
 
     def test_company_real_propaga_nombre(self):
@@ -364,9 +364,9 @@ class TestBuildSampleContext:
             assert clave in ctx, f"Clave faltante: {clave}"
 
     def test_sin_company_usa_datos_ficticios(self):
-        """Sin company, el contexto usa datos predefinidos de TurtleForge Studio."""
+        """Sin company, el contexto usa datos predefinidos de Collector's Forge Studio."""
         ctx = _build_sample_context(None)
-        assert ctx["company"]["name"] == "TurtleForge Studio"
+        assert ctx["company"]["name"] == "Collector's Forge Studio"
 
     def test_con_company_propaga_nombre(self):
         """Con company, el nombre de la empresa se refleja en el contexto."""

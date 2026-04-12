@@ -1,5 +1,5 @@
 """
-Paquete de servicios de Calculator3D.
+Paquete de servicios de collectors-forge-studio.
 
 Contiene la lógica de negocio de la aplicación, desacoplada de la capa de
 transporte HTTP. Cada servicio es responsable de una área funcional específica

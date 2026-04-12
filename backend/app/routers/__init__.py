@@ -1,5 +1,5 @@
 """
-Paquete de routers de la API Calculator3D.
+Paquete de routers de la API collectors-forge-studio.
 
 Contiene los módulos de enrutamiento FastAPI organizados por recurso. Cada
 módulo define un APIRouter con su propio prefijo de URL y etiquetas para la

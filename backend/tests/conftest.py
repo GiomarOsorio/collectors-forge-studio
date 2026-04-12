@@ -1,5 +1,5 @@
 """
-Configuración global de pytest para los tests de Calculator3D.
+Configuración global de pytest para los tests de collectors-forge-studio.
 
 Fixtures con valores Decimal puros — nunca float — para garantizar
 aritmética exacta y que _d() no tenga que hacer conversiones.

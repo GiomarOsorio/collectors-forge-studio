@@ -1,5 +1,5 @@
 """
-Servicio de tasa de cambio USD → COP para Calculator3D.
+Servicio de tasa de cambio USD → COP para collectors-forge-studio.
 
 Obtiene el precio del dólar en pesos colombianos desde la API pública de
 open.er-api.com (sin clave de API requerida). Al valor obtenido se le suman

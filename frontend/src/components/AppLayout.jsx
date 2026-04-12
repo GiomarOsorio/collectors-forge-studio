@@ -1,12 +1,12 @@
 /**
- * @file Layout unificado para las apps de TurtleForge Studio.
+ * @file Layout unificado para las apps de Collector's Forge Studio.
  *
  * Reemplaza los 7 layouts individuales (CostLayout, InventoryLayout, etc.)
  * con un componente parametrizable. Diferencia entre apps con AppSwitcher
  * (Cost, Inventory, Queue, Maintenance, Company, Slicer) y sin él (Settings).
  *
  * Mejoras vs. los layouts anteriores:
- * - Sublabel "TurtleForge Studio" en la cabecera del sidebar
+ * - Sublabel "Collector's Forge Studio" en la cabecera del sidebar
  * - Botón de logout con tf-btn-ghost (touch target ≥ 44px)
  * - Animación fadeInUp en el área de contenido
  * - Breadcrumb de navegación
@@ -28,7 +28,7 @@ const PageFallback = () => (
 );
 
 /**
- * Layout unificado para apps de TurtleForge Studio.
+ * Layout unificado para apps de Collector's Forge Studio.
  *
  * @param {Object} props
  * @param {string} props.appName - Nombre de la app mostrado en el sidebar (ej. "Cost", "Archive")
@@ -55,12 +55,12 @@ export default function AppLayout({ appName, navItems, activeClass, useAppSwitch
     <>
       <img
         src="/logo.png"
-        alt="TurtleForge"
+        alt="Collector's Forge"
         className="h-10 w-10 object-contain shrink-0 group-hover:scale-105 transition-transform"
       />
       <div className="min-w-0">
         <p className="text-[10px] font-medium text-gunmetal leading-none mb-1 uppercase tracking-widest">
-          TurtleForge Studio
+          Collector's Forge Studio
         </p>
         <h1 className="text-lg font-bold text-tech-white leading-none truncate">{appName}</h1>
       </div>
@@ -100,7 +100,7 @@ export default function AppLayout({ appName, navItems, activeClass, useAppSwitch
             <Link
               to="/"
               className="flex items-center gap-3 w-full hover:opacity-80 transition-opacity group"
-              title="Volver a TurtleForge Studio"
+              title="Volver a Collector's Forge Studio"
             >
               {logoInner}
             </Link>
@@ -169,12 +169,12 @@ export default function AppLayout({ appName, navItems, activeClass, useAppSwitch
               className="flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0"
               title="Cambiar de aplicación"
             >
-              <img src="/logo.png" alt="TurtleForge" className="h-7 w-7 object-contain shrink-0" />
+              <img src="/logo.png" alt="Collector's Forge" className="h-7 w-7 object-contain shrink-0" />
               <h1 className="text-lg font-bold text-tech-white truncate">{appName}</h1>
             </button>
           ) : (
             <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0">
-              <img src="/logo.png" alt="TurtleForge" className="h-7 w-7 object-contain shrink-0" />
+              <img src="/logo.png" alt="Collector's Forge" className="h-7 w-7 object-contain shrink-0" />
               <h1 className="text-lg font-bold text-tech-white truncate">{appName}</h1>
             </Link>
           )}
@@ -195,7 +195,7 @@ export default function AppLayout({ appName, navItems, activeClass, useAppSwitch
 
         {/* Footer */}
         <footer className="bg-[#0A0E16] border-t border-[#222630] py-2 px-6 text-center shrink-0">
-          <p className="text-gunmetal text-xs">TurtleForge Studio · Medellín, Colombia</p>
+          <p className="text-gunmetal text-xs">Collector's Forge Studio · Medellín, Colombia</p>
         </footer>
       </div>
     </div>

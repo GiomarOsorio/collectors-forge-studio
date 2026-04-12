@@ -1,5 +1,5 @@
 """
-Router de cotizaciones de cliente para TurtleForge Cost.
+Router de cotizaciones de cliente para Collector's Forge Studio.
 
 Gestiona las cotizaciones manuales multi-producto orientadas al cliente.
 A diferencia del historial de costos de impresión (quotes), estas cotizaciones

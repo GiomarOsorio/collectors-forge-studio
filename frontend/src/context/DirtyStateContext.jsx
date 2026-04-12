@@ -1,5 +1,5 @@
 /**
- * @file Contexto de estado sucio (datos no guardados) para TurtleForge Studio.
+ * @file Contexto de estado sucio (datos no guardados) para Collector's Forge Studio.
  *
  * Permite a cualquier formulario registrarse como "sucio" (con datos sin guardar).
  * Otros componentes (como el AppSwitcher) consultan este estado antes de navegar

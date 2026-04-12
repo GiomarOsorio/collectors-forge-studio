@@ -1,5 +1,5 @@
 """
-Router de cola de impresión para TurtleForge Studio.
+Router de cola de impresión para Collector's Forge Studio.
 
 Gestiona los trabajos de impresión encolados. Solo se pueden agregar cotizaciones
 guardadas (Quote). Al marcar un trabajo como 'done', se descuenta automáticamente

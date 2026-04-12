@@ -1,5 +1,5 @@
 """
-Router del Vault de modelos .3mf para TurtleForge Studio.
+Router del Vault de modelos .3mf para Collector's Forge Studio.
 
 Gestiona la subida, descarga y administración de archivos .3mf almacenados
 en MinIO. Todos los endpoints requieren autenticación JWT y filtran por
