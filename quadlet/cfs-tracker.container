@@ -1,12 +1,12 @@
 [Unit]
-Description=TurtleForge Tracker - Seguimiento de pedidos con Playwright
-After=network-online.target calculator3d-postgres.service
-Requires=calculator3d-postgres.service
+Description=Collector's Forge Tracker - Seguimiento de pedidos con Playwright
+After=network-online.target cfs-postgres.service
+Requires=cfs-postgres.service
 
 [Container]
-ContainerName=calculator3d-tracker
-Image=localhost/calculator3d-tracker:latest
-Network=calculator3d.network:alias=tracker
+ContainerName=cfs-tracker
+Image=localhost/cfs-tracker:latest
+Network=cfs.network:alias=tracker
 EnvironmentFile=__ENV_FILE__
 HealthCmd=curl -sf http://localhost:8002/health
 HealthInterval=30s

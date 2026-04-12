@@ -1,4 +1,4 @@
 # NOTA: Este volumen va en turtleStorage, NO en turtleServer.
 
 [Volume]
-VolumeName=calculator3d-minio-data
+VolumeName=cfs-minio-data

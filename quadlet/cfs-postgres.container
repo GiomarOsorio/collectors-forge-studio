@@ -1,16 +1,16 @@
 [Unit]
-Description=TurtleForge Cost - PostgreSQL 16
+Description=Collector's Forge Studio - PostgreSQL 16
 After=network-online.target
 
 [Container]
-ContainerName=calculator3d-postgres
+ContainerName=cfs-postgres
 Image=docker.io/postgres:16-alpine
-Network=calculator3d.network
-Volume=calculator3d-pgdata.volume:/var/lib/postgresql/data:Z
+Network=cfs.network
+Volume=cfs-pgdata.volume:/var/lib/postgresql/data:Z
 # Variables de PostgreSQL leídas desde .env:
 #   POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
 EnvironmentFile=__ENV_FILE__
-HealthCmd=pg_isready -U turtleforge -d turtleforge
+HealthCmd=pg_isready -U collectorsforge -d collectorsforge
 HealthInterval=10s
 HealthTimeout=5s
 HealthRetries=5
