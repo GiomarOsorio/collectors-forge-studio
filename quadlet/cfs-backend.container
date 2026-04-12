@@ -1,13 +1,13 @@
 [Unit]
-Description=TurtleForge Cost - Backend (FastAPI)
-After=network-online.target calculator3d-postgres.service
-Requires=calculator3d-postgres.service
+Description=Collector's Forge Studio - Backend (FastAPI)
+After=network-online.target cfs-postgres.service
+Requires=cfs-postgres.service
 
 [Container]
-ContainerName=calculator3d-backend
-Image=localhost/calculator3d-backend:latest
-Network=calculator3d.network
-Volume=calculator3d-slicer-jobs.volume:/slicer_jobs:Z
+ContainerName=cfs-backend
+Image=localhost/cfs-backend:latest
+Network=cfs.network
+Volume=cfs-slicer-jobs.volume:/slicer_jobs:Z
 # DATABASE_URL y demás variables vienen del .env (sin hardcodear SQLite aquí)
 EnvironmentFile=__ENV_FILE__
 Environment=ALGORITHM=HS256

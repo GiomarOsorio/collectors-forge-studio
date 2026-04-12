@@ -1,17 +1,17 @@
 # NOTA: Este Quadlet va en turtleStorage, NO en turtleServer.
 # Instalar manualmente en /home/turtlestorage/.config/containers/systemd/
-# Luego: systemctl --user daemon-reload && systemctl --user start calculator3d-minio
+# Luego: systemctl --user daemon-reload && systemctl --user start cfs-minio
 
 [Unit]
-Description=TurtleForge MinIO - Object storage para el Vault
+Description=Collector's Forge MinIO - Object storage para el Vault
 After=network-online.target
 
 [Container]
-ContainerName=calculator3d-minio
+ContainerName=cfs-minio
 Image=quay.io/minio/minio:latest
 PublishPort=9000:9000
 PublishPort=9001:9001
-Volume=calculator3d-minio-data.volume:/data
+Volume=cfs-minio-data.volume:/data
 EnvironmentFile=/home/turtlestorage/.env
 Exec=server /data --console-address ":9001"
 HealthCmd=curl -sf http://localhost:9000/minio/health/live
