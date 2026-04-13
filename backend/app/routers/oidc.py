@@ -106,8 +106,9 @@ async def oidc_callback(request: Request, db: AsyncSession = Depends(get_db)):
 
     if user is None:
         # Verificar si es el primer usuario del sistema (será admin)
-        count_result = await db.execute(select(User))
-        is_first_user = count_result.scalar_one_or_none() is None
+        from sqlalchemy import func
+        count_result = await db.execute(select(func.count()).select_from(User))
+        is_first_user = count_result.scalar() == 0
 
         # Generar username único si ya existe uno igual
         username = preferred_username or f"user_{oidc_sub[:8]}"
