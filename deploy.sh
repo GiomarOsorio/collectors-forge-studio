@@ -86,7 +86,7 @@ if [ -n "$INFISICAL_CLIENT_ID" ] && infisical_ready; then
     pg_db=$(infisical_get POSTGRES_DB 2>/dev/null || echo "collectorsforge")
     pg_password=$(infisical_get POSTGRES_PASSWORD)
     session_key=$(infisical_get SESSION_SECRET_KEY 2>/dev/null || echo "")
-    oidc_issuer=$(infisical_get AUTHENTIK_ENDPOINT /authentik 2>/dev/null || echo "")
+    oidc_issuer=$(infisical_get OIDC_ISSUER 2>/dev/null || echo "")
     oidc_client_id=$(infisical_get OIDC_CLIENT_ID 2>/dev/null || echo "")
     oidc_client_secret=$(infisical_get OIDC_CLIENT_SECRET 2>/dev/null || echo "")
     oidc_redirect_uri=$(infisical_get OIDC_REDIRECT_URI 2>/dev/null || echo "")
