@@ -165,6 +165,13 @@ echo "→ Instalando Quadlets en systemd..."
 QUADLET_DIR="$HOME/.config/containers/systemd"
 mkdir -p "$QUADLET_DIR"
 
+# Eliminar quadlets viejos (calculator3d-*) para evitar conflictos de puertos.
+# Los volúmenes podman con los datos NO se borran — solo las definiciones de unidad.
+echo "→ Eliminando quadlets obsoletos calculator3d-*..."
+rm -f "$QUADLET_DIR"/calculator3d-*.container \
+      "$QUADLET_DIR"/calculator3d-*.volume \
+      "$QUADLET_DIR"/calculator3d*.network
+
 # Copiar red y volúmenes
 # Nota: service-deployments también instala cfs.network (para cloudflared)
 cp "$DEPLOY_PATH/quadlet/cfs.network" "$QUADLET_DIR/"
