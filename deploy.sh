@@ -229,7 +229,22 @@ for old in calculator3d-frontend calculator3d-backend calculator3d-postgres \
     podman rm   "$old" 2>/dev/null || true
 done
 
-sleep 2
+echo "→ Esperando que el puerto 3000 quede libre..."
+for i in $(seq 1 20); do
+    if ! ss -tlnp 2>/dev/null | grep -q ':3000'; then
+        echo "  Puerto 3000 libre."
+        break
+    fi
+    if [ "$i" -eq 20 ]; then
+        echo "  Forzando liberación del puerto 3000..."
+        fuser -k 3000/tcp 2>/dev/null || true
+        pkill -f "rootlessport" 2>/dev/null || true
+        sleep 3
+    else
+        echo "  Puerto ocupado, esperando... ($i/20)"
+        sleep 1
+    fi
+done
 
 echo "→ Iniciando backend, slicer, tracker y frontend..."
 systemctl --user start cfs-slicer cfs-backend cfs-tracker cfs-frontend
