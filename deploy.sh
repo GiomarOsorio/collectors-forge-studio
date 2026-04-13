@@ -215,6 +215,13 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+echo "→ Limpiando contenedores con nombres anteriores (calculator3d-*)..."
+for old in calculator3d-frontend calculator3d-backend calculator3d-postgres \
+           calculator3d-slicer calculator3d-tracker calculator3d-tunnel; do
+    podman stop "$old" 2>/dev/null || true
+    podman rm   "$old" 2>/dev/null || true
+done
+
 echo "→ Iniciando backend, slicer, tracker y frontend..."
 systemctl --user restart cfs-slicer cfs-backend cfs-tracker cfs-frontend
 
