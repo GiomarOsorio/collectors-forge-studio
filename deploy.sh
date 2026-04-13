@@ -31,6 +31,7 @@ infisical_login() {
     fi
     local response
     response=$(curl -s -X POST \
+        --connect-timeout 10 --max-time 30 \
         "${INFISICAL_URL}/api/v1/auth/universal-auth/login" \
         -H "Content-Type: application/x-www-form-urlencoded" \
         --data-urlencode "clientId=${INFISICAL_CLIENT_ID}" \
@@ -50,9 +51,13 @@ infisical_get() {
     local name="$1"
     infisical_login
     local response
-    response=$(curl -s \
+    response=$(curl -s --get \
+        --connect-timeout 10 --max-time 30 \
         -H "Authorization: Bearer ${INFISICAL_TOKEN}" \
-        "${INFISICAL_URL}/api/v3/secrets/raw/${name}?workspaceSlug=${INFISICAL_PROJECT}&environment=${INFISICAL_ENV}&secretPath=${INFISICAL_PATH}")
+        --data-urlencode "workspaceSlug=${INFISICAL_PROJECT}" \
+        --data-urlencode "environment=${INFISICAL_ENV}" \
+        --data-urlencode "secretPath=${INFISICAL_PATH}" \
+        "${INFISICAL_URL}/api/v3/secrets/raw/${name}")
     echo "$response" \
         | python3 -c "import sys,json; print(json.load(sys.stdin)['secret']['secretValue'])" || {
         echo "ERROR: No se pudo obtener el secreto '${name}'." >&2
@@ -71,6 +76,8 @@ if [ -n "$INFISICAL_CLIENT_ID" ] && infisical_ready; then
     echo "→ Obteniendo secretos desde Infisical (${INFISICAL_URL})..."
 
     secret_key=$(infisical_get SECRET_KEY)
+    pg_user=$(infisical_get POSTGRES_USER 2>/dev/null || echo "collectorsforge")
+    pg_db=$(infisical_get POSTGRES_DB 2>/dev/null || echo "collectorsforge")
     pg_password=$(infisical_get POSTGRES_PASSWORD)
     session_key=$(infisical_get SESSION_SECRET_KEY 2>/dev/null || echo "")
     oidc_issuer=$(infisical_get OIDC_ISSUER 2>/dev/null || echo "")
@@ -86,9 +93,9 @@ if [ -n "$INFISICAL_CLIENT_ID" ] && infisical_ready; then
     echo "→ Escribiendo ${ENV_FILE}..."
     {
         printf 'SECRET_KEY=%q\n'          "$secret_key"
-        printf 'POSTGRES_USER=%q\n'       "${POSTGRES_USER:-collectorsforge}"
+        printf 'POSTGRES_USER=%q\n'       "$pg_user"
         printf 'POSTGRES_PASSWORD=%q\n'   "$pg_password"
-        printf 'POSTGRES_DB=%q\n'         "${POSTGRES_DB:-collectorsforge}"
+        printf 'POSTGRES_DB=%q\n'         "$pg_db"
         printf 'SESSION_SECRET_KEY=%q\n'  "$session_key"
         printf 'OIDC_ISSUER=%q\n'         "$oidc_issuer"
         printf 'OIDC_CLIENT_ID=%q\n'      "$oidc_client_id"
