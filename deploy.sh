@@ -215,6 +215,13 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+echo "→ Parando servicios cfs-* en ejecución..."
+for svc in cfs-frontend cfs-backend cfs-slicer cfs-tracker; do
+    systemctl --user stop "$svc" 2>/dev/null || true
+    podman stop "$svc"   2>/dev/null || true
+    podman rm   "$svc"   2>/dev/null || true
+done
+
 echo "→ Limpiando contenedores con nombres anteriores (calculator3d-*)..."
 for old in calculator3d-frontend calculator3d-backend calculator3d-postgres \
            calculator3d-slicer calculator3d-tracker calculator3d-tunnel; do
@@ -222,8 +229,10 @@ for old in calculator3d-frontend calculator3d-backend calculator3d-postgres \
     podman rm   "$old" 2>/dev/null || true
 done
 
+sleep 2
+
 echo "→ Iniciando backend, slicer, tracker y frontend..."
-systemctl --user restart cfs-slicer cfs-backend cfs-tracker cfs-frontend
+systemctl --user start cfs-slicer cfs-backend cfs-tracker cfs-frontend
 
 echo "→ Verificando que el backend responde (máx. 30s)..."
 for i in $(seq 1 15); do
