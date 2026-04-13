@@ -54,7 +54,7 @@ infisical_login() {
 # Obtiene el valor de un secreto por nombre desde Infisical
 # Uso: infisical_get <SECRET_NAME>
 infisical_get() {
-    local name="$1"
+    local name="$1" path="${2:-$INFISICAL_PATH}"
     infisical_login || return 1
     local response
     response=$(curl -s --get \
@@ -62,7 +62,7 @@ infisical_get() {
         -H "Authorization: Bearer ${INFISICAL_TOKEN}" \
         --data-urlencode "workspaceSlug=${INFISICAL_PROJECT}" \
         --data-urlencode "environment=${INFISICAL_ENV}" \
-        --data-urlencode "secretPath=${INFISICAL_PATH}" \
+        --data-urlencode "secretPath=${path}" \
         "${INFISICAL_URL}/api/v3/secrets/raw/${name}")
     echo "$response" \
         | python3 -c "import sys,json; print(json.load(sys.stdin)['secret']['secretValue'])" || {
@@ -86,13 +86,13 @@ if [ -n "$INFISICAL_CLIENT_ID" ] && infisical_ready; then
     pg_db=$(infisical_get POSTGRES_DB 2>/dev/null || echo "collectorsforge")
     pg_password=$(infisical_get POSTGRES_PASSWORD)
     session_key=$(infisical_get SESSION_SECRET_KEY 2>/dev/null || echo "")
-    oidc_issuer=$(infisical_get OIDC_ISSUER 2>/dev/null || echo "")
+    oidc_issuer=$(infisical_get AUTHENTIK_ENDPOINT /authentik 2>/dev/null || echo "")
     oidc_client_id=$(infisical_get OIDC_CLIENT_ID 2>/dev/null || echo "")
     oidc_client_secret=$(infisical_get OIDC_CLIENT_SECRET 2>/dev/null || echo "")
     oidc_redirect_uri=$(infisical_get OIDC_REDIRECT_URI 2>/dev/null || echo "")
-    minio_endpoint=$(infisical_get MINIO_ENDPOINT 2>/dev/null || echo "http://cfs-minio:9000")
-    minio_access_key=$(infisical_get MINIO_ACCESS_KEY 2>/dev/null || echo "minioadmin")
-    minio_secret_key=$(infisical_get MINIO_SECRET_KEY 2>/dev/null || echo "minioadmin")
+    minio_endpoint=$(infisical_get MINIO_ENDPOINT /minio 2>/dev/null || echo "http://cfs-minio:9000")
+    minio_access_key=$(infisical_get MINIO_ACCESS_KEY /minio 2>/dev/null || echo "minioadmin")
+    minio_secret_key=$(infisical_get MINIO_SECRET_KEY /minio 2>/dev/null || echo "minioadmin")
     minio_bucket=$(infisical_get MINIO_BUCKET 2>/dev/null || echo "cfs-models")
     vault_quota=$(infisical_get VAULT_QUOTA_GB 2>/dev/null || echo "50")
 
