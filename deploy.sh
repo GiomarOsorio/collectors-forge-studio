@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# Trap para mostrar línea exacta del fallo
+trap 'echo "[DEPLOY ERROR] Falló en línea $LINENO (exit $?)"' ERR
+
 echo "=== Collector's Forge Studio - Deploy ==="
 
 DEPLOY_PATH="$(cd "$(dirname "$0")" && pwd)"
@@ -26,9 +29,10 @@ infisical_ready() {
 infisical_login() {
     [ -n "$INFISICAL_TOKEN" ] && return 0
     if [ -z "$INFISICAL_CLIENT_ID" ] || [ -z "$INFISICAL_CLIENT_SECRET" ]; then
-        echo "ERROR: INFISICAL_CLIENT_ID e INFISICAL_CLIENT_SECRET son requeridos." >&2
+        echo "ERROR: INFISICAL_CLIENT_ID e INFISICAL_CLIENT_SECRET son requeridos."
         exit 1
     fi
+    echo "  → Login Infisical (${INFISICAL_URL})..."
     local response
     response=$(curl -s -X POST \
         --connect-timeout 10 --max-time 30 \
@@ -36,13 +40,15 @@ infisical_login() {
         -H "Content-Type: application/x-www-form-urlencoded" \
         --data-urlencode "clientId=${INFISICAL_CLIENT_ID}" \
         --data-urlencode "clientSecret=${INFISICAL_CLIENT_SECRET}")
+    echo "  → Respuesta login: ${response:0:120}"
     INFISICAL_TOKEN=$(echo "$response" \
         | python3 -c "import sys,json; print(json.load(sys.stdin)['accessToken'])") || {
-        echo "ERROR: Infisical login falló." >&2
-        echo "  URL: ${INFISICAL_URL}/api/v1/auth/universal-auth/login" >&2
-        echo "  Respuesta: ${response}" >&2
+        echo "ERROR: Infisical login falló."
+        echo "  URL: ${INFISICAL_URL}/api/v1/auth/universal-auth/login"
+        echo "  Respuesta completa: ${response}"
         exit 1
     }
+    echo "  → Login OK (token obtenido)"
 }
 
 # Obtiene el valor de un secreto por nombre desde Infisical
@@ -60,8 +66,8 @@ infisical_get() {
         "${INFISICAL_URL}/api/v3/secrets/raw/${name}")
     echo "$response" \
         | python3 -c "import sys,json; print(json.load(sys.stdin)['secret']['secretValue'])" || {
-        echo "ERROR: No se pudo obtener el secreto '${name}'." >&2
-        echo "  Respuesta: ${response}" >&2
+        echo "ERROR: No se pudo obtener el secreto '${name}'."
+        echo "  Respuesta: ${response}"
         exit 1
     }
 }
