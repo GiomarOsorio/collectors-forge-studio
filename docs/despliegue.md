@@ -75,11 +75,16 @@ Crear los siguientes secretos en Infisical — **proyecto `homelab`**, environme
 | `OIDC_CLIENT_ID` | Client ID de Authentik |
 | `OIDC_CLIENT_SECRET` | Client Secret de Authentik |
 | `OIDC_REDIRECT_URI` | `https://3d.turtlenode.dev/api/auth/oidc/callback` |
-| `MINIO_ENDPOINT` | Ej. `http://turtleStorage:9000` (opcional) |
-| `MINIO_ACCESS_KEY` | Credencial MinIO (opcional) |
-| `MINIO_SECRET_KEY` | Credencial MinIO (opcional) |
 | `MINIO_BUCKET` | Nombre del bucket (opcional, default `cfs-models`) |
 | `VAULT_QUOTA_GB` | Cuota Vault en GB (opcional, default `50`) |
+
+Los secretos de MinIO van en carpeta `/minio` (no en `/collectorsforge`):
+
+| Nombre en Infisical | Path | Descripción |
+|---|---|---|
+| `MINIO_ENDPOINT` | `/minio` | Ej. `http://turtleStorage:9000` |
+| `MINIO_ACCESS_KEY` | `/minio` | Credencial MinIO (root user) |
+| `MINIO_SECRET_KEY` | `/minio` | Credencial MinIO (root password) |
 
 Crear una Machine Identity en Infisical para el deploy:
 1. **Infisical → `homelab` → Access Control → Machine Identities → Create**

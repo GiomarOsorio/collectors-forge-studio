@@ -137,8 +137,9 @@ collectors-forge-studio/
 │   │   │   └── slicer.py             # SlicingJob schemas
 │   │   │
 │   │   ├── routers/                  # Endpoints FastAPI
-│   │   │   ├── auth.py               # GET /auth/me, POST /auth/logout
+│   │   │   ├── auth.py               # GET /auth/me, POST /auth/logout (blacklist JWT)
 │   │   │   ├── oidc.py               # GET /auth/oidc/login, /callback, /logout
+│   │   │   ├── vault.py              # /vault/ — Vault de modelos .3mf (MinIO)
 │   │   │   ├── company.py            # GET/PUT /company/, POST /company/logo
 │   │   │   ├── company_templates.py  # CRUD + /validate + /preview
 │   │   │   ├── users.py              # GET/PATCH /users/, PUT /users/me
@@ -156,7 +157,9 @@ collectors-forge-studio/
 │   │   │   └── queue.py              # /queue/ cola activa + history
 │   │   │
 │   │   ├── services/                 # Lógica de negocio pura
-│   │   │   ├── auth.py               # JWT create/verify, password hash/verify
+│   │   │   ├── auth.py               # JWT create/verify, blacklist, get_current_user
+│   │   │   ├── vault_storage.py      # MinIO: upload/download/delete via aiobotocore
+│   │   │   ├── vault_metadata.py     # Fetch metadata MakerWorld/Printables/OG
 │   │   │   ├── calculator.py         # Motor de cálculo (Decimal puro)
 │   │   │   ├── pdf_generator.py      # ReportLab → PDF (fallback)
 │   │   │   ├── liquid_pdf.py         # python-liquid + WeasyPrint → PDF
@@ -334,6 +337,14 @@ Company (UUID PK — singleton)
 | `MaintenanceLog` | `maintenance_logs` | Registro de mantenimiento con items usados |
 | `PrintQueueItem` | `print_queue` | Item en cola de impresión (pending/printing/done/cancelled) |
 | `ModelFile` | `model_files` | Archivo `.3mf` en MinIO con metadatos de display (Vault) |
+
+### Cuota y almacenamiento del Vault
+
+MinIO corre en máquina separada (`turtleStorage`). El backend es el único que accede a MinIO — el frontend nunca toca MinIO directamente. La cuota se configura con `VAULT_QUOTA_GB` (Infisical `/collectorsforge`).
+
+```
+Frontend → GET /api/vault/{id}/download → Backend → MinIO (turtleStorage:9000)
+```
 
 ---
 

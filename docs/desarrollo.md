@@ -396,7 +396,11 @@ engine = create_async_engine(settings.DATABASE_URL, echo=True)
 
 ### Probar un endpoint directamente
 
-El login es vía OIDC. Para obtener un token en desarrollo, hacer login en el navegador y copiarlo de `localStorage`:
+El login es exclusivamente vía OIDC. Para obtener un token en desarrollo:
+1. Arrancar el backend con las variables OIDC configuradas para localhost
+2. Abrir `http://localhost:5173` en el navegador (el frontend auto-redirige al IdP)
+3. Completar el login en Authentik
+4. Copiar el token de `localStorage`:
 
 ```js
 // En la consola del navegador (después de hacer login)
