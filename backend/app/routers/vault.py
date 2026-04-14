@@ -2,9 +2,8 @@
 Router del Vault de modelos .3mf para Collector's Forge Studio.
 
 Gestiona la subida, descarga y administración de archivos .3mf almacenados
-en MinIO. Todos los endpoints requieren autenticación JWT y filtran por
-company_id (multi-tenant). Las operaciones de escritura (upload, edit,
-delete) requieren is_admin=True.
+en MinIO. Todos los endpoints requieren autenticación JWT. Las operaciones
+de escritura (upload, edit, delete) requieren role='admin'.
 
 Endpoints:
     GET    /api/vault/               — Listar archivos (paginado, búsqueda)

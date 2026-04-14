@@ -131,7 +131,7 @@ python3 -m pytest tests/test_calculator.py -v
 python3 -m pytest tests/ --cov --cov-fail-under=80
 ```
 
-**Resultado esperado:** 405 tests, todos PASS, coverage ≥ 80%.
+**Resultado esperado:** 402 tests, todos PASS, coverage ≥ 80%.
 
 ### Tests del frontend
 
