@@ -11,21 +11,49 @@ La documentación interactiva (Swagger UI) está disponible en `/docs`.
 
 ---
 
-## Autenticación
+## Autenticación OIDC
 
-### `POST /auth/login`
-Inicia sesión. Devuelve un JWT válido por 24 horas.
+El login es exclusivamente vía OIDC con PKCE. No hay login con contraseña. El flujo completo:
+`GET /auth/oidc/login` → IdP → `GET /auth/oidc/callback` → `/auth/success?token=<JWT>` → frontend guarda token.
 
-**Body** (`application/x-www-form-urlencoded`):
-```
-username=admin&password=mi-password
-```
+---
+
+### `GET /auth/oidc/login`
+Inicia el flujo OIDC. Redirige al proveedor de identidad (Authentik).
+
+Genera `state`, `nonce` y `code_verifier` (PKCE S256), los guarda en la sesión del servidor y redirige.
+
+**Response:** `302 Redirect` → Authentik (o proveedor OIDC configurado)
+
+**Errors:**
+- `503`: OIDC no configurado en el servidor
+
+---
+
+### `GET /auth/oidc/callback`
+Callback del IdP. Intercambia el `code` por tokens, provisiona el usuario (JIT) y emite un JWT local.
+
+**Query params:** `code`, `state` (enviados por el IdP)
+
+**Response:**
+- Éxito: `302 Redirect → /auth/success?token=<JWT>`
+- Error:  `302 Redirect → /login?error=<código>`
+
+Códigos de error posibles:
+- `oidc_callback_failed` — fallo al intercambiar el code
+- `missing_sub` — el ID token no contiene claim `sub`
+- `provisioning_failed` — error al crear usuario JIT
+- `user_inactive` — la cuenta está desactivada
+
+---
+
+### `GET /auth/oidc/logout`
+Retorna la URL de logout del IdP. El frontend limpia el token local y redirige a esta URL.
 
 **Response 200:**
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "bearer"
+  "logout_url": "https://auth.turtlenode.dev/application/o/collectorsforge/end-session/?post_logout_redirect_uri=..."
 }
 ```
 
@@ -37,27 +65,21 @@ Devuelve el usuario autenticado actual.
 **Response 200:**
 ```json
 {
-  "id": "uuid-del-usuario",
-  "username": "admin",
-  "email": "admin@turtlenode.dev",
-  "is_admin": true,
-  "company_id": "00000000-0000-0000-0000-000000000001"
+  "id": 1,
+  "username": "giomar",
+  "email": "giomar@turtlenode.dev",
+  "is_active": true,
+  "role": "admin",
+  "created_at": "2026-04-13T10:00:00"
 }
 ```
 
 ---
 
-### `POST /auth/register`
-Registra un nuevo usuario (solo admins pueden hacerlo, según configuración).
+### `POST /auth/logout`
+Invalida el token JWT actual (lo agrega a una blacklist en memoria hasta que expire).
 
-**Body:**
-```json
-{
-  "username": "nuevo_usuario",
-  "email": "nuevo@email.com",
-  "password": "password123"
-}
-```
+**Response:** `204 No Content`
 
 ---
 
@@ -242,21 +264,40 @@ Devuelve el contenido del template por defecto del sistema (para usar como punto
 ## Usuarios
 
 ### `GET /users/`
-Lista todos los usuarios de la empresa (solo admin).
+Lista todos los usuarios del sistema (solo admin).
+
+**Response 200:** array de `UserResponse` (id, username, email, is_active, role, created_at)
+
+---
 
 ### `PATCH /users/{id}`
-Actualiza un usuario (solo admin). Puede cambiar `is_admin`, `email`, `password`.
-
-### `PUT /users/me`
-Actualiza el perfil del usuario autenticado actual.
+Actualiza el rol de un usuario (solo admin). No se puede quitar el rol de admin propio.
 
 **Body:**
 ```json
 {
-  "email": "nuevo@email.com",
-  "password": "nueva-password"
+  "role": "operator"
 }
 ```
+
+Valores válidos para `role`: `"admin"` | `"operator"` | `"viewer"`
+
+**Response 200:** `UserResponse` actualizado
+
+---
+
+### `PUT /users/me`
+Actualiza el perfil del usuario autenticado: username y/o email.
+
+**Body (todos opcionales):**
+```json
+{
+  "username": "nuevo_nombre",
+  "email": "nuevo@email.com"
+}
+```
+
+**Response 200:** `UserResponse` actualizado
 
 ---
 
@@ -281,8 +322,7 @@ Lista todas las impresoras de la empresa.
     "buildplate_price": 35.0,
     "buildplate_lifespan_hours": 2000.0,
     "other_maintenance_per_hour": 0.01,
-    "notes": "Impresora principal",
-    "company_id": "uuid"
+    "notes": "Impresora principal"
   }
 ]
 ```
@@ -785,6 +825,131 @@ Elimina un ítem de la cola (solo si está en estado `pending` o `cancelled`).
 
 ### `GET /queue/history`
 Lista los últimos 50 ítems completados o cancelados.
+
+---
+
+## Vault de modelos .3mf
+
+Almacenamiento de archivos `.3mf` en MinIO. Todas las operaciones de escritura requieren rol `admin`.
+
+### `GET /vault/`
+Lista archivos del Vault con paginación y búsqueda opcional.
+
+**Query params:**
+- `q` — buscar por nombre (opcional)
+- `page` — página (default 1)
+- `page_size` — ítems por página (default 20, max 100)
+
+**Response 200:**
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "uploaded_by": 1,
+      "uploaded_by_username": "giomar",
+      "file_name": "figura_darth_vader.3mf",
+      "file_size": 2456789,
+      "name": "Darth Vader 15cm",
+      "description": "Figura articulada con base",
+      "thumbnail_url": "https://cdn.makerworld.com/...",
+      "tags": ["star wars", "figura"],
+      "source_url": "https://makerworld.com/models/12345",
+      "source_platform": "makerworld",
+      "creator_name": "PrintMaster",
+      "creator_url": "https://makerworld.com/u/printmaster",
+      "created_at": "2026-04-13T10:00:00",
+      "updated_at": "2026-04-13T10:00:00"
+    }
+  ],
+  "total": 42,
+  "page": 1,
+  "page_size": 20
+}
+```
+
+---
+
+### `GET /vault/stats`
+Uso y cuota de almacenamiento.
+
+**Response 200:**
+```json
+{
+  "used_bytes": 1073741824,
+  "quota_bytes": 53687091200,
+  "percent": 2.0
+}
+```
+
+---
+
+### `POST /vault/fetch-metadata`
+Extrae metadatos de un modelo desde su URL (MakerWorld, Printables, OpenGraph).
+
+**Body:**
+```json
+{
+  "url": "https://makerworld.com/models/12345"
+}
+```
+
+**Response 200:** `VaultMetadataResponse` con name, description, thumbnail_url, tags, source_platform, creator_name, creator_url
+
+---
+
+### `POST /vault/upload` (admin)
+Sube un archivo `.3mf` con sus metadatos.
+
+**Body** (`multipart/form-data`):
+```
+file: archivo.3mf
+metadata: {"name": "Nombre display", "description": "...", "tags": ["tag1"], "source_url": "...", "source_platform": "makerworld", "creator_name": "...", "thumbnail_url": "..."}
+```
+
+Límite: 1 GB. Verifica cuota antes de subir.
+
+**Response 201:** `ModelFileResponse`
+
+**Errors:**
+- `400`: El archivo no es `.3mf`
+- `413`: Supera el límite de 1 GB
+- `507`: Sin espacio disponible (cuota excedida)
+
+---
+
+### `GET /vault/{id}/download`
+Descarga el archivo `.3mf` a través del backend (MinIO permanece en red interna).
+
+**Response:** `application/octet-stream` (binary)
+
+---
+
+### `PUT /vault/{id}` (admin)
+Actualiza metadatos de un archivo (nombre, descripción, tags, etc.). No reemplaza el archivo.
+
+**Body (todos opcionales):**
+```json
+{
+  "name": "Nuevo nombre",
+  "description": "Nueva descripción",
+  "tags": ["tag1", "tag2"]
+}
+```
+
+---
+
+### `POST /vault/{id}/replace` (admin)
+Reemplaza el archivo `.3mf` conservando los metadatos. Sube nuevo archivo, actualiza DB, borra el anterior de MinIO.
+
+**Body** (`multipart/form-data`): `file: nuevo_archivo.3mf`
+
+---
+
+### `DELETE /vault/{id}` (admin)
+Elimina el archivo de MinIO y el registro en DB.
+
+**Response:** `204 No Content`
 
 ---
 
