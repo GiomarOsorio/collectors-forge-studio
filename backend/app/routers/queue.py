@@ -100,7 +100,6 @@ async def _build_response(
 
     return PrintQueueItemResponse(
         id=item.id,
-        company_id=item.company_id,
         quote_id=item.quote_id,
         status=item.status,
         position=item.position,
@@ -166,7 +165,6 @@ async def _build_responses_bulk(
                 )
         responses.append(PrintQueueItemResponse(
             id=item.id,
-            company_id=item.company_id,
             quote_id=item.quote_id,
             status=item.status,
             position=item.position,

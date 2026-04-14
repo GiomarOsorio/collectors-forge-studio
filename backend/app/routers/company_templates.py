@@ -271,8 +271,9 @@ async def validate_liquid_template(
     Returns:
         TemplateValidateResponse con ok, errors, warnings y preview_pdf_b64.
     """
+    DEFAULT_COMPANY_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
     company_result = await db.execute(
-        select(Company).where(Company.id == current_user.company_id)
+        select(Company).where(Company.id == DEFAULT_COMPANY_ID)
     )
     company = company_result.scalar_one_or_none()
 
