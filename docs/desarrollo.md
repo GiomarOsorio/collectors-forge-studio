@@ -82,7 +82,9 @@ Al arrancar por primera vez, el lifespan crea automáticamente:
 - AppSettings con valores por defecto
 - Impresora BambuLab P2S Combo
 
-Los usuarios se crean vía JIT provisioning al hacer login OIDC. No hay usuario `admin` predefinido — el primer usuario que inicia sesión recibe rol `admin`.
+Los usuarios se crean vía JIT provisioning al hacer login OIDC. No hay usuario `admin` predefinido — el primer usuario que inicia sesión recibe rol `admin`. `hashed_password` siempre es NULL.
+
+> **No hay login con contraseña.** El flujo de auth es exclusivamente OIDC. Para desarrollo local, registrar `http://localhost:8000/api/auth/oidc/callback` como Redirect URI adicional en Authentik (o proveedor elegido).
 
 ---
 

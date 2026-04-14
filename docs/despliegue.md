@@ -255,6 +255,14 @@ cd ~/actions-runner
 sudo ./svc.sh start
 ```
 
+### 3.4b Trigger manual de deploy
+
+El workflow tiene `workflow_dispatch` habilitado. Para forzar un deploy sin hacer push:
+
+**GitHub Actions UI** → Repositorio → Actions → "CI / Deploy" → "Run workflow" → Branch: `main` → Run workflow.
+
+---
+
 ### 3.5 GitHub SSH a través del puerto 443
 
 Si el servidor no puede conectar a GitHub por el puerto 22 (SSH), configurar `~/.ssh/config`:
@@ -668,6 +676,14 @@ sudo ./svc.sh start
 ./config.sh --url ... --token NUEVO_TOKEN ...
 sudo ./svc.sh install && sudo ./svc.sh start
 ```
+
+### Error FK al intentar borrar usuarios
+
+Si se necesita limpiar todos los usuarios (ej: migrar de auth local a OIDC), hay FK que bloquean `DELETE FROM users`. Ver procedimiento completo en [docs/base-de-datos.md](base-de-datos.md#borrar-todos-los-usuarios-migración-de-auth).
+
+Tablas que referencian `users`: `app_settings`, `client_quotes`, `quotes`, `slicing_jobs`, `model_files`. Nullear cada una por separado antes de borrar.
+
+---
 
 ### Deploy falla con "Infisical login falló"
 
