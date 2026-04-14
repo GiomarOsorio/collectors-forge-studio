@@ -45,8 +45,18 @@ Las migraciones están en `backend/alembic/versions/`. Se aplican con `alembic u
 | `e6f7a8b9c0d1` | `e6f7a8b9c0d1_add_iva_to_client_quotes.py` | Campo `include_iva` (bool) y `usd_rate` en `client_quotes` |
 | `f5a6b7c8d9e0` | `f5a6b7c8d9e0_add_company_profile.py` | Campos de perfil en `companies`: slogan, address, phone, email, nit, logo_url |
 | `f7a8b9c0d1e2` | `f7a8b9c0d1e2_add_company_pdf_settings.py` | Tabla `company_templates`; campo `pdf_terms` en companies |
+| `a0b1c2d3e4f5` | `a0b1c2d3e4f5_sprint3_queue_index.py` | Índice en `print_queue.quote_id` para queries de cola |
+| `b1c2d3e4f5a7` | `b1c2d3e4f5a7_client_quote_items_jsonb.py` | Migra `client_quotes.items` de TEXT a JSONB |
+| `c2d3e4f5a6b8` | `c2d3e4f5a6b8_company_id_not_null.py` | `company_id NOT NULL` en 7 tablas (posteriormente revertido por `h2i3j4k5l6m7`) |
+| `d3e4f5a6b7c9` | `d3e4f5a6b7c9_add_updated_at_quotes.py` | Campo `updated_at` en `quotes` y `client_quotes` |
+| `e4f5a6b7c8d0` | `e4f5a6b7c8d0_add_inventory_categories.py` | Tabla `inventory_categories` (7 categorías seed: Filamento con decimals, 6 sin decimales) |
 | `a9b0c1d2e3f4` | `a9b0c1d2e3f4_palette_jsonb.py` | Campo `pdf_palette` JSONB en companies: `[{name, hex}]`; elimina los 4 campos de color fijos |
+| `f5a6b7c8d9e1` | `f5a6b7c8d9e1_merge_palette_and_categories.py` | Merge: une rama `palette_jsonb` con rama `inventory_categories` |
+| `a2b3c4d5e6f7` | `a2b3c4d5e6f7_add_consumable_fields.py` | Campos para consumibles en `inventory_items` + categoría Consumible |
+| `b3c4d5e6f7a8` | `b3c4d5e6f7a8_add_model_files.py` | Tabla `model_files` para el Vault de archivos `.3mf` en MinIO |
 | `a1b2c3d4e5f6` | `a1b2c3d4e5f6_add_usd_rate_to_client_quotes.py` | Campo `usd_rate` agregado en `client_quotes` para guardar la tasa USD/COP al momento de emisión |
+| `c5d6e7f8a9b0` | `c5d6e7f8a9b0_merge_three_heads.py` | Merge de tres heads: `model_files`, `printed_items`, `usd_rate` |
+| `c6d7e8f9a0b1` | `c6d7e8f9a0b1_add_plates_data.py` | Campo `plates_data` JSONB en `slicing_jobs` para multi-placa |
 | `g1h2i3j4k5l6` | `g1h2i3j4k5l6_add_oidc_support.py` | Agrega `oidc_sub` (unique, indexed, nullable) y hace `hashed_password` nullable en `users` para soporte OIDC/JIT provisioning |
 | `h2i3j4k5l6m7` | `h2i3j4k5l6m7_remove_multitenant_add_roles.py` | **Head actual** — Elimina `company_id` de 17 tablas operativas. Reemplaza `is_admin` por `role` (`admin`/`operator`/`viewer`) en `users`. `companies` se mantiene como singleton |
 
@@ -323,7 +333,7 @@ Archivos `.3mf` almacenados en MinIO (Vault de modelos).
 |---|---|---|
 | `id` | INTEGER PK | — |
 | `uploaded_by` | INTEGER FK → users SET NULL | Usuario que subió el archivo (nullable) |
-| `file_key` | VARCHAR(500) | Clave del objeto en MinIO: `{company_id}/{uuid}-{filename}.3mf` |
+| `file_key` | VARCHAR(500) | Clave del objeto en MinIO: `{uuid}-{filename}.3mf` |
 | `file_name` | VARCHAR(255) | Nombre original del archivo |
 | `file_size` | BIGINT | Tamaño en bytes |
 | `name` | VARCHAR(200) | Nombre de display editable |
@@ -383,7 +393,7 @@ ORDER BY created_at;
 
 -- Ver templates de cotización
 SELECT id, name, template_type, is_default, length(content) AS content_len
-FROM company_templates ORDER BY company_id, created_at;
+FROM company_templates ORDER BY created_at;
 
 -- Ver stock bajo mínimo
 SELECT name, category, quantity, min_quantity

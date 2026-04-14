@@ -173,8 +173,8 @@ collectors-forge-studio/
 │   │       ├── fonts/                # Fuentes para ReportLab
 │   │       │   ├── TrajanPro-Bold.otf
 │   │       │   └── TrajanPro-Regular.ttf
-│   │       └── companies/            # Logos subidos por cada empresa
-│   │           └── {company_id}/logo.{ext}
+│   │       └── companies/            # Logos de la empresa (UUID como nombre)
+│   │           └── {uuid}.{ext}
 │   │
 │   ├── alembic/                      # Migraciones de base de datos
 │   │   ├── env.py                    # Configuración Alembic async
@@ -330,7 +330,7 @@ Company (UUID PK — singleton)
 | `PrintedItem` | `printed_items` | Impresión terminada con foto e inventario |
 | `Quote` | `quotes` | Cálculo de costo de impresión guardado |
 | `ClientQuote` | `client_quotes` | Cotización multi-producto para cliente (COT-XXXX) |
-| `AppSettings` | `app_settings` | Config por empresa (tarifas, margen) |
+| `AppSettings` | `app_settings` | Config global singleton (tarifas, margen) |
 | `ElectricityTariff` | `electricity_tariffs` | Historial tarifas EPM por mes/estrato |
 | `SlicingJob` | `slicing_jobs` | Trabajo de laminado STL/G-code |
 | `MaintenancePrinter` | `maintenance_printers` | Impresora registrada para mantenimiento |
