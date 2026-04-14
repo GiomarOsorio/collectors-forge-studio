@@ -104,9 +104,10 @@ collectors-forge-studio/
 │   │   │
 │   │   ├── models/                   # SQLAlchemy ORM
 │   │   │   ├── __init__.py           # Re-exporta todos los modelos
-│   │   │   ├── company.py            # Company (UUID PK, logo, pdf_palette)
+│   │   │   ├── company.py            # Company (UUID PK singleton, logo, pdf_palette JSONB)
 │   │   │   ├── company_template.py   # CompanyTemplate (Liquid HTML)
-│   │   │   ├── user.py               # User (FK→Company, is_admin, JWT)
+│   │   │   ├── user.py               # User (oidc_sub, role admin/operator/viewer)
+│   │   │   ├── model_file.py         # ModelFile (Vault .3mf en MinIO, uploaded_by FK→users)
 │   │   │   ├── printer.py            # Printer (depreciación, mantenimiento)
 │   │   │   ├── filament.py           # Filament (legacy, migrado a inventory)
 │   │   │   ├── supply.py             # Supply (legacy, migrado a inventory)
@@ -332,6 +333,7 @@ Company (UUID PK — singleton)
 | `MaintenancePrinter` | `maintenance_printers` | Impresora registrada para mantenimiento |
 | `MaintenanceLog` | `maintenance_logs` | Registro de mantenimiento con items usados |
 | `PrintQueueItem` | `print_queue` | Item en cola de impresión (pending/printing/done/cancelled) |
+| `ModelFile` | `model_files` | Archivo `.3mf` en MinIO con metadatos de display (Vault) |
 
 ---
 
@@ -471,10 +473,10 @@ Todos los contenedores se comunican en la red `cfs` (bridge). Los nombres de con
 ## CI/CD
 
 ```
-git push → main
+git push → main   (o workflow_dispatch manual desde GitHub Actions UI)
       │
       ▼
-GitHub Actions (ubuntu-latest)
+GitHub Actions (self-hosted)
       │
       ├─ Setup Python 3.11
       ├─ pip install requirements.txt

@@ -315,6 +315,28 @@ Singleton — solo hay una fila (se consulta con `LIMIT 1`).
 | `inventory_item_id` | UUID FK → inventory_items | Ítem usado |
 | `quantity` | NUMERIC(12,4) | Cantidad usada (se descuenta del stock) |
 
+### `model_files`
+
+Archivos `.3mf` almacenados en MinIO (Vault de modelos).
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `uploaded_by` | INTEGER FK → users SET NULL | Usuario que subió el archivo (nullable) |
+| `file_key` | VARCHAR(500) | Clave del objeto en MinIO: `{company_id}/{uuid}-{filename}.3mf` |
+| `file_name` | VARCHAR(255) | Nombre original del archivo |
+| `file_size` | BIGINT | Tamaño en bytes |
+| `name` | VARCHAR(200) | Nombre de display editable |
+| `description` | TEXT | — |
+| `thumbnail_url` | VARCHAR(1000) | URL externa de miniatura (MakerWorld/Printables) |
+| `tags` | JSONB | Array de etiquetas de texto libre |
+| `source_url` | VARCHAR(1000) | URL de origen del modelo |
+| `source_platform` | VARCHAR(50) | `makerworld` \| `printables` \| `thingiverse` \| `otro` |
+| `creator_name` | VARCHAR(200) | Nombre del creador original |
+| `creator_url` | VARCHAR(1000) | URL del perfil del creador |
+| `created_at` | TIMESTAMP | — |
+| `updated_at` | TIMESTAMP | — |
+
 ### `print_queue`
 
 | Columna | Tipo | Descripción |
@@ -380,6 +402,54 @@ SELECT quote_number, client_name, total, created_at
 FROM client_quotes
 ORDER BY created_at DESC
 LIMIT 10;
+```
+
+---
+
+## Borrar todos los usuarios (migración de auth)
+
+Cuando se necesita limpiar usuarios con `hashed_password` local para migrar a OIDC, hay que nullear todas las FK que apuntan a `users.id` primero. Ejecutar **cada statement por separado** (no en un solo `-c`) para evitar rollback en cadena por error en uno.
+
+```bash
+source ~/CollectorsForgeENV
+
+# 1. Nullear todas las FKs (cada una separada)
+podman exec -e PGPASSWORD="$POSTGRES_PASSWORD" cfs-postgres \
+  psql -U "${POSTGRES_USER:-collectorsforge}" -d "${POSTGRES_DB:-collectorsforge}" \
+  -c "UPDATE app_settings SET user_id = NULL WHERE user_id IS NOT NULL;"
+
+podman exec -e PGPASSWORD="$POSTGRES_PASSWORD" cfs-postgres \
+  psql -U "${POSTGRES_USER:-collectorsforge}" -d "${POSTGRES_DB:-collectorsforge}" \
+  -c "UPDATE client_quotes SET user_id = NULL WHERE user_id IS NOT NULL;"
+
+# quotes.user_id puede ser NOT NULL — hacerla nullable primero si es necesario:
+# psql -c "ALTER TABLE quotes ALTER COLUMN user_id DROP NOT NULL;"
+podman exec -e PGPASSWORD="$POSTGRES_PASSWORD" cfs-postgres \
+  psql -U "${POSTGRES_USER:-collectorsforge}" -d "${POSTGRES_DB:-collectorsforge}" \
+  -c "UPDATE quotes SET user_id = NULL WHERE user_id IS NOT NULL;"
+
+podman exec -e PGPASSWORD="$POSTGRES_PASSWORD" cfs-postgres \
+  psql -U "${POSTGRES_USER:-collectorsforge}" -d "${POSTGRES_DB:-collectorsforge}" \
+  -c "UPDATE slicing_jobs SET user_id = NULL WHERE user_id IS NOT NULL;"
+
+podman exec -e PGPASSWORD="$POSTGRES_PASSWORD" cfs-postgres \
+  psql -U "${POSTGRES_USER:-collectorsforge}" -d "${POSTGRES_DB:-collectorsforge}" \
+  -c "UPDATE model_files SET uploaded_by = NULL WHERE uploaded_by IS NOT NULL;"
+
+# 2. Borrar usuarios
+podman exec -e PGPASSWORD="$POSTGRES_PASSWORD" cfs-postgres \
+  psql -U "${POSTGRES_USER:-collectorsforge}" -d "${POSTGRES_DB:-collectorsforge}" \
+  -c "DELETE FROM users;"
+```
+
+Para verificar qué tablas tienen FK hacia `users`:
+```sql
+SELECT tc.table_name, kcu.column_name
+FROM information_schema.table_constraints AS tc
+JOIN information_schema.key_column_usage AS kcu ON tc.constraint_name = kcu.constraint_name
+JOIN information_schema.referential_constraints AS rc ON tc.constraint_name = rc.constraint_name
+JOIN information_schema.table_constraints AS ccu ON ccu.constraint_name = rc.unique_constraint_name
+WHERE tc.constraint_type = 'FOREIGN KEY' AND ccu.table_name = 'users';
 ```
 
 ---

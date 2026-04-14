@@ -10,10 +10,10 @@
 ## Arquitectura
 - **Backend**: FastAPI (Python 3.11 en contenedor, 3.9 en Mac dev) + SQLAlchemy async + PostgreSQL (asyncpg)
 - **Frontend**: React 19 + Vite 7 + TailwindCSS 4 + Axios + React Router DOM
-- **Auth**: JWT (python-jose + passlib/bcrypt) + futura integración Cloudflare Access
+- **Auth**: OIDC/SSO con Authentik (PKCE, JIT provisioning) + JWT local (python-jose, HS256, 24h). Sin login con contraseña.
 - **PDF**: ReportLab (generación en memoria) + WeasyPrint (templates Liquid personalizados)
 - **Contenedores**: Podman + Quadlet (systemd), NO Docker
-- **Deploy**: PC Linux separada (no la Mac dev), via Cloudflare Tunnel en `3d.turtledev.dev`
+- **Deploy**: PC Linux separada (no la Mac dev), via Cloudflare Tunnel en `3d.turtlenode.dev`
 
 ## Archivos Clave
 - Backend entry: `backend/app/main.py`
@@ -37,20 +37,20 @@
 
 ## Base de Datos
 - PostgreSQL con asyncpg
-- Alembic para migraciones; head actual: `f5a6b7c8d9e1` (merge palette+categories)
+- Alembic para migraciones; head actual: `h2i3j4k5l6m7` (remove multitenant + add roles)
 - Migrar en servidor: `alembic upgrade head` dentro del contenedor backend
 - **asyncpg + DateTime**: rechaza `datetime` timezone-aware en `TIMESTAMP WITHOUT TIME ZONE`. Usar `.replace(tzinfo=None)` o `DateTime(timezone=True)`.
 - **ALTER TYPE JSONB**: DROP DEFAULT → ALTER TYPE JSONB USING col::jsonb → SET DEFAULT '[]'::jsonb
 - **UNIQUE constraint**: Si tabla tiene UNIQUE, un UPDATE masivo falla si ya existe fila con ese valor. Patrón: `DELETE FROM t WHERE col IS NULL AND EXISTS (...)` antes del UPDATE.
 - Si aparece "Multiple head revisions": crear merge migration con `down_revision = (head1, head2)`
 
-## Multi-tenant (company_id)
-- Modelo `Company` (UUID PK) en `backend/app/models/company.py`
-- `company_id` presente en: User, Filament, Printer, Supply, AppSettings, Quote
-- Todos los routers filtran por `current_user.company_id`
-- Empresa por defecto UUID `00000000-0000-0000-0000-000000000001` creada en `main.py`
-- **Empresa default**: "The Collector Forge"
-- AppSettings: UNIQUE en `company_id` (no en `user_id`); `user_id` ahora nullable
+## Empresa singleton y roles
+- `Company` (UUID fijo `00000000-0000-0000-0000-000000000001`) es singleton — no hay multi-tenant
+- `company_id` fue eliminado de todas las tablas operativas en migración `h2i3j4k5l6m7`
+- `Company` se mantiene solo para perfil, branding y templates PDF
+- `User.role`: `admin` | `operator` | `viewer` (reemplaza `is_admin`)
+- Primer usuario que hace login OIDC → `role='admin'` (JIT provisioning)
+- `hashed_password` siempre NULL — solo se autentica vía OIDC
 
 ## Estructura de Apps (Collector's Forge Studio)
 | App | Ruta | Color | Ícono |
@@ -71,16 +71,19 @@
 ## Modelos y Migraciones (orden cronológico)
 1. Base tables (users, printers, filaments, supplies, quotes)
 2. `b1c2d3e4f5a6` — inventory_items + purchase_orders
-3. `c2d3e4f5a6b7` — inventario unificado (filamentos e insumos → inventory_items)
-4. `c3d4e5f6a7b8` — maintenance (MaintenancePrinter, MaintenanceLog, MaintenanceLogItem)
-5. `d1e2f3a4b5c6` — printed_items
-6. `d3e4f5a6b7c8` — slicing_jobs
-7. `d5e6f7a8b9c0` — print_queue
-8. `e4f5a6b7c8d0` — inventory_categories (7 seed: Filamento is_system+decimals, 6 sin decimales)
-9. `e6f7a8b9c0d1` — (rama palette_jsonb)
-10. `f4a1b9c2d8e7` — multi-tenant company_id
-11. `f7a8b9c0d1e2` — company_pdf_settings (5 campos color + CompanyTemplate)
-12. `f5a6b7c8d9e1` — **merge migration** (head actual, une e4f5... con palette_jsonb)
+3. `b3c4d5e6f7a8` — model_files (Vault MinIO, uploaded_by FK→users nullable)
+4. `c2d3e4f5a6b7` — inventario unificado (filamentos e insumos → inventory_items)
+5. `c3d4e5f6a7b8` — maintenance (MaintenancePrinter, MaintenanceLog, MaintenanceLogItem)
+6. `d1e2f3a4b5c6` — printed_items
+7. `d3e4f5a6b7c8` — slicing_jobs
+8. `d5e6f7a8b9c0` — print_queue
+9. `e4f5a6b7c8d0` — inventory_categories (7 seed: Filamento is_system+decimals, 6 sin decimales)
+10. `e6f7a8b9c0d1` — (rama palette_jsonb)
+11. `f4a1b9c2d8e7` — multi-tenant company_id
+12. `f7a8b9c0d1e2` — company_pdf_settings (pdf_palette JSONB + CompanyTemplate)
+13. `f5a6b7c8d9e1` — merge migration (une e4f5... con palette_jsonb)
+14. `g1h2i3j4k5l6` — OIDC support (oidc_sub unique indexed, hashed_password nullable)
+15. `h2i3j4k5l6m7` — **head actual** — elimina company_id de 17 tablas; role admin/operator/viewer
 
 ## Cotización Manual (ClientQuote)
 - Endpoint: `POST /api/client-quotes/`
@@ -100,7 +103,8 @@
 
 ## App Compañía / PDF Templates
 - Rutas: `/company/profile`, `/company/branding`, `/company/templates`
-- 5 campos color en Company: `pdf_color_primary/accent/highlight/table_text` + `pdf_terms`
+- `pdf_palette` JSONB en Company: `[{name, hex}]` (reemplaza los 4 campos de color fijos)
+- `pdf_terms` TEXT en Company: términos de pago para pie de cotización
 - `CompanyTemplate` — template Liquid HTML para PDF de cotizaciones
 - `liquid_pdf.py` — python-liquid render + WeasyPrint PDF
 - Router: `company_templates.py` — CRUD + `/validate` + `/{id}/preview` + `/default-template`
@@ -148,7 +152,8 @@
 ## CI/CD (`deploy.yml`)
 - Un solo workflow: job `test` → job `deploy`
 - `deploy` tiene `needs: test` — bloqueado si tests fallan
-- `deploy` solo corre en push a `main`; `test` corre en push a main Y en PRs
+- `deploy` corre en push a `main` Y en `workflow_dispatch` (trigger manual desde GitHub Actions UI)
+- `test` corre en push a main, PRs Y workflow_dispatch
 - Runner deploy: self-hosted en la PC Linux
 - Si el runner está offline: `cd ~/actions-runner && sudo ./svc.sh start`
 
@@ -167,12 +172,16 @@
 - **ALTER TYPE JSONB**: DROP DEFAULT → ALTER → SET DEFAULT '[]'::jsonb
 - **InventoryStockPage**: `parseInt()` al guardar IDs desde `<select>` HTML (retorna string)
 - **Multiple head revisions Alembic**: crear merge migration con `down_revision = (head1, head2)`
+- **`exit 1` en función bash llamada en `$()`**: mata el subshell silenciosamente, bypasea `|| fallback`. Usar `return 1` en funciones siempre.
+- **`psql -c "stmt1; stmt2;"`**: todo va en una sola TX implícita. Error en stmt2 revierte stmt1. Separar en `-c` individuales.
+- **`scalar_one_or_none()` con múltiples resultados**: lanza `MultipleResultsFound`. Usar `select(func.count())` para conteos; `select(Model).limit(1)` si se quiere el primero.
+- **Borrar usuarios con FKs**: nullear `app_settings`, `client_quotes`, `quotes` (hacerla nullable primero), `slicing_jobs`, `model_files.uploaded_by` antes de `DELETE FROM users`.
 
 ## Cloudflare
-- Tunnel: gratis
+- Tunnel: gratis — gestionado en repo `service-deployments`, quadlet `cloudflared` en red `cfs`
 - Bot Fight Mode / challenge page: gratis (plan free)
 - Turnstile: gratis hasta 1M req/mes
-- Access (auth futura): gratis hasta 50 usuarios
+- Access: no se usa — la autenticación la maneja Authentik vía OIDC
 
 ## Documentación
 - `docs/arquitectura.md` — diagrama contenedores, estructura archivos, modelos, flujos
