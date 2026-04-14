@@ -37,16 +37,20 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 @router.get("/", response_model=AppSettingsResponse)
 async def get_settings(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_admin_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Obtiene la configuración singleton de la aplicación (solo admins).
+    Obtiene la configuración singleton de la aplicación.
+
+    Lectura abierta a cualquier usuario autenticado porque la calculadora
+    de costos requiere estos parámetros (tarifa, margen, etc). La escritura
+    sigue restringida a admin en `PUT /api/settings/`.
 
     Si no existe configuración, la crea con valores por defecto.
 
     Args:
         db: Sesión de base de datos inyectada por FastAPI.
-        current_user: Usuario admin autenticado.
+        current_user: Usuario autenticado.
 
     Returns:
         AppSettingsResponse con todos los parámetros económicos.
