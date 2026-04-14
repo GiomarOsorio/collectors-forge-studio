@@ -176,6 +176,7 @@
 - **`psql -c "stmt1; stmt2;"`**: todo va en una sola TX implícita. Error en stmt2 revierte stmt1. Separar en `-c` individuales.
 - **`scalar_one_or_none()` con múltiples resultados**: lanza `MultipleResultsFound`. Usar `select(func.count())` para conteos; `select(Model).limit(1)` si se quiere el primero.
 - **Borrar usuarios con FKs**: nullear `app_settings`, `client_quotes`, `quotes` (hacerla nullable primero), `slicing_jobs`, `model_files.uploaded_by` antes de `DELETE FROM users`.
+- **Refs stale a `company_id` post-migración `h2i3j4k5l6m7`**: la columna fue eliminada de las 17 tablas operativas pero routers/schemas podían seguir leyendo `model.company_id` o `current_user.company_id` → `AttributeError` 500 en runtime. Para singletons usar `DEFAULT_COMPANY_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")`. Tests con MagicMock no detectan esto. Grep periódico: `grep -rn company_id backend/app/`.
 
 ## Cloudflare
 - Tunnel: gratis — gestionado en repo `service-deployments`, quadlet `cloudflared` en red `cfs`

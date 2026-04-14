@@ -195,7 +195,6 @@ async def _get_company_slicing_job(
 async def _run_orca_slicer(
     db_session_factory,
     job_id: int,
-    company_id,
     stl_filename: str,
     printer_preset: str,
     filament_preset: str,
@@ -211,7 +210,6 @@ async def _run_orca_slicer(
     Args:
         db_session_factory: Función para crear sesiones de DB.
         job_id:             ID del SlicingJob en la DB.
-        company_id:         Parámetro conservado por compatibilidad (no usado).
         stl_filename:       Nombre del archivo STL en el volumen compartido.
         printer_preset:     Perfil de impresora OrcaSlicer.
         filament_preset:    Perfil de filamento OrcaSlicer.
@@ -522,7 +520,6 @@ async def upload_stl(
         _run_orca_slicer,
         None,  # no se usa, se obtiene internamente
         job.id,
-        None,  # company_id conservado por compatibilidad de firma, no usado
         stl_filename,
         p_preset,
         f_preset,

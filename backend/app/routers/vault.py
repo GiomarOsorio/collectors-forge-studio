@@ -84,7 +84,6 @@ async def _get_used_bytes(db: AsyncSession) -> int:
 def _to_response(model: ModelFile, username: Optional[str]) -> ModelFileResponse:
     return ModelFileResponse(
         id=model.id,
-        company_id=str(model.company_id),
         uploaded_by=model.uploaded_by,
         uploaded_by_username=username,
         file_name=model.file_name,
