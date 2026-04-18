@@ -165,7 +165,7 @@ export default function MaintenanceLogsPage() {
 
   /** Convierte los suggested_items de un tipo en filas del formulario. */
   const suggestedToFormItems = (typeDef) => {
-    if (!typeDef?.suggested_items?.length) return [{ ...EMPTY_ITEM }];
+    if (!typeDef?.suggested_items?.length) return [];
     return typeDef.suggested_items.map((si) => ({
       ...EMPTY_ITEM,
       name: si.name,
@@ -640,15 +640,14 @@ export default function MaintenanceLogsPage() {
                             placeholder="Opcional..."
                           />
                         </div>
-                        {formItems.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeItem(idx)}
-                            className="p-1.5 rounded text-steel hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeItem(idx)}
+                          className="p-1.5 rounded text-steel hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                          title="Quitar ítem"
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     </div>
                   ))}
