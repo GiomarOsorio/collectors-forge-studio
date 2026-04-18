@@ -74,6 +74,17 @@ export function AuthProvider({ children }) {
   };
 
   /**
+   * Limpia el estado local de sesión sin redirigir al IdP.
+   * Usado por el interceptor 401 de axios cuando el backend rechaza
+   * el token (expirado o revocado) — el usuario ya perdió la sesión
+   * y necesita volver a /login.
+   */
+  const clearAuth = () => {
+    localStorage.removeItem('token');
+    setUser(null);
+  };
+
+  /**
    * Cierra la sesion del usuario.
    * Llama al endpoint OIDC para obtener la URL de logout del IdP y redirige.
    * Si falla, simplemente limpia el estado local.
@@ -99,7 +110,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, loginUser, logout }}>
+    <AuthContext.Provider value={{ user, loading, loginUser, logout, clearAuth }}>
       {children}
     </AuthContext.Provider>
   );
