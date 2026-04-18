@@ -134,16 +134,19 @@ function AdminRoute({ children }) {
  * @returns {JSX.Element|null}
  */
 function AppRoutes() {
-  const { user, loading } = useAuth();
+  const { user, loading, clearAuth } = useAuth();
   const navigate = useNavigate();
 
   // M-05: Redirigir via React Router cuando el interceptor de Axios detecta 401.
   // Así se respeta DirtyStateContext en lugar de hacer un reload completo.
   useEffect(() => {
-    const handler = () => navigate('/login', { replace: true });
+    const handler = () => {
+      clearAuth();
+      navigate('/login', { replace: true });
+    };
     window.addEventListener('auth:unauthorized', handler);
     return () => window.removeEventListener('auth:unauthorized', handler);
-  }, [navigate]);
+  }, [navigate, clearAuth]);
 
   if (loading) return null;
 
