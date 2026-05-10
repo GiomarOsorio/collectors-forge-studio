@@ -280,8 +280,17 @@ export default function SlicerUploadPage() {
       fils = result.plates_data.flatMap((p) => p.filaments || []);
     }
 
+    // Cambios de color: por placa o suma de todas las placas
+    const colorChanges = plate
+      ? plate.color_changes || 0
+      : (result.plates_data || []).reduce((acc, p) => acc + (p.color_changes || 0), 0);
+
     if (fils.length > 0) {
-      setMapperData({ filaments: fils, printTimeSeconds: data.print_time_seconds });
+      setMapperData({
+        filaments: fils,
+        printTimeSeconds: data.print_time_seconds,
+        colorChanges,
+      });
     } else {
       const params = new URLSearchParams();
       if (data.filament_weight_g) params.set('weight_grams', data.filament_weight_g);
@@ -289,12 +298,13 @@ export default function SlicerUploadPage() {
         params.set('print_time_hours', (data.print_time_seconds / 3600).toFixed(4));
       }
       if (data.filament_type) params.set('filament_type', data.filament_type);
+      if (colorChanges > 0) params.set('color_changes', colorChanges);
       navigate(`/cost/calculator?${params.toString()}`);
     }
   };
 
   /** Callback del modal: navega a la calculadora con IDs del inventario. */
-  const handleMapperConfirm = ({ primaryId, primaryWeight, extras, printTimeSeconds }) => {
+  const handleMapperConfirm = ({ primaryId, primaryWeight, extras, printTimeSeconds, colorChanges }) => {
     setMapperData(null);
     const params = new URLSearchParams();
     params.set('inventory_item_id', primaryId);
@@ -302,6 +312,7 @@ export default function SlicerUploadPage() {
     if (printTimeSeconds) {
       params.set('print_time_hours', (printTimeSeconds / 3600).toFixed(4));
     }
+    if (colorChanges > 0) params.set('color_changes', colorChanges);
     extras.forEach((e, i) => {
       params.set(`extra_id_${i + 1}`, e.inventory_item_id);
       params.set(`extra_weight_${i + 1}`, e.weight_grams);
@@ -764,6 +775,7 @@ export default function SlicerUploadPage() {
         onClose={() => setMapperData(null)}
         slicerFilaments={mapperData?.filaments || []}
         printTimeSeconds={mapperData?.printTimeSeconds}
+        colorChanges={mapperData?.colorChanges || 0}
         onConfirm={handleMapperConfirm}
       />
     </div>

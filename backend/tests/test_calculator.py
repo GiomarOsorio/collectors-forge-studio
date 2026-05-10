@@ -843,6 +843,55 @@ class TestCalculoCompleto:
         assert r200.material_cost > r100.material_cost
         assert r200.total_price > r100.total_price
 
+    def test_color_changes_suman_overhead_a_costos_operativos(self, filament, printer, app_settings):
+        """
+        20 cambios × 3 min = 60 min = 1h adicional al tiempo efectivo.
+        Comparar 2h sin cambios vs 2h + 20 cambios: igual a 3h.
+        Mano de obra no debe verse afectada.
+        """
+        sin_cambios = calculate_cost(
+            filament, printer, app_settings,
+            weight_grams=Decimal("0"),
+            print_time_hours=Decimal("3"),
+            preparation_time_hours=Decimal("0"),
+            post_processing_time_hours=Decimal("0"),
+            quantity=1,
+        )
+        con_cambios = calculate_cost(
+            filament, printer, app_settings,
+            weight_grams=Decimal("0"),
+            print_time_hours=Decimal("2"),
+            preparation_time_hours=Decimal("0"),
+            post_processing_time_hours=Decimal("0"),
+            quantity=1,
+            color_changes=20,
+        )
+        assert con_cambios.electricity_cost == sin_cambios.electricity_cost
+        assert con_cambios.depreciation_cost == sin_cambios.depreciation_cost
+        assert con_cambios.maintenance_cost == sin_cambios.maintenance_cost
+        assert con_cambios.labor_cost == Decimal("0.00")
+
+    def test_color_changes_cero_no_modifica_resultado(self, filament, printer, app_settings):
+        """color_changes=0 no debe alterar nada vs no pasar el parámetro."""
+        sin = calculate_cost(
+            filament, printer, app_settings,
+            weight_grams=Decimal("100"),
+            print_time_hours=Decimal("2"),
+            preparation_time_hours=Decimal("0"),
+            post_processing_time_hours=Decimal("0"),
+            quantity=1,
+        )
+        con = calculate_cost(
+            filament, printer, app_settings,
+            weight_grams=Decimal("100"),
+            print_time_hours=Decimal("2"),
+            preparation_time_hours=Decimal("0"),
+            post_processing_time_hours=Decimal("0"),
+            quantity=1,
+            color_changes=0,
+        )
+        assert con.total_price == sin.total_price
+
     def test_incrementar_tiempo_incrementa_costos_operativos(self, filament, printer, app_settings):
         """A mayor tiempo, mayores costos eléctrico, depreciación y mantenimiento."""
         r1h = calculate_cost(

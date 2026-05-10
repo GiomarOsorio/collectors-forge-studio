@@ -263,17 +263,62 @@ def _parse_slice_info_xml(xml_text: str) -> List[PlateResult]:
             elif tipos_unicos:
                 pr.filament_type = "/".join(sorted(tipos_unicos))
 
+        # Cambios de color desde <layer_filament_lists>: cada bloque con
+        # filament_list no vacío es un tramo de un filamento. Las transiciones
+        # entre tramos consecutivos son los cambios reales de color.
+        bloques_filamento = []
+        for lfl_root in plate_el.findall("layer_filament_lists"):
+            for lfl in lfl_root.findall("layer_filament_list"):
+                fl = (lfl.get("filament_list") or "").strip()
+                if not fl:
+                    continue
+                rangos = (lfl.get("layer_ranges") or "0 0").split()
+                start_layer = int(rangos[0]) if rangos else 0
+                bloques_filamento.append((start_layer, fl))
+        if bloques_filamento:
+            bloques_filamento.sort(key=lambda x: x[0])
+            pr.color_changes = max(0, len(bloques_filamento) - 1)
+
         plates.append(pr)
 
     return plates
+
+
+def _count_color_changes_in_gcode(gcode_text: str) -> int:
+    """
+    Cuenta los cambios de color (filamento) reales en un G-code de placa.
+
+    Cada selección de herramienta `Tn` (línea con solo 'T' + dígitos) representa
+    una activación de extrusor. La primera carga inicial el material; las siguientes
+    son cambios reales de color durante la impresión. El comando final `T65535`
+    de Bambu (parking/unload) no se cuenta como cambio.
+
+    Solo cuenta líneas exactas `^T[0-9]+$`, lo que excluye los comandos templados
+    (`T[next_extruder]`, etc.) presentes en bloques de start/end gcode.
+
+    Args:
+        gcode_text: Contenido del G-code (puede ser parcial).
+
+    Returns:
+        Número de cambios de color (cero para impresiones de un solo filamento).
+    """
+    tool_changes = 0
+    for raw in gcode_text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith(";"):
+            continue
+        m = re.match(r"^T(\d+)$", line)
+        if m and int(m.group(1)) != 65535:
+            tool_changes += 1
+    return max(0, tool_changes - 1)
 
 
 def _enrich_plates_from_gcode(zf: zipfile.ZipFile, plates: List[PlateResult]) -> None:
     """
     Complementa los datos de las placas con info del gcode header.
 
-    Extrae temperaturas (nozzle, cama), altura de capa y colores de
-    filamento que no están en slice_info.config.
+    Extrae temperaturas (nozzle, cama), altura de capa, colores de
+    filamento y conteo de cambios de color que no están en slice_info.config.
 
     Args:
         zf:     ZipFile abierto del .3mf.
@@ -283,11 +328,20 @@ def _enrich_plates_from_gcode(zf: zipfile.ZipFile, plates: List[PlateResult]) ->
         gcode_name = f"Metadata/plate_{plate.plate_number}.gcode"
         try:
             with zf.open(gcode_name) as f:
-                contenido = f.read(200 * 1024).decode("utf-8", errors="ignore")
+                # Header de 200KB para metadatos; conteo de cambios stream completo aparte.
+                header_bytes = f.read(200 * 1024)
+                resto = f.read()
+            contenido_header = header_bytes.decode("utf-8", errors="ignore")
+            contenido_total = contenido_header + resto.decode("utf-8", errors="ignore")
         except KeyError:
             continue
 
-        result = _parse_gcode_text(contenido)
+        result = _parse_gcode_text(contenido_header)
+        # Solo recurrir al conteo por gcode si slice_info no aportó datos de filamentos:
+        # el start-gcode de Bambu emite múltiples T0 de inicialización que inflan
+        # el conteo y no son cambios de color reales.
+        if not plate.filaments and plate.color_changes == 0:
+            plate.color_changes = _count_color_changes_in_gcode(contenido_total)
         if plate.nozzle_temp is None and result.nozzle_temp is not None:
             plate.nozzle_temp = result.nozzle_temp
         if plate.bed_temp is None and result.bed_temp is not None:
@@ -386,8 +440,8 @@ def parse_3mf_all_plates(file_path: str) -> List[PlateResult]:
                         continue
                     plate_num = int(m.group(1))
                     with zf.open(gcode_name) as f:
-                        contenido = f.read(200 * 1024).decode("utf-8", errors="ignore")
-                    result = _parse_gcode_text(contenido)
+                        contenido = f.read().decode("utf-8", errors="ignore")
+                    result = _parse_gcode_text(contenido[:200 * 1024])
                     if result.print_time_seconds is not None or result.filament_weight_g is not None:
                         plates.append(PlateResult(
                             plate_number=plate_num,
@@ -397,6 +451,7 @@ def parse_3mf_all_plates(file_path: str) -> List[PlateResult]:
                             layer_height_mm=result.layer_height_mm,
                             nozzle_temp=result.nozzle_temp,
                             bed_temp=result.bed_temp,
+                            color_changes=_count_color_changes_in_gcode(contenido),
                         ))
 
             # Fallback: buscar cualquier .gcode en el ZIP (raíz u otra ruta)
@@ -404,8 +459,8 @@ def parse_3mf_all_plates(file_path: str) -> List[PlateResult]:
                 for nombre in nombres:
                     if nombre.lower().endswith(".gcode"):
                         with zf.open(nombre) as f:
-                            contenido = f.read(200 * 1024).decode("utf-8", errors="ignore")
-                        result = _parse_gcode_text(contenido)
+                            contenido = f.read().decode("utf-8", errors="ignore")
+                        result = _parse_gcode_text(contenido[:200 * 1024])
                         if result.print_time_seconds is not None or result.filament_weight_g is not None:
                             plates.append(PlateResult(
                                 plate_number=1,
@@ -415,6 +470,7 @@ def parse_3mf_all_plates(file_path: str) -> List[PlateResult]:
                                 layer_height_mm=result.layer_height_mm,
                                 nozzle_temp=result.nozzle_temp,
                                 bed_temp=result.bed_temp,
+                                color_changes=_count_color_changes_in_gcode(contenido),
                             ))
                             break
 

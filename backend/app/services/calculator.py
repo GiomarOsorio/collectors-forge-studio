@@ -5,15 +5,19 @@ Fórmula de cálculo aplicada:
     El peso y tiempo de impresión representan el trabajo completo (la placa con
     todas las piezas). La cantidad indica cuántas piezas produce ese trabajo.
 
+    Cada cambio de color añade COLOR_CHANGE_MINUTES minutos al tiempo efectivo
+    usado para electricidad, depreciación y mantenimiento (la impresora sigue
+    consumiendo y desgastándose durante la purga). No afecta mano de obra.
+
     1. Costo de material   = gramos_totales × (precio_por_kg / 1000) + filamentos adicionales
-    2. Costo eléctrico     = (watts × horas_totales / 1000) × tarifa_kWh
-    3. Depreciación        = (precio_impresora / vida_útil_horas) × horas_totales
-    4. Mantenimiento       = (boquilla/vida_boquilla + placa/vida_placa + otros) × horas_totales
+    2. Costo eléctrico     = (watts × horas_efectivas / 1000) × tarifa_kWh
+    3. Depreciación        = (precio_impresora / vida_útil_horas) × horas_efectivas
+    4. Mantenimiento       = (boquilla/vida_boquilla + placa/vida_placa + otros) × horas_efectivas
     5. Mano de obra        = (t_preparación + t_post_procesado) × costo_hora
     6. Costo de fallos     = (suma 1-5) × (tasa_fallos / 100)
     7. Subtotal base       = suma 1-5 + costo_fallos
     8. Insumos adicionales = suma(cantidad × precio_unitario) por cada insumo
-    9. Desgaste consumible = suma(unit_cost_cal / useful_life_hours × horas_impresión)
+    9. Desgaste consumible = suma(unit_cost_cal / useful_life_hours × horas_efectivas)
    10. Subtotal final      = subtotal_base + insumos + consumibles
    11. Margen              = subtotal_final × (margen_percent / 100)
    12. Total trabajo       = subtotal_final + margen  (lo que paga el cliente)
@@ -35,6 +39,12 @@ _0     = Decimal("1")       # enteros para COP
 _D0    = Decimal("0")
 _D100  = Decimal("100")
 _D1000 = Decimal("1000")
+_D60   = Decimal("60")
+
+# Minutos extra por cada cambio de color (purga + flush + reanudación).
+# La impresora sigue consumiendo electricidad y desgastándose durante este tiempo,
+# pero el slicer no lo incluye en su estimación de tiempo de impresión.
+COLOR_CHANGE_MINUTES = Decimal("3")
 
 
 def _d(value) -> Decimal:
@@ -65,6 +75,7 @@ def calculate_cost(
     supplies: Optional[List[dict]] = None,
     additional_filaments: Optional[List[dict]] = None,
     consumables: Optional[List[dict]] = None,
+    color_changes: int = 0,
 ) -> QuoteCostBreakdown:
     """
     Calcula el costo total de imprimir una pieza 3D con desglose por componente.
@@ -94,6 +105,9 @@ def calculate_cost(
         consumables:                 Lista de dicts de consumibles con unit_cost_cal y
                                      useful_life_hours. Su desgaste se calcula automáticamente
                                      proporcional a print_time_hours.
+        color_changes:               Número de cambios de color/filamento durante la impresión.
+                                     Cada uno suma COLOR_CHANGE_MINUTES minutos a las horas
+                                     usadas para electricidad, depreciación y mantenimiento.
 
     Returns:
         QuoteCostBreakdown con todos los valores como Decimal.
@@ -110,6 +124,15 @@ def calculate_cost(
     preparation_time_hours     = _d(preparation_time_hours)
     post_processing_time_hours = _d(post_processing_time_hours)
 
+    # Tiempo efectivo: tiempo del slicer + overhead de cambios de color.
+    # El slicer no contabiliza la purga/flush en su estimación, pero la impresora
+    # sigue consumiendo electricidad y desgastando boquilla/placa durante esos minutos.
+    color_changes_count = max(0, int(color_changes or 0))
+    color_change_hours: Decimal = (
+        Decimal(color_changes_count) * COLOR_CHANGE_MINUTES / _D60
+    )
+    effective_print_hours: Decimal = print_time_hours + color_change_hours
+
     # ── 1. Costo de material ─────────────────────────────────────────────────
     price_per_gram: Decimal = _d(filament.price_per_kg) / _D1000
     material_cost: Decimal = weight_grams * price_per_gram
@@ -120,7 +143,7 @@ def calculate_cost(
         material_cost += af_weight * af_price_per_gram
 
     # ── 2. Costo de electricidad ─────────────────────────────────────────────
-    kwh_consumed: Decimal = (_d(printer.power_consumption_watts) * print_time_hours) / _D1000
+    kwh_consumed: Decimal = (_d(printer.power_consumption_watts) * effective_print_hours) / _D1000
     electricity_cost: Decimal = kwh_consumed * _d(app_settings.electricity_rate)
 
     # ── 3. Depreciación lineal ───────────────────────────────────────────────
@@ -130,7 +153,7 @@ def calculate_cost(
         if estimated_lifespan > _D0
         else _D0
     )
-    depreciation_cost: Decimal = depreciation_per_hour * print_time_hours
+    depreciation_cost: Decimal = depreciation_per_hour * effective_print_hours
 
     # ── 4. Mantenimiento ─────────────────────────────────────────────────────
     nozzle_lifespan: Decimal = _d(printer.nozzle_lifespan_hours)
@@ -148,7 +171,7 @@ def calculate_cost(
     maintenance_per_hour: Decimal = (
         nozzle_cost_per_hour + buildplate_cost_per_hour + _d(printer.other_maintenance_per_hour)
     )
-    maintenance_cost: Decimal = maintenance_per_hour * print_time_hours
+    maintenance_cost: Decimal = maintenance_per_hour * effective_print_hours
 
     # ── 5. Mano de obra ──────────────────────────────────────────────────────
     total_labor_hours: Decimal = preparation_time_hours + post_processing_time_hours
@@ -188,15 +211,14 @@ def calculate_cost(
 
     # ── 9. Desgaste de consumibles ────────────────────────────────────────────
     # Los consumibles (boquillas, calcetas, filtros, etc.) se desgastan
-    # proporcionalmente a las horas de impresión. Se cargan automáticamente
-    # desde el inventario (categoría "Consumible") sin intervención del usuario.
-    # Fórmula por consumible: unit_cost_cal / useful_life_hours × print_time_hours
+    # proporcionalmente a las horas efectivas (incluye overhead de cambios de color).
+    # Se cargan automáticamente desde el inventario (categoría "Consumible").
     consumables_wear_cost: Decimal = _D0
     for c in (consumables or []):
         life_hours: Decimal = _d(c["useful_life_hours"])
         cost_cal: Decimal = _d(c["unit_cost_cal"])
         if life_hours > _D0:
-            consumables_wear_cost += (cost_cal / life_hours * print_time_hours).quantize(
+            consumables_wear_cost += (cost_cal / life_hours * effective_print_hours).quantize(
                 _4, rounding=ROUND_HALF_UP
             )
     consumables_wear_cost = consumables_wear_cost.quantize(_2, rounding=ROUND_HALF_UP)
