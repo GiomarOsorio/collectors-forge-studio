@@ -25,6 +25,7 @@ import {
 } from '../services/api';
 import toast from 'react-hot-toast';
 import { Calculator, Save, Plus, Trash2, AlertTriangle, RotateCcw, Loader2 } from 'lucide-react';
+import { formatQuantity } from '../utils/format';
 
 /**
  * Componente de la pagina de calculadora de costos.
@@ -521,9 +522,7 @@ export default function CalculatorPage() {
                       <div className="mt-1 flex items-center gap-1.5 text-xs text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 rounded px-2 py-1">
                         <AlertTriangle size={12} />
                         Stock bajo — solo{' '}
-                        {parseFloat(selectedFilament.quantity).toLocaleString('es-CO', {
-                          maximumFractionDigits: 3,
-                        })}{' '}
+                        {formatQuantity(selectedFilament.quantity)}{' '}
                         {selectedFilament.unit} disponible
                       </div>
                     )}
