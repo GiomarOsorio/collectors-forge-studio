@@ -93,7 +93,6 @@ export default function CalculatorPage() {
   const [form, setForm] = useState({
     piece_name: '',
     description: '',
-    client_name: '',
     inventory_item_id: '',
     printer_id: '',
     weight_grams: '',
@@ -104,6 +103,28 @@ export default function CalculatorPage() {
     margin_percent: '',
     color_changes: '0',
   });
+
+  // Patrones para auto-seleccionar consumibles por defecto al cargar.
+  // Match case-insensitive por substring del nombre del item.
+  const DEFAULT_CONSUMABLE_PATTERNS = [
+    'bambu lab placa pei',
+    'filament cutter',
+    'hottend socks',
+    'ptfe',
+  ];
+  // Patrones que identifican una boquilla (única opción manual del dropdown).
+  const NOZZLE_PATTERNS = ['boquilla', 'nozzle'];
+
+  /**
+   * Decide si un consumible coincide con cualquiera de los patrones dados.
+   * @param {Object} item - Item de inventario
+   * @param {string[]} patterns - Substrings a buscar en el nombre (lowercase)
+   * @returns {boolean}
+   */
+  const matchesAny = (item, patterns) => {
+    const name = (item.name || '').toLowerCase();
+    return patterns.some((p) => name.includes(p));
+  };
 
   /**
    * Estado temporal para el insumo que se esta por agregar a la cotizacion.
@@ -160,6 +181,13 @@ export default function CalculatorPage() {
         setConsumables(consumableItems);
         setPrinters(sortedPrinters);
         setSettings(sRes.data);
+
+        // Auto-seleccionar consumibles por defecto (placa PEI, cutter, socks, PTFE).
+        // El usuario solo elige manualmente la boquilla.
+        const defaultsAuto = consumableItems.filter((c) =>
+          matchesAny(c, DEFAULT_CONSUMABLE_PATTERNS),
+        );
+        if (defaultsAuto.length > 0) setSelectedConsumables(defaultsAuto);
 
         // Valores base: primera impresora, primer filamento, margen por defecto
         const updates = { margin_percent: sRes.data.default_margin_percent };
@@ -243,7 +271,7 @@ export default function CalculatorPage() {
   const buildPayload = () => ({
     piece_name: form.piece_name,
     description: form.description || null,
-    client_name: form.client_name || null,
+    client_name: 'Interno',
     inventory_item_id: form.inventory_item_id,
     printer_id: parseInt(form.printer_id),
     weight_grams: parseFloat(form.weight_grams),
@@ -363,7 +391,6 @@ export default function CalculatorPage() {
     setForm({
       piece_name: '',
       description: '',
-      client_name: '',
       inventory_item_id: '',
       printer_id: printers.length > 0 ? printers[0].id : '',
       weight_grams: '',
@@ -376,7 +403,10 @@ export default function CalculatorPage() {
     });
     setSelectedSupplies([]);
     setAdditionalFilaments([]);
-    setSelectedConsumables([]);
+    // Restaurar defaults de consumibles (placa PEI, cutter, socks, PTFE).
+    setSelectedConsumables(
+      consumables.filter((c) => matchesAny(c, DEFAULT_CONSUMABLE_PATTERNS)),
+    );
     setResult(null);
   };
 
@@ -441,15 +471,6 @@ export default function CalculatorPage() {
                   value={form.piece_name}
                   onChange={handleChange}
                   required
-                  className="tf-input"
-                />
-              </div>
-              <div>
-                <label className="tf-label">Cliente</label>
-                <input
-                  name="client_name"
-                  value={form.client_name}
-                  onChange={handleChange}
                   className="tf-input"
                 />
               </div>
@@ -835,9 +856,13 @@ export default function CalculatorPage() {
                   onChange={(e) => setConsumableToAdd(e.target.value)}
                   className="tf-input flex-1"
                 >
-                  <option value="">Consumible...</option>
+                  <option value="">Boquilla...</option>
                   {consumables
-                    .filter((c) => !selectedConsumables.some((sc) => sc.id === c.id))
+                    .filter(
+                      (c) =>
+                        matchesAny(c, NOZZLE_PATTERNS) &&
+                        !selectedConsumables.some((sc) => sc.id === c.id),
+                    )
                     .map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name} — {c.useful_life_hours}h vida útil
