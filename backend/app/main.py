@@ -47,6 +47,7 @@ from app.routers.vault import router as vault_router
 from app.routers.oidc import router as oidc_router
 from app.routers.slicer import cleanup_old_slicer_files
 from app.services.vault_storage import ensure_bucket
+from app.services.tariff_scraper import refresh_if_stale
 
 # UUID fijo de la empresa por defecto — coincide con la migración f4a1b9c2d8e7
 DEFAULT_COMPANY_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
@@ -67,6 +68,26 @@ async def _periodic_slicer_cleanup() -> None:
             break
         except Exception as e:
             logger.error("Error en tarea de limpieza de slicer: %s", e)
+
+
+async def _periodic_tariff_refresh() -> None:
+    """
+    Tarea de fondo que refresca la tarifa EPM cada 24 horas.
+
+    `refresh_if_stale` consulta primero la BD y omite el scrape si el último
+    registro tiene < 7 días, así que aunque corramos diario, EPM recibe a lo
+    sumo ~4-5 hits/mes. EPM publica tarifas mensualmente (mid-month), por
+    lo que este intervalo cubre la latencia de publicación con holgura.
+    """
+    while True:
+        try:
+            await asyncio.sleep(24 * 3600)
+            async with async_session() as db:
+                await refresh_if_stale(db)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error("Error en refresh periódico de tarifa EPM: %s", e)
 
 
 @asynccontextmanager
@@ -92,12 +113,21 @@ async def lifespan(app: FastAPI):
     # Ejecutar limpieza de slicer al inicio y luego cada 24h en background
     await cleanup_old_slicer_files()
     cleanup_task = asyncio.create_task(_periodic_slicer_cleanup())
+    # Refresco condicional de tarifa EPM al inicio + cada 24h (gating en BD)
+    try:
+        async with async_session() as db:
+            await refresh_if_stale(db)
+    except Exception as e:
+        logger.error("Refresh inicial de tarifa EPM falló: %s", e)
+    tariff_task = asyncio.create_task(_periodic_tariff_refresh())
     yield
     cleanup_task.cancel()
-    try:
-        await cleanup_task
-    except asyncio.CancelledError:
-        pass
+    tariff_task.cancel()
+    for task in (cleanup_task, tariff_task):
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 # Instancia principal de la aplicación FastAPI con metadatos para la documentación

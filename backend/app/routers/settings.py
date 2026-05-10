@@ -15,9 +15,7 @@ Endpoints disponibles bajo el prefijo /api/settings:
 - PUT /  - Actualiza parcialmente la configuración del usuario autenticado.
 """
 
-from datetime import datetime, timezone
-
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,7 +27,7 @@ from app.schemas.settings import AppSettingsUpdate, AppSettingsResponse
 from app.limiter import limiter
 from app.services.auth import get_admin_user, get_current_user
 from app.services.exchange_rate import get_usd_to_cop, COP_MARKUP, get_cache_timestamp
-from app.services.tariff_scraper import get_epm_estrato4_tariff, TARIFF_MULTIPLIER
+from app.services.tariff_scraper import get_epm_estrato4_tariff, persist_tariffs
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -120,36 +118,8 @@ async def get_electricity_tariff(
     if not data:
         return {"available": False, "message": "No se pudo obtener la tarifa EPM en este momento"}
 
-    # Guardar cada estrato en BD si no existe ya para este mes
-    year = data.get("year")
-    month = data.get("month")
-    if year and month:
-        for estrato_num_str, estrato_data in data.get("estratos", {}).items():
-            estrato_num = int(estrato_num_str)
-            existing = await db.execute(
-                select(ElectricityTariff).where(
-                    ElectricityTariff.year == year,
-                    ElectricityTariff.month == month,
-                    ElectricityTariff.estrato == estrato_num,
-                )
-            )
-            if existing.scalar_one_or_none() is None:
-                record = ElectricityTariff(
-                    year=year,
-                    month=month,
-                    month_label=data["month_label"],
-                    estrato=estrato_num,
-                    cop_market_rate=estrato_data["cop_market_rate"],
-                    cop_rate_used=estrato_data["cop_rate_used"],
-                    usd_rate=estrato_data["usd_rate"],
-                    usd_to_cop=data["usd_to_cop"],
-                    multiplier=data["multiplier"],
-                    pdf_url=data.get("pdf_url"),
-                    scraped_at=datetime.now(timezone.utc).replace(tzinfo=None),
-                )
-                db.add(record)
-        await db.commit()
-
+    # Persistencia idempotente delegada al servicio (usa UNIQUE constraint)
+    await persist_tariffs(db, data)
     return {"available": True, **data}
 
 
@@ -178,7 +148,7 @@ async def list_electricity_tariffs(
     )
     records = result.scalars().all()
 
-    # Agrupar por (year, month)
+    # Agrupar por (year, month). `scraped_at` por mes = max scrape de cualquier estrato.
     months: dict = {}
     for r in records:
         key = (r.year, r.month)
@@ -188,8 +158,16 @@ async def list_electricity_tariffs(
                 "month": r.month,
                 "month_label": r.month_label,
                 "multiplier": r.multiplier,
+                "scraped_at": r.scraped_at.isoformat() if r.scraped_at else None,
                 "estratos": {},
             }
+        else:
+            # Mantener el scraped_at más reciente del mes
+            if r.scraped_at and (
+                months[key]["scraped_at"] is None
+                or r.scraped_at.isoformat() > months[key]["scraped_at"]
+            ):
+                months[key]["scraped_at"] = r.scraped_at.isoformat()
         months[key]["estratos"][str(r.estrato)] = {
             "cop_market_rate": r.cop_market_rate,
             "cop_rate_used": r.cop_rate_used,

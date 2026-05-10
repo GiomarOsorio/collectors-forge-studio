@@ -18,7 +18,26 @@
 import { useState, useEffect } from 'react';
 import { getSettings, updateSettings, getExchangeRate, getElectricityTariff, getElectricityTariffs, updateSettings as applySettings } from '../services/api';
 import toast from 'react-hot-toast';
-import { Save, Zap } from 'lucide-react';
+import { Save, Zap, AlertTriangle } from 'lucide-react';
+
+/**
+ * Formatea una fecha ISO como "hace X días/horas" en español.
+ * Útil para mostrar la antigüedad del último scrape de tarifa EPM.
+ *
+ * @param {string|null} isoDate - Fecha en formato ISO 8601 (UTC).
+ * @returns {{label: string, days: number}|null} Etiqueta humana y días transcurridos.
+ */
+function relativeAge(isoDate) {
+  if (!isoDate) return null;
+  // El backend devuelve naive UTC; añadimos Z para que Date lo parse como UTC.
+  const date = new Date(isoDate.endsWith('Z') ? isoDate : `${isoDate}Z`);
+  if (Number.isNaN(date.getTime())) return null;
+  const diffMs = Date.now() - date.getTime();
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  if (days >= 1) return { label: `hace ${days} día${days === 1 ? '' : 's'}`, days };
+  return { label: `hace ${hours} hora${hours === 1 ? '' : 's'}`, days: 0 };
+}
 
 /**
  * Componente de la pagina de configuracion.
@@ -290,7 +309,30 @@ export default function SettingsPage() {
                 <Zap size={16} />
                 Aplicar {source?.month_label} · Estrato {selectedEstrato} → {usdRate ?? '—'} USD/kWh
               </button>
-              <p className="text-xs text-forge-teal/60 mt-2">Fuente: epm.com.co — PDF oficial de tarifas. Los meses se guardan automáticamente.</p>
+              {(() => {
+                const age = relativeAge(source?.scraped_at);
+                const stale = age && age.days > 35;
+                return (
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <p className="text-xs text-forge-teal/60">
+                      Fuente: epm.com.co — actualización automática cada 24h
+                    </p>
+                    {age && (
+                      <span
+                        className={
+                          stale
+                            ? 'text-xs flex items-center gap-1 text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 rounded px-2 py-0.5'
+                            : 'text-xs text-forge-teal/60'
+                        }
+                        title={source?.scraped_at}
+                      >
+                        {stale && <AlertTriangle size={11} />}
+                        Última: {age.label}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           );
         })()}
