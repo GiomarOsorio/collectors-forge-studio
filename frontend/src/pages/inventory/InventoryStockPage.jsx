@@ -34,6 +34,7 @@ import {
 } from '../../services/api';
 import { SkeletonTable } from '../../components/SkeletonLoader';
 import EmptyState from '../../components/EmptyState';
+import { formatQuantity } from '../../utils/format';
 
 /** Ítems por página en la tabla */
 const PAGE_SIZE = 15;
@@ -495,13 +496,13 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
                   )}
                   <td className="tf-td-right">
                     <span className={`font-semibold font-mono ${alert ? 'text-red-400' : 'text-tech-white'}`}>
-                      {parseFloat(item.quantity).toLocaleString('es-CO', { maximumFractionDigits: 3 })}
+                      {formatQuantity(item.quantity)}
                     </span>
                     <span className="text-gunmetal text-xs ml-1">{item.unit}</span>
                   </td>
                   <td className="tf-td-right hidden sm:table-cell text-steel text-sm font-mono">
                     {parseFloat(item.min_quantity) > 0
-                      ? parseFloat(item.min_quantity).toLocaleString('es-CO', { maximumFractionDigits: 3 })
+                      ? formatQuantity(item.min_quantity)
                       : '—'}
                   </td>
                   <td className="tf-td hidden sm:table-cell">
@@ -831,7 +832,7 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
               <span className="text-tech-white font-medium">{adjustModal.item.name}</span>
               <br />
               Actual: <span className="text-blue-400 font-medium">
-                {parseFloat(adjustModal.item.quantity).toLocaleString('es-CO', { maximumFractionDigits: 3 })} {adjustModal.item.unit}
+                {formatQuantity(adjustModal.item.quantity)} {adjustModal.item.unit}
               </span>
             </p>
             <label className="tf-label">
@@ -852,8 +853,7 @@ export default function InventoryStockPage({ categoryFilter = null, excludeCateg
             {adjustModal.value !== '' && !isNaN(parseFloat(adjustModal.value)) && (
               <p className="text-xs text-gunmetal mb-4">
                 Nuevo total: <span className="text-tech-white font-medium">
-                  {(parseFloat(adjustModal.item.quantity) + parseFloat(adjustModal.value))
-                    .toLocaleString('es-CO', { maximumFractionDigits: 3 })} {adjustModal.item.unit}
+                  {formatQuantity(parseFloat(adjustModal.item.quantity) + parseFloat(adjustModal.value))} {adjustModal.item.unit}
                 </span>
               </p>
             )}

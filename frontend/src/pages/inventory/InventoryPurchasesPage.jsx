@@ -24,6 +24,7 @@ import {
   getInventoryItems,
   scanTracking,
 } from '../../services/api';
+import { formatQuantity } from '../../utils/format';
 
 /** Mapa de colores y etiquetas por estado del pedido */
 const STATUS_CONFIG = {
@@ -429,7 +430,7 @@ export default function InventoryPurchasesPage() {
                           <span className="ml-1 text-xs text-blue-400">(vinculado)</span>
                         )}
                       </td>
-                      <td className="tf-td-right py-2 text-steel">{parseFloat(it.quantity).toLocaleString('es-CO', { maximumFractionDigits: 3 })}</td>
+                      <td className="tf-td-right py-2 text-steel">{formatQuantity(it.quantity)}</td>
                       <td className="tf-td-right py-2 text-steel">
                         {parseFloat(it.unit_cost) > 0 ? `$ ${parseFloat(it.unit_cost).toFixed(2)}` : '—'}
                       </td>
