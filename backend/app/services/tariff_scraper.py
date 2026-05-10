@@ -17,9 +17,12 @@ import re
 import io
 import time
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict
 
 import httpx
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +137,12 @@ async def _find_latest_pdf_url() -> tuple:
     """
     Scraping de la página EPM para encontrar la URL del PDF más reciente.
 
+    Estrategia:
+    - Regex restringido a caracteres válidos de URL (excluye `\\&<>` y blancos)
+      para no capturar blobs HTML escaped que EPM embebe en sus dropdowns.
+    - Para cada match con año y mes parseables, escoge por `max((año, mes))`
+      en lugar de la posición — más robusto a cambios de orden en el HTML.
+
     Returns:
         tuple: (url_absoluta, etiqueta_mes, year, month_num)
                o (None, None, None, None) si no se encontró.
@@ -143,31 +152,45 @@ async def _find_latest_pdf_url() -> tuple:
         response.raise_for_status()
         html = response.text
 
-    # Busca rutas de PDF dentro de la carpeta de tarifas del año actual
-    pattern = r'(/content/dam/epm/[^"\']*[Tt]arifa[^"\']*\.pdf)'
+    # Excluye `\&<>` y blancos para evitar capturar JSON/HTML escaped en blobs
+    pattern = r'(/content/dam/epm/[^"\'\\&<>\s]*[Tt]arifa[^"\'\\&<>\s]*\.pdf)'
     matches = re.findall(pattern, html)
 
     if not matches:
         return None, None, None, None
 
-    # El último enlace suele ser el más reciente (publicación más nueva)
-    latest_path = matches[-1]
+    # Construye candidatos (year, month_num, path) y elige el más reciente
+    candidates = []
+    seen_paths = set()
+    for path in matches:
+        if path in seen_paths:
+            continue
+        seen_paths.add(path)
+
+        month_match = re.search(
+            r'(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)',
+            path, re.IGNORECASE
+        )
+        # IMPORTANTE: tomar el ÚLTIMO año que aparece en el path. EPM usa rutas
+        # tipo `.../Tarifas%202026/...Abril162026_ANT_OM.pdf` donde el regex
+        # `20\d{2}` empareja primero `2020` por colisión con `%20` + `20...`.
+        # El año real siempre está al final del nombre del archivo.
+        year_matches = re.findall(r'20\d{2}', path)
+        if not month_match or not year_matches:
+            continue
+
+        month_name = month_match.group(1).lower()
+        month_num = _MONTH_NAMES.get(month_name)
+        year = int(year_matches[-1])
+        if month_num:
+            candidates.append((year, month_num, month_name, path))
+
+    if not candidates:
+        return None, None, None, None
+
+    year, month_num, month_name, latest_path = max(candidates, key=lambda c: (c[0], c[1]))
     full_url = EPM_BASE_URL + latest_path
-
-    # Extraer mes del nombre del archivo
-    month_match = re.search(
-        r'(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)',
-        latest_path, re.IGNORECASE
-    )
-    month_name = month_match.group(1).lower() if month_match else None
-    month_num = _MONTH_NAMES.get(month_name) if month_name else None
-
-    # Extraer año del nombre del archivo o usar el actual
-    year_match = re.search(r'(20\d{2})', latest_path)
-    year = int(year_match.group(1)) if year_match else time.localtime().tm_year
-
-    month_label = f"{month_name.capitalize()} {year}" if month_name else f"Mes actual {year}"
-
+    month_label = f"{month_name.capitalize()} {year}"
     return full_url, month_label, year, month_num
 
 
@@ -214,3 +237,100 @@ async def _extract_all_estratos(pdf_url: str) -> Optional[Dict]:
                 pass
 
     return estratos if estratos else None
+
+
+async def persist_tariffs(db: AsyncSession, data: Dict) -> int:
+    """
+    Inserta los estratos del scrape en la tabla `electricity_tariffs` si no existen.
+
+    Idempotente: usa UNIQUE(year, month, estrato) para detectar duplicados
+    en aplicación. Hace commit solo si insertó al menos un registro.
+
+    Args:
+        db:   Sesión async activa.
+        data: Dict retornado por `get_epm_estrato4_tariff()`.
+
+    Returns:
+        int: Número de registros nuevos insertados (0..6).
+    """
+    # Importación tardía para evitar ciclo con app.models
+    from app.models.electricity_tariff import ElectricityTariff
+
+    year = data.get("year")
+    month = data.get("month")
+    if not year or not month:
+        return 0
+
+    inserted = 0
+    for estrato_num_str, estrato_data in data.get("estratos", {}).items():
+        estrato_num = int(estrato_num_str)
+        existing = await db.execute(
+            select(ElectricityTariff).where(
+                ElectricityTariff.year == year,
+                ElectricityTariff.month == month,
+                ElectricityTariff.estrato == estrato_num,
+            )
+        )
+        if existing.scalar_one_or_none() is None:
+            db.add(ElectricityTariff(
+                year=year,
+                month=month,
+                month_label=data["month_label"],
+                estrato=estrato_num,
+                cop_market_rate=estrato_data["cop_market_rate"],
+                cop_rate_used=estrato_data["cop_rate_used"],
+                usd_rate=estrato_data["usd_rate"],
+                usd_to_cop=data["usd_to_cop"],
+                multiplier=data["multiplier"],
+                pdf_url=data.get("pdf_url"),
+                scraped_at=datetime.now(timezone.utc).replace(tzinfo=None),
+            ))
+            inserted += 1
+    if inserted:
+        await db.commit()
+    return inserted
+
+
+async def refresh_if_stale(db: AsyncSession, max_age_days: int = 7) -> Optional[Dict]:
+    """
+    Scraping condicional: solo descarga el PDF EPM si el último registro en BD
+    tiene más de `max_age_days` días.
+
+    Pensado para ejecutarse en una tarea de fondo periódica (lifespan) sin
+    saturar el portal EPM. EPM publica una vez al mes, así que un intervalo
+    semanal cubre la latencia de publicación con holgura (~4-5 hits/mes max).
+
+    Args:
+        db:           Sesión async activa.
+        max_age_days: Edad mínima del último scrape para volver a intentarlo.
+
+    Returns:
+        dict si se hizo scrape (datos persistidos), None si se omitió o falló.
+    """
+    from app.models.electricity_tariff import ElectricityTariff
+
+    result = await db.execute(select(func.max(ElectricityTariff.scraped_at)))
+    last_scraped = result.scalar()
+
+    if last_scraped is not None:
+        # `scraped_at` se guarda timezone-naive en UTC (asyncpg + TIMESTAMP WITHOUT TZ)
+        now_utc_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+        age = now_utc_naive - last_scraped
+        if age < timedelta(days=max_age_days):
+            logger.debug(
+                "Tarifa EPM omite scrape: último registro hace %s (< %d días)",
+                age, max_age_days,
+            )
+            return None
+
+    data = await get_epm_estrato4_tariff()
+    if not data:
+        logger.warning("Tarifa EPM: scraping falló durante refresh periódico")
+        return None
+
+    inserted = await persist_tariffs(db, data)
+    logger.info(
+        "Tarifa EPM refresh completado: %d registros nuevos para %s",
+        inserted, data.get("month_label", "?"),
+    )
+    return data

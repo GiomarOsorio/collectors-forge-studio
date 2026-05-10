@@ -142,6 +142,15 @@
 - `electricity` interno = 0.105 (no 0.11)
 - Nunca usar float en tests — siempre `Decimal` con valores pre-calculados
 
+## Tarifa EPM (electricidad)
+- `services/tariff_scraper.py` scrapea PDF mensual de EPM (`epm.com.co`), aplica multiplicador ×2, persiste 6 estratos en `electricity_tariffs` (UNIQUE year+month+estrato)
+- Selección de PDF: regex restrictivo (excluye `\&<>`) + `max((year, month_num))` — NO `matches[-1]` (frágil ante reordenamiento HTML)
+- Año: usar `re.findall(r'20\d{2}', path)[-1]` — el primero captura `2020` por colisión con `%20` URL-encoded
+- `refresh_if_stale(db, max_age_days=7)`: scrape solo si último registro >7 días → ~4-5 hits/mes a EPM
+- Background task en `main.py` lifespan: corre al arrancar + cada 24h
+- Caché módulo-global 24h se pierde en redeploy; el gating por BD lo cubre
+- UI muestra `scraped_at` del mes seleccionado + badge amarillo si >35 días
+
 ## Testing
 - **Correr tests**: `backend/venv/bin/python3 -m pytest backend/tests/ -v` (402 tests, todos pasan)
 - `tests/conftest.py` — fixtures MagicMock (sin DB real — no detecta bugs asyncpg)
@@ -162,6 +171,14 @@
 - GPG signing activo (`commit.gpgsign=true`), clave `E27EC9BF82C8078A`
 - gpg-agent: `allow-loopback-pinentry` + TTL 7 días
 - Si expira la caché GPG: `echo "test" | gpg --sign > /dev/null`
+
+## SSH (GitHub) — KWallet + ksshaskpass
+- Key GitHub: `~/.ssh/id_ed25519_gh` (con passphrase, guardada en KWallet)
+- Plasma corre `ssh-agent.socket` (systemd-user) en `$XDG_RUNTIME_DIR/ssh-agent.socket`
+- `~/.config/plasma-workspace/env/ssh-askpass.sh` exporta `SSH_ASKPASS=/usr/bin/ksshaskpass` + `SSH_ASKPASS_REQUIRE=prefer`
+- `~/.config/autostart/ssh-add.desktop` corre `ssh-add -q ~/.ssh/id_ed25519_gh` al login → ksshaskpass abre prompt → check "Guardar en KWallet" la 1ra vez → silencioso después
+- `.zshrc` y `.bashrc` reutilizan el socket: `[ -z "$SSH_AUTH_SOCK" ] && [ -S "$XDG_RUNTIME_DIR/ssh-agent.socket" ] && export SSH_AUTH_SOCK=...`
+- **NO** correr `eval "$(ssh-agent -s)"` por shell — crea agentes huérfanos sin la key cargada. Si `git push` da `Permission denied (publickey)`, verificar `ssh-add -l`; si "no identities", añadir manualmente con `ssh-add ~/.ssh/id_ed25519_gh` (única vez por sesión hasta logout)
 
 ## Problemas Conocidos / Patrones de Fix
 - **asyncpg + datetime**: siempre `.replace(tzinfo=None)` en columnas `TIMESTAMP WITHOUT TIME ZONE`

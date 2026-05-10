@@ -145,6 +145,63 @@ class TestFindLatestPdfUrl:
         assert "Marzo" in label
 
     @pytest.mark.asyncio
+    async def test_elige_mes_mas_reciente_no_ultimo_match(self):
+        """
+        Cuando hay varios PDFs en la página, se debe elegir el de mayor
+        (year, month) — no el último por orden de aparición.
+        """
+        html_mock = """
+        <a href="/content/dam/epm/Tarifas%202026/4.PublicacionTarifasAbril162026_ANT_OM.pdf">Abril</a>
+        <a href="/content/dam/epm/Tarifas%202026/3.PublicacionTarifasMarzo172026_ANT_OM.pdf">Marzo</a>
+        <a href="/content/dam/epm/Tarifas%202026/1.PublicacionTarifasEnero172026_ANT_OM.pdf">Enero</a>
+        """
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.text = html_mock
+
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch("app.services.tariff_scraper.httpx.AsyncClient", return_value=mock_client):
+            url, label, year, month_num = await _find_latest_pdf_url()
+
+        # Debe ser Abril aunque aparece primero en el HTML
+        assert month_num == 4
+        assert "Abril" in label
+        assert "Abril" in url
+
+    @pytest.mark.asyncio
+    async def test_ignora_blob_html_escaped(self):
+        """
+        El regex no debe capturar blobs HTML escaped (caracteres `\\&<>`)
+        que EPM embebe en sus dropdowns/JSON inline.
+        """
+        # Blob simulando lo que EPM publica: enlaces dentro de string escaped.
+        html_mock = (
+            'pre /content/dam/epm/Tarifas/Tarifas-marzo-2026.pdf'
+            '\\&#34;>Marzo&lt;/a> '
+            '/content/dam/epm/Tarifas/Tarifas-abril-2026.pdf post'
+        )
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.text = html_mock
+
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch("app.services.tariff_scraper.httpx.AsyncClient", return_value=mock_client):
+            url, label, year, month_num = await _find_latest_pdf_url()
+
+        # El regex debe haber separado los dos PDFs limpios y elegido Abril.
+        # Si el blob se hubiera capturado, el path tendría `\\&#34;` dentro.
+        assert "\\&#34;" not in url
+        assert month_num == 4
+
+    @pytest.mark.asyncio
     async def test_retorna_none_si_sin_pdfs(self):
         """Si no hay PDFs en el HTML, retorna (None, None, None, None)."""
         mock_response = MagicMock()
