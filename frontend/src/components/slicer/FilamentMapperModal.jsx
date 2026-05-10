@@ -51,9 +51,10 @@ function groupFilaments(filaments) {
  * @param {Function} props.onClose - Callback al cerrar
  * @param {Array} props.slicerFilaments - Filamentos detectados [{filament_type, colour_hex, weight_g}]
  * @param {number|null} props.printTimeSeconds - Tiempo total de impresión
+ * @param {number} [props.colorChanges] - Número de cambios de color detectados por el slicer
  * @param {Function} props.onConfirm - Callback con datos mapeados
  */
-export default function FilamentMapperModal({ open, onClose, slicerFilaments, printTimeSeconds, onConfirm }) {
+export default function FilamentMapperModal({ open, onClose, slicerFilaments, printTimeSeconds, colorChanges = 0, onConfirm }) {
   const [inventoryFilaments, setInventoryFilaments] = useState([]);
   const [loading, setLoading] = useState(true);
   /** Mapeo: key del grupo → inventory_item_id seleccionado */
@@ -115,6 +116,7 @@ export default function FilamentMapperModal({ open, onClose, slicerFilaments, pr
       primaryWeight: primary.weight_g || 0,
       extras,
       printTimeSeconds,
+      colorChanges,
     });
   };
 

@@ -102,6 +102,7 @@ async def calculate_quote(
         supplies=supplies_data,
         additional_filaments=additional_filaments_data,
         consumables=consumables_data,
+        color_changes=data.color_changes,
     )
 
 
@@ -176,6 +177,7 @@ async def calculate_quote_manual(
         margin_percent=data.margin_percent,
         usd_to_cop_rate=cop_rate,
         consumables=consumables_data,
+        color_changes=data.color_changes,
     )
 
 
@@ -218,6 +220,7 @@ async def create_quote(
         supplies=supplies_data,
         additional_filaments=additional_filaments_data,
         consumables=consumables_data,
+        color_changes=data.color_changes,
     )
 
     quote = Quote(

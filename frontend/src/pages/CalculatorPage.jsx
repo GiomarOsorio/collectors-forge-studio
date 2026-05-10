@@ -101,6 +101,7 @@ export default function CalculatorPage() {
     post_processing_time_minutes: '0',
     quantity: '1',
     margin_percent: '',
+    color_changes: '0',
   });
 
   /**
@@ -175,6 +176,9 @@ export default function CalculatorPage() {
           updates.print_time_minutes = Math.round(parseFloat(printTimeHours) * 60).toString();
         }
 
+        const colorChanges = searchParams.get('color_changes');
+        if (colorChanges) updates.color_changes = String(parseInt(colorChanges) || 0);
+
         // ID directo del inventario (viene del modal de mapeo)
         if (inventoryItemId && filamentItems.some((f) => f.id === parseInt(inventoryItemId))) {
           updates.inventory_item_id = parseInt(inventoryItemId);
@@ -247,6 +251,7 @@ export default function CalculatorPage() {
     post_processing_time_hours: (parseFloat(form.post_processing_time_minutes) || 0) / 60,
     quantity: parseInt(form.quantity) || 1,
     margin_percent: parseFloat(form.margin_percent),
+    color_changes: parseInt(form.color_changes) || 0,
     supplies: selectedSupplies,
     additional_filaments: additionalFilaments,
     consumable_ids: selectedConsumables.map((c) => c.id),
@@ -366,6 +371,7 @@ export default function CalculatorPage() {
       post_processing_time_minutes: '0',
       quantity: '1',
       margin_percent: settings?.default_margin_percent ?? '',
+      color_changes: '0',
     });
     setSelectedSupplies([]);
     setAdditionalFilaments([]);
@@ -612,6 +618,23 @@ export default function CalculatorPage() {
                   onChange={handleChange}
                   className="tf-input"
                 />
+              </div>
+              <div>
+                <label className="tf-label">Cambios de color</label>
+                <input
+                  name="color_changes"
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={form.color_changes}
+                  onChange={handleChange}
+                  className="tf-input"
+                />
+                <p className="text-xs text-gunmetal mt-1">
+                  +3 min c/u (purga). Suma{' '}
+                  {((parseInt(form.color_changes) || 0) * 3).toLocaleString('es-CO')} min al
+                  tiempo efectivo.
+                </p>
               </div>
             </div>
           </div>

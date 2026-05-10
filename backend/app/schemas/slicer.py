@@ -55,6 +55,7 @@ class PlateResult:
     layer_height_mm: Optional[float] = None
     nozzle_temp: Optional[int] = None
     bed_temp: Optional[int] = None
+    color_changes: int = 0
     filaments: Optional[List["PlateFilament"]] = None
     objects: Optional[List[str]] = None
 
@@ -81,6 +82,7 @@ class PlateData(BaseModel):
     layer_height_mm: Optional[float] = None
     nozzle_temp: Optional[int] = None
     bed_temp: Optional[int] = None
+    color_changes: int = 0
     filaments: List[PlateFilamentData] = []
     objects: List[str] = []
 
