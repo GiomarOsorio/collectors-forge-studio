@@ -287,6 +287,21 @@ function FuelGauge({ value, level }) {
   );
 }
 
+// ─── Reasignar destino (heurística simple para badges del drawer) ───────────
+
+/** Heurística de "último uso" relativo a un timestamp ISO. */
+function lastUsedFromDate(iso) {
+  if (!iso) return 'sin uso';
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return 'sin uso';
+  const days = Math.floor((Date.now() - t) / 86_400_000);
+  if (days <= 0) return 'hoy';
+  if (days === 1) return 'ayer';
+  if (days < 30) return `${days} días`;
+  if (days < 365) return `${Math.floor(days / 30)} meses`;
+  return `${Math.floor(days / 365)}+ años`;
+}
+
 // ─── Filament card (grid) ────────────────────────────────────────────────────
 
 function FilamentCard({ f, onClick }) {
@@ -460,83 +475,129 @@ function FilamentTable({ items, onRowClick }) {
 
 // ─── Drawer body ─────────────────────────────────────────────────────────────
 
-function FilamentDrawerBody({ f }) {
+function FilamentDrawerBody({ f, onClose }) {
   if (!f) return null;
   const level = stockLevel(f);
   const p = fillPercent(f);
   const remainValueCop = (f.remaining / 1000) * f.costPerKg;
+  const lastUsedLabel = lastUsedFromDate(f.updatedAt);
+  const locationShort = f.location
+    ? (f.location.split(' · ').slice(-1)[0] || f.location)
+    : '—';
+  const gaugeColor = level === 'ok'
+    ? 'linear-gradient(90deg, #3B82F6, #60A5FA)'
+    : 'linear-gradient(90deg, #FBBF24, #F59E0B)';
 
   return (
-    <div className="p-5 flex flex-col gap-5">
+    <div className="p-5 flex flex-col gap-4">
       {/* Hero */}
-      <div className="flex items-center gap-4">
-        <Swatch color={f.color} size={72} level={level} />
+      <div className="flex items-center gap-3.5">
+        <Swatch color={f.color} size={64} level={level} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-1">
-            <span className="mono text-[10px] px-1.5 py-0.5 rounded-sm bg-white/5 border border-[var(--color-border)] text-steel">
+            <span className="mono text-[10px] px-1.5 py-0.5 rounded-sm bg-white/5 border border-[var(--color-border)] text-steel tracking-wider">
               {f.material}
             </span>
             {level !== 'ok' && (
-              <span className="mono inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm bg-amber-400/10 border border-amber-400/30 text-amber-400">
+              <span className="mono inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm bg-amber-400/10 border border-amber-400/30 text-amber-400 tracking-wider">
                 <AlertTriangle size={10} />
                 {level === 'critical' ? 'CRÍTICO' : 'BAJO'}
               </span>
             )}
           </div>
-          <h2 className="text-xl font-semibold text-tech-white tracking-tight">{f.colorName}</h2>
-          <p className="mono text-[11.5px] text-gunmetal mt-1 truncate">
-            {f.vendor}
+          <h2 className="text-xl font-semibold text-tech-white tracking-tight leading-tight truncate">
+            {f.colorName}
+          </h2>
+          <p className="mono text-[10.5px] text-gunmetal mt-1 truncate">
+            {f.rawId}
             {f.batch ? ` · ${f.batch}` : ''}
-            {f.color ? ` · ${f.color}` : ''}
+            {f.vendor && f.vendor !== '—' ? ` · ${f.vendor}` : ''}
           </p>
         </div>
       </div>
 
-      <FuelGauge value={p} level={level} />
-
-      {/* Stats grid */}
-      <div className="grid grid-cols-2 gap-2">
-        <Card className="p-3 flex flex-col gap-1">
-          <span className="lbl-eyebrow text-[9px]">Restante</span>
-          <span className="mono text-base text-tech-white">{fmtG(f.remaining)}</span>
-          <span className="mono text-[11px] text-gunmetal">de {fmtKg(f.total)}</span>
-        </Card>
-        <Card className="p-3 flex flex-col gap-1">
-          <span className="lbl-eyebrow text-[9px]">Valor restante</span>
-          <span className="mono text-base text-tech-white">{fmtCOP(remainValueCop)}</span>
-          <span className="mono text-[11px] text-gunmetal">{fmtCOP(f.costPerKg)} / kg</span>
-        </Card>
-        <Card className="p-3 flex flex-col gap-1">
-          <span className="lbl-eyebrow text-[9px]">Ubicación</span>
-          <span className="mono text-sm text-tech-white">{f.location || '—'}</span>
-        </Card>
-        <Card className="p-3 flex flex-col gap-1">
-          <span className="lbl-eyebrow text-[9px]">Mínimo</span>
-          <span className="mono text-sm text-tech-white">
-            {f.minQuantity ? `${fmtG(f.minQuantity)} ${f.unit}` : '—'}
+      {/* Gauge card */}
+      <div className="rounded-xl bg-[var(--color-surf-card-2)] border border-[var(--color-border)] p-3.5">
+        <div className="flex justify-between items-baseline mb-2">
+          <span className="lbl-eyebrow">Restante</span>
+          <span className="mono text-base font-semibold text-tech-white">
+            {Math.round(p)}
+            <span className="text-gunmetal text-xs">%</span>
           </span>
-        </Card>
+        </div>
+        <div className="relative h-1.5 bg-white/5 rounded overflow-hidden mb-2">
+          <div
+            className="absolute inset-y-0 left-0 rounded"
+            style={{ width: `${p}%`, background: gaugeColor }}
+          />
+          {[25, 50, 75].map((t) => (
+            <span
+              key={t}
+              className="absolute -top-px -bottom-px w-px bg-[var(--color-surf-card-2)]"
+              style={{ left: `${t}%` }}
+            />
+          ))}
+        </div>
+        <div className="flex justify-between">
+          <span className="mono text-[11px] text-steel">{fmtG(f.remaining)} restantes</span>
+          <span className="mono text-[11px] text-gunmetal">de {fmtKg(f.total)}</span>
+        </div>
       </div>
 
-      {f.notes && (
-        <Card className="p-3">
-          <span className="lbl-eyebrow text-[9px]">Notas</span>
-          <p className="text-sm text-steel whitespace-pre-wrap mt-1">{f.notes}</p>
-        </Card>
+      {/* Stats grid 2×2 */}
+      <div className="grid grid-cols-2 gap-1.5">
+        <SheetStat label="Valor restante" value={fmtCOP(remainValueCop)} />
+        <SheetStat label="Costo / kg" value={fmtCOP(f.costPerKg)} />
+        <SheetStat label="Ubicación" value={locationShort} icon={MapPin} />
+        <SheetStat label="Último uso" value={lastUsedLabel} icon={Clock} />
+      </div>
+
+      {/* Min stock + notes */}
+      {(f.minQuantity > 0 || f.notes) && (
+        <div className="grid grid-cols-1 gap-1.5">
+          {f.minQuantity > 0 && (
+            <SheetStat
+              label="Stock mínimo"
+              value={`${fmtG(f.minQuantity)} ${f.unit || 'g'}`}
+            />
+          )}
+          {f.notes && (
+            <Card className="p-3">
+              <span className="lbl-eyebrow text-[9px]">Notas</span>
+              <p className="text-sm text-steel whitespace-pre-wrap mt-1">{f.notes}</p>
+            </Card>
+          )}
+        </div>
       )}
 
-      <div className="flex gap-2">
-        <Button variant="primary" icon={Pencil} className="flex-1">
-          Editar
-        </Button>
-        <Button variant="ghost" icon={ShoppingCart} className="flex-1">
-          Agregar a compras
-        </Button>
+      {/* Actions */}
+      <div className="flex gap-2 pt-1">
+        <Link to="/inventory/purchases?new=1" className="btn btn-primary btn-sm flex-1 justify-center">
+          <ShoppingCart size={13} /> A compras
+        </Link>
+        <Link to={`/inventory/stock?edit=${f.id}`} className="btn btn-sm flex-1 justify-center">
+          <Pencil size={13} /> Editar
+        </Link>
       </div>
 
-      <p className="text-[11px] text-gunmetal">
-        Editor inline disponible pronto. Por ahora edita desde la página antigua de inventario.
+      <p className="text-[10.5px] text-gunmetal text-center">
+        Editar abre la vista clásica (formulario completo con todos los campos).
       </p>
+    </div>
+  );
+}
+
+/**
+ * Tile compacto con label + valor + ícono opcional, usado en grids 2×2 de drawers.
+ */
+function SheetStat({ label, value, icon: Icon }) {
+  return (
+    <div className="rounded-md bg-[var(--color-surf-card-2)] border border-[var(--color-border)] px-2.5 py-2">
+      <div className="lbl-eyebrow text-[9px] flex items-center gap-1 mb-0.5">
+        {Icon && <Icon size={9} />}
+        {label}
+      </div>
+      <p className="mono text-sm font-medium text-tech-white truncate">{value}</p>
     </div>
   );
 }
@@ -1123,16 +1184,17 @@ function FilamentRow({ f, onClick }) {
     <button
       type="button"
       onClick={() => onClick(f)}
-      className="w-full text-left flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border-soft)] hover:bg-[var(--color-surf-hover)]/50 transition-colors"
+      className="w-full text-left flex items-center gap-3 mx-4 mb-2 px-3 py-3 rounded-xl bg-[var(--color-surf-card)] border border-[var(--color-border)] active:scale-[0.98] active:bg-[var(--color-surf-hover)] hover:bg-[var(--color-surf-hover)]/60 transition-all"
     >
-      <Swatch color={f.color} size={36} level={level} />
+      <Swatch color={f.color} size={40} level={level} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5">
-          <span className="mono text-[9.5px] px-1 py-px rounded-sm bg-white/5 border border-[var(--color-border)] text-steel tracking-wider">
+          <span className="mono text-[9px] px-1.5 py-px rounded-sm bg-white/5 border border-[var(--color-border)] text-steel tracking-wider">
             {f.material}
           </span>
           {level !== 'ok' && (
-            <span className="mono text-[9.5px] px-1 py-px rounded-sm bg-amber-400/10 border border-amber-400/30 text-amber-400">
+            <span className="mono inline-flex items-center gap-0.5 text-[9px] px-1 py-px rounded-sm bg-amber-400/10 border border-amber-400/30 text-amber-400 tracking-wider">
+              <AlertTriangle size={8} />
               {level === 'critical' ? 'CRÍT' : 'BAJO'}
             </span>
           )}
@@ -1140,21 +1202,28 @@ function FilamentRow({ f, onClick }) {
         <p className="text-sm font-semibold text-tech-white truncate leading-tight">
           {f.colorName}
         </p>
-        <div className="flex items-center gap-2 mt-1">
-          <div className="relative h-0.5 bg-white/5 rounded flex-1">
-            <div
-              className="absolute inset-y-0 left-0 rounded"
-              style={{ width: `${p}%`, background: level === 'ok' ? '#3B82F6' : '#FBBF24' }}
-            />
-          </div>
-          <span className="mono text-[10px] text-gunmetal shrink-0">{Math.round(p)}%</span>
+        <p className="mono text-[10px] text-gunmetal mt-0.5 truncate">
+          {f.vendor}
+          {f.batch ? ` · ${f.batch}` : ''}
+        </p>
+      </div>
+      <div className="flex flex-col items-end shrink-0 gap-1 min-w-[64px]">
+        <span className="mono text-sm font-semibold text-tech-white">
+          {Math.round(p)}
+          <span className="text-gunmetal text-[10px]">%</span>
+        </span>
+        <div className="w-14 h-0.5 bg-white/5 rounded">
+          <div
+            className="h-full rounded"
+            style={{
+              width: `${p}%`,
+              background: level === 'ok' ? '#3B82F6' : '#FBBF24',
+              boxShadow: level !== 'ok' ? `0 0 4px #FBBF2455` : 'none',
+            }}
+          />
         </div>
+        <span className="mono text-[10px] text-gunmetal">{fmtG(f.remaining)}</span>
       </div>
-      <div className="flex flex-col items-end shrink-0">
-        <span className="mono text-xs text-tech-white">{fmtG(f.remaining)}</span>
-        <span className="mono text-[10px] text-gunmetal">{fmtCOP(f.costPerKg)}/kg</span>
-      </div>
-      <ChevronRight size={14} className="text-gunmetal-dim shrink-0" />
     </button>
   );
 }
@@ -1436,13 +1505,44 @@ export default function InventoryPage() {
                 </p>
               </div>
             ) : (
-              <ul className="mt-2 pb-28">
-                {filteredFilaments.map((f) => (
-                  <li key={f.id}>
-                    <FilamentRow f={f} onClick={setSelected} />
-                  </li>
+              <div className="mt-2 pb-28">
+                {groups.map((g) => (
+                  <section key={g.key} className="mb-3">
+                    <div
+                      className={`flex items-baseline gap-2 px-4 mb-1.5 mt-3 ${
+                        g.warn ? '' : ''
+                      }`}
+                    >
+                      <h3
+                        className={`text-[10px] font-semibold uppercase tracking-widest inline-flex items-center gap-1.5 ${
+                          g.warn ? 'text-amber-400' : 'text-steel'
+                        }`}
+                      >
+                        {g.warn && <AlertTriangle size={10} />}
+                        {g.label}
+                      </h3>
+                      <span className="mono text-[10px] text-gunmetal">
+                        {g.items.length}
+                      </span>
+                      {g.warn && (
+                        <Link
+                          to="/inventory/purchases?new=1"
+                          className="ml-auto inline-flex items-center gap-1 text-[11px] text-amber-400 hover:text-amber-300"
+                        >
+                          <ShoppingCart size={11} /> Comprar
+                        </Link>
+                      )}
+                    </div>
+                    <ul>
+                      {g.items.map((f) => (
+                        <li key={f.id}>
+                          <FilamentRow f={f} onClick={setSelected} />
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
                 ))}
-              </ul>
+              </div>
             )}
           </>
         ) : tab === 'compras' ? (
