@@ -12,7 +12,6 @@ Create Date: 2026-05-14
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
 
 
 revision: str = "i3j4k5l6m7n8"
@@ -22,11 +21,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "model_files",
-        sa.Column("local_thumbnail_path", sa.String(500), nullable=True),
+    # Idempotente: si un deploy previo dejó la columna pero falló antes de
+    # marcar la versión, este IF NOT EXISTS evita re-bloqueos.
+    op.execute(
+        "ALTER TABLE model_files ADD COLUMN IF NOT EXISTS local_thumbnail_path VARCHAR(500)"
     )
 
 
 def downgrade() -> None:
-    op.drop_column("model_files", "local_thumbnail_path")
+    op.execute("ALTER TABLE model_files DROP COLUMN IF EXISTS local_thumbnail_path")

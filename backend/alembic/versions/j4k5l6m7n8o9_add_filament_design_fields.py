@@ -13,7 +13,6 @@ Create Date: 2026-05-14
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
 
 
 revision: str = "j4k5l6m7n8o9"
@@ -23,26 +22,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "inventory_items",
-        sa.Column("batch", sa.String(50), nullable=True),
-    )
-    op.add_column(
-        "inventory_items",
-        sa.Column("location", sa.String(100), nullable=True),
-    )
-    op.add_column(
-        "inventory_items",
-        sa.Column("color_hex", sa.String(7), nullable=True),
-    )
-    op.add_column(
-        "inventory_items",
-        sa.Column("color_name", sa.String(100), nullable=True),
-    )
+    # Idempotente: IF NOT EXISTS evita romper el deploy si las columnas ya
+    # existen (p.ej. agregadas por SQL manual o migración previa parcial).
+    op.execute("ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS batch VARCHAR(50)")
+    op.execute("ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS location VARCHAR(100)")
+    op.execute("ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS color_hex VARCHAR(7)")
+    op.execute("ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS color_name VARCHAR(100)")
 
 
 def downgrade() -> None:
-    op.drop_column("inventory_items", "color_name")
-    op.drop_column("inventory_items", "color_hex")
-    op.drop_column("inventory_items", "location")
-    op.drop_column("inventory_items", "batch")
+    op.execute("ALTER TABLE inventory_items DROP COLUMN IF EXISTS color_name")
+    op.execute("ALTER TABLE inventory_items DROP COLUMN IF EXISTS color_hex")
+    op.execute("ALTER TABLE inventory_items DROP COLUMN IF EXISTS location")
+    op.execute("ALTER TABLE inventory_items DROP COLUMN IF EXISTS batch")
