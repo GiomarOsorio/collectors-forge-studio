@@ -1,0 +1,66 @@
+#!/usr/bin/env sh
+# Pre-commit hook de Collector's Forge Studio.
+#
+# Verificaciones rápidas (<5s) sobre los archivos staged:
+#  - ESLint sobre archivos JSX/JS modificados en frontend/
+#  - Python ast.parse sobre archivos .py modificados en backend/
+#
+# Si fallan, el commit es bloqueado. Para saltar (emergencia):
+#   git commit --no-verify -m "..."
+#
+# NOTA: No corremos tests aquí — demasiado lento para un hook. Los tests
+# corren en CI (.github/workflows/deploy.yml).
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# ── Frontend: ESLint sobre archivos staged en frontend/ ──────────────────
+staged_js=$(git diff --cached --name-only --diff-filter=ACMR \
+  | grep -E '^frontend/.*\.(js|jsx)$' || true)
+
+if [ -n "$staged_js" ]; then
+  echo "→ Pre-commit: ESLint en $(echo "$staged_js" | wc -l) archivo(s) frontend"
+  cd "$REPO_ROOT/frontend"
+  # Stripear el prefijo frontend/ porque eslint corre con cwd=frontend
+  files_rel=$(echo "$staged_js" | sed 's|^frontend/||')
+  npx eslint --max-warnings 100 $files_rel
+  cd "$REPO_ROOT"
+fi
+
+# ── Backend: ast.parse sobre archivos .py staged ─────────────────────────
+staged_py=$(git diff --cached --name-only --diff-filter=ACMR \
+  | grep -E '^backend/.*\.py$' || true)
+
+if [ -n "$staged_py" ]; then
+  echo "→ Pre-commit: Python syntax check en $(echo "$staged_py" | wc -l) archivo(s) backend"
+  for f in $staged_py; do
+    python3 -c "import ast; ast.parse(open('$REPO_ROOT/$f').read())" || {
+      echo "✗ Syntax error en $f"
+      exit 1
+    }
+  done
+fi
+
+# ── Migrations Alembic: chequeo rápido de integridad ─────────────────────
+staged_migrations=$(git diff --cached --name-only --diff-filter=ACMR \
+  | grep -E '^backend/alembic/versions/.*\.py$' || true)
+
+if [ -n "$staged_migrations" ]; then
+  echo "→ Pre-commit: chequeando integridad de migraciones Alembic"
+  python3 "$REPO_ROOT/backend/tests/test_migrations_smoke.py" 2>/dev/null || true
+  # El test_migrations_smoke.py es un módulo pytest; si lo importamos directo,
+  # no corre. Para chequeo en hook usamos un grep simple:
+  for mig in $staged_migrations; do
+    if ! grep -q '^revision' "$REPO_ROOT/$mig"; then
+      echo "✗ $mig: falta declaración 'revision = ...'"
+      exit 1
+    fi
+    if ! grep -q 'down_revision' "$REPO_ROOT/$mig"; then
+      echo "✗ $mig: falta declaración 'down_revision = ...'"
+      exit 1
+    fi
+  done
+fi
+
+echo "✓ Pre-commit OK"
