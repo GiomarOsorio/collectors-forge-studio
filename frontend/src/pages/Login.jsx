@@ -1,17 +1,22 @@
 /**
  * @file Pagina de inicio de sesion de Collector's Forge Studio.
  *
- * Si no hay error previo, redirige automáticamente al flujo OIDC (comportamiento
+ * Sin error previo: redirige automáticamente al flujo OIDC (comportamiento
  * tipo Okta: si el IdP ya tiene sesión activa, el login es transparente).
  * Si hay ?error= en la URL (callback fallido), muestra el error y un botón para reintentar.
+ *
+ * En modo dev (`import.meta.env.DEV`) se omite el auto-redirect y se muestra
+ * un botón extra "Bypass dev" que inyecta un usuario admin falso sin pasar por
+ * Authentik. Útil para probar UI cuando el backend no está corriendo localmente.
  *
  * @module pages/Login
  */
 
 import { useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { LogIn, Loader2 } from 'lucide-react';
+import { LogIn, FlaskConical, Loader2 } from 'lucide-react';
+import { DEV_BYPASS_TOKEN, DEV_BYPASS_USER, useAuth } from '../context/AuthContext';
 
 const MENSAJES_ERROR = {
   oidc_callback_failed: 'Error al completar el inicio de sesión. Intenta de nuevo.',
@@ -20,30 +25,38 @@ const MENSAJES_ERROR = {
   user_inactive:        'Tu cuenta está desactivada. Contacta al administrador.',
 };
 
+const IS_DEV = import.meta.env.DEV;
+
 /**
  * Componente de la pagina de inicio de sesion via SSO.
  *
- * Sin error previo: redirige automáticamente a /api/auth/oidc/login.
- * Con error previo: muestra mensaje y botón para reintentar.
+ * Producción: redirige automáticamente a /api/auth/oidc/login.
+ * Con error previo o en dev: muestra mensaje/UI con botones manuales.
  *
- * @returns {JSX.Element} Pantalla de carga (auto-redirect) o pantalla de error con botón
+ * @returns {JSX.Element}
  */
 export default function Login() {
   const [searchParams] = useSearchParams();
   const error = searchParams.get('error');
+  const navigate = useNavigate();
+  const { loginUser } = useAuth();
 
   useEffect(() => {
     if (error) {
       toast.error(MENSAJES_ERROR[error] || 'Error de autenticación');
-    } else {
-      // Sin error previo: redirigir automáticamente al IdP.
-      // Si Authentik ya tiene sesión activa, el login es transparente.
-      window.location.href = '/api/auth/oidc/login';
+      return;
     }
+    if (IS_DEV) return; // en dev no auto-redirigir: dejamos elegir bypass
+    window.location.href = '/api/auth/oidc/login';
   }, [error]);
 
-  // Sin error: mostrar spinner mientras se redirige
-  if (!error) {
+  const handleDevBypass = () => {
+    loginUser(DEV_BYPASS_TOKEN, DEV_BYPASS_USER);
+    navigate('/');
+  };
+
+  // Producción sin error: spinner mientras se redirige.
+  if (!error && !IS_DEV) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-forge-black">
         <div className="flex flex-col items-center gap-4 text-gunmetal">
@@ -54,7 +67,6 @@ export default function Login() {
     );
   }
 
-  // Con error: mostrar mensaje y botón para reintentar manualmente
   return (
     <div className="min-h-screen flex items-center justify-center bg-forge-black">
       <div className="tf-card rounded-2xl p-8 w-full max-w-md shadow-2xl">
@@ -63,13 +75,31 @@ export default function Login() {
           <h1 className="text-3xl font-bold text-tech-white tracking-tight">Collector's Forge Studio</h1>
           <p className="text-gunmetal mt-2 text-sm">Inicio de sesión</p>
         </div>
-        <button
-          onClick={() => { window.location.href = '/api/auth/oidc/login'; }}
-          className="tf-btn-primary w-full py-3 text-base gap-2 flex items-center justify-center"
-        >
-          <LogIn size={18} />
-          Reintentar inicio de sesión
-        </button>
+        <div className="space-y-3">
+          <button
+            onClick={() => { window.location.href = '/api/auth/oidc/login'; }}
+            className="tf-btn-primary w-full py-3 text-base gap-2 flex items-center justify-center"
+          >
+            <LogIn size={18} />
+            {error ? 'Reintentar inicio de sesión' : 'Iniciar sesión con SSO'}
+          </button>
+          {IS_DEV && (
+            <button
+              onClick={handleDevBypass}
+              className="w-full py-3 text-base gap-2 flex items-center justify-center rounded-lg border border-amber-400/40 bg-amber-400/10 text-amber-300 hover:bg-amber-400/20 transition-colors"
+              title="Inyecta un usuario admin falso sin tocar el backend (sólo dev)"
+            >
+              <FlaskConical size={18} />
+              Bypass dev (admin local)
+            </button>
+          )}
+        </div>
+        {IS_DEV && (
+          <p className="text-xs text-gunmetal mt-6 text-center">
+            Modo dev: el bypass usa un usuario falso. Las llamadas al backend fallarán silenciosamente
+            si <code className="text-steel">localhost:8000</code> no está corriendo.
+          </p>
+        )}
       </div>
     </div>
   );

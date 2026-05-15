@@ -547,6 +547,33 @@ export default function CalculatorPage() {
                         {selectedFilament.unit} disponible
                       </div>
                     )}
+                    {selectedFilament && (
+                      <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
+                        <div className="bg-[#0A0E16] border border-[#222630] rounded px-2 py-1.5">
+                          <p className="text-gunmetal uppercase tracking-wider">Stock</p>
+                          <p className="text-tech-white font-medium mt-0.5">
+                            {formatQuantity(selectedFilament.quantity)} {selectedFilament.unit}
+                          </p>
+                        </div>
+                        <div className="bg-[#0A0E16] border border-[#222630] rounded px-2 py-1.5">
+                          <p className="text-gunmetal uppercase tracking-wider">Tipo · color</p>
+                          <p className="text-tech-white font-medium mt-0.5 truncate">
+                            {selectedFilament.filament_type || '—'}
+                            {selectedFilament.filament_color ? ` · ${selectedFilament.filament_color}` : ''}
+                          </p>
+                        </div>
+                        <div className="bg-[#0A0E16] border border-[#222630] rounded px-2 py-1.5">
+                          <p className="text-gunmetal uppercase tracking-wider">Costo / g</p>
+                          <p className="text-forge-teal font-medium mt-0.5">
+                            {(() => {
+                              const perKg = Number(selectedFilament.price_per_kg ?? selectedFilament.unit_cost ?? 0);
+                              const perG = perKg / 1000;
+                              return perG > 0 ? `$${perG.toFixed(2)}` : '—';
+                            })()}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
               </div>

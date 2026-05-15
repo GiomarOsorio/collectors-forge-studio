@@ -75,6 +75,15 @@ class InventoryItem(Base):
     filament_brand: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     filament_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)   # PLA, PETG, ABS...
     filament_color: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    # Campos visuales agregados con la UI inspirada en Claude Design.
+    # `batch`: código de lote del proveedor (ej. "A-2611").
+    # `location`: ubicación física (ej. "Estante 1 · A2").
+    # `color_hex`: color exacto del filamento en formato "#RRGGBB" — alimenta los swatches glossy.
+    # `color_name`: nombre comercial del color (ej. "Carbon Black"), independiente de `filament_color` genérico.
+    batch: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    location: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    color_hex: Mapped[Optional[str]] = mapped_column(String(7), nullable=True)
+    color_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     filament_diameter: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 3), nullable=True)
     filament_density: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 6), nullable=True)
     weight_per_roll: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 3), nullable=True)

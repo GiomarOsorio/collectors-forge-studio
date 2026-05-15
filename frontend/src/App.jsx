@@ -48,21 +48,13 @@
  * @module App
  */
 
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { lazy, Suspense, useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DirtyStateProvider } from './context/DirtyStateContext';
 import { ConfirmProvider } from './components/ConfirmDialog';
-import StudioLayout from './components/StudioLayout';
-import CostLayout from './components/CostLayout';
-import InventoryLayout from './components/InventoryLayout';
-import SlicerLayout from './components/SlicerLayout';
-import SettingsLayout from './components/SettingsLayout';
-import MaintenanceLayout from './components/MaintenanceLayout';
-import QueueLayout from './components/QueueLayout';
-import CompanyLayout from './components/CompanyLayout';
-import VaultLayout from './components/VaultLayout';
+import AppLayout from './components/AppLayout';
 import Login from './pages/Login';
 import AuthSuccess from './pages/AuthSuccess';
 
@@ -77,6 +69,14 @@ const CuentaPage               = lazy(() => import('./pages/settings/CuentaPage'
 const EmpresaPage              = lazy(() => import('./pages/settings/EmpresaPage'));
 const UsuariosPage             = lazy(() => import('./pages/settings/UsuariosPage'));
 const InventoryStockPage       = lazy(() => import('./pages/inventory/InventoryStockPage'));
+const InventoryPage            = lazy(() => import('./pages/inventory/InventoryPage'));
+const CostPage                 = lazy(() => import('./pages/cost/CostPage'));
+const SlicerPage               = lazy(() => import('./pages/slicer/SlicerPage'));
+const QueuePageV2              = lazy(() => import('./pages/queue/QueuePageV2'));
+const MaintenancePageV2        = lazy(() => import('./pages/maintenance/MaintenancePageV2'));
+const VaultPageV2              = lazy(() => import('./pages/vault/VaultPageV2'));
+const CompanyPageV2            = lazy(() => import('./pages/company/CompanyPageV2'));
+const CalculatorPageV2         = lazy(() => import('./pages/cost/CalculatorPageV2'));
 const InventoryPurchasesPage   = lazy(() => import('./pages/inventory/InventoryPurchasesPage'));
 const InventoryFilamentsPage   = lazy(() => import('./pages/inventory/InventoryFilamentsPage'));
 const InventorySuppliesPage    = lazy(() => import('./pages/inventory/InventorySuppliesPage'));
@@ -156,79 +156,91 @@ function AppRoutes() {
       <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
       <Route path="/auth/success" element={<AuthSuccess />} />
 
-      {/* Collector's Forge Studio Home: lanzador de aplicaciones */}
-      <Route path="/" element={<PrivateRoute><StudioLayout /></PrivateRoute>}>
-        <Route index element={<StudioHomePage />} />
-      </Route>
+      {/* Layout único con sidebar global. Todas las apps comparten StudioSidebar. */}
+      <Route element={<PrivateRoute><AppLayout /></PrivateRoute>}>
+        {/* Home: dashboard de Collector's Forge Studio */}
+        <Route path="/" element={<StudioHomePage />} />
 
-      {/* Aplicación Inventario: gestión de stock y pedidos */}
-      <Route path="/inventory" element={<PrivateRoute><InventoryLayout /></PrivateRoute>}>
-        <Route index element={<Navigate to="/inventory/stock" replace />} />
-        <Route path="filaments" element={<InventoryFilamentsPage />} />
-        <Route path="supplies" element={<InventorySuppliesPage />} />
-        <Route path="tools" element={<InventoryToolsPage />} />
-        <Route path="consumables" element={<InventoryConsumablesPage />} />
-        <Route path="stock" element={<InventoryStockPage />} />
-        <Route path="purchases" element={<InventoryPurchasesPage />} />
-        <Route path="prints" element={<InventoryPrintsPage />} />
-        <Route path="io" element={<InventoryImportExportPage />} />
-      </Route>
+        {/* Inventario */}
+        <Route path="/inventory">
+          <Route index element={<Navigate to="/inventory/stock" replace />} />
+          <Route path="v2" element={<InventoryPage />} />
+          <Route path="filaments" element={<InventoryFilamentsPage />} />
+          <Route path="supplies" element={<InventorySuppliesPage />} />
+          <Route path="tools" element={<InventoryToolsPage />} />
+          <Route path="consumables" element={<InventoryConsumablesPage />} />
+          <Route path="stock" element={<InventoryStockPage />} />
+          <Route path="purchases" element={<InventoryPurchasesPage />} />
+          <Route path="prints" element={<InventoryPrintsPage />} />
+          <Route path="io" element={<InventoryImportExportPage />} />
+        </Route>
 
-      {/* Aplicación Cost: calculadora de costos de impresión 3D */}
-      <Route path="/cost" element={<PrivateRoute><CostLayout /></PrivateRoute>}>
-        <Route index element={<Navigate to="/cost/calculator" replace />} />
-        <Route path="calculator" element={<CalculatorPage />} />
-        <Route path="quotes" element={<QuotesPage />} />
-        <Route path="manual" element={<ManualQuotePage />} />
-        <Route path="printers" element={<PrintersPage />} />
-        <Route path="history" element={<HistoryPage />} />
-        <Route path="settings" element={<SettingsPage />} />
-      </Route>
+        {/* Cost */}
+        <Route path="/cost">
+          <Route index element={<Navigate to="/cost/calculator" replace />} />
+          <Route path="v2" element={<CostPage />} />
+          <Route path="calculator/v2" element={<CalculatorPageV2 />} />
+          <Route path="calculator" element={<CalculatorPage />} />
+          <Route path="quotes" element={<QuotesPage />} />
+          <Route path="manual" element={<ManualQuotePage />} />
+          <Route path="printers" element={<PrintersPage />} />
+          <Route path="history" element={<HistoryPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+        </Route>
 
-      {/* Aplicación Configuración: cuenta, empresa y usuarios */}
-      <Route path="/settings" element={<PrivateRoute><SettingsLayout /></PrivateRoute>}>
-        <Route index element={<Navigate to="/settings/account" replace />} />
-        <Route path="account" element={<CuentaPage />} />
-        <Route path="company" element={<AdminRoute><EmpresaPage /></AdminRoute>} />
-        <Route path="users" element={<AdminRoute><UsuariosPage /></AdminRoute>} />
-      </Route>
+        {/* Settings */}
+        <Route path="/settings">
+          <Route index element={<Navigate to="/settings/account" replace />} />
+          <Route path="account" element={<CuentaPage />} />
+          <Route path="company" element={<AdminRoute><EmpresaPage /></AdminRoute>} />
+          <Route path="users" element={<AdminRoute><UsuariosPage /></AdminRoute>} />
+        </Route>
 
-      {/* Aplicación Slicer: laminado de modelos 3D */}
-      <Route path="/slicer" element={<PrivateRoute><SlicerLayout /></PrivateRoute>}>
-        <Route index element={<Navigate to="/slicer/upload" replace />} />
-        <Route path="upload" element={<SlicerUploadPage />} />
-        <Route path="history" element={<SlicerHistoryPage />} />
-        <Route path="jobs/:id" element={<SlicerJobDetailPage />} />
-      </Route>
+        {/* Slicer */}
+        <Route path="/slicer">
+          <Route index element={<Navigate to="/slicer/upload" replace />} />
+          <Route path="v2" element={<SlicerPage />} />
+          <Route path="upload" element={<SlicerUploadPage />} />
+          <Route path="history" element={<SlicerHistoryPage />} />
+          <Route path="jobs/:id" element={<SlicerJobDetailPage />} />
+        </Route>
 
-      {/* Aplicación Mantenimiento: historial de mantenimiento de impresoras */}
-      <Route path="/maintenance" element={<PrivateRoute><MaintenanceLayout /></PrivateRoute>}>
-        <Route index element={<Navigate to="/maintenance/dashboard" replace />} />
-        <Route path="dashboard" element={<MaintenanceDashboardPage />} />
-        <Route path="logs" element={<MaintenanceLogsPage />} />
-        <Route path="printers" element={<MaintenancePrintersPage />} />
-      </Route>
+        {/* Mantenimiento */}
+        <Route path="/maintenance">
+          <Route index element={<Navigate to="/maintenance/dashboard" replace />} />
+          <Route path="v2" element={<MaintenancePageV2 />} />
+          <Route path="dashboard" element={<MaintenanceDashboardPage />} />
+          <Route path="logs" element={<MaintenanceLogsPage />} />
+          <Route path="printers" element={<MaintenancePrintersPage />} />
+        </Route>
 
-      {/* Aplicación Queue: cola de impresión */}
-      <Route path="/queue" element={<PrivateRoute><QueueLayout /></PrivateRoute>}>
-        <Route index element={<QueuePage />} />
-        <Route path="history" element={<QueueHistoryPage />} />
-      </Route>
+        {/* Queue */}
+        <Route path="/queue">
+          <Route index element={<QueuePage />} />
+          <Route path="v2" element={<QueuePageV2 />} />
+          <Route path="history" element={<QueueHistoryPage />} />
+        </Route>
 
-      {/* Aplicación Compañía: perfil, marca y templates PDF (solo admins) */}
-      <Route path="/company" element={<AdminRoute><CompanyLayout /></AdminRoute>}>
-        <Route index element={<Navigate to="/company/profile" replace />} />
-        <Route path="profile"       element={<CompanyProfilePage />} />
-        <Route path="branding"      element={<CompanyBrandingPage />} />
-        <Route path="templates"     element={<CompanyTemplatesPage />} />
-        <Route path="templates/new" element={<CompanyTemplateEditorPage />} />
-        <Route path="templates/:id" element={<CompanyTemplateEditorPage />} />
-      </Route>
+        {/* Compañía (solo admin) */}
+        <Route
+          path="/company"
+          element={<AdminRoute><Outlet /></AdminRoute>}
+        >
+          <Route index element={<Navigate to="/company/profile" replace />} />
+          <Route path="v2" element={<CompanyPageV2 />} />
+          <Route path="profile"       element={<CompanyProfilePage />} />
+          <Route path="branding"      element={<CompanyBrandingPage />} />
+          <Route path="templates"     element={<CompanyTemplatesPage />} />
+          <Route path="templates/new" element={<CompanyTemplateEditorPage />} />
+          <Route path="templates/:id" element={<CompanyTemplateEditorPage />} />
+        </Route>
 
-      {/* Aplicación Vault: archivo de modelos .3mf */}
-      <Route path="/vault" element={<PrivateRoute><VaultLayout /></PrivateRoute>}>
-        <Route index element={<VaultPage />} />
-        <Route path="upload" element={<VaultUploadPage />} />
+        {/* Vault */}
+        <Route path="/vault">
+          <Route index element={<VaultPage />} />
+          <Route path="v2" element={<VaultPageV2 />} />
+          <Route path="upload" element={<VaultUploadPage />} />
+        </Route>
       </Route>
     </Routes>
   );

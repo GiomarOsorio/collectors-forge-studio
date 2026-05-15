@@ -51,6 +51,7 @@ class ModelFileResponse(BaseModel):
     name: str
     description: Optional[str]
     thumbnail_url: Optional[str]
+    local_thumbnail_path: Optional[str] = None
     tags: List[str]
     source_url: Optional[str]
     source_platform: Optional[str]
