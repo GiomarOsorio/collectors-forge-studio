@@ -51,3 +51,9 @@ coverage.xml
 
 # Claude
 .claude
+
+# Playwright (snapshots SÍ se commitean — son la baseline)
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/playwright/.cache/
