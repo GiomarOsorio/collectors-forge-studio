@@ -27,16 +27,31 @@ VERSIONS_DIR = Path(__file__).parent.parent / "alembic" / "versions"
 
 
 def _parse_revision_meta(path: Path) -> dict:
-    """Extrae `revision`, `down_revision`, `branch_labels` del archivo."""
+    """Extrae `revision`, `down_revision`, `branch_labels` del archivo.
+
+    Soporta `revision = "..."` (Assign) y `revision: str = "..."`
+    (AnnAssign con type hint — formato que Alembic genera desde
+    versiones recientes).
+    """
     tree = ast.parse(path.read_text())
     meta = {"revision": None, "down_revision": None, "branch_labels": None, "depends_on": None}
+
+    def _try_extract(target_id, value_node):
+        if target_id not in meta or value_node is None:
+            return
+        try:
+            meta[target_id] = ast.literal_eval(value_node)
+        except (ValueError, SyntaxError):
+            pass
+
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign):
             for target in node.targets:
-                if isinstance(target, ast.Name) and target.id in meta:
-                    meta[target.id] = ast.literal_eval(node.value) if isinstance(
-                        node.value, (ast.Constant, ast.Tuple, ast.Str, ast.NameConstant)
-                    ) else None
+                if isinstance(target, ast.Name):
+                    _try_extract(target.id, node.value)
+        elif isinstance(node, ast.AnnAssign):
+            if isinstance(node.target, ast.Name):
+                _try_extract(node.target.id, node.value)
     return meta
 
 
