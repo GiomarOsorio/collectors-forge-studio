@@ -1526,7 +1526,7 @@ export default function InventoryPage() {
   // ── Shell mobile ───────────────────────────────────────────────────────
   if (isMobile) {
     return (
-      <div className="flex flex-col -mx-4 -mt-4">
+      <div className="flex flex-col">
         <MobileInPageHeader tab={tab} count={counts[tab] ?? 0} />
         {tab === 'filamentos' && (
           <>
