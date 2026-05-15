@@ -28,6 +28,7 @@ import {
   Clock,
   Download,
   Droplet,
+  Filter,
   Grid3x3,
   List,
   MapPin,
@@ -36,6 +37,7 @@ import {
   Scissors,
   Search,
   ShoppingCart,
+  TrendingUp,
   Upload,
   X,
 } from 'lucide-react';
@@ -1024,73 +1026,128 @@ function PurchaseDrawerBody({ po }) {
 // Nota: el header (logo + hamburger) lo provee AppLayout vía Studio Sidebar.
 // Esta vista sólo renderiza el contenido específico del inventario.
 
-function MobileHeroStatus({ stats }) {
-  const lowPct = stats.spoolCount > 0 ? (stats.lowCount / stats.spoolCount) * 100 : 0;
+/**
+ * Header in-page del mobile: ícono badge de la app + nombre del tab + count.
+ * Replica el patrón del design (no reemplaza al hamburger de AppLayout, lo complementa).
+ */
+function MobileInPageHeader({ tab, count }) {
   return (
-    <div className="mx-4 mt-3">
-      <Card className="p-4 flex flex-col gap-3 industrial-grid">
-        <div className="flex items-baseline justify-between">
-          <span className="lbl-eyebrow">Estado del taller</span>
-          <span className="mono text-[10px] text-gunmetal">{stats.spoolCount} spools</span>
-        </div>
-        <div className="flex items-baseline gap-2">
-          <span className="mono text-3xl font-semibold text-tech-white tracking-tight">
-            {(stats.totalGrams / 1000).toFixed(2)}
-          </span>
-          <span className="mono text-sm text-gunmetal">kg de material</span>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div className="flex flex-col">
-            <span className="lbl-eyebrow text-[9px]">Capital</span>
-            <span className="mono text-sm text-tech-white">
-              ${(stats.totalValue / 1_000_000).toFixed(2)}M
-            </span>
-          </div>
-          <div className="flex flex-col">
-            <span className="lbl-eyebrow text-[9px]">Stock bajo</span>
-            <span
-              className={`mono text-sm ${stats.criticalCount > 0 ? 'text-amber-400' : 'text-tech-white'}`}
-            >
-              {stats.lowCount}{' '}
-              <span className="text-gunmetal text-[10px]">({stats.criticalCount} crít.)</span>
-            </span>
-          </div>
-        </div>
-        {/* Mini barra global stock-bajo */}
-        <div className="relative h-1 bg-white/5 rounded">
-          <div
-            className="absolute inset-y-0 left-0 rounded transition-all"
+    <div className="px-4 pt-3 pb-2 flex items-center gap-2.5">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <span
+            className="inline-flex items-center justify-center w-5 h-5 rounded shrink-0"
             style={{
-              width: `${lowPct}%`,
-              background: lowPct > 0 ? '#FBBF24' : '#3B82F6',
+              background: 'rgba(59, 130, 246, 0.14)',
+              color: '#3B82F6',
             }}
-          />
+          >
+            <Box size={11} />
+          </span>
+          <span className="text-[11px] text-gunmetal tracking-wide">Inventario</span>
         </div>
-      </Card>
+        <h1 className="text-lg font-semibold text-tech-white tracking-tight leading-tight capitalize mt-0.5">
+          {tab}
+        </h1>
+      </div>
+      <span className="mono text-[10px] px-1.5 py-0.5 rounded-sm bg-white/5 border border-[var(--color-border)] text-steel tracking-wider shrink-0">
+        {count}
+      </span>
     </div>
   );
 }
 
-function MobileMiniKPIs({ stats, openPOs }) {
-  const items = [
-    { label: 'Spools', value: stats.spoolCount, accent: '#3B82F6' },
-    { label: 'Críticos', value: stats.criticalCount, accent: '#FBBF24' },
-    { label: 'Bajos', value: stats.lowCount - stats.criticalCount, accent: '#FBBF24' },
-    { label: 'POs abiertas', value: openPOs, accent: '#8B5CF6' },
+/**
+ * Hero status: Capital invertido (mono grande) + trend + sparkline de consumo.
+ * Réplica del design `inventory-mobile.jsx::HeroStatus` con gradient blue→teal
+ * y corner glow azul. Visible sólo en tab Filamentos.
+ */
+function MobileHeroStatus({ stats, consumption14d }) {
+  const trend = 4; // placeholder hasta que tengamos endpoint de comparativa mes anterior
+  return (
+    <div className="mx-4 mt-1 mb-3">
+      <div
+        className="relative overflow-hidden rounded-2xl border border-[var(--color-border)] p-4"
+        style={{
+          background:
+            'linear-gradient(135deg, rgba(59, 130, 246, 0.10) 0%, rgba(45, 212, 191, 0.04) 100%), var(--color-surf-card)',
+        }}
+      >
+        {/* Corner glow */}
+        <div
+          className="absolute -top-10 -right-10 w-36 h-36 rounded-full pointer-events-none"
+          style={{
+            background: 'radial-gradient(circle, rgba(59, 130, 246, 0.18), transparent 70%)',
+          }}
+        />
+        <div className="relative flex justify-between items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="lbl-eyebrow">Capital invertido</p>
+            <div className="flex items-baseline gap-1.5 mt-1.5">
+              <span className="mono text-[28px] font-semibold text-tech-white tracking-tight leading-none">
+                ${(stats.totalValue / 1_000_000).toFixed(2)}M
+              </span>
+              <span className="mono text-xs text-gunmetal">COP</span>
+            </div>
+            <div className="inline-flex items-center gap-1 mt-2 text-[11px]">
+              <TrendingUp size={11} className="text-emerald-400" />
+              <span className="mono text-emerald-400">+{trend}%</span>
+              <span className="text-gunmetal">vs mes ant.</span>
+            </div>
+          </div>
+          <div className="flex flex-col items-end shrink-0">
+            <Sparkline data={consumption14d} color="#3B82F6" width={110} height={36} />
+            <span className="mono text-[9.5px] text-gunmetal tracking-wider mt-1">
+              CONSUMO · 14d
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Mini KPI strip mobile: 3 tiles (Material / Stock bajo / Compras) en línea.
+ * Replica el design `inventory-mobile.jsx::MiniKPIStrip`.
+ */
+function MobileMiniKPIs({ stats, openPOs, openPOsValue }) {
+  const tiles = [
+    {
+      label: 'Material',
+      value: (stats.totalGrams / 1000).toFixed(2),
+      unit: 'kg',
+      sub: `${stats.spoolCount} spools`,
+      color: 'text-tech-white',
+    },
+    {
+      label: 'Stock bajo',
+      value: stats.lowCount,
+      unit: 'ítems',
+      sub: `${stats.criticalCount} críticos`,
+      color: stats.criticalCount > 0 ? 'text-amber-400' : 'text-tech-white',
+    },
+    {
+      label: 'Compras',
+      value: openPOs,
+      unit: 'POs',
+      sub: openPOsValue > 0 ? `${fmtCOP(openPOsValue)} ruta` : 'sin pendientes',
+      color: 'text-tech-white',
+    },
   ];
   return (
-    <div className="px-4 mt-3 flex gap-2 overflow-x-auto pb-1 -mb-1 snap-x">
-      {items.map((it) => (
+    <div className="px-4 mb-3 flex gap-2">
+      {tiles.map((t) => (
         <div
-          key={it.label}
-          className="card flex flex-col gap-0.5 px-3 py-2 min-w-[110px] snap-start shrink-0"
+          key={t.label}
+          className="flex-1 min-w-0 rounded-xl bg-[var(--color-surf-card)] border border-[var(--color-border)] px-2.5 py-2.5 flex flex-col gap-1"
         >
-          <span className="lbl-eyebrow text-[9px]">{it.label}</span>
-          <span className="mono text-base font-semibold text-tech-white">{it.value}</span>
-          <span
-            className="block w-6 h-0.5 rounded mt-0.5"
-            style={{ background: it.accent }}
-          />
+          <span className="lbl-eyebrow text-[8.5px] truncate">{t.label}</span>
+          <div className="flex items-baseline gap-1 whitespace-nowrap">
+            <span className={`mono text-[17px] font-semibold ${t.color}`}>{t.value}</span>
+            <span className="mono text-[9.5px] text-gunmetal">{t.unit}</span>
+          </div>
+          <span className="mono text-[9px] text-gunmetal-dim truncate">{t.sub}</span>
         </div>
       ))}
     </div>
@@ -1152,7 +1209,12 @@ function MobileSearchBar({ query, onQuery }) {
 
 function MobileChips({ materialFilters, onToggleMat }) {
   return (
-    <div className="px-4 mt-2 flex gap-1.5 overflow-x-auto pb-1 -mb-1 snap-x">
+    <div className="px-4 mb-2 flex gap-1.5 overflow-x-auto pb-1 -mb-1 snap-x">
+      {/* Label "Material" tipo chip (no clickable) — replica del design */}
+      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-[var(--color-border)] text-gunmetal shrink-0 whitespace-nowrap text-[11px] font-medium">
+        <Filter size={11} />
+        Material
+      </div>
       {MATERIALS.map((m) => {
         const active = materialFilters.includes(m.id);
         return (
@@ -1163,7 +1225,7 @@ function MobileChips({ materialFilters, onToggleMat }) {
             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium whitespace-nowrap shrink-0 snap-start transition-colors border ${
               active
                 ? 'bg-blue-500/12 border-blue-500/45 text-blue-300'
-                : 'bg-transparent border-[var(--color-border)] text-steel'
+                : 'bg-[var(--color-surf-card)] border-[var(--color-border)] text-steel'
             }`}
           >
             <span
@@ -1465,10 +1527,11 @@ export default function InventoryPage() {
   if (isMobile) {
     return (
       <div className="flex flex-col -mx-4 -mt-4">
+        <MobileInPageHeader tab={tab} count={counts[tab] ?? 0} />
         {tab === 'filamentos' && (
           <>
-            <MobileHeroStatus stats={stats} />
-            <MobileMiniKPIs stats={stats} openPOs={openPOs} />
+            <MobileHeroStatus stats={stats} consumption14d={CONSUMPTION_PLACEHOLDER} />
+            <MobileMiniKPIs stats={stats} openPOs={openPOs} openPOsValue={openPOsValue} />
           </>
         )}
         <MobileTabs value={tab} onChange={setTab} counts={counts} />
