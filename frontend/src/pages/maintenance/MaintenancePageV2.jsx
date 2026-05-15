@@ -83,19 +83,17 @@ function PrinterCard({ entry, onClick }) {
   const lastPerType = entry.last_per_type || {};
   const tipos = MAINTENANCE_TYPES.filter((t) => t.interval_hours);
 
-  let critical = 0;
-  let warning = 0;
-  let ok = 0;
-  let unknown = 0;
+  // Derivar level por tipo sin mutar contadores durante render (react-compiler
+  // se queja de reassign — refactor a derivación funcional).
   const tipoLevels = tipos.map((t) => {
     const last = lastPerType[t.value];
     const lvl = last ? maintLevel(t.value, last.hours_since) : 'unknown';
-    if (lvl === 'critical') critical += 1;
-    else if (lvl === 'warning') warning += 1;
-    else if (lvl === 'unknown') unknown += 1;
-    else ok += 1;
     return { tipo: t, last, level: lvl };
   });
+  const critical = tipoLevels.filter((x) => x.level === 'critical').length;
+  const warning = tipoLevels.filter((x) => x.level === 'warning').length;
+  const unknown = tipoLevels.filter((x) => x.level === 'unknown').length;
+  const ok = tipoLevels.filter((x) => x.level === 'ok').length;
 
   const overallLevel = critical > 0 ? 'critical' : warning > 0 ? 'warning' : 'ok';
   const overallColor = LEVEL_DOT[overallLevel].color;
