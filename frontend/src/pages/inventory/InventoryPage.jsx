@@ -41,12 +41,7 @@ import {
 import toast from 'react-hot-toast';
 import { Button, Card, Chip, DetailDrawer, KPI, MobileSheet, Sparkline, Swatch } from '../../components/ui';
 import { useIsMobile } from '../../hooks/useMediaQuery';
-import {
-  getInventoryFilaments,
-  getInventorySupplies,
-  getInventoryItems,
-  getPurchaseOrders,
-} from '../../services/api';
+import { getInventoryItems, getPurchaseOrders } from '../../services/api';
 import { MATERIALS, MATERIAL_ORDER } from '../../config/materials';
 import {
   computeFilamentStats,
@@ -546,6 +541,423 @@ function FilamentDrawerBody({ f }) {
   );
 }
 
+// ─── Item card / row / drawer (insumos · herramientas · consumibles) ───────
+
+/**
+ * Devuelve `{ icon, color, label }` por categoría para reutilizar en cards/rows.
+ */
+function categoryMeta(category) {
+  const map = {
+    Insumo:      { icon: Box,      color: '#3B82F6', label: 'Insumo' },
+    Herramienta: { icon: Scissors, color: '#94A0AE', label: 'Herramienta' },
+    Consumible:  { icon: Beaker,   color: '#FBBF24', label: 'Consumible' },
+  };
+  return map[category] || { icon: Box, color: '#94A0AE', label: category || '—' };
+}
+
+/**
+ * Calcula nivel de stock para items genéricos: critical si ≤25% del mínimo,
+ * low si ≤100%, ok si >100%. Si `min_quantity` es 0 → ok siempre.
+ */
+function itemLevel(item) {
+  const min = Number(item?.min_quantity || 0);
+  const qty = Number(item?.quantity || 0);
+  if (min <= 0) return 'ok';
+  const ratio = qty / min;
+  if (ratio <= 0.25) return 'critical';
+  if (ratio <= 1) return 'low';
+  return 'ok';
+}
+
+function InventoryItemCard({ item, onClick }) {
+  const meta = categoryMeta(item.category);
+  const Icon = meta.icon;
+  const level = itemLevel(item);
+  const min = Number(item.min_quantity || 0);
+  const qty = Number(item.quantity || 0);
+  const fillPct = min > 0 ? Math.min(100, (qty / min) * 100) : 100;
+  return (
+    <Card as="button" interactive onClick={() => onClick(item)} className="text-left w-full p-4 flex flex-col gap-3">
+      <div className="flex items-start gap-3">
+        <span
+          className="inline-flex items-center justify-center w-10 h-10 rounded-lg shrink-0"
+          style={{ background: `${meta.color}1A`, color: meta.color, border: `1px solid ${meta.color}40` }}
+        >
+          <Icon size={16} />
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span
+              className="mono inline-flex items-center text-[9.5px] px-1.5 py-px rounded-sm tracking-wider"
+              style={{ background: `${meta.color}1A`, border: `1px solid ${meta.color}40`, color: meta.color }}
+            >
+              {meta.label.toUpperCase()}
+            </span>
+            {level !== 'ok' && (
+              <span className="mono inline-flex items-center gap-1 text-[9.5px] px-1.5 py-px rounded-sm bg-amber-400/10 border border-amber-400/30 text-amber-400 tracking-wider">
+                <AlertTriangle size={9} />
+                {level === 'critical' ? 'CRÍTICO' : 'BAJO'}
+              </span>
+            )}
+          </div>
+          <p className="text-sm font-semibold text-tech-white truncate">{item.name}</p>
+          {item.supplier_name && (
+            <p className="mono text-[10.5px] text-gunmetal mt-0.5 truncate">{item.supplier_name}</p>
+          )}
+        </div>
+      </div>
+
+      {min > 0 && (
+        <div className="flex flex-col gap-1">
+          <div className="flex justify-between items-baseline">
+            <span className="mono text-[10px] text-gunmetal tracking-wider">STOCK</span>
+            <span className="mono text-[11px] text-tech-white">
+              {qty}
+              <span className="text-gunmetal">/{min} {item.unit}</span>
+            </span>
+          </div>
+          <div className="relative h-1 bg-white/5 rounded overflow-hidden">
+            <div
+              className="absolute inset-y-0 left-0 rounded transition-all"
+              style={{ width: `${fillPct}%`, background: level === 'ok' ? meta.color : '#FBBF24' }}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-between items-end gap-2.5 border-t border-dashed border-[var(--color-border-soft)] pt-2.5">
+        <div className="flex flex-col min-w-0">
+          <span className="lbl-eyebrow text-[9px]">Cantidad</span>
+          <span className="mono text-xs text-tech-white whitespace-nowrap">
+            {qty} {item.unit}
+          </span>
+        </div>
+        <div className="flex flex-col items-end min-w-0">
+          <span className="lbl-eyebrow text-[9px]">Costo</span>
+          <span className="mono text-xs text-tech-white whitespace-nowrap">
+            {fmtCOP(item.unit_cost)} <span className="text-gunmetal">/{item.unit}</span>
+          </span>
+        </div>
+      </div>
+
+      {item.category === 'Consumible' && item.useful_life_hours && (
+        <div className="text-[11px] text-gunmetal border-t border-[var(--color-border-soft)] pt-2 inline-flex items-center gap-1.5">
+          <Beaker size={11} />
+          Dura {Number(item.useful_life_hours).toFixed(0)}h de impresión
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function InventoryItemRow({ item, onClick }) {
+  const meta = categoryMeta(item.category);
+  const Icon = meta.icon;
+  const level = itemLevel(item);
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(item)}
+      className="w-full text-left flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border-soft)] hover:bg-[var(--color-surf-hover)]/50 transition-colors"
+    >
+      <span
+        className="inline-flex items-center justify-center w-9 h-9 rounded-lg shrink-0"
+        style={{ background: `${meta.color}1A`, color: meta.color, border: `1px solid ${meta.color}40` }}
+      >
+        <Icon size={15} />
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-tech-white truncate">{item.name}</p>
+        <p className="mono text-[10px] text-gunmetal mt-0.5 truncate">
+          {item.quantity} {item.unit}
+          {Number(item.min_quantity) > 0 ? ` / min ${item.min_quantity}` : ''}
+          {item.supplier_name ? ` · ${item.supplier_name}` : ''}
+        </p>
+      </div>
+      <div className="flex flex-col items-end shrink-0">
+        <span className="mono text-xs text-tech-white">{fmtCOP(item.unit_cost)}</span>
+        {level !== 'ok' && (
+          <span className="mono text-[9.5px] text-amber-400">{level === 'critical' ? 'CRÍT' : 'BAJO'}</span>
+        )}
+      </div>
+      <ChevronRight size={14} className="text-gunmetal-dim shrink-0" />
+    </button>
+  );
+}
+
+function InventoryItemDrawerBody({ item }) {
+  if (!item) return null;
+  const meta = categoryMeta(item.category);
+  const Icon = meta.icon;
+  const level = itemLevel(item);
+  return (
+    <div className="p-5 flex flex-col gap-4">
+      <div className="flex items-center gap-4">
+        <span
+          className="inline-flex items-center justify-center w-14 h-14 rounded-xl shrink-0"
+          style={{ background: `${meta.color}1A`, color: meta.color, border: `1px solid ${meta.color}40` }}
+        >
+          <Icon size={22} />
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span
+              className="mono inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-sm tracking-wider"
+              style={{ background: `${meta.color}1A`, border: `1px solid ${meta.color}40`, color: meta.color }}
+            >
+              {meta.label.toUpperCase()}
+            </span>
+            {level !== 'ok' && (
+              <span className="mono inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm bg-amber-400/10 border border-amber-400/30 text-amber-400 tracking-wider">
+                <AlertTriangle size={10} />
+                {level === 'critical' ? 'CRÍTICO' : 'BAJO'}
+              </span>
+            )}
+          </div>
+          <h2 className="text-xl font-semibold text-tech-white tracking-tight truncate">{item.name}</h2>
+          {item.supplier_name && (
+            <p className="mono text-[11.5px] text-gunmetal mt-0.5 truncate">{item.supplier_name}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <Card className="p-3">
+          <span className="lbl-eyebrow text-[9px]">Stock actual</span>
+          <p className="mono text-base font-semibold text-tech-white mt-0.5">
+            {item.quantity} <span className="text-gunmetal text-sm">{item.unit}</span>
+          </p>
+        </Card>
+        <Card className="p-3">
+          <span className="lbl-eyebrow text-[9px]">Mínimo</span>
+          <p className="mono text-base font-semibold text-tech-white mt-0.5">
+            {Number(item.min_quantity || 0) > 0 ? `${item.min_quantity} ${item.unit}` : '—'}
+          </p>
+        </Card>
+        <Card className="p-3">
+          <span className="lbl-eyebrow text-[9px]">Costo unit.</span>
+          <p className="mono text-base font-semibold text-forge-teal mt-0.5">{fmtCOP(item.unit_cost)}</p>
+        </Card>
+        <Card className="p-3">
+          <span className="lbl-eyebrow text-[9px]">Valor total</span>
+          <p className="mono text-base font-semibold text-tech-white mt-0.5">
+            {fmtCOP(Number(item.unit_cost || 0) * Number(item.quantity || 0))}
+          </p>
+        </Card>
+        {item.category === 'Consumible' && item.useful_life_hours != null && (
+          <Card className="p-3 col-span-2">
+            <span className="lbl-eyebrow text-[9px]">Vida útil estimada</span>
+            <p className="mono text-sm text-tech-white mt-0.5">
+              {Number(item.useful_life_hours).toFixed(0)}h de impresión por unidad
+            </p>
+          </Card>
+        )}
+      </div>
+
+      {item.description && (
+        <Card className="p-3">
+          <span className="lbl-eyebrow text-[9px]">Descripción</span>
+          <p className="text-sm text-steel whitespace-pre-wrap mt-1">{item.description}</p>
+        </Card>
+      )}
+      {item.supplier_contact && (
+        <Card className="p-3">
+          <span className="lbl-eyebrow text-[9px]">Contacto proveedor</span>
+          <p className="text-sm text-steel whitespace-pre-wrap mt-1 break-all">{item.supplier_contact}</p>
+        </Card>
+      )}
+      {item.notes && (
+        <Card className="p-3">
+          <span className="lbl-eyebrow text-[9px]">Notas</span>
+          <p className="text-sm text-steel whitespace-pre-wrap mt-1">{item.notes}</p>
+        </Card>
+      )}
+
+      <div className="flex gap-2 pt-2 border-t border-[var(--color-border-soft)]">
+        <Link to="/inventory/stock" className="btn btn-primary btn-sm flex-1">
+          Editar en vista clásica
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+// ─── Purchase card / row / drawer (compras) ─────────────────────────────────
+
+function purchaseStatusBadge(status) {
+  const s = (status || '').toLowerCase();
+  if (s.includes('complet')) return { label: 'Completado', color: '#34D399' };
+  if (s.includes('camino') || s.includes('ship') || s.includes('transit'))
+    return { label: 'En camino', color: '#FBBF24' };
+  if (s.includes('proces') || s.includes('pending') || s.includes('pend'))
+    return { label: 'Procesando', color: '#3B82F6' };
+  if (s.includes('cancel')) return { label: 'Cancelado', color: '#F87171' };
+  return { label: status || 'Sin estado', color: '#94A0AE' };
+}
+
+function PurchaseCard({ po, onClick }) {
+  const badge = purchaseStatusBadge(po.status);
+  const itemsCount = Array.isArray(po.items) ? po.items.length : po.items_count ?? po.items ?? 0;
+  return (
+    <Card as="button" interactive onClick={() => onClick(po)} className="text-left w-full p-4 flex flex-col gap-3">
+      <div className="flex items-start gap-3">
+        <span
+          className="inline-flex items-center justify-center w-10 h-10 rounded-lg shrink-0"
+          style={{ background: 'rgba(139, 92, 246, 0.12)', color: '#8B5CF6', border: '1px solid rgba(139, 92, 246, 0.25)' }}
+        >
+          <ShoppingCart size={16} />
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span className="mono text-[10.5px] text-gunmetal tracking-wider">
+              PO-{String(po.id).padStart(4, '0')}
+            </span>
+            <span
+              className="mono inline-flex items-center text-[9.5px] px-1.5 py-px rounded-sm tracking-wider"
+              style={{ background: `${badge.color}1A`, border: `1px solid ${badge.color}40`, color: badge.color }}
+            >
+              {badge.label.toUpperCase()}
+            </span>
+          </div>
+          <p className="text-sm font-semibold text-tech-white truncate">
+            {po.supplier_name || po.vendor || 'Proveedor sin nombre'}
+          </p>
+          <p className="mono text-[10.5px] text-gunmetal mt-0.5 truncate">
+            {itemsCount} ítem{itemsCount === 1 ? '' : 's'}
+            {po.order_date ? ` · ${String(po.order_date).split('T')[0]}` : ''}
+            {po.expected_arrival ? ` · llega ${String(po.expected_arrival).split('T')[0]}` : po.eta ? ` · ${po.eta}` : ''}
+          </p>
+        </div>
+        <span className="mono text-base font-semibold text-forge-teal whitespace-nowrap shrink-0">
+          {fmtCOP(po.total || po.total_amount)}
+        </span>
+      </div>
+      {po.tracking_number && (
+        <p className="text-[11px] text-gunmetal border-t border-dashed border-[var(--color-border-soft)] pt-2.5 truncate">
+          Tracking: <span className="mono text-steel">{po.tracking_number}</span>
+        </p>
+      )}
+    </Card>
+  );
+}
+
+function PurchaseRow({ po, onClick }) {
+  const badge = purchaseStatusBadge(po.status);
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(po)}
+      className="w-full text-left flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border-soft)] hover:bg-[var(--color-surf-hover)]/50 transition-colors"
+    >
+      <span
+        className="inline-flex items-center justify-center w-9 h-9 rounded-lg shrink-0"
+        style={{ background: 'rgba(139, 92, 246, 0.12)', color: '#8B5CF6', border: '1px solid rgba(139, 92, 246, 0.25)' }}
+      >
+        <ShoppingCart size={15} />
+      </span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <span
+            className="mono inline-flex items-center text-[9.5px] px-1 py-px rounded-sm"
+            style={{ background: `${badge.color}1A`, border: `1px solid ${badge.color}40`, color: badge.color }}
+          >
+            {badge.label.toUpperCase()}
+          </span>
+        </div>
+        <p className="text-sm font-semibold text-tech-white truncate">{po.supplier_name || po.vendor || 'Proveedor'}</p>
+        <p className="mono text-[10px] text-gunmetal mt-0.5">PO-{String(po.id).padStart(4, '0')}</p>
+      </div>
+      <span className="mono text-sm text-tech-white whitespace-nowrap shrink-0">{fmtCOP(po.total || po.total_amount)}</span>
+      <ChevronRight size={14} className="text-gunmetal-dim shrink-0" />
+    </button>
+  );
+}
+
+function PurchaseDrawerBody({ po }) {
+  if (!po) return null;
+  const badge = purchaseStatusBadge(po.status);
+  const items = Array.isArray(po.items) ? po.items : [];
+  return (
+    <div className="p-5 flex flex-col gap-4">
+      <div>
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <span
+            className="mono inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-sm tracking-wider"
+            style={{ background: `${badge.color}1A`, border: `1px solid ${badge.color}40`, color: badge.color }}
+          >
+            {badge.label.toUpperCase()}
+          </span>
+          <span className="mono text-[10px] text-gunmetal">PO-{String(po.id).padStart(4, '0')}</span>
+        </div>
+        <h2 className="text-lg font-semibold text-tech-white truncate">
+          {po.supplier_name || po.vendor || 'Proveedor sin nombre'}
+        </h2>
+        {(po.order_date || po.expected_arrival) && (
+          <p className="mono text-[11.5px] text-gunmetal mt-0.5">
+            {po.order_date ? `Pedido ${String(po.order_date).split('T')[0]}` : ''}
+            {po.expected_arrival ? ` · llega ${String(po.expected_arrival).split('T')[0]}` : ''}
+          </p>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <Card className="p-3">
+          <span className="lbl-eyebrow text-[9px]">Total</span>
+          <p className="mono text-base font-semibold text-forge-teal mt-0.5">{fmtCOP(po.total || po.total_amount)}</p>
+        </Card>
+        <Card className="p-3">
+          <span className="lbl-eyebrow text-[9px]">Ítems</span>
+          <p className="mono text-base font-semibold text-tech-white mt-0.5">{items.length || po.items_count || '—'}</p>
+        </Card>
+        {po.tracking_number && (
+          <Card className="p-3 col-span-2">
+            <span className="lbl-eyebrow text-[9px]">Tracking</span>
+            <p className="mono text-sm text-tech-white mt-0.5 break-all">{po.tracking_number}</p>
+            {po.tracking_carrier && (
+              <p className="mono text-[11px] text-gunmetal">{po.tracking_carrier}</p>
+            )}
+          </Card>
+        )}
+      </div>
+
+      {items.length > 0 && (
+        <div>
+          <span className="lbl-eyebrow text-[9px]">Ítems ({items.length})</span>
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {items.map((it, i) => (
+              <li
+                key={i}
+                className="flex items-center justify-between gap-3 px-3 py-2 rounded-md bg-[var(--color-surf-card)] border border-[var(--color-border-soft)]"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm text-tech-white truncate">{it.name || it.item_name || `Ítem #${i + 1}`}</p>
+                  <p className="mono text-[11px] text-gunmetal">
+                    {it.quantity || 1} × {fmtCOP(it.unit_cost || it.unit_price)}
+                  </p>
+                </div>
+                <span className="mono text-xs text-tech-white whitespace-nowrap">
+                  {fmtCOP(Number(it.unit_cost || it.unit_price || 0) * Number(it.quantity || 1))}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {po.notes && (
+        <Card className="p-3">
+          <span className="lbl-eyebrow text-[9px]">Notas</span>
+          <p className="text-sm text-steel whitespace-pre-wrap mt-1">{po.notes}</p>
+        </Card>
+      )}
+
+      <Link to="/inventory/purchases" className="btn btn-primary btn-sm self-start">
+        Editar en vista clásica
+      </Link>
+    </div>
+  );
+}
+
 // ─── Mobile shell ────────────────────────────────────────────────────────────
 // Nota: el header (logo + hamburger) lo provee AppLayout vía Studio Sidebar.
 // Esta vista sólo renderiza el contenido específico del inventario.
@@ -777,7 +1189,10 @@ export default function InventoryPage() {
   const [query, setQuery] = useState('');
   const [materialFilters, setMaterialFilters] = useState([]);
   const [sort, setSort] = useState('lowFirst');
-  const [selected, setSelected] = useState(null);
+  // Drawer/sheet state — un slot por tipo para no mezclar bodies.
+  const [selected, setSelected] = useState(null);            // filamento
+  const [selectedItem, setSelectedItem] = useState(null);    // insumo / herramienta / consumible
+  const [selectedPurchase, setSelectedPurchase] = useState(null); // PO
 
   const [filaments, setFilaments] = useState([]);
   const [supplies, setSupplies] = useState([]);
@@ -793,29 +1208,20 @@ export default function InventoryPage() {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
-      const results = await Promise.allSettled([
-        getInventoryFilaments(),
-        getInventorySupplies(),
-        getInventoryItems({ params: { category: 'Herramienta' } }),
-        getInventoryItems({ params: { category: 'Consumible' } }),
+      const [allRes, poRes] = await Promise.allSettled([
+        getInventoryItems(),
         getPurchaseOrders(),
       ]);
       if (cancelled) return;
-      const [filRes, supRes, toolRes, consRes, poRes] = results;
-      if (filRes.status === 'fulfilled') {
-        setFilaments((filRes.value.data || []).map(mapToFilament));
-      }
-      if (supRes.status === 'fulfilled') {
-        // Supplies retorna inventory items sin filtro de categoría;
-        // descartamos los filamentos para no duplicar.
-        const items = (supRes.value.data || []).filter((i) => i.category !== 'Filamento');
-        setSupplies(items.filter((i) => i.category === 'Insumo'));
-      }
-      if (toolRes.status === 'fulfilled') {
-        setTools(toolRes.value.data || []);
-      }
-      if (consRes.status === 'fulfilled') {
-        setConsumables(consRes.value.data || []);
+      // Una sola llamada a /inventory/items/ y partimos por category client-side
+      // (la función getInventoryItems no acepta params, y filtrar local es
+      // más rápido que 4 round-trips).
+      if (allRes.status === 'fulfilled') {
+        const all = allRes.value.data || [];
+        setFilaments(all.filter((i) => i.category === 'Filamento').map(mapToFilament));
+        setSupplies(all.filter((i) => i.category === 'Insumo'));
+        setTools(all.filter((i) => i.category === 'Herramienta'));
+        setConsumables(all.filter((i) => i.category === 'Consumible'));
       }
       if (poRes.status === 'fulfilled') {
         setPurchases(poRes.value.data || []);
@@ -878,6 +1284,84 @@ export default function InventoryPage() {
   }, [filteredFilaments, sort]);
 
   const stats = useMemo(() => computeFilamentStats(filaments), [filaments]);
+
+  /**
+   * Filtra + ordena items genéricos (insumos/herramientas/consumibles) por la
+   * misma query y sort que filamentos. lowFirst usa ratio quantity/min.
+   */
+  const filterGeneric = (list) => {
+    let arr = list;
+    const q = query.trim().toLowerCase();
+    if (q) {
+      arr = arr.filter(
+        (i) =>
+          i.name.toLowerCase().includes(q) ||
+          (i.supplier_name || '').toLowerCase().includes(q) ||
+          (i.description || '').toLowerCase().includes(q) ||
+          (i.notes || '').toLowerCase().includes(q),
+      );
+    }
+    const ratio = (i) => {
+      const min = Number(i.min_quantity || 0);
+      if (min <= 0) return Infinity;
+      return Number(i.quantity || 0) / min;
+    };
+    const next = [...arr];
+    switch (sort) {
+      case 'lowFirst':
+        next.sort((a, b) => ratio(a) - ratio(b));
+        break;
+      case 'valueDesc':
+        next.sort(
+          (a, b) =>
+            Number(b.unit_cost || 0) * Number(b.quantity || 0) -
+            Number(a.unit_cost || 0) * Number(a.quantity || 0),
+        );
+        break;
+      case 'weightDesc':
+        next.sort((a, b) => Number(b.quantity || 0) - Number(a.quantity || 0));
+        break;
+      default:
+        next.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return next;
+  };
+
+  const filteredSupplies = useMemo(() => filterGeneric(supplies), [supplies, query, sort]);
+  const filteredTools = useMemo(() => filterGeneric(tools), [tools, query, sort]);
+  const filteredConsumables = useMemo(() => filterGeneric(consumables), [consumables, query, sort]);
+
+  const filteredPurchases = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let arr = q
+      ? purchases.filter(
+          (p) =>
+            (p.supplier_name || p.vendor || '').toLowerCase().includes(q) ||
+            (p.tracking_number || '').toLowerCase().includes(q) ||
+            (p.status || '').toLowerCase().includes(q) ||
+            String(p.id).includes(q),
+        )
+      : [...purchases];
+    return arr.sort(
+      (a, b) => new Date(b.order_date || b.created_at || 0).getTime() - new Date(a.order_date || a.created_at || 0).getTime(),
+    );
+  }, [purchases, query]);
+
+  /**
+   * Devuelve estadísticas básicas para mostrar bajo el header en tabs no-filamento.
+   */
+  const genericStats = (list) => {
+    let low = 0;
+    let crit = 0;
+    let totalValue = 0;
+    for (const it of list) {
+      const lvl = itemLevel(it);
+      if (lvl === 'low') low += 1;
+      if (lvl === 'critical') crit += 1;
+      totalValue += Number(it.unit_cost || 0) * Number(it.quantity || 0);
+    }
+    return { count: list.length, low, critical: crit, totalValue };
+  };
 
   const openPOs = useMemo(
     () => purchases.filter((p) => (p.status || '').toLowerCase() !== 'completado').length,
@@ -961,11 +1445,89 @@ export default function InventoryPage() {
               </ul>
             )}
           </>
+        ) : tab === 'compras' ? (
+          <>
+            <MobileSearchBar query={query} onQuery={setQuery} />
+            <div className="flex items-center justify-between px-4 mt-3 mb-1">
+              <span className="mono text-[11px] text-gunmetal">
+                {filteredPurchases.length} de {purchases.length} pedidos
+              </span>
+            </div>
+            {loading ? (
+              <p className="px-4 py-12 text-center text-gunmetal text-sm">Cargando…</p>
+            ) : filteredPurchases.length === 0 ? (
+              <div className="px-4 py-12 flex flex-col items-center gap-2 text-center">
+                <ShoppingCart size={22} className="text-gunmetal-dim" />
+                <p className="text-sm font-semibold text-tech-white">
+                  {purchases.length === 0 ? 'Sin pedidos de compra' : 'Sin resultados'}
+                </p>
+              </div>
+            ) : (
+              <ul className="mt-2 pb-28">
+                {filteredPurchases.map((p) => (
+                  <li key={p.id}>
+                    <PurchaseRow po={p} onClick={setSelectedPurchase} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
         ) : (
-          <TabPlaceholder tab={tab} />
+          <>
+            <MobileSearchBar query={query} onQuery={setQuery} />
+            <div className="flex items-center justify-between px-4 mt-3 mb-1">
+              <span className="mono text-[11px] text-gunmetal">
+                {tab === 'insumos'
+                  ? `${filteredSupplies.length} de ${supplies.length} insumos`
+                  : tab === 'herramientas'
+                  ? `${filteredTools.length} de ${tools.length} herramientas`
+                  : `${filteredConsumables.length} de ${consumables.length} consumibles`}
+              </span>
+            </div>
+            {(() => {
+              const list =
+                tab === 'insumos'
+                  ? filteredSupplies
+                  : tab === 'herramientas'
+                  ? filteredTools
+                  : filteredConsumables;
+              const rawList =
+                tab === 'insumos' ? supplies : tab === 'herramientas' ? tools : consumables;
+              const meta = categoryMeta(
+                tab === 'insumos'
+                  ? 'Insumo'
+                  : tab === 'herramientas'
+                  ? 'Herramienta'
+                  : 'Consumible',
+              );
+              const Icon = meta.icon;
+              if (loading) {
+                return <p className="px-4 py-12 text-center text-gunmetal text-sm">Cargando…</p>;
+              }
+              if (list.length === 0) {
+                return (
+                  <div className="px-4 py-12 flex flex-col items-center gap-2 text-center">
+                    <Icon size={22} className="text-gunmetal-dim" />
+                    <p className="text-sm font-semibold text-tech-white">
+                      {rawList.length === 0 ? `Sin ${tab} aún` : 'Sin resultados'}
+                    </p>
+                  </div>
+                );
+              }
+              return (
+                <ul className="mt-2 pb-28">
+                  {list.map((it) => (
+                    <li key={it.id}>
+                      <InventoryItemRow item={it} onClick={setSelectedItem} />
+                    </li>
+                  ))}
+                </ul>
+              );
+            })()}
+          </>
         )}
 
-        <MobileFAB onClick={() => navigate('/inventory/stock?new=1')} />
+        <MobileFAB onClick={() => navigate(tab === 'compras' ? '/inventory/purchases' : '/inventory/stock?new=1')} />
 
         <MobileSheet
           open={!!selected}
@@ -974,6 +1536,22 @@ export default function InventoryPage() {
           height="full"
         >
           <FilamentDrawerBody f={selected} />
+        </MobileSheet>
+        <MobileSheet
+          open={!!selectedItem}
+          onClose={() => setSelectedItem(null)}
+          title={selectedItem?.name}
+          height="full"
+        >
+          <InventoryItemDrawerBody item={selectedItem} />
+        </MobileSheet>
+        <MobileSheet
+          open={!!selectedPurchase}
+          onClose={() => setSelectedPurchase(null)}
+          title={selectedPurchase ? `PO-${String(selectedPurchase.id).padStart(4, '0')}` : ''}
+          height="full"
+        >
+          <PurchaseDrawerBody po={selectedPurchase} />
         </MobileSheet>
       </div>
     );
@@ -1077,8 +1655,153 @@ export default function InventoryPage() {
             <FilamentTable items={filteredFilaments} onRowClick={setSelected} />
           )}
         </>
+      ) : tab === 'compras' ? (
+        <>
+          <div className="flex flex-wrap gap-3 items-center px-6 py-3 sticky top-0 bg-forge-black/80 backdrop-blur z-10">
+            <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 min-w-[260px] basis-[280px] flex-1 max-w-md">
+              <Search size={13} className="text-gunmetal" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Proveedor, tracking, status, PO id…"
+                className="flex-1 bg-transparent border-0 outline-0 text-tech-white text-sm placeholder:text-gunmetal-dim"
+              />
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => setQuery('')}
+                  className="text-gunmetal hover:text-tech-white"
+                  aria-label="Limpiar"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+            <span className="flex-1" />
+            <span className="mono text-[11px] text-gunmetal">
+              {filteredPurchases.length} de {purchases.length} pedidos
+            </span>
+          </div>
+          {loading ? (
+            <p className="px-6 py-16 text-center text-gunmetal text-sm">Cargando pedidos…</p>
+          ) : filteredPurchases.length === 0 ? (
+            <div className="px-6 py-16 flex flex-col items-center gap-3 text-center">
+              <ShoppingCart size={28} className="text-gunmetal-dim" />
+              <p className="text-sm font-semibold text-tech-white">
+                {purchases.length === 0 ? 'Sin pedidos de compra' : 'Sin resultados'}
+              </p>
+              {purchases.length === 0 && (
+                <Link to="/inventory/purchases" className="btn btn-primary btn-sm">
+                  <Plus size={13} /> Crear pedido
+                </Link>
+              )}
+            </div>
+          ) : (
+            <div
+              className="px-6 pb-8 grid gap-3"
+              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}
+            >
+              {filteredPurchases.map((p) => (
+                <PurchaseCard key={p.id} po={p} onClick={setSelectedPurchase} />
+              ))}
+            </div>
+          )}
+        </>
       ) : (
-        <TabPlaceholder tab={tab} />
+        <>
+          {(() => {
+            const list =
+              tab === 'insumos'
+                ? filteredSupplies
+                : tab === 'herramientas'
+                ? filteredTools
+                : filteredConsumables;
+            const rawList =
+              tab === 'insumos' ? supplies : tab === 'herramientas' ? tools : consumables;
+            const tabStats = genericStats(rawList);
+            const meta = categoryMeta(
+              tab === 'insumos' ? 'Insumo' : tab === 'herramientas' ? 'Herramienta' : 'Consumible',
+            );
+            const Icon = meta.icon;
+            return (
+              <>
+                <div className="flex flex-wrap gap-3 items-center px-6 py-3 sticky top-0 bg-forge-black/80 backdrop-blur z-10">
+                  <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 min-w-[260px] basis-[280px] flex-1 max-w-md">
+                    <Search size={13} className="text-gunmetal" />
+                    <input
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder={`Buscar ${tab}, proveedor, notas…`}
+                      className="flex-1 bg-transparent border-0 outline-0 text-tech-white text-sm placeholder:text-gunmetal-dim"
+                    />
+                    {query && (
+                      <button
+                        type="button"
+                        onClick={() => setQuery('')}
+                        className="text-gunmetal hover:text-tech-white"
+                        aria-label="Limpiar"
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
+                  <select
+                    value={sort}
+                    onChange={(e) => setSort(e.target.value)}
+                    className="input mono text-xs cursor-pointer w-auto min-w-[170px]"
+                  >
+                    <option value="lowFirst">Stock bajo primero</option>
+                    <option value="material">Por nombre</option>
+                    <option value="valueDesc">Valor (mayor)</option>
+                    <option value="weightDesc">Cantidad (mayor)</option>
+                  </select>
+                  <span className="flex-1" />
+                  <div className="flex gap-3 items-center mono text-[11px] text-gunmetal">
+                    <span>{tabStats.count} ítems</span>
+                    {tabStats.critical > 0 && (
+                      <span className="text-rose-300">{tabStats.critical} crít.</span>
+                    )}
+                    {tabStats.low > 0 && <span className="text-amber-400">{tabStats.low} bajos</span>}
+                    <span>{fmtCOP(tabStats.totalValue)}</span>
+                  </div>
+                </div>
+                {loading ? (
+                  <p className="px-6 py-16 text-center text-gunmetal text-sm">Cargando…</p>
+                ) : list.length === 0 ? (
+                  <div className="px-6 py-16 flex flex-col items-center gap-3 text-center">
+                    <div
+                      className="w-14 h-14 rounded-full flex items-center justify-center"
+                      style={{
+                        background: `${meta.color}1A`,
+                        border: `1px solid ${meta.color}40`,
+                        color: meta.color,
+                      }}
+                    >
+                      <Icon size={22} />
+                    </div>
+                    <p className="text-sm font-semibold text-tech-white">
+                      {rawList.length === 0 ? `Sin ${tab} aún` : 'Sin resultados'}
+                    </p>
+                    {rawList.length === 0 && (
+                      <Link to="/inventory/stock?new=1" className="btn btn-primary btn-sm">
+                        <Plus size={13} /> Agregar primer ítem
+                      </Link>
+                    )}
+                  </div>
+                ) : (
+                  <div
+                    className="px-6 pb-8 grid gap-3"
+                    style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}
+                  >
+                    {list.map((it) => (
+                      <InventoryItemCard key={it.id} item={it} onClick={setSelectedItem} />
+                    ))}
+                  </div>
+                )}
+              </>
+            );
+          })()}
+        </>
       )}
 
       <DetailDrawer
@@ -1088,6 +1811,22 @@ export default function InventoryPage() {
         width={460}
       >
         <FilamentDrawerBody f={selected} />
+      </DetailDrawer>
+      <DetailDrawer
+        open={!!selectedItem}
+        onClose={() => setSelectedItem(null)}
+        title={selectedItem?.name || ''}
+        width={460}
+      >
+        <InventoryItemDrawerBody item={selectedItem} />
+      </DetailDrawer>
+      <DetailDrawer
+        open={!!selectedPurchase}
+        onClose={() => setSelectedPurchase(null)}
+        title={selectedPurchase ? `PO-${String(selectedPurchase.id).padStart(4, '0')}` : ''}
+        width={460}
+      >
+        <PurchaseDrawerBody po={selectedPurchase} />
       </DetailDrawer>
 
       <footer className="mt-auto px-6 py-2.5 border-t border-[var(--color-border-soft)] bg-[var(--color-surf-sidebar)] flex flex-wrap items-center gap-4 text-[11px] text-gunmetal">
@@ -1106,26 +1845,11 @@ export default function InventoryPage() {
   );
 }
 
-function TabPlaceholder({ tab }) {
-  const map = {
-    insumos: { to: '/inventory/supplies', label: 'Insumos' },
-    herramientas: { to: '/inventory/tools', label: 'Herramientas' },
-    consumibles: { to: '/inventory/consumables', label: 'Consumibles' },
-    compras: { to: '/inventory/purchases', label: 'Pedidos de compra' },
-  };
-  const target = map[tab];
+function _TabPlaceholderDeprecated({ tab }) {
+  // Reservado por si alguna pestaña futura necesita placeholder antes de portarse.
   return (
     <div className="flex flex-col items-center justify-center gap-3 px-6 py-20 text-center">
-      <p className="text-sm font-semibold text-tech-white">Vista en construcción</p>
-      <p className="text-xs text-gunmetal max-w-sm">
-        Esta pestaña se portará al nuevo diseño en los próximos días. Mientras tanto se mantiene
-        funcional la página antigua.
-      </p>
-      {target && (
-        <Link to={target.to} className="btn btn-ghost btn-sm">
-          Ir a {target.label} (vista antigua)
-        </Link>
-      )}
+      <p className="text-sm font-semibold text-tech-white">Vista {tab} en construcción</p>
     </div>
   );
 }
