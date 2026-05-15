@@ -163,7 +163,7 @@ function AppRoutes() {
 
         {/* Inventario */}
         <Route path="/inventory">
-          <Route index element={<Navigate to="/inventory/stock" replace />} />
+          <Route index element={<Navigate to="/inventory/v2" replace />} />
           <Route path="v2" element={<InventoryPage />} />
           <Route path="filaments" element={<InventoryFilamentsPage />} />
           <Route path="supplies" element={<InventorySuppliesPage />} />
@@ -177,7 +177,7 @@ function AppRoutes() {
 
         {/* Cost */}
         <Route path="/cost">
-          <Route index element={<Navigate to="/cost/calculator" replace />} />
+          <Route index element={<Navigate to="/cost/v2" replace />} />
           <Route path="v2" element={<CostPage />} />
           <Route path="calculator/v2" element={<CalculatorPageV2 />} />
           <Route path="calculator" element={<CalculatorPage />} />
@@ -198,7 +198,7 @@ function AppRoutes() {
 
         {/* Slicer */}
         <Route path="/slicer">
-          <Route index element={<Navigate to="/slicer/upload" replace />} />
+          <Route index element={<Navigate to="/slicer/v2" replace />} />
           <Route path="v2" element={<SlicerPage />} />
           <Route path="upload" element={<SlicerUploadPage />} />
           <Route path="history" element={<SlicerHistoryPage />} />
@@ -207,7 +207,7 @@ function AppRoutes() {
 
         {/* Mantenimiento */}
         <Route path="/maintenance">
-          <Route index element={<Navigate to="/maintenance/dashboard" replace />} />
+          <Route index element={<Navigate to="/maintenance/v2" replace />} />
           <Route path="v2" element={<MaintenancePageV2 />} />
           <Route path="dashboard" element={<MaintenanceDashboardPage />} />
           <Route path="logs" element={<MaintenanceLogsPage />} />
@@ -216,8 +216,9 @@ function AppRoutes() {
 
         {/* Queue */}
         <Route path="/queue">
-          <Route index element={<QueuePage />} />
+          <Route index element={<Navigate to="/queue/v2" replace />} />
           <Route path="v2" element={<QueuePageV2 />} />
+          <Route path="legacy" element={<QueuePage />} />
           <Route path="history" element={<QueueHistoryPage />} />
         </Route>
 
@@ -226,7 +227,7 @@ function AppRoutes() {
           path="/company"
           element={<AdminRoute><Outlet /></AdminRoute>}
         >
-          <Route index element={<Navigate to="/company/profile" replace />} />
+          <Route index element={<Navigate to="/company/v2" replace />} />
           <Route path="v2" element={<CompanyPageV2 />} />
           <Route path="profile"       element={<CompanyProfilePage />} />
           <Route path="branding"      element={<CompanyBrandingPage />} />
@@ -237,8 +238,9 @@ function AppRoutes() {
 
         {/* Vault */}
         <Route path="/vault">
-          <Route index element={<VaultPage />} />
+          <Route index element={<VaultPageV2 />} />
           <Route path="v2" element={<VaultPageV2 />} />
+          <Route path="legacy" element={<VaultPage />} />
           <Route path="upload" element={<VaultUploadPage />} />
         </Route>
       </Route>
