@@ -36,14 +36,15 @@ export function useMediaQuery(query) {
 }
 
 /**
- * Atajo: `true` para viewports de teléfono (≤ 767px = debajo de Tailwind `md`).
+ * Atajo: `true` para viewports táctiles/angostas (≤ 1023px = debajo de Tailwind `lg`).
  *
- * Tablets y desktops angostas (768-1279) usan el shell desktop con sus grids
- * responsive — sólo phones reciben el shell especial (hero gradient + FAB
- * + bottom sheet) para no malgastar pantalla intermedia.
+ * Cubre phones y tablets en portrait. Sólo desktops anchos (≥1024) reciben el
+ * shell desktop con sticky toolbar + grid|table toggle. Esto incluye el caso
+ * común de redimensionar el navegador a una ventana media — al cruzar 1023px
+ * cambia al diseño mobile con hero gradient + FAB + bottom sheet.
  *
  * @returns {boolean}
  */
 export function useIsMobile() {
-  return useMediaQuery('(max-width: 767px)');
+  return useMediaQuery('(max-width: 1023px)');
 }
