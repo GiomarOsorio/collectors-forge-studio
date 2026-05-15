@@ -40,6 +40,11 @@ from app.schemas.vault import (
     VaultStatsResponse,
 )
 from app.services.auth import get_admin_user, get_current_user
+from app.services.thumbnail_extractor import (
+    delete_thumbnail,
+    extract_plate_png,
+    save_thumbnail,
+)
 from app.services.vault_metadata import fetch_metadata
 from app.services.vault_storage import delete_file, download_file, upload_file
 
@@ -90,6 +95,7 @@ def _to_response(model: ModelFile, username: Optional[str]) -> ModelFileResponse
         name=model.name,
         description=model.description,
         thumbnail_url=model.thumbnail_url,
+        local_thumbnail_path=model.local_thumbnail_path,
         tags=model.tags or [],
         source_url=model.source_url,
         source_platform=model.source_platform,
@@ -256,6 +262,17 @@ async def upload_vault_file(
     await db.commit()
     await db.refresh(model)
 
+    # Extraer plate render PNG embebido en el .3mf (OrcaSlicer/BambuStudio).
+    # Si el ZIP no trae thumbnail (modelo sin slicing), seguimos sin él.
+    png = extract_plate_png(content)
+    if png:
+        try:
+            model.local_thumbnail_path = save_thumbnail(model.id, png)
+            await db.commit()
+            await db.refresh(model)
+        except OSError as exc:
+            logger.warning("No se pudo guardar thumbnail local de %s: %s", model.id, exc)
+
     return _to_response(model, current_user.username)
 
 
@@ -360,6 +377,19 @@ async def replace_vault_file(
     model.file_name = file.filename
     model.file_size = file_size
     model.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    # Re-extraer plate render del nuevo .3mf — invalida el anterior aunque falle.
+    png = extract_plate_png(content)
+    delete_thumbnail(model.id)
+    if png:
+        try:
+            model.local_thumbnail_path = save_thumbnail(model.id, png)
+        except OSError as exc:
+            logger.warning("No se pudo guardar thumbnail local de %s: %s", model.id, exc)
+            model.local_thumbnail_path = None
+    else:
+        model.local_thumbnail_path = None
+
     await db.commit()
     await db.refresh(model)
 
@@ -393,3 +423,4 @@ async def delete_vault_file(
 
     await db.delete(model)
     await db.commit()
+    delete_thumbnail(model.id)

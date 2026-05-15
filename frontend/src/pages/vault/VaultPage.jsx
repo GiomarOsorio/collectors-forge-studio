@@ -22,6 +22,7 @@ import {
   replaceVaultFile,
   deleteVaultFile,
 } from '../../services/api';
+import { getThumbnail } from '../../utils/thumbnail';
 
 // ─── Barra de almacenamiento ───────────────────────────────────────────────
 
@@ -254,23 +255,31 @@ function ModelCard({ file, isAdmin, onDownload, onEdit, onDelete, downloadingIds
 
   return (
     <div className="bg-surface border border-border rounded-xl overflow-hidden flex flex-col hover:border-rose-500/40 transition-colors">
-      {/* Thumbnail */}
-      <div className="h-40 bg-bg flex items-center justify-center overflow-hidden">
-        {file.thumbnail_url ? (
-          <img
-            src={file.thumbnail_url}
-            alt={file.name}
-            className="w-full h-full object-cover"
-            onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
-          />
-        ) : null}
-        <div
-          className="w-full h-full flex items-center justify-center"
-          style={{ display: file.thumbnail_url ? 'none' : 'flex' }}
-        >
-          <Archive size={40} className="text-rose-500/30" />
-        </div>
-      </div>
+      {/* Thumbnail: prioridad plate render local del .3mf > URL externa > placeholder */}
+      {(() => {
+        const thumb = getThumbnail(file);
+        return (
+          <div className="h-40 bg-bg flex items-center justify-center overflow-hidden">
+            {thumb ? (
+              <img
+                src={thumb}
+                alt={file.name}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  e.target.nextSibling.style.display = 'flex';
+                }}
+              />
+            ) : null}
+            <div
+              className="w-full h-full flex items-center justify-center"
+              style={{ display: thumb ? 'none' : 'flex' }}
+            >
+              <Archive size={40} className="text-rose-500/30" />
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Info */}
       <div className="p-3 flex flex-col flex-1 gap-1">

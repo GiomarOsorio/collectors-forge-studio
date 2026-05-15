@@ -46,7 +46,8 @@ from app.routers.inventory_categories import router as inventory_categories_rout
 from app.routers.vault import router as vault_router
 from app.routers.oidc import router as oidc_router
 from app.routers.slicer import cleanup_old_slicer_files
-from app.services.vault_storage import ensure_bucket
+from app.services.thumbnail_extractor import extract_plate_png, save_thumbnail
+from app.services.vault_storage import download_file, ensure_bucket
 from app.services.tariff_scraper import refresh_if_stale
 
 # UUID fijo de la empresa por defecto — coincide con la migración f4a1b9c2d8e7
@@ -68,6 +69,53 @@ async def _periodic_slicer_cleanup() -> None:
             break
         except Exception as e:
             logger.error("Error en tarea de limpieza de slicer: %s", e)
+
+
+async def _backfill_vault_thumbnails() -> None:
+    """
+    Backfill idempotente de thumbnails de plate render del Vault.
+
+    Recorre los `model_files` con `local_thumbnail_path IS NULL`, descarga el
+    `.3mf` de MinIO y extrae el PNG embebido por OrcaSlicer/BambuStudio. Los
+    fallos por archivo se loggean y no detienen el resto (puede ser un .3mf
+    sin slicing, sin PNG embebido, o un objeto corrupto en MinIO).
+
+    Corre una sola vez al arrancar dentro del `lifespan`. Es no-op si todos los
+    modelos ya tienen su thumbnail local.
+    """
+    # Import diferido para evitar dependencia circular con app.models en tests.
+    from app.models.model_file import ModelFile
+
+    try:
+        async with async_session() as db:
+            result = await db.execute(
+                select(ModelFile).where(ModelFile.local_thumbnail_path.is_(None))
+            )
+            models = result.scalars().all()
+
+            if not models:
+                return
+
+            logger.info("Backfill de thumbnails: %d modelos pendientes", len(models))
+            ok = 0
+            for model in models:
+                try:
+                    zip_bytes = await download_file(model.file_key)
+                    png = extract_plate_png(zip_bytes)
+                    if not png:
+                        continue
+                    model.local_thumbnail_path = save_thumbnail(model.id, png)
+                    await db.commit()
+                    await db.refresh(model)
+                    ok += 1
+                except Exception as exc:
+                    logger.warning(
+                        "Backfill thumbnail falló para model_file=%s: %s", model.id, exc
+                    )
+                    await db.rollback()
+            logger.info("Backfill de thumbnails: %d/%d completados", ok, len(models))
+    except Exception as exc:
+        logger.error("Backfill de thumbnails abortado: %s", exc)
 
 
 async def _periodic_tariff_refresh() -> None:
@@ -107,9 +155,12 @@ async def lifespan(app: FastAPI):
     """
     # Crear directorios estáticos necesarios
     Path("/app/static/companies").mkdir(parents=True, exist_ok=True)
+    Path("/app/static/thumbnails").mkdir(parents=True, exist_ok=True)
     await create_default_data()
     # Inicializar bucket MinIO del Vault (no-fatal si MinIO no está disponible)
     await ensure_bucket()
+    # Backfill de thumbnails embebidos en .3mf — idempotente, no-op si todo está al día.
+    asyncio.create_task(_backfill_vault_thumbnails())
     # Ejecutar limpieza de slicer al inicio y luego cada 24h en background
     await cleanup_old_slicer_files()
     cleanup_task = asyncio.create_task(_periodic_slicer_cleanup())

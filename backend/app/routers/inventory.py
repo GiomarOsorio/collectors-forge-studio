@@ -139,11 +139,19 @@ async def create_inventory_item(
         filament_brand=data.filament_brand,
         filament_type=data.filament_type,
         filament_color=data.filament_color,
+        # Campos visuales (Claude Design)
+        batch=data.batch,
+        location=data.location,
+        color_hex=data.color_hex,
+        color_name=data.color_name,
         filament_diameter=data.filament_diameter,
         filament_density=data.filament_density,
         weight_per_roll=data.weight_per_roll,
         # Precio por unidad para insumos (calculadora)
         price_per_unit=data.price_per_unit,
+        # Consumibles (calculadora)
+        useful_life_hours=data.useful_life_hours,
+        unit_cost_cal=data.unit_cost_cal,
     )
     db.add(item)
     await db.commit()

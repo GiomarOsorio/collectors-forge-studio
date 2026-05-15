@@ -2,15 +2,18 @@
  * @file Breadcrumb de navegación para las apps de Collector's Forge Studio.
  *
  * Lee la ruta actual con useLocation() y muestra los segmentos en español.
+ * El primer segmento (el id de la app) se renderiza con el ícono y el color
+ * de la app desde `config/sidebar.js`. Los segmentos siguientes son texto
+ * plano (sin enlaces).
+ *
  * Solo se renderiza cuando la ruta tiene 2 o más segmentos (ej. /cost/calculator).
- * Los segmentos se muestran como texto plano (sin enlaces) para evitar
- * navegar a rutas intermedias que pueden no existir.
  *
  * @module components/Breadcrumb
  */
 
 import { useLocation } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
+import { SETTINGS_APP, SIDEBAR_APPS } from '../config/sidebar';
 
 /**
  * Mapa de segmentos de ruta a etiquetas legibles en español.
@@ -25,6 +28,7 @@ const SEGMENT_LABELS = {
   company:     'Compañía',
   slicer:      'Slicer',
   settings:    'Configuración',
+  vault:       'Vault',
   /* Cost */
   calculator:  'Calculadora',
   quotes:      'Cotizaciones',
@@ -41,8 +45,6 @@ const SEGMENT_LABELS = {
   prints:      'Disponible para Venta',
   io:          'Importar / Exportar',
   categories:  'Categorías',
-  /* Queue */
-  /* history ya está arriba */
   /* Maintenance */
   dashboard:   'Estado general',
   logs:        'Historial de logs',
@@ -52,13 +54,16 @@ const SEGMENT_LABELS = {
   templates:   'Templates PDF',
   /* Slicer */
   upload:      'Subir modelo',
-  /* Vault */
-  vault:       'Vault',
-  /* upload ya está arriba (Slicer) */
   /* Settings */
   account:     'Cuenta',
   users:       'Usuarios',
 };
+
+/** Mapa app-id → { icon, color } construido a partir del registro de la sidebar. */
+const APP_META_BY_ID = [...SIDEBAR_APPS, SETTINGS_APP].reduce((acc, app) => {
+  acc[app.id] = { icon: app.icon, color: app.color };
+  return acc;
+}, {});
 
 /**
  * Breadcrumb de navegación.
@@ -72,14 +77,21 @@ export default function Breadcrumb() {
 
   if (segments.length < 2) return null;
 
+  const appMeta = APP_META_BY_ID[segments[0]];
+  const AppIcon = appMeta?.icon;
+
   return (
     <nav aria-label="Ruta de navegación" className="flex items-center flex-wrap gap-1 text-xs mb-4">
       {segments.map((seg, i) => {
         const isLast = i === segments.length - 1;
+        const isFirst = i === 0;
         return (
           <span key={i} className="flex items-center gap-1">
             {i > 0 && (
               <ChevronRight size={11} className="text-gunmetal/50 shrink-0" />
+            )}
+            {isFirst && AppIcon && (
+              <AppIcon size={13} style={{ color: appMeta.color }} className="shrink-0" />
             )}
             <span className={isLast ? 'text-steel' : 'text-gunmetal'}>
               {SEGMENT_LABELS[seg] ?? seg}

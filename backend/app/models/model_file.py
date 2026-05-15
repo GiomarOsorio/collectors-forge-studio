@@ -31,6 +31,9 @@ class ModelFile(Base):
         name:            Nombre de display editable por el usuario.
         description:     Descripción libre del modelo (opcional).
         thumbnail_url:   URL externa de miniatura (MakerWorld/Printables), no se descarga.
+        local_thumbnail_path: Ruta interna al PNG de plate render extraído del .3mf
+                              (sirve `/static/thumbnails/{id}.png`). Tiene prioridad sobre
+                              thumbnail_url al renderizar en frontend.
         tags:            Array JSONB de etiquetas de texto libre.
         source_url:      URL de origen del modelo (MakerWorld, Printables, etc.).
         source_platform: Plataforma de origen ('makerworld'|'printables'|'thingiverse'|'otro').
@@ -52,6 +55,7 @@ class ModelFile(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     thumbnail_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    local_thumbnail_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     tags: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     source_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     source_platform: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)

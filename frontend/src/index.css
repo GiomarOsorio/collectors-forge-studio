@@ -1,13 +1,37 @@
 @import "tailwindcss";
 
 @theme {
+  /* Brand */
   --color-forge-teal: #2DD4BF;
   --color-deep-teal: #14B8A6;
   --color-forge-amber: #FBBF24;
+  --color-forge-rose: #F43F5E;
   --color-steel: #94A0AE;
   --color-gunmetal: #7A8494;
+  --color-gunmetal-dim: #5A6573;
   --color-forge-black: #0F1219;
   --color-tech-white: #E4E8ED;
+
+  /* App accents (alineados con SIDEBAR_APPS) */
+  --color-app-cost: #2DD4BF;
+  --color-app-inventory: #3B82F6;
+  --color-app-slicer: #F59E0B;
+  --color-app-mtto: #8B5CF6;
+  --color-app-queue: #14B8A6;
+  --color-app-vault: #F43F5E;
+  --color-app-company: #6366F1;
+
+  /* Superficies jerárquicas */
+  --color-surf-sidebar: #0A0E16;
+  --color-surf-card: #111520;
+  --color-surf-card-2: #161B27;
+  --color-surf-hover: #1A2030;
+
+  /* Bordes */
+  --color-border-soft: #1C2230;
+  --color-border: #222630;
+  --color-border-strong: #303642;
+  --color-border-bright: #3B4150;
 
   --font-sans: 'Space Grotesk', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
@@ -141,4 +165,104 @@ select option {
     animation: shimmer 1.5s infinite;
     border-radius: 6px;
   }
+
+  /* ── Sistema Claude Design — Coexiste con .tf-* mientras se hace el port ── */
+
+  /* Tipografía monospace para números/codes (tabular nums) */
+  .mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Eyebrow label: tag pequeño en mayúsculas para sectionar */
+  .lbl-eyebrow {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-gunmetal);
+  }
+
+  /* Fondo industrial sutil con dot grid */
+  .industrial-grid {
+    background-image: radial-gradient(circle, rgba(148, 160, 174, 0.05) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* Botones — sistema Claude Design */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-3 py-2 rounded-md border text-sm font-medium
+           border-[var(--color-border-strong)] bg-[var(--color-surf-card)] text-tech-white
+           transition-colors cursor-pointer select-none whitespace-nowrap shrink-0;
+  }
+  .btn:hover {
+    @apply bg-[var(--color-surf-hover)] border-[var(--color-border-bright)];
+  }
+  .btn-primary {
+    background: var(--color-forge-teal);
+    border-color: var(--color-forge-teal);
+    color: #0A1014;
+  }
+  .btn-primary:hover {
+    background: var(--color-deep-teal);
+    border-color: var(--color-deep-teal);
+  }
+  .btn-ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--color-steel);
+  }
+  .btn-ghost:hover {
+    background: var(--color-surf-hover);
+    color: var(--color-tech-white);
+    border-color: transparent;
+  }
+  .btn-sm { @apply px-2.5 py-1.5 text-xs; }
+  .btn-icon { @apply p-1.5; }
+
+  /* Chips para filtros */
+  .chip {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium
+           border border-[var(--color-border)] bg-transparent text-steel cursor-pointer select-none transition-colors;
+  }
+  .chip:hover {
+    background: var(--color-surf-hover);
+    color: var(--color-tech-white);
+  }
+  .chip-active {
+    background: rgba(59, 130, 246, 0.12);
+    border-color: rgba(59, 130, 246, 0.55);
+    color: #93C5FD;
+  }
+
+  /* Inputs estilo Claude Design (alternativo a .tf-input) */
+  .input {
+    @apply w-full px-3 py-2 rounded-md text-sm text-tech-white
+           bg-[var(--color-surf-card)] border border-[var(--color-border-strong)]
+           transition-colors placeholder:text-[var(--color-gunmetal-dim)];
+  }
+  .input:focus {
+    @apply outline-none border-forge-teal bg-[var(--color-surf-card-2)];
+  }
+
+  /* Cards (alternativo a .tf-card) */
+  .card {
+    @apply rounded-xl bg-[var(--color-surf-card)] border border-[var(--color-border)] transition-colors;
+  }
+  .card-interactive {
+    @apply cursor-pointer;
+  }
+  .card-interactive:hover {
+    @apply border-[var(--color-border-bright)] bg-[var(--color-surf-card-2)];
+  }
+
+  /* Pulso sutil para badges de alerta */
+  .pulse-soft {
+    animation: pulse-soft 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
 }

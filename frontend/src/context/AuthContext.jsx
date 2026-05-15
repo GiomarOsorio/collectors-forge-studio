@@ -21,6 +21,21 @@ import { getMe } from '../services/api';
 const AuthContext = createContext(null);
 
 /**
+ * Token sentinel usado para bypass de auth en modo dev.
+ * Cuando localStorage.token === DEV_BYPASS_TOKEN, AuthContext omite el GET /auth/me
+ * y popula `user` con DEV_BYPASS_USER. Sólo activable desde Login en dev mode.
+ */
+export const DEV_BYPASS_TOKEN = 'dev-bypass';
+
+/** Usuario falso usado por el bypass dev. Rol admin para ver todas las apps. */
+export const DEV_BYPASS_USER = Object.freeze({
+  id: 0,
+  username: 'giomar-dev',
+  email: 'dev@local',
+  role: 'admin',
+});
+
+/**
  * @typedef {Object} AuthContextValue
  * @property {Object|null} user - Datos del usuario autenticado, o null si no hay sesion
  * @property {boolean} loading - Indica si se esta verificando la sesion (true durante la carga inicial)
@@ -51,6 +66,12 @@ export function AuthProvider({ children }) {
   // consultando el endpoint /auth/me con el token almacenado
   useEffect(() => {
     const token = localStorage.getItem('token');
+    // Bypass dev: token sentinel sin llamar al backend.
+    if (token === DEV_BYPASS_TOKEN && import.meta.env.DEV) {
+      setUser(DEV_BYPASS_USER);
+      setLoading(false);
+      return;
+    }
     if (token) {
       getMe()
         .then((res) => setUser(res.data))
@@ -90,8 +111,15 @@ export function AuthProvider({ children }) {
    * Si falla, simplemente limpia el estado local.
    */
   const logout = async () => {
+    const token = localStorage.getItem('token');
+    // Bypass dev: limpiar sin pegarle al backend.
+    if (token === DEV_BYPASS_TOKEN) {
+      localStorage.removeItem('token');
+      setUser(null);
+      window.location.href = '/login';
+      return;
+    }
     try {
-      const token = localStorage.getItem('token');
       if (token) {
         const res = await fetch('/api/auth/oidc/logout', {
           headers: { Authorization: `Bearer ${token}` },

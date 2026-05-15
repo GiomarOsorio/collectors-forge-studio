@@ -14,7 +14,7 @@
 import { useState, useEffect } from 'react';
 import { getFilaments, createFilament, updateFilament, deleteFilament } from '../services/api';
 import toast from 'react-hot-toast';
-import { Plus, Pencil, Trash2, X } from 'lucide-react';
+import { Layers, Plus, Pencil, Trash2, X } from 'lucide-react';
 import { useConfirm } from '../components/ConfirmDialog';
 
 /**
@@ -236,7 +236,23 @@ export default function FilamentsPage() {
               </tr>
             ))}
             {filaments.length === 0 && (
-              <tr><td colSpan={5} className="px-5 py-12 text-center text-gunmetal">No hay filamentos. Agrega uno para comenzar.</td></tr>
+              <tr>
+                <td colSpan={5} className="px-5 py-12">
+                  <div className="flex flex-col items-center text-center gap-3">
+                    <div className="p-4 rounded-2xl bg-[#222630]">
+                      <Layers size={32} className="text-gunmetal" strokeWidth={1.5} />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-steel">Sin filamentos aún</p>
+                      <p className="text-xs text-gunmetal mt-1">Agrega el primer filamento para usarlo en la calculadora.</p>
+                    </div>
+                    <button onClick={() => { setForm(emptyForm); setEditingId(null); setShowForm(true); }} className="tf-btn-primary gap-2 mt-1">
+                      <Plus size={14} />
+                      Agregar primer filamento
+                    </button>
+                  </div>
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
