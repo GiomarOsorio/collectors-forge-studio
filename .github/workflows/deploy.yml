@@ -8,8 +8,44 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
-    name: Tests & Coverage
+  # ── Lint frontend + python syntax check ──────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar deps frontend
+        working-directory: frontend
+        run: npm ci
+
+      - name: ESLint frontend (no-undef es error, resto warn)
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Python syntax check backend
+        working-directory: backend
+        run: |
+          python -m py_compile $(find app alembic -name "*.py")
+          python -m py_compile $(find tests -name "*.py")
+
+  # ── Tests backend con coverage + Postgres real ────────────────────────────
+  test-backend:
+    name: Tests Backend
     runs-on: self-hosted
 
     env:
@@ -63,7 +99,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: coverage-report
+          name: coverage-backend
           path: backend/coverage.xml
           retention-days: 7
 
@@ -71,22 +107,92 @@ jobs:
         if: always()
         run: podman rm -f pg-ci-${{ github.run_id }} || true
 
+  # ── Tests frontend (Vitest unit tests) ────────────────────────────────────
+  test-frontend:
+    name: Tests Frontend
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar deps frontend
+        working-directory: frontend
+        run: npm ci
+
+      - name: Vitest unit tests + coverage
+        working-directory: frontend
+        run: npm test -- --coverage
+
+      - name: Subir reporte de coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-frontend
+          path: frontend/coverage/
+          retention-days: 7
+
+  # ── E2E + visual regression con Playwright ────────────────────────────────
+  e2e-frontend:
+    name: E2E + Visual Regression
+    runs-on: self-hosted
+    # Solo en PRs o workflow_dispatch — el deploy a main confía en lint+tests.
+    # Visual regression mostraría diff en PR; en main pondría screenshots
+    # nuevos como baseline (no se hace automático para evitar drift).
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar deps frontend
+        working-directory: frontend
+        run: npm ci
+
+      - name: Instalar navegadores Playwright
+        working-directory: frontend
+        run: npx playwright install chromium
+
+      - name: Correr E2E + visual regression
+        working-directory: frontend
+        env:
+          CI: "true"
+        run: npm run e2e
+
+      - name: Subir reporte HTML de Playwright
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 14
+
+  # ── Deploy a Laptop (solo si lint + backend + frontend pasan) ────────────
   deploy:
     name: Deploy to Laptop
     runs-on: self-hosted
-    needs: test
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && needs.test.result == 'success'
+    needs: [lint, test-backend, test-frontend]
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && needs.lint.result == 'success' && needs.test-backend.result == 'success' && needs.test-frontend.result == 'success'
 
     env:
-      # Credenciales de Machine Identity en Infisical
-      # Crear en: Infisical → <proyecto> → Access Control → Machine Identities
       INFISICAL_CLIENT_ID: ${{ secrets.INFISICAL_CLIENT_ID }}
       INFISICAL_CLIENT_SECRET: ${{ secrets.INFISICAL_CLIENT_SECRET }}
-      # Slug del proyecto en Infisical (default: homelab)
       INFISICAL_PROJECT_SLUG: ${{ secrets.INFISICAL_PROJECT_SLUG || 'homelab' }}
-      # URL de Infisical (default: http://127.0.0.1:8080 — instancia local)
       INFISICAL_URL: ${{ secrets.INFISICAL_URL || 'http://127.0.0.1:8080' }}
-      # Path de secretos dentro del proyecto (default: /collectorsforge)
       INFISICAL_SECRET_PATH: ${{ secrets.INFISICAL_SECRET_PATH || '/collectorsforge' }}
 
     steps:
