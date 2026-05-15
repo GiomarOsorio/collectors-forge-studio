@@ -23,9 +23,36 @@ Object.defineProperty(window, 'matchMedia', {
   })),
 });
 
-// Mock de ResizeObserver — no disponible en jsdom
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
+// Mock de ResizeObserver — jsdom no lo implementa pero @dnd-kit/core lo usa con `new`.
+// Definir como class para que el constructor funcione correctamente.
+global.ResizeObserver = class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+
+// jsdom + vitest 4 a veces dejan localStorage como objeto sin setItem.
+// Garantizar un mock en memoria para que componentes que persisten estado
+// (StudioSidebar, Dashboard layout, etc.) no exploten en los tests.
+const localStorageStore = {};
+const localStorageMock = {
+  getItem: (key) => (key in localStorageStore ? localStorageStore[key] : null),
+  setItem: (key, value) => {
+    localStorageStore[key] = String(value);
+  },
+  removeItem: (key) => {
+    delete localStorageStore[key];
+  },
+  clear: () => {
+    for (const k of Object.keys(localStorageStore)) delete localStorageStore[k];
+  },
+  key: (i) => Object.keys(localStorageStore)[i] ?? null,
+  get length() {
+    return Object.keys(localStorageStore).length;
+  },
+};
+Object.defineProperty(window, 'localStorage', {
+  value: localStorageMock,
+  writable: false,
+  configurable: true,
+});

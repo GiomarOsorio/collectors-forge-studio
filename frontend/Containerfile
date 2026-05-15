@@ -6,6 +6,11 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
+# Verify that critical deps actually resolved (busts the build early con
+# error legible si el cache de podman/npm dejó un node_modules incompleto).
+RUN npm ls @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities react-router-dom \
+    || (echo "ERROR: deps faltantes tras npm ci. Revisar cache podman." && exit 1)
+
 COPY . .
 RUN npm run build
 
