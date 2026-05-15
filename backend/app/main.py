@@ -283,6 +283,63 @@ async def health_check():
     return {"status": "ok", "app": "Collector's Forge Studio"}
 
 
+@app.get("/api/health/full")
+async def health_check_full():
+    """
+    Health check completo — verifica DB (Postgres) + MinIO + tabla migrations.
+
+    Útil para uptime monitors. Retorna 200 si todo OK, 503 si algo falla.
+
+    Returns:
+        dict con `status: ok|degraded`, `checks: { db, minio, alembic }`
+    """
+    from fastapi import status as http_status
+    from fastapi.responses import JSONResponse
+    from sqlalchemy import text
+
+    checks = {"db": "unknown", "minio": "unknown", "alembic": "unknown"}
+
+    # DB ping
+    try:
+        async with async_session() as db:
+            await db.execute(text("SELECT 1"))
+            checks["db"] = "ok"
+    except Exception as exc:
+        logger.error("Health DB falló: %s", exc)
+        checks["db"] = f"error: {type(exc).__name__}"
+
+    # MinIO ping (head_bucket)
+    try:
+        import asyncio as _asyncio
+        from app.services.vault_storage import _get_client
+        from app.config import settings as _settings
+
+        def _ping():
+            client = _get_client()
+            client.head_bucket(Bucket=_settings.MINIO_BUCKET)
+
+        await _asyncio.to_thread(_ping)
+        checks["minio"] = "ok"
+    except Exception as exc:
+        logger.error("Health MinIO falló: %s", exc)
+        checks["minio"] = f"error: {type(exc).__name__}"
+
+    # Alembic version actual
+    try:
+        async with async_session() as db:
+            result = await db.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))
+            version = result.scalar()
+            checks["alembic"] = version or "no version"
+    except Exception as exc:
+        logger.error("Health alembic falló: %s", exc)
+        checks["alembic"] = f"error: {type(exc).__name__}"
+
+    all_ok = checks["db"] == "ok" and checks["minio"] == "ok"
+    body = {"status": "ok" if all_ok else "degraded", "checks": checks}
+    code = http_status.HTTP_200_OK if all_ok else http_status.HTTP_503_SERVICE_UNAVAILABLE
+    return JSONResponse(content=body, status_code=code)
+
+
 async def create_default_data():
     """
     Crea los datos iniciales de la empresa por defecto si aún no existen.
