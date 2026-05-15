@@ -1,18 +1,24 @@
 /**
  * @file Layout único de Collector's Forge Studio.
  *
- * Sustituye a los 8 layouts por app (CostLayout, InventoryLayout, etc.) que
- * existían antes del refactor de UI inspirado en bambuddy. Ahora hay una sola
- * sidebar global (`StudioSidebar`) y todas las apps usan este wrapper.
+ * Estrategia responsive (alineada con `useIsMobile` = ≤1023px):
+ *  - **Desktop (≥1024px)**: sidebar fija a la izquierda (StudioSidebar) + main
+ *    con `lg:ml-64`. Header de página vive dentro de cada Page.
+ *  - **Mobile (≤1023px)**: SIN sidebar ni hamburger. La navegación entre apps
+ *    la hace `MobileBottomNav` fija al pie de pantalla. Cada Page provee su
+ *    propio header con breadcrumb badge + acciones.
+ *
+ * Sustituye a los 8 layouts por app anteriores.
  *
  * @module components/AppLayout
  */
 
 import { Suspense, useState } from 'react';
-import { Link, Outlet } from 'react-router-dom';
-import { Menu } from 'lucide-react';
+import { Outlet } from 'react-router-dom';
 import Breadcrumb from './Breadcrumb';
+import MobileBottomNav from './MobileBottomNav';
 import StudioSidebar from './StudioSidebar';
+import { useIsMobile } from '../hooks/useMediaQuery';
 
 /** Spinner mientras carga un `lazy(() => import(...))`. */
 const PageFallback = () => (
@@ -27,30 +33,32 @@ const PageFallback = () => (
  * @returns {JSX.Element}
  */
 export default function AppLayout() {
+  const isMobile = useIsMobile();
+  // En desktop la sidebar se controla como drawer en pantallas medianas
+  // (md-lg, antes del cambio a 1024px) y como fija desde lg+.
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const closeSidebar = () => setSidebarOpen(false);
 
+  // ── Shell mobile (≤1023px) ───────────────────────────────────────────────
+  if (isMobile) {
+    return (
+      <div className="min-h-screen bg-forge-black flex flex-col">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden pb-20">
+          <Suspense fallback={<PageFallback />}>
+            <Outlet />
+          </Suspense>
+        </main>
+        <MobileBottomNav />
+      </div>
+    );
+  }
+
+  // ── Shell desktop (≥1024px) ──────────────────────────────────────────────
   return (
     <div className="flex min-h-screen bg-forge-black">
       <StudioSidebar open={sidebarOpen} onClose={closeSidebar} />
 
-      <div className="flex-1 flex flex-col min-w-0 xl:ml-64">
-        {/* Header mobile: hamburger + logo */}
-        <header className="xl:hidden bg-[#0A0E16] text-tech-white px-4 py-3 flex items-center gap-3 sticky top-0 z-20 border-b border-[#222630]">
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(true)}
-            className="text-steel hover:text-tech-white shrink-0"
-            aria-label="Abrir menú"
-          >
-            <Menu size={24} />
-          </button>
-          <Link to="/" className="flex items-center gap-2 hover:opacity-80 min-w-0">
-            <img src="/logo.png" alt="Collector's Forge" className="h-7 w-7 object-contain shrink-0" />
-            <h1 className="text-lg font-bold text-tech-white truncate">Studio</h1>
-          </Link>
-        </header>
-
+      <div className="flex-1 flex flex-col min-w-0 lg:ml-64">
         <main className="flex-1 overflow-y-auto overflow-x-hidden">
           <div
             className="p-4 md:p-6 xl:p-8 max-w-7xl mx-auto w-full min-h-full"

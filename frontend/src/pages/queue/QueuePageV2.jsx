@@ -550,7 +550,7 @@ export default function QueuePageV2() {
         <button
           type="button"
           onClick={() => navigate('/cost/quotes')}
-          className="fixed bottom-5 right-4 z-30 inline-flex items-center gap-2 pl-4 pr-5 py-3.5 rounded-full font-semibold text-sm shadow-2xl active:scale-95 transition-transform"
+          className="fixed bottom-20 right-4 z-40 inline-flex items-center gap-2 pl-4 pr-5 py-3.5 rounded-full font-semibold text-sm shadow-2xl active:scale-95 transition-transform"
           style={{ background: ACCENT, color: '#0A1014', boxShadow: `0 8px 24px ${ACCENT}55` }}
           aria-label="Agregar a cola"
         >

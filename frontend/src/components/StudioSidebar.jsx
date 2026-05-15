@@ -288,7 +288,7 @@ export default function StudioSidebar({ open, onClose }) {
       {/* Backdrop mobile */}
       {open && (
         <div
-          className="fixed inset-0 bg-black/60 z-30 xl:hidden"
+          className="fixed inset-0 bg-black/60 z-30 lg:hidden"
           onClick={onClose}
           aria-hidden="true"
         />
@@ -297,7 +297,7 @@ export default function StudioSidebar({ open, onClose }) {
       <aside
         className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#0A0E16] text-tech-white border-r border-[#222630] flex flex-col transition-transform duration-300 ${
           open ? 'translate-x-0' : '-translate-x-full'
-        } xl:translate-x-0`}
+        } lg:translate-x-0`}
       >
         {/* Header con logo */}
         <div className="px-4 py-4 border-b border-[#222630] flex items-center justify-between gap-2">
@@ -321,7 +321,7 @@ export default function StudioSidebar({ open, onClose }) {
           <button
             type="button"
             onClick={onClose}
-            className="p-1 text-gunmetal hover:text-tech-white xl:hidden"
+            className="p-1 text-gunmetal hover:text-tech-white lg:hidden"
             aria-label="Cerrar menú"
           >
             <X size={20} />

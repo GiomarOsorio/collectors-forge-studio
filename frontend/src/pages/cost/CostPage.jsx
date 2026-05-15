@@ -665,7 +665,7 @@ export default function CostPage() {
         <button
           type="button"
           onClick={() => navigate('/cost/manual')}
-          className="fixed bottom-5 right-4 z-30 inline-flex items-center gap-2 pl-4 pr-5 py-3.5 rounded-full bg-forge-teal text-[#0A1014] font-semibold text-sm shadow-2xl active:scale-95 transition-transform"
+          className="fixed bottom-20 right-4 z-40 inline-flex items-center gap-2 pl-4 pr-5 py-3.5 rounded-full bg-forge-teal text-[#0A1014] font-semibold text-sm shadow-2xl active:scale-95 transition-transform"
           style={{ boxShadow: '0 8px 24px rgba(45, 212, 191, 0.35)' }}
           aria-label="Nueva cotización"
         >
