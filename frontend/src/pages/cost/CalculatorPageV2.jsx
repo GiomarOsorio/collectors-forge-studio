@@ -432,7 +432,7 @@ export default function CalculatorPageV2() {
   // ── Mobile shell ─────────────────────────────────────────────────────────
   if (isMobile) {
     return (
-      <div className="flex flex-col -mx-4 -mt-4 pb-8">
+      <div className="flex flex-col pb-8">
         <div className="px-4 mt-3">
           <Card className="p-4 flex flex-col gap-2 industrial-grid">
             <div className="flex items-baseline justify-between">
