@@ -260,6 +260,13 @@ select option {
   .pulse-soft {
     animation: pulse-soft 2.4s ease-in-out infinite;
   }
+
+  /* Oculta scrollbars en contenedores horizontales mobile (tabs, chips). */
+  .phone-scroll::-webkit-scrollbar { display: none; }
+  .phone-scroll {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
 }
 
 @keyframes pulse-soft {
