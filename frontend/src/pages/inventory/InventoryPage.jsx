@@ -123,11 +123,11 @@ function KPIStrip({ stats, openPOs, openPOsValue }) {
 // ─── Category tabs ───────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'filamentos',   label: 'Filamentos',   icon: Droplet },
-  { id: 'insumos',      label: 'Insumos',      icon: Box },
-  { id: 'herramientas', label: 'Herramientas', icon: Scissors },
-  { id: 'consumibles',  label: 'Consumibles',  icon: Beaker },
-  { id: 'compras',      label: 'Compras',      icon: ShoppingCart },
+  { id: 'filamentos',   label: 'Filamentos',   shortLabel: 'Filamentos',   icon: Droplet },
+  { id: 'insumos',      label: 'Insumos',      shortLabel: 'Insumos',      icon: Box },
+  { id: 'herramientas', label: 'Herramientas', shortLabel: 'Herram.',      icon: Scissors },
+  { id: 'consumibles',  label: 'Consumibles',  shortLabel: 'Consum.',      icon: Beaker },
+  { id: 'compras',      label: 'Compras',      shortLabel: 'Compras',      icon: ShoppingCart },
 ];
 
 function CategoryTabs({ value, onChange, counts }) {
@@ -1156,7 +1156,7 @@ function MobileMiniKPIs({ stats, openPOs, openPOsValue }) {
 
 function MobileTabs({ value, onChange, counts }) {
   return (
-    <div className="mt-3 px-4 flex gap-1.5 overflow-x-auto pb-1 -mb-1 snap-x">
+    <div className="phone-scroll mt-3 px-4 pb-3 flex gap-1.5 overflow-x-auto">
       {TABS.map((t) => {
         const Icon = t.icon;
         const active = t.id === value;
@@ -1165,15 +1165,23 @@ function MobileTabs({ value, onChange, counts }) {
             key={t.id}
             type="button"
             onClick={() => onChange(t.id)}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap shrink-0 snap-start transition-colors border ${
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-[12.5px] font-medium whitespace-nowrap shrink-0 transition-colors border ${
               active
-                ? 'bg-blue-500/15 border-blue-500/40 text-blue-300'
+                ? 'bg-blue-500/14 border-blue-500/45 text-blue-300'
                 : 'bg-transparent border-[var(--color-border)] text-steel'
             }`}
           >
-            <Icon size={12} />
-            {t.label}
-            <span className="mono text-[10px] text-gunmetal">{counts[t.id] ?? 0}</span>
+            <Icon size={13} style={{ color: active ? 'var(--color-app-inventory)' : 'var(--color-gunmetal)' }} />
+            {t.shortLabel || t.label}
+            <span
+              className={`mono text-[9.5px] px-1.5 py-px rounded-full border ${
+                active
+                  ? 'bg-blue-500/15 border-blue-500/25 text-blue-300'
+                  : 'bg-white/5 border-[var(--color-border)] text-gunmetal'
+              }`}
+            >
+              {counts[t.id] ?? 0}
+            </span>
           </button>
         );
       })}
@@ -1181,7 +1189,13 @@ function MobileTabs({ value, onChange, counts }) {
   );
 }
 
-function MobileSearchBar({ query, onQuery }) {
+// Nota: el search bar mobile fue removido a petición del usuario. El diseño
+// Claude Design accede al search vía overlay en el header; CFS prefiere no
+// tenerlo en mobile por ahora. Se conserva la function comentada por si más
+// adelante se requiere reactivar.
+//
+// eslint-disable-next-line no-unused-vars
+function _MobileSearchBarDeprecated({ query, onQuery }) {
   return (
     <div className="px-4 mt-3">
       <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-2">
@@ -1538,13 +1552,12 @@ export default function InventoryPage() {
 
         {tab === 'filamentos' ? (
           <>
-            <MobileSearchBar query={query} onQuery={setQuery} />
             <MobileChips materialFilters={materialFilters} onToggleMat={toggleMat} />
-            <div className="flex items-center justify-between px-4 mt-3 mb-1">
+            <div className="flex items-center justify-between px-4 mt-2 mb-1">
               <span className="mono text-[11px] text-gunmetal">
                 {filteredFilaments.length} de {filaments.length} spools
               </span>
-              {(query || materialFilters.length > 0) && (
+              {materialFilters.length > 0 && (
                 <button
                   type="button"
                   onClick={clearFilters}
@@ -1611,8 +1624,7 @@ export default function InventoryPage() {
           </>
         ) : tab === 'compras' ? (
           <>
-            <MobileSearchBar query={query} onQuery={setQuery} />
-            <div className="flex items-center justify-between px-4 mt-3 mb-1">
+            <div className="flex items-center justify-between px-4 mt-2 mb-1">
               <span className="mono text-[11px] text-gunmetal">
                 {filteredPurchases.length} de {purchases.length} pedidos
               </span>
@@ -1638,8 +1650,7 @@ export default function InventoryPage() {
           </>
         ) : (
           <>
-            <MobileSearchBar query={query} onQuery={setQuery} />
-            <div className="flex items-center justify-between px-4 mt-3 mb-1">
+            <div className="flex items-center justify-between px-4 mt-2 mb-1">
               <span className="mono text-[11px] text-gunmetal">
                 {tab === 'insumos'
                   ? `${filteredSupplies.length} de ${supplies.length} insumos`
