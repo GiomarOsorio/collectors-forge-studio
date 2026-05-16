@@ -23,13 +23,16 @@ import {
   Beaker,
   Bell,
   Box,
+  Check,
   ChevronDown,
   ChevronRight,
   Clock,
   Download,
   Droplet,
+  Edit3,
   Filter,
   Grid3x3,
+  History,
   List,
   MapPin,
   Pencil,
@@ -37,12 +40,24 @@ import {
   Scissors,
   Search,
   ShoppingCart,
+  Truck,
   TrendingUp,
   Upload,
   X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Button, Card, Chip, DetailDrawer, KPI, MobileSheet, Sparkline, Swatch } from '../../components/ui';
+import {
+  Button,
+  Card,
+  Chip,
+  DetailDrawer,
+  EmptyState,
+  KPI,
+  MobileSheet,
+  Sparkline,
+  StatusPill,
+  Swatch,
+} from '../../components/ui';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { getInventoryItems, getPurchaseOrders } from '../../services/api';
 import { MATERIALS, MATERIAL_ORDER } from '../../config/materials';
@@ -222,6 +237,7 @@ function Toolbar({ query, onQuery, materialFilters, onToggleMat, view, onView, s
         >
           <option value="lowFirst">Stock bajo primero</option>
           <option value="material">Por material</option>
+          <option value="recent">Uso reciente</option>
           <option value="valueDesc">Valor (mayor)</option>
           <option value="weightDesc">Peso restante</option>
         </select>
@@ -478,7 +494,7 @@ function FilamentTable({ items, onRowClick }) {
 
 // ─── Drawer body ─────────────────────────────────────────────────────────────
 
-function FilamentDrawerBody({ f, onClose }) {
+function FilamentDrawerBody({ f }) {
   if (!f) return null;
   const level = stockLevel(f);
   const p = fillPercent(f);
@@ -502,7 +518,7 @@ function FilamentDrawerBody({ f, onClose }) {
               {f.material}
             </span>
             {level !== 'ok' && (
-              <span className="mono inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm bg-amber-400/10 border border-amber-400/30 text-amber-400 tracking-wider">
+              <span className={`mono inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm bg-amber-400/10 border border-amber-400/30 text-amber-400 tracking-wider ${level === 'critical' ? 'pulse-soft' : ''}`}>
                 <AlertTriangle size={10} />
                 {level === 'critical' ? 'CRÍTICO' : 'BAJO'}
               </span>
@@ -512,9 +528,9 @@ function FilamentDrawerBody({ f, onClose }) {
             {f.colorName}
           </h2>
           <p className="mono text-[10.5px] text-gunmetal mt-1 truncate">
-            {f.rawId}
-            {f.batch ? ` · ${f.batch}` : ''}
-            {f.vendor && f.vendor !== '—' ? ` · ${f.vendor}` : ''}
+            {f.batch ? `${f.batch} · ` : ''}
+            {f.vendor && f.vendor !== '—' ? f.vendor : ''}
+            {f.color ? ` · ${String(f.color).toUpperCase()}` : ''}
           </p>
         </div>
       </div>
@@ -528,7 +544,7 @@ function FilamentDrawerBody({ f, onClose }) {
             <span className="text-gunmetal text-xs">%</span>
           </span>
         </div>
-        <div className="relative h-1.5 bg-white/5 rounded overflow-hidden mb-2">
+        <div className="relative h-2 bg-white/5 rounded overflow-hidden mb-2">
           <div
             className="absolute inset-y-0 left-0 rounded"
             style={{ width: `${p}%`, background: gaugeColor }}
@@ -543,50 +559,77 @@ function FilamentDrawerBody({ f, onClose }) {
         </div>
         <div className="flex justify-between">
           <span className="mono text-[11px] text-steel">{fmtG(f.remaining)} restantes</span>
-          <span className="mono text-[11px] text-gunmetal">de {fmtKg(f.total)}</span>
+          <span className="mono text-[11px] text-gunmetal">{fmtG(Math.max(0, f.total - f.remaining))} usados</span>
         </div>
       </div>
 
-      {/* Stats grid 2×2 */}
+      {/* Stats grid 2×3 */}
       <div className="grid grid-cols-2 gap-1.5">
         <SheetStat label="Valor restante" value={fmtCOP(remainValueCop)} />
         <SheetStat label="Costo / kg" value={fmtCOP(f.costPerKg)} />
+        <SheetStat label="Spool original" value={fmtKg(f.total)} />
         <SheetStat label="Ubicación" value={locationShort} icon={MapPin} />
         <SheetStat label="Último uso" value={lastUsedLabel} icon={Clock} />
+        {f.minQuantity > 0 && (
+          <SheetStat
+            label="Stock mínimo"
+            value={`${fmtG(f.minQuantity)} ${f.unit || 'g'}`}
+          />
+        )}
       </div>
 
-      {/* Min stock + notes */}
-      {(f.minQuantity > 0 || f.notes) && (
-        <div className="grid grid-cols-1 gap-1.5">
-          {f.minQuantity > 0 && (
-            <SheetStat
-              label="Stock mínimo"
-              value={`${fmtG(f.minQuantity)} ${f.unit || 'g'}`}
-            />
-          )}
-          {f.notes && (
-            <Card className="p-3">
-              <span className="lbl-eyebrow text-[9px]">Notas</span>
-              <p className="text-sm text-steel whitespace-pre-wrap mt-1">{f.notes}</p>
-            </Card>
-          )}
-        </div>
+      {/* Notes */}
+      {f.notes && (
+        <Card className="p-3">
+          <span className="lbl-eyebrow text-[9px]">Notas</span>
+          <p className="text-sm text-steel whitespace-pre-wrap mt-1">{f.notes}</p>
+        </Card>
       )}
 
-      {/* Actions */}
-      <div className="flex gap-2 pt-1">
-        <Link to="/inventory/purchases?new=1" className="btn btn-primary btn-sm flex-1 justify-center">
-          <ShoppingCart size={13} /> A compras
-        </Link>
-        <Link to={`/inventory/stock?edit=${f.id}`} className="btn btn-sm flex-1 justify-center">
-          <Pencil size={13} /> Editar
-        </Link>
+      {/* Historial reciente — placeholder hasta endpoint real (quotes/queue) */}
+      <div>
+        <div className="lbl-eyebrow mb-2 inline-flex items-center gap-1.5">
+          <History size={11} /> Historial reciente
+        </div>
+        <p className="text-[10.5px] text-gunmetal mb-2">
+          Pendiente: integrar consumo desde cola e impresiones reales.
+        </p>
+        {f.updatedAt && (
+          <div className="flex items-center gap-2.5 py-2 border-b border-dashed border-[var(--color-border-soft)]">
+            <span className="mono text-[11px] text-gunmetal min-w-[60px] shrink-0 whitespace-nowrap">
+              {lastUsedFromDate(f.updatedAt)}
+            </span>
+            <span className="flex-1 min-w-0 text-[12.5px] text-tech-white truncate">
+              Última actualización del spool
+            </span>
+          </div>
+        )}
       </div>
-
-      <p className="text-[10.5px] text-gunmetal text-center">
-        Editar abre la vista clásica (formulario completo con todos los campos).
-      </p>
     </div>
+  );
+}
+
+/**
+ * Footer del FilamentDetailDrawer: acciones primarias + secundarias.
+ * Se renderiza dentro del slot `footer` del primitive DetailDrawer v2.
+ */
+function FilamentDrawerFooter({ f }) {
+  if (!f) return null;
+  return (
+    <>
+      <Link
+        to="/inventory/purchases?new=1"
+        className="btn btn-primary btn-sm flex-1 justify-center"
+      >
+        <ShoppingCart size={13} /> A compras
+      </Link>
+      <Link
+        to={`/inventory/stock?edit=${f.id}`}
+        className="btn btn-sm flex-1 justify-center"
+      >
+        <Pencil size={13} /> Editar
+      </Link>
+    </>
   );
 }
 
@@ -848,15 +891,28 @@ function InventoryItemDrawerBody({ item }) {
 
 // ─── Purchase card / row / drawer (compras) ─────────────────────────────────
 
+/**
+ * Devuelve metadatos del badge para un status de PO.
+ * Mapeo de tonos:
+ *   - `done`     → completado (verde)
+ *   - `printing` → en camino (azul, replica del design "en ruta")
+ *   - `warn`     → procesando (amber, replica del design)
+ *   - `danger`   → cancelado (rojo)
+ *   - `neutral`  → borrador / sin estado
+ */
 function purchaseStatusBadge(status) {
   const s = (status || '').toLowerCase();
-  if (s.includes('complet')) return { label: 'Completado', color: '#34D399' };
+  if (s.includes('complet'))
+    return { label: 'Completado', tone: 'done', icon: Check };
   if (s.includes('camino') || s.includes('ship') || s.includes('transit'))
-    return { label: 'En camino', color: '#FBBF24' };
+    return { label: 'En camino', tone: 'printing', icon: Truck };
   if (s.includes('proces') || s.includes('pending') || s.includes('pend'))
-    return { label: 'Procesando', color: '#3B82F6' };
-  if (s.includes('cancel')) return { label: 'Cancelado', color: '#F87171' };
-  return { label: status || 'Sin estado', color: '#94A0AE' };
+    return { label: 'Procesando', tone: 'warn', icon: Clock };
+  if (s.includes('borrador') || s.includes('draft'))
+    return { label: 'Borrador', tone: 'neutral', icon: Edit3 };
+  if (s.includes('cancel'))
+    return { label: 'Cancelado', tone: 'danger', icon: X };
+  return { label: status || 'Sin estado', tone: 'neutral', icon: null };
 }
 
 function PurchaseCard({ po, onClick }) {
@@ -876,12 +932,9 @@ function PurchaseCard({ po, onClick }) {
             <span className="mono text-[10.5px] text-gunmetal tracking-wider">
               PO-{String(po.id).padStart(4, '0')}
             </span>
-            <span
-              className="mono inline-flex items-center text-[9.5px] px-1.5 py-px rounded-sm tracking-wider"
-              style={{ background: `${badge.color}1A`, border: `1px solid ${badge.color}40`, color: badge.color }}
-            >
-              {badge.label.toUpperCase()}
-            </span>
+            <StatusPill tone={badge.tone} icon={badge.icon || undefined}>
+              {badge.label}
+            </StatusPill>
           </div>
           <p className="text-sm font-semibold text-tech-white truncate">
             {po.supplier_name || po.vendor || 'Proveedor sin nombre'}
@@ -896,6 +949,24 @@ function PurchaseCard({ po, onClick }) {
           {fmtCOP(po.total || po.total_amount)}
         </span>
       </div>
+      {Array.isArray(po.items) && po.items.length > 0 && (
+        <div className="flex flex-wrap gap-1 pt-2 border-t border-dashed border-[var(--color-border-soft)]">
+          {po.items.slice(0, 6).map((line, i) => (
+            <span
+              key={i}
+              className="mono text-[10px] px-1.5 py-0.5 rounded-sm bg-white/5 border border-[var(--color-border-soft)] text-steel whitespace-nowrap truncate max-w-[180px]"
+              title={line.name || line.item_name}
+            >
+              {line.name || line.item_name || `Ítem ${i + 1}`}
+            </span>
+          ))}
+          {po.items.length > 6 && (
+            <span className="mono text-[10px] text-gunmetal self-center">
+              +{po.items.length - 6}
+            </span>
+          )}
+        </div>
+      )}
       {po.tracking_number && (
         <p className="text-[11px] text-gunmetal border-t border-dashed border-[var(--color-border-soft)] pt-2.5 truncate">
           Tracking: <span className="mono text-steel">{po.tracking_number}</span>
@@ -921,12 +992,9 @@ function PurchaseRow({ po, onClick }) {
       </span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5">
-          <span
-            className="mono inline-flex items-center text-[9.5px] px-1 py-px rounded-sm"
-            style={{ background: `${badge.color}1A`, border: `1px solid ${badge.color}40`, color: badge.color }}
-          >
-            {badge.label.toUpperCase()}
-          </span>
+          <StatusPill tone={badge.tone} icon={badge.icon || undefined}>
+            {badge.label}
+          </StatusPill>
         </div>
         <p className="text-sm font-semibold text-tech-white truncate">{po.supplier_name || po.vendor || 'Proveedor'}</p>
         <p className="mono text-[10px] text-gunmetal mt-0.5">PO-{String(po.id).padStart(4, '0')}</p>
@@ -945,12 +1013,9 @@ function PurchaseDrawerBody({ po }) {
     <div className="p-5 flex flex-col gap-4">
       <div>
         <div className="flex items-center gap-1.5 mb-1.5">
-          <span
-            className="mono inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-sm tracking-wider"
-            style={{ background: `${badge.color}1A`, border: `1px solid ${badge.color}40`, color: badge.color }}
-          >
-            {badge.label.toUpperCase()}
-          </span>
+          <StatusPill tone={badge.tone} icon={badge.icon || undefined} size="lg">
+            {badge.label}
+          </StatusPill>
           <span className="mono text-[10px] text-gunmetal">PO-{String(po.id).padStart(4, '0')}</span>
         </div>
         <h2 className="text-lg font-semibold text-tech-white truncate">
@@ -1407,6 +1472,12 @@ export default function InventoryPage() {
       case 'lowFirst':
         arr.sort((a, b) => fillPercent(a) - fillPercent(b));
         break;
+      case 'recent':
+        arr.sort(
+          (a, b) =>
+            new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime(),
+        );
+        break;
       case 'valueDesc':
         arr.sort(
           (a, b) => (b.remaining / 1000) * b.costPerKg - (a.remaining / 1000) * a.costPerKg,
@@ -1570,17 +1641,16 @@ export default function InventoryPage() {
             {loading ? (
               <p className="px-4 py-12 text-center text-gunmetal text-sm">Cargando inventario…</p>
             ) : filteredFilaments.length === 0 ? (
-              <div className="px-4 py-12 flex flex-col items-center gap-2 text-center">
-                <Search size={22} className="text-gunmetal-dim" />
-                <p className="text-sm font-semibold text-tech-white">
-                  {filaments.length === 0 ? 'Sin filamentos aún' : 'Sin resultados'}
-                </p>
-                <p className="text-xs text-gunmetal max-w-xs">
-                  {filaments.length === 0
+              <EmptyState
+                icon={filaments.length === 0 ? Droplet : Search}
+                accent="#3B82F6"
+                title={filaments.length === 0 ? 'Sin filamentos aún' : 'Sin resultados'}
+                hint={
+                  filaments.length === 0
                     ? 'Toca el botón + para agregar el primer filamento.'
-                    : 'Ajusta los filtros o limpia la búsqueda.'}
-                </p>
-              </div>
+                    : 'Ajusta los filtros o limpia la búsqueda.'
+                }
+              />
             ) : (
               <div className="mt-2 pb-28">
                 {groups.map((g) => (
@@ -1632,12 +1702,11 @@ export default function InventoryPage() {
             {loading ? (
               <p className="px-4 py-12 text-center text-gunmetal text-sm">Cargando…</p>
             ) : filteredPurchases.length === 0 ? (
-              <div className="px-4 py-12 flex flex-col items-center gap-2 text-center">
-                <ShoppingCart size={22} className="text-gunmetal-dim" />
-                <p className="text-sm font-semibold text-tech-white">
-                  {purchases.length === 0 ? 'Sin pedidos de compra' : 'Sin resultados'}
-                </p>
-              </div>
+              <EmptyState
+                icon={ShoppingCart}
+                accent="#8B5CF6"
+                title={purchases.length === 0 ? 'Sin pedidos de compra' : 'Sin resultados'}
+              />
             ) : (
               <ul className="mt-2 pb-28">
                 {filteredPurchases.map((p) => (
@@ -1681,12 +1750,11 @@ export default function InventoryPage() {
               }
               if (list.length === 0) {
                 return (
-                  <div className="px-4 py-12 flex flex-col items-center gap-2 text-center">
-                    <Icon size={22} className="text-gunmetal-dim" />
-                    <p className="text-sm font-semibold text-tech-white">
-                      {rawList.length === 0 ? `Sin ${tab} aún` : 'Sin resultados'}
-                    </p>
-                  </div>
+                  <EmptyState
+                    icon={Icon}
+                    accent={meta.color}
+                    title={rawList.length === 0 ? `Sin ${tab} aún` : 'Sin resultados'}
+                  />
                 );
               }
               return (
@@ -1711,6 +1779,11 @@ export default function InventoryPage() {
           height="full"
         >
           <FilamentDrawerBody f={selected} />
+          {selected && (
+            <div className="px-5 pt-3 pb-5 border-t border-[var(--color-border-soft)] flex gap-2 sticky bottom-0 bg-[var(--color-surf-sidebar)]">
+              <FilamentDrawerFooter f={selected} />
+            </div>
+          )}
         </MobileSheet>
         <MobileSheet
           open={!!selectedItem}
@@ -1799,31 +1872,23 @@ export default function InventoryPage() {
           {loading ? (
             <div className="px-6 py-16 text-center text-gunmetal text-sm">Cargando inventario…</div>
           ) : filteredFilaments.length === 0 ? (
-            <div className="px-6 py-16 flex flex-col items-center gap-3 text-center">
-              <div
-                className="w-14 h-14 rounded-full flex items-center justify-center"
-                style={{
-                  background: 'rgba(59, 130, 246, 0.08)',
-                  border: '1px solid rgba(59, 130, 246, 0.22)',
-                  color: '#3B82F6',
-                }}
-              >
-                <Search size={22} />
-              </div>
-              <p className="text-sm font-semibold text-tech-white">
-                {filaments.length === 0 ? 'Sin filamentos aún' : 'Sin resultados'}
-              </p>
-              <p className="text-xs text-gunmetal max-w-sm">
-                {filaments.length === 0
+            <EmptyState
+              icon={filaments.length === 0 ? Droplet : Search}
+              accent="#3B82F6"
+              title={filaments.length === 0 ? 'Sin filamentos aún' : 'Sin resultados'}
+              hint={
+                filaments.length === 0
                   ? 'Agrega un filamento para empezar a usarlo en la calculadora y la cola.'
-                  : 'Ajusta los filtros o limpia la búsqueda para ver todos los spools.'}
-              </p>
-              {filaments.length === 0 && (
-                <Link to="/inventory/stock?new=1" className="btn btn-primary btn-sm">
-                  <Plus size={13} /> Agregar primer filamento
-                </Link>
-              )}
-            </div>
+                  : 'Ajusta los filtros o limpia la búsqueda para ver todos los spools.'
+              }
+              action={
+                filaments.length === 0 ? (
+                  <Link to="/inventory/stock?new=1" className="btn btn-primary btn-sm">
+                    <Plus size={13} /> Agregar primer filamento
+                  </Link>
+                ) : null
+              }
+            />
           ) : view === 'grid' ? (
             <FilamentGrid groups={groups} onCardClick={setSelected} />
           ) : (
@@ -1860,17 +1925,23 @@ export default function InventoryPage() {
           {loading ? (
             <p className="px-6 py-16 text-center text-gunmetal text-sm">Cargando pedidos…</p>
           ) : filteredPurchases.length === 0 ? (
-            <div className="px-6 py-16 flex flex-col items-center gap-3 text-center">
-              <ShoppingCart size={28} className="text-gunmetal-dim" />
-              <p className="text-sm font-semibold text-tech-white">
-                {purchases.length === 0 ? 'Sin pedidos de compra' : 'Sin resultados'}
-              </p>
-              {purchases.length === 0 && (
-                <Link to="/inventory/purchases" className="btn btn-primary btn-sm">
-                  <Plus size={13} /> Crear pedido
-                </Link>
-              )}
-            </div>
+            <EmptyState
+              icon={ShoppingCart}
+              accent="#8B5CF6"
+              title={purchases.length === 0 ? 'Sin pedidos de compra' : 'Sin resultados'}
+              hint={
+                purchases.length === 0
+                  ? 'Crea un pedido para llevar control de lo que llega de tus proveedores.'
+                  : 'Ajusta la búsqueda para ver más pedidos.'
+              }
+              action={
+                purchases.length === 0 ? (
+                  <Link to="/inventory/purchases" className="btn btn-primary btn-sm">
+                    <Plus size={13} /> Crear pedido
+                  </Link>
+                ) : null
+              }
+            />
           ) : (
             <div
               className="px-6 pb-8 grid gap-3"
@@ -1943,26 +2014,23 @@ export default function InventoryPage() {
                 {loading ? (
                   <p className="px-6 py-16 text-center text-gunmetal text-sm">Cargando…</p>
                 ) : list.length === 0 ? (
-                  <div className="px-6 py-16 flex flex-col items-center gap-3 text-center">
-                    <div
-                      className="w-14 h-14 rounded-full flex items-center justify-center"
-                      style={{
-                        background: `${meta.color}1A`,
-                        border: `1px solid ${meta.color}40`,
-                        color: meta.color,
-                      }}
-                    >
-                      <Icon size={22} />
-                    </div>
-                    <p className="text-sm font-semibold text-tech-white">
-                      {rawList.length === 0 ? `Sin ${tab} aún` : 'Sin resultados'}
-                    </p>
-                    {rawList.length === 0 && (
-                      <Link to="/inventory/stock?new=1" className="btn btn-primary btn-sm">
-                        <Plus size={13} /> Agregar primer ítem
-                      </Link>
-                    )}
-                  </div>
+                  <EmptyState
+                    icon={Icon}
+                    accent={meta.color}
+                    title={rawList.length === 0 ? `Sin ${tab} aún` : 'Sin resultados'}
+                    hint={
+                      rawList.length === 0
+                        ? `Agrega tu primer ítem en la categoría ${meta.label.toLowerCase()}.`
+                        : 'Ajusta la búsqueda o el sort.'
+                    }
+                    action={
+                      rawList.length === 0 ? (
+                        <Link to="/inventory/stock?new=1" className="btn btn-primary btn-sm">
+                          <Plus size={13} /> Agregar primer ítem
+                        </Link>
+                      ) : null
+                    }
+                  />
                 ) : (
                   <div
                     className="px-6 pb-8 grid gap-3"
@@ -1982,8 +2050,10 @@ export default function InventoryPage() {
       <DetailDrawer
         open={!!selected}
         onClose={() => setSelected(null)}
-        title={selected ? selected.rawId : ''}
+        eyebrow={selected?.rawId}
+        title={selected?.colorName || ''}
         width={460}
+        footer={selected && <FilamentDrawerFooter f={selected} />}
       >
         <FilamentDrawerBody f={selected} />
       </DetailDrawer>
