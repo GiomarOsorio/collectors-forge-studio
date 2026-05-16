@@ -10,8 +10,13 @@
  */
 
 import { expect, test } from '@playwright/test';
+import { mockApi } from './helpers/apiMock.js';
 
 test.describe('Auth — login + bypass dev', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockApi(page);
+  });
+
   test('muestra ambos botones en /login (dev mode)', async ({ page }) => {
     await page.goto('/login');
     await expect(page.getByRole('button', { name: /iniciar sesión/i })).toBeVisible();

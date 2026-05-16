@@ -57,7 +57,12 @@ export default defineConfig({
     {
       name: 'mobile-iphone12',
       use: {
+        // iPhone 12 viewport (390×844) + userAgent — pero forzamos engine
+        // chromium para no requerir instalar WebKit aparte (CI sólo trae
+        // chromium para reducir setup en self-hosted runner).
         ...devices['iPhone 12'],
+        browserName: 'chromium',
+        defaultBrowserType: 'chromium',
       },
     },
   ],
