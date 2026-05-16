@@ -35,8 +35,8 @@ import {
   History,
   List,
   MapPin,
-  Pencil,
   Plus,
+  RefreshCw,
   Scissors,
   Search,
   ShoppingCart,
@@ -60,7 +60,7 @@ import {
 } from '../../components/ui';
 import MobileAppHeader from '../../components/MobileAppHeader';
 import { useIsMobile } from '../../hooks/useMediaQuery';
-import { getInventoryItems, getPurchaseOrders } from '../../services/api';
+import { createInventoryItem, getInventoryItems, getPurchaseOrders } from '../../services/api';
 import { MATERIALS, MATERIAL_ORDER } from '../../config/materials';
 import {
   computeFilamentStats,
@@ -614,7 +614,7 @@ function FilamentDrawerBody({ f }) {
  * Footer del FilamentDetailDrawer: acciones primarias + secundarias.
  * Se renderiza dentro del slot `footer` del primitive DetailDrawer v2.
  */
-function FilamentDrawerFooter({ f }) {
+function FilamentDrawerFooter({ f, onReassign }) {
   if (!f) return null;
   return (
     <>
@@ -622,14 +622,15 @@ function FilamentDrawerFooter({ f }) {
         to="/inventory/purchases?new=1"
         className="btn btn-primary btn-sm flex-1 justify-center"
       >
-        <ShoppingCart size={13} /> A compras
+        <ShoppingCart size={13} /> Agregar a compras
       </Link>
-      <Link
-        to={`/inventory/stock?edit=${f.id}`}
+      <button
+        type="button"
+        onClick={() => onReassign?.(f)}
         className="btn btn-sm flex-1 justify-center"
       >
-        <Pencil size={13} /> Editar
-      </Link>
+        <RefreshCw size={13} /> Reasignar batch
+      </button>
     </>
   );
 }
@@ -1388,6 +1389,318 @@ function MobileFAB({ onClick, label = 'Agregar' }) {
   );
 }
 
+// ─── Add Filament Modal (centered, replaces legacy /inventory/stock?new=1) ──
+
+/**
+ * Modal centrado para crear un filamento desde la vista v2. Reemplaza el
+ * link a la vista clásica `/inventory/stock?new=1`. Campos requeridos
+ * marcados con `*`. Al guardar, dispara `onCreated(item)` y cierra.
+ *
+ * @param {Object} props
+ * @param {boolean} props.open
+ * @param {() => void} props.onClose
+ * @param {(item: Object) => void} [props.onCreated]
+ */
+function AddFilamentModal({ open, onClose, onCreated }) {
+  const [form, setForm] = useState({
+    name: '',
+    color_name: '',
+    color_hex: '#3B82F6',
+    filament_type: 'PLA',
+    filament_brand: '',
+    batch: '',
+    weight_per_roll: 1000,
+    quantity: 1000,
+    price_per_kg: '',
+    location: '',
+    min_quantity: '',
+    notes: '',
+  });
+  const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setForm({
+      name: '', color_name: '', color_hex: '#3B82F6',
+      filament_type: 'PLA', filament_brand: '', batch: '',
+      weight_per_roll: 1000, quantity: 1000,
+      price_per_kg: '', location: '', min_quantity: '', notes: '',
+    });
+    setErrors({});
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const update = (k, v) => setForm((cur) => ({ ...cur, [k]: v }));
+
+  const validate = () => {
+    const next = {};
+    if (!form.name.trim()) next.name = 'Requerido';
+    if (!form.color_name.trim()) next.color_name = 'Requerido';
+    if (!form.filament_type) next.filament_type = 'Requerido';
+    const wpr = Number(form.weight_per_roll);
+    if (!wpr || wpr <= 0) next.weight_per_roll = 'Debe ser > 0';
+    const q = Number(form.quantity);
+    if (q < 0 || q > wpr) next.quantity = `0 — ${wpr} g`;
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  };
+
+  const submit = async () => {
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      const payload = {
+        name: form.name.trim(),
+        category: 'Filamento',
+        unit: 'g',
+        quantity: Number(form.quantity),
+        weight_per_roll: Number(form.weight_per_roll),
+        filament_type: form.filament_type,
+        filament_brand: form.filament_brand.trim() || null,
+        batch: form.batch.trim() || null,
+        color_name: form.color_name.trim(),
+        color_hex: form.color_hex,
+        price_per_kg: form.price_per_kg ? Number(form.price_per_kg) : null,
+        location: form.location.trim() || null,
+        min_quantity: form.min_quantity ? Number(form.min_quantity) : 0,
+        notes: form.notes.trim() || null,
+      };
+      const res = await createInventoryItem(payload);
+      toast.success(`Filamento "${payload.color_name}" agregado`);
+      onCreated?.(res.data);
+      onClose?.();
+    } catch (err) {
+      const msg = err?.response?.data?.detail || 'No se pudo crear el filamento';
+      toast.error(typeof msg === 'string' ? msg : 'Error al guardar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const Field = ({ label, required, error, children }) => (
+    <label className="flex flex-col gap-1 min-w-0">
+      <span className="lbl-eyebrow text-[10px] flex items-center gap-1">
+        {label}
+        {required && <span className="text-rose-400" aria-label="requerido">*</span>}
+        {error && <span className="ml-auto text-rose-300 normal-case tracking-normal text-[10px] font-normal">{error}</span>}
+      </span>
+      {children}
+    </label>
+  );
+
+  const inputCls =
+    'w-full bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm placeholder:text-gunmetal-dim outline-none focus:border-blue-500';
+
+  return (
+    <>
+      <div
+        onClick={onClose}
+        className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm"
+        aria-hidden="true"
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Agregar filamento"
+        className="fixed inset-0 z-[81] flex items-end sm:items-center justify-center p-0 sm:p-6 pointer-events-none"
+      >
+        <div className="pointer-events-auto w-full sm:max-w-xl max-h-[90vh] flex flex-col rounded-t-2xl sm:rounded-2xl border border-[var(--color-border)] bg-[var(--color-surf-card)] shadow-2xl">
+          <header className="flex items-center gap-3 px-5 py-3.5 border-b border-[var(--color-border-soft)] shrink-0">
+            <span
+              className="inline-flex items-center justify-center w-9 h-9 rounded-lg shrink-0"
+              style={{ background: 'rgba(59,130,246,0.14)', color: '#3B82F6', border: '1px solid rgba(59,130,246,0.35)' }}
+            >
+              <Droplet size={16} />
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="mono text-[10px] text-gunmetal uppercase tracking-widest">Inventario · nuevo</p>
+              <h2 className="text-base font-semibold text-tech-white tracking-tight">Agregar filamento</h2>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Cerrar"
+              className="w-8 h-8 rounded-lg border border-[var(--color-border)] text-steel inline-flex items-center justify-center hover:bg-[var(--color-surf-hover)] shrink-0"
+            >
+              <X size={14} />
+            </button>
+          </header>
+
+          <div className="flex-1 overflow-y-auto px-5 py-4">
+            <p className="text-[12px] text-gunmetal mb-4">
+              Los campos marcados con <span className="text-rose-400">*</span> son obligatorios.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Nombre interno" required error={errors.name}>
+                <input
+                  value={form.name}
+                  onChange={(e) => update('name', e.target.value)}
+                  placeholder="ej. Spool A-2611"
+                  className={inputCls}
+                  autoFocus
+                />
+              </Field>
+              <Field label="Nombre del color" required error={errors.color_name}>
+                <input
+                  value={form.color_name}
+                  onChange={(e) => update('color_name', e.target.value)}
+                  placeholder="ej. Carbon Black"
+                  className={inputCls}
+                />
+              </Field>
+
+              <Field label="Color (hex)">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={form.color_hex}
+                    onChange={(e) => update('color_hex', e.target.value)}
+                    className="w-10 h-9 rounded border border-[var(--color-border-strong)] bg-transparent shrink-0 cursor-pointer"
+                    aria-label="Selector de color"
+                  />
+                  <input
+                    value={form.color_hex}
+                    onChange={(e) => update('color_hex', e.target.value)}
+                    placeholder="#3B82F6"
+                    className={`${inputCls} mono uppercase`}
+                  />
+                </div>
+              </Field>
+              <Field label="Material" required error={errors.filament_type}>
+                <select
+                  value={form.filament_type}
+                  onChange={(e) => update('filament_type', e.target.value)}
+                  className={inputCls}
+                >
+                  {MATERIALS.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Marca">
+                <input
+                  value={form.filament_brand}
+                  onChange={(e) => update('filament_brand', e.target.value)}
+                  placeholder="ej. BambuLab"
+                  className={inputCls}
+                />
+              </Field>
+              <Field label="Batch">
+                <input
+                  value={form.batch}
+                  onChange={(e) => update('batch', e.target.value)}
+                  placeholder="ej. A-2611"
+                  className={`${inputCls} mono`}
+                />
+              </Field>
+
+              <Field label="Peso total spool (g)" required error={errors.weight_per_roll}>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={form.weight_per_roll}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    update('weight_per_roll', v);
+                    if (Number(form.quantity) > Number(v)) update('quantity', v);
+                  }}
+                  className={`${inputCls} mono`}
+                />
+              </Field>
+              <Field label="Restante actual (g)" required error={errors.quantity}>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={form.quantity}
+                  onChange={(e) => update('quantity', e.target.value)}
+                  className={`${inputCls} mono`}
+                />
+              </Field>
+
+              <Field label="Precio por kg (COP)">
+                <input
+                  type="number"
+                  min="0"
+                  step="100"
+                  value={form.price_per_kg}
+                  onChange={(e) => update('price_per_kg', e.target.value)}
+                  placeholder="ej. 120000"
+                  className={`${inputCls} mono`}
+                />
+              </Field>
+              <Field label="Stock mínimo (g)">
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={form.min_quantity}
+                  onChange={(e) => update('min_quantity', e.target.value)}
+                  placeholder="ej. 200"
+                  className={`${inputCls} mono`}
+                />
+              </Field>
+
+              <Field label="Ubicación">
+                <input
+                  value={form.location}
+                  onChange={(e) => update('location', e.target.value)}
+                  placeholder="ej. Estante 1 · Caja A"
+                  className={inputCls}
+                />
+              </Field>
+              <div /> {/* spacer */}
+
+              <div className="sm:col-span-2">
+                <Field label="Notas">
+                  <textarea
+                    rows={3}
+                    value={form.notes}
+                    onChange={(e) => update('notes', e.target.value)}
+                    placeholder="Observaciones, condiciones de almacenamiento…"
+                    className={`${inputCls} resize-y`}
+                  />
+                </Field>
+              </div>
+            </div>
+          </div>
+
+          <footer className="flex gap-2 px-5 py-3 border-t border-[var(--color-border-soft)] bg-[var(--color-surf-card-2)] shrink-0">
+            <button
+              type="button"
+              onClick={onClose}
+              className="btn btn-sm flex-1 justify-center"
+              disabled={saving}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={submit}
+              disabled={saving}
+              className="btn btn-primary btn-sm flex-1 justify-center disabled:opacity-50"
+            >
+              {saving ? 'Guardando…' : (<><Plus size={13} /> Agregar</>)}
+            </button>
+          </footer>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 /**
@@ -1407,6 +1720,7 @@ export default function InventoryPage() {
   const [materialFilters, setMaterialFilters] = useState([]);
   const [sort, setSort] = useState('lowFirst');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   // Drawer/sheet state — un slot por tipo para no mezclar bodies.
   const [selected, setSelected] = useState(null);            // filamento
   const [selectedItem, setSelectedItem] = useState(null);    // insumo / herramienta / consumible
@@ -1788,7 +2102,20 @@ export default function InventoryPage() {
           </>
         )}
 
-        <MobileFAB onClick={() => navigate(tab === 'compras' ? '/inventory/purchases' : '/inventory/stock?new=1')} />
+        <MobileFAB
+          onClick={() => {
+            if (tab === 'compras') {
+              navigate('/inventory/purchases');
+              return;
+            }
+            if (tab === 'filamentos') {
+              setAddOpen(true);
+              return;
+            }
+            // Otras categorías aún no tienen modal v2 — TODO.
+            toast('Crear ítems en otras categorías llega pronto.');
+          }}
+        />
 
         <MobileSheet
           open={!!selected}
@@ -1799,7 +2126,10 @@ export default function InventoryPage() {
           <FilamentDrawerBody f={selected} />
           {selected && (
             <div className="px-5 pt-3 pb-5 border-t border-[var(--color-border-soft)] flex gap-2 sticky bottom-0 bg-[var(--color-surf-sidebar)]">
-              <FilamentDrawerFooter f={selected} />
+              <FilamentDrawerFooter
+                f={selected}
+                onReassign={() => toast('Reasignar batch llega pronto.')}
+              />
             </div>
           )}
         </MobileSheet>
@@ -1819,6 +2149,16 @@ export default function InventoryPage() {
         >
           <PurchaseDrawerBody po={selectedPurchase} />
         </MobileSheet>
+
+        <AddFilamentModal
+          open={addOpen}
+          onClose={() => setAddOpen(false)}
+          onCreated={(item) => {
+            if (item?.category === 'Filamento') {
+              setFilaments((cur) => [mapToFilament(item), ...cur]);
+            }
+          }}
+        />
       </div>
     );
   }
@@ -1857,9 +2197,19 @@ export default function InventoryPage() {
           </Link>
           <span className="w-px h-4 bg-[var(--color-border)]" />
           <Button variant="ghost" iconOnly icon={Bell} iconSize={14} aria-label="Notificaciones" />
-          <Link to="/inventory/stock?new=1" className="btn btn-primary btn-sm">
+          <button
+            type="button"
+            onClick={() => {
+              if (tab === 'filamentos') {
+                setAddOpen(true);
+              } else {
+                toast('Crear ítems en otras categorías llega pronto.');
+              }
+            }}
+            className="btn btn-primary btn-sm"
+          >
             <Plus size={13} /> Agregar
-          </Link>
+          </button>
         </div>
       </header>
 
@@ -1901,9 +2251,13 @@ export default function InventoryPage() {
               }
               action={
                 filaments.length === 0 ? (
-                  <Link to="/inventory/stock?new=1" className="btn btn-primary btn-sm">
+                  <button
+                    type="button"
+                    onClick={() => setAddOpen(true)}
+                    className="btn btn-primary btn-sm"
+                  >
                     <Plus size={13} /> Agregar primer filamento
-                  </Link>
+                  </button>
                 ) : null
               }
             />
@@ -2043,9 +2397,13 @@ export default function InventoryPage() {
                     }
                     action={
                       rawList.length === 0 ? (
-                        <Link to="/inventory/stock?new=1" className="btn btn-primary btn-sm">
+                        <button
+                          type="button"
+                          onClick={() => toast('Crear ítems en otras categorías llega pronto.')}
+                          className="btn btn-primary btn-sm"
+                        >
                           <Plus size={13} /> Agregar primer ítem
-                        </Link>
+                        </button>
                       ) : null
                     }
                   />
@@ -2071,7 +2429,14 @@ export default function InventoryPage() {
         eyebrow={selected?.rawId}
         title={selected?.colorName || ''}
         width={460}
-        footer={selected && <FilamentDrawerFooter f={selected} />}
+        footer={
+          selected && (
+            <FilamentDrawerFooter
+              f={selected}
+              onReassign={() => toast('Reasignar batch llega pronto.')}
+            />
+          )
+        }
       >
         <FilamentDrawerBody f={selected} />
       </DetailDrawer>
@@ -2091,6 +2456,17 @@ export default function InventoryPage() {
       >
         <PurchaseDrawerBody po={selectedPurchase} />
       </DetailDrawer>
+
+      <AddFilamentModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onCreated={(item) => {
+          // Insertamos optimísticamente al estado local sin recargar todo.
+          if (item?.category === 'Filamento') {
+            setFilaments((cur) => [mapToFilament(item), ...cur]);
+          }
+        }}
+      />
 
       <footer className="mt-auto px-6 py-2.5 border-t border-[var(--color-border-soft)] bg-[var(--color-surf-sidebar)] flex flex-wrap items-center gap-4 text-[11px] text-gunmetal">
         <span className="inline-flex items-center gap-1.5">
