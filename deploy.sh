@@ -155,13 +155,25 @@ loginctl enable-linger "$(whoami)" 2>/dev/null || true
 echo "→ Construyendo imágenes de la aplicación..."
 podman build -t cfs-backend -f "$DEPLOY_PATH/backend/Containerfile" "$DEPLOY_PATH/backend/"
 
-# Frontend: --no-cache obligatorio. El cache layer de `COPY pkg+lock`
-# se queda pegado a un node_modules viejo aunque cambies la versión en
-# package.json — terminó corrompiendo varios deploys (`@dnd-kit/core`
-# no resuelve en vite build aunque `npm ls` cacheado diga que está).
-# El frontend es chico, el rebuild son ~30s. No vale la pena el cache.
-echo "→ Frontend con --no-cache (evita layer cache corrupto de npm ci)..."
-podman build --no-cache -t cfs-frontend -f "$DEPLOY_PATH/frontend/Containerfile" "$DEPLOY_PATH/frontend/"
+# Frontend: protocolo extremo de cache-bust. El podman de este server ha
+# mostrado ignorar `--no-cache` en algunas ocasiones — el build termina
+# con un node_modules incompleto (`@dnd-kit/core` no resuelve en vite
+# build pese a estar en package-lock.json).
+#
+# Combinamos 3 medidas:
+#   1. `podman rmi -f cfs-frontend` borra la imagen tag (rompe el reuse
+#      del COPY layer cacheado contra la imagen previa).
+#   2. `podman image prune -f --filter label=stage=cfs-frontend-build`
+#      borra layers intermedios huérfanos (require LABEL en el Containerfile).
+#   3. `podman build --no-cache --pull=always` fuerza rebuild + base
+#      image fresh de docker.io.
+#
+# Si después de esto sigue fallando: `podman system prune -af` manual.
+echo "→ Frontend: borrando imagen previa + build fresh..."
+podman rmi -f cfs-frontend 2>/dev/null || true
+podman image prune -f --filter label=stage=cfs-frontend-build 2>/dev/null || true
+podman build --no-cache --pull=always -t cfs-frontend \
+    -f "$DEPLOY_PATH/frontend/Containerfile" "$DEPLOY_PATH/frontend/"
 
 podman build -t cfs-slicer -f "$DEPLOY_PATH/slicer/Containerfile" "$DEPLOY_PATH/slicer/"
 podman build -t cfs-tracker -f "$DEPLOY_PATH/tracker/Containerfile" "$DEPLOY_PATH/tracker/"
