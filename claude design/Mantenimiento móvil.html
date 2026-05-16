@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="es-CO">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mantenimiento móvil · Collector's Forge Studio</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --forge-teal: #2DD4BF;
+      --deep-teal: #14B8A6;
+      --forge-amber: #FBBF24;
+      --app-inventory: #3B82F6;
+      --app-slicer: #F59E0B;
+      --app-queue: #14B8A6;
+      --app-mtto: #8B5CF6;
+
+      --forge-black: #0F1219;
+      --surf-sidebar: #0A0E16;
+      --surf-card: #111520;
+      --surf-card-2: #161B27;
+      --surf-hover: #1A2030;
+      --border-soft: #1C2230;
+      --border: #222630;
+      --border-strong: #303642;
+
+      --tech-white: #E4E8ED;
+      --steel: #94A0AE;
+      --gunmetal: #7A8494;
+      --gunmetal-dim: #5A6573;
+
+      --font-sans: 'Space Grotesk', -apple-system, system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    html { background: #060912; }
+    body {
+      font-family: var(--font-sans);
+      color: var(--tech-white);
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(45, 212, 191, 0.06), transparent 50%),
+        radial-gradient(circle at 80% 100%, rgba(59, 130, 246, 0.06), transparent 50%),
+        #060912;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 28px 16px;
+    }
+    .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    @keyframes pulse-soft { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+    .pulse-soft { animation: pulse-soft 2.4s ease-in-out infinite; }
+
+    svg { display: block; }
+    .icon { stroke-width: 2; stroke: currentColor; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* hide scrollbars inside the phone for a clean device look */
+    .phone-scroll::-webkit-scrollbar { display: none; }
+    .phone-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+
+    /* page header above device */
+    .page-shell {
+      display: flex; flex-direction: column; align-items: center; gap: 18px;
+    }
+    .page-meta {
+      font: 500 11px/1 var(--font-mono);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--gunmetal-dim);
+    }
+    .page-meta .accent { color: var(--app-mtto); }
+
+    #root { display: flex; align-items: center; justify-content: center; }
+
+    /* boot */
+    .boot { color: var(--gunmetal); font: 500 12px var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; }
+  </style>
+</head>
+<body>
+  <div id="root"><div class="boot">cargando mantenimiento móvil…</div></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="ios-frame.jsx"></script>
+  <script type="text/babel" src="icons.jsx"></script>
+  <script type="text/babel" src="data.jsx"></script>
+  <script type="text/babel" src="components.jsx"></script>
+  <script type="text/babel" src="maintenance-mobile.jsx"></script>
+</body>
+</html>

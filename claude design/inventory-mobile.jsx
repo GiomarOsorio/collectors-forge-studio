@@ -168,10 +168,12 @@ function HeroStatus({ stats }) {
 
 // ─── mini KPI strip ───────────────────────────────────────────────────────
 function MiniKPIStrip({ stats }) {
+  const activePOs = COMPRAS.filter((p) => p.status !== 'completado');
+  const onRoute = activePOs.reduce((s, p) => s + p.total, 0);
   const tiles = [
-    { label: 'Material', value: (stats.totalGrams / 1000).toFixed(2), unit: 'kg',    accent: 'var(--steel)',     sub: `${stats.spoolCount} spools` },
+    { label: 'Material',   value: (stats.totalGrams / 1000).toFixed(2), unit: 'kg',    accent: 'var(--steel)',     sub: `${stats.spoolCount} spools` },
     { label: 'Stock bajo', value: stats.lowCount,                       unit: 'ítems', accent: 'var(--forge-amber)', sub: `${stats.criticalCount} críticos`, warn: true },
-    { label: 'Compras',    value: '3',                                   unit: 'POs',   accent: '#A78BFA',           sub: '$1.4M ruta' },
+    { label: 'Compras',    value: activePOs.length,                     unit: 'POs',   accent: '#A78BFA',           sub: `$${(onRoute/1000000).toFixed(2)}M ruta` },
   ];
   return (
     <div style={{ display: 'flex', gap: 8, padding: '0 16px 14px' }}>
@@ -209,53 +211,64 @@ function MiniKPIStrip({ stats }) {
 // ─── category tabs (horizontal scroll pills) ──────────────────────────────
 function MobileTabs({ value, onChange, counts }) {
   const tabs = [
-    { id: 'filamentos',    label: 'Filamentos',    icon: 'IconDroplet' },
-    { id: 'insumos',       label: 'Insumos',       icon: 'IconBox' },
-    { id: 'herramientas',  label: 'Herram.',       icon: 'IconScissors' },
-    { id: 'consumibles',   label: 'Consum.',       icon: 'IconBeaker' },
-    { id: 'compras',       label: 'Compras',       icon: 'IconCart' },
+    { id: 'filamentos',    label: 'Filam.',     icon: 'IconDroplet' },
+    { id: 'insumos',       label: 'Insumos',    icon: 'IconBox' },
+    { id: 'herramientas',  label: 'Herram.',    icon: 'IconScissors' },
+    { id: 'consumibles',   label: 'Consum.',    icon: 'IconBeaker' },
+    { id: 'compras',       label: 'Compras',    icon: 'IconCart' },
   ];
   return (
-    <div className="phone-scroll" style={{
-      display: 'flex', gap: 6, padding: '0 16px 12px',
-      overflowX: 'auto',
-    }}>
-      {tabs.map((t) => {
-        const Icon = window[t.icon];
-        const active = t.id === value;
-        return (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => onChange(t.id)}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              padding: '8px 12px',
-              borderRadius: 999,
-              background: active ? 'rgba(59, 130, 246, 0.14)' : 'transparent',
-              border: `1px solid ${active ? 'rgba(59, 130, 246, 0.45)' : 'var(--border)'}`,
-              color: active ? '#93C5FD' : 'var(--steel)',
-              font: '500 12.5px/1 var(--font-sans)',
-              flexShrink: 0,
-              whiteSpace: 'nowrap',
-              cursor: 'default',
-            }}
-          >
-            <Icon size={13} style={{ color: active ? 'var(--app-inventory)' : 'var(--gunmetal)' }} />
-            {t.label}
-            <span className="mono" style={{
-              fontSize: 9.5,
-              padding: '1px 5px',
-              borderRadius: 999,
-              background: active ? 'rgba(59, 130, 246, 0.15)' : 'rgba(228, 232, 237, 0.05)',
-              color: active ? '#93C5FD' : 'var(--gunmetal)',
-              border: `1px solid ${active ? 'rgba(59, 130, 246, 0.25)' : 'var(--border)'}`,
-            }}>
-              {counts[t.id]}
-            </span>
-          </button>
-        );
-      })}
+    <div style={{ position: 'relative', marginBottom: 12 }}>
+      <div className="phone-scroll" style={{
+        display: 'flex', gap: 5, padding: '0 16px',
+        overflowX: 'auto',
+      }}>
+        {tabs.map((t) => {
+          const Icon = window[t.icon];
+          const active = t.id === value;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => onChange(t.id)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '7px 10px',
+                borderRadius: 999,
+                background: active ? 'rgba(59, 130, 246, 0.14)' : 'transparent',
+                border: `1px solid ${active ? 'rgba(59, 130, 246, 0.45)' : 'var(--border)'}`,
+                color: active ? '#93C5FD' : 'var(--steel)',
+                font: '500 12px/1 var(--font-sans)',
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
+                cursor: 'default',
+              }}
+            >
+              {active && <Icon size={12} style={{ color: 'var(--app-inventory)' }} />}
+              {t.label}
+              {active && (
+                <span className="mono" style={{
+                  fontSize: 9,
+                  padding: '1px 4px',
+                  borderRadius: 999,
+                  background: 'rgba(59, 130, 246, 0.15)',
+                  color: '#93C5FD',
+                  border: '1px solid rgba(59, 130, 246, 0.25)',
+                }}>
+                  {counts[t.id]}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {/* edge fade — hint that strip scrolls horizontally */}
+      <div style={{
+        position: 'absolute', right: 0, top: 0, bottom: 0,
+        width: 28,
+        background: 'linear-gradient(90deg, rgba(15, 18, 25, 0), var(--forge-black))',
+        pointerEvents: 'none',
+      }} />
     </div>
   );
 }
@@ -714,6 +727,193 @@ function SearchOverlay({ open, onClose, query, onQuery }) {
   );
 }
 
+// ─── kind icon resolver (insumos / herramientas / consumibles) ───────────
+const KIND_ICONS = {
+  plate: 'IconLayers', nozzle: 'IconDroplet', hotend: 'IconFlame',
+  belt: 'IconRefresh', tube: 'IconBox',
+  pliers: 'IconWrench', scissors: 'IconScissors', knife: 'IconEdit',
+  hex: 'IconWrench', caliper: 'IconWrench', spatula: 'IconWrench',
+  silica: 'IconBox', liquid: 'IconBeaker', glue: 'IconBeaker',
+  sandpaper: 'IconBox', gloves: 'IconBox', cloth: 'IconBox',
+};
+const KIND_TONES = {
+  plate: '#3B82F6', nozzle: '#FBBF24', hotend: '#F87171',
+  belt: '#94A0AE', tube: '#94A0AE',
+  pliers: '#A78BFA', scissors: '#A78BFA', knife: '#A78BFA',
+  hex: '#A78BFA', caliper: '#A78BFA', spatula: '#A78BFA',
+  silica: '#34D399', liquid: '#22D3EE', glue: '#34D399',
+  sandpaper: '#94A0AE', gloves: '#34D399', cloth: '#34D399',
+};
+
+// ─── generic supply row (insumos / herramientas / consumibles) ────────────
+function SupplyRow({ item }) {
+  const Icon = window[KIND_ICONS[item.kind] || 'IconBox'];
+  const tone = KIND_TONES[item.kind] || 'var(--steel)';
+  const ratio = item.par ? Math.max(0, Math.min(1, item.stock / item.par)) : 1;
+  const lvl = item.critical ? 'critical' : item.low ? 'low' : 'ok';
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12,
+      width: '100%', padding: '11px 14px',
+      background: 'var(--surf-card)', border: '1px solid var(--border)',
+      borderRadius: 12,
+    }}>
+      {/* kind tile */}
+      <div style={{
+        width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+        background: `${tone}1a`,
+        border: `1px solid ${tone}40`,
+        color: tone,
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        position: 'relative',
+      }}>
+        <Icon size={18} />
+        {lvl !== 'ok' && (
+          <span className={lvl === 'critical' ? 'pulse-soft' : ''} style={{
+            position: 'absolute', top: -3, right: -3,
+            width: 8, height: 8, borderRadius: 999,
+            background: 'var(--forge-amber)',
+            border: '2px solid var(--surf-card)',
+          }} />
+        )}
+      </div>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
+          <span className="mono" style={{
+            fontSize: 8.5, padding: '1px 5px', borderRadius: 3,
+            background: 'rgba(228, 232, 237, 0.05)', border: '1px solid var(--border)',
+            color: 'var(--steel)', letterSpacing: 0.08,
+            whiteSpace: 'nowrap', flexShrink: 0,
+          }}>{item.id}</span>
+          {lvl !== 'ok' && (
+            <span className="mono" style={{
+              display: 'inline-flex', alignItems: 'center', gap: 2,
+              fontSize: 8.5, padding: '1px 5px', borderRadius: 3,
+              background: 'rgba(251, 191, 36, 0.10)',
+              border: '1px solid rgba(251, 191, 36, 0.3)',
+              color: '#FBBF24', letterSpacing: 0.06,
+              whiteSpace: 'nowrap', flexShrink: 0,
+            }}>
+              <IconAlert size={8} />
+              {lvl === 'critical' ? 'CRÍTICO' : 'BAJO'}
+            </span>
+          )}
+        </div>
+        <div style={{
+          fontSize: 13, fontWeight: 600, color: 'var(--tech-white)',
+          lineHeight: 1.2,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>
+          {item.name}
+        </div>
+        <div className="mono" style={{
+          fontSize: 10, color: 'var(--gunmetal)', marginTop: 2,
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%',
+        }}>
+          <IconMapPin size={9} /> {item.location}
+          {item.lastUsed && <React.Fragment><span style={{ opacity: 0.45 }}>·</span><IconClock size={9} /> {item.lastUsed}</React.Fragment>}
+        </div>
+      </div>
+
+      {/* right: stock + par */}
+      <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5, minWidth: 60 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
+          <span className="mono" style={{ fontSize: 14, fontWeight: 600, color: lvl !== 'ok' ? 'var(--forge-amber)' : 'var(--tech-white)' }}>
+            {item.stock}
+          </span>
+          {item.unit && <span className="mono" style={{ fontSize: 9.5, color: 'var(--gunmetal)' }}>{item.unit}</span>}
+        </div>
+        {item.par != null && (
+          <div style={{ width: 56, height: 3, background: 'rgba(228, 232, 237, 0.06)', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{
+              width: `${Math.min(100, ratio * 100)}%`, height: '100%',
+              background: lvl === 'ok' ? tone : 'var(--forge-amber)',
+              borderRadius: 2,
+            }} />
+          </div>
+        )}
+        {item.par != null && (
+          <span className="mono" style={{ fontSize: 9, color: 'var(--gunmetal)' }}>par {item.par}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── purchase order card (compras tab) ────────────────────────────────────
+const PO_STATUS = {
+  'en camino':   { color: '#3B82F6', bg: 'rgba(59, 130, 246, 0.10)', border: 'rgba(59, 130, 246, 0.35)', icon: 'IconTruck' },
+  'procesando':  { color: '#FBBF24', bg: 'rgba(251, 191, 36, 0.10)', border: 'rgba(251, 191, 36, 0.30)', icon: 'IconClock' },
+  'borrador':    { color: '#94A0AE', bg: 'rgba(148, 160, 174, 0.10)', border: 'rgba(148, 160, 174, 0.25)', icon: 'IconEdit' },
+  'completado':  { color: '#34D399', bg: 'rgba(52, 211, 153, 0.10)', border: 'rgba(52, 211, 153, 0.28)', icon: 'IconCheck' },
+};
+function POCard({ po }) {
+  const s = PO_STATUS[po.status] || PO_STATUS['procesando'];
+  const Icon = window[s.icon];
+  return (
+    <div style={{
+      width: '100%', padding: '13px 14px',
+      background: 'var(--surf-card)', border: '1px solid var(--border)',
+      borderRadius: 12,
+      display: 'flex', flexDirection: 'column', gap: 9,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+        <span className="mono" style={{
+          fontSize: 11, fontWeight: 600, color: 'var(--tech-white)', whiteSpace: 'nowrap',
+        }}>{po.id}</span>
+        <span style={{ width: 3, height: 3, borderRadius: 999, background: 'var(--gunmetal-dim)', flexShrink: 0 }} />
+        <span style={{
+          fontSize: 11.5, color: 'var(--steel)', whiteSpace: 'nowrap', flexShrink: 0,
+        }}>{po.vendor}</span>
+        <span className="mono" style={{
+          marginLeft: 'auto', flexShrink: 0,
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          fontSize: 9, fontWeight: 600,
+          padding: '3px 7px', borderRadius: 999,
+          background: s.bg, color: s.color,
+          border: `1px solid ${s.border}`,
+          letterSpacing: 0.06, textTransform: 'uppercase', whiteSpace: 'nowrap',
+        }}>
+          <Icon size={9} /> {po.status}
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, whiteSpace: 'nowrap' }}>
+        <span className="mono" style={{ fontSize: 19, fontWeight: 600, color: 'var(--tech-white)', letterSpacing: -0.3 }}>
+          ${(po.total / 1000).toFixed(0)}k
+        </span>
+        <span className="mono" style={{ fontSize: 10.5, color: 'var(--gunmetal)' }}>COP · {po.items} ítems</span>
+        <span className="mono" style={{
+          marginLeft: 'auto',
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          fontSize: 10.5, color: po.status === 'en camino' ? 'var(--app-inventory)' : 'var(--steel)',
+        }}>
+          <IconClock size={10} /> {po.eta}
+        </span>
+      </div>
+
+      {/* line items */}
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', gap: 4,
+        paddingTop: 8, borderTop: '1px dashed var(--border-soft)',
+      }}>
+        {po.lines.map((l) => (
+          <span key={l} className="mono" style={{
+            fontSize: 10, padding: '2px 6px', borderRadius: 4,
+            background: 'rgba(228, 232, 237, 0.04)',
+            border: '1px solid var(--border-soft)',
+            color: 'var(--steel)', whiteSpace: 'nowrap',
+          }}>
+            {l}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── main mobile inventory app ────────────────────────────────────────────
 function MobileInventoryApp() {
   const [tab, setTab] = React.useState('filamentos');
@@ -819,53 +1019,10 @@ function MobileInventoryApp() {
               </div>
             )}
           </React.Fragment>
+        ) : tab === 'compras' ? (
+          <ComprasTab />
         ) : (
-          <div style={{ padding: '14px 16px 40px' }}>
-            <div style={{
-              background: 'var(--surf-card)',
-              border: '1px solid var(--border)',
-              borderRadius: 12, padding: 20, textAlign: 'center',
-            }}>
-              <div style={{
-                width: 40, height: 40, borderRadius: 10, margin: '0 auto 10px',
-                background: 'rgba(59, 130, 246, 0.10)',
-                border: '1px solid rgba(59, 130, 246, 0.2)',
-                color: 'var(--app-inventory)',
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <IconBox size={18} />
-              </div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--tech-white)' }}>
-                {tab === 'insumos' && 'Insumos'}
-                {tab === 'herramientas' && 'Herramientas'}
-                {tab === 'consumibles' && 'Consumibles'}
-                {tab === 'compras' && 'Órdenes de compra'}
-              </div>
-              <div style={{ fontSize: 11.5, color: 'var(--gunmetal)', marginTop: 4, marginBottom: 12 }}>
-                {counts[tab]} ítems · vista detallada en construcción
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, textAlign: 'left' }}>
-                {(tab === 'insumos' ? INSUMOS :
-                  tab === 'herramientas' ? HERRAMIENTAS :
-                  tab === 'consumibles' ? CONSUMIBLES :
-                  COMPRAS).slice(0, 4).map((it) => (
-                  <div key={it.id} style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '8px 10px',
-                    background: 'var(--surf-card-2)',
-                    border: '1px solid var(--border-soft)',
-                    borderRadius: 8,
-                  }}>
-                    <span className="mono" style={{ fontSize: 10, color: 'var(--gunmetal)', flexShrink: 0 }}>{it.id}</span>
-                    <span style={{ flex: 1, fontSize: 12, color: 'var(--tech-white)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.name || `Vendor ${it.vendor}`}</span>
-                    <span className="mono" style={{ fontSize: 11, color: 'var(--steel)', flexShrink: 0 }}>
-                      {it.stock != null ? `${it.stock}${it.unit ? it.unit[0] : ''}` : `${it.items}u`}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          <SupplyTab tab={tab} />
         )}
 
         {/* tail padding so FAB doesn't cover content */}
@@ -878,6 +1035,168 @@ function MobileInventoryApp() {
       <BottomNav active="inventory" />
       <BottomSheet filament={drawerFilament} onClose={() => setDrawerFilament(null)} />
     </div>
+  );
+}
+
+// ─── supply tab (insumos / herramientas / consumibles) ───────────────────
+function SupplyTab({ tab }) {
+  const data = tab === 'insumos' ? INSUMOS
+              : tab === 'herramientas' ? HERRAMIENTAS
+              : CONSUMIBLES;
+  const titles = {
+    insumos:      { label: 'Insumos',      sub: 'Plates, nozzles, hotends y refacciones' },
+    herramientas: { label: 'Herramientas', sub: 'Inventario fijo del taller' },
+    consumibles:  { label: 'Consumibles',  sub: 'Materiales que se gastan por uso' },
+  };
+  const t = titles[tab];
+  const lowItems = data.filter((it) => it.low);
+  const okItems  = data.filter((it) => !it.low);
+
+  // category-level mini KPIs
+  const totalValue = data.reduce((s, it) => s + (it.costPerUnit ? it.costPerUnit * it.stock : 0), 0);
+  const lowCount = lowItems.length;
+  const totalCount = data.length;
+
+  return (
+    <React.Fragment>
+      <div style={{ padding: '0 16px', marginBottom: 12 }}>
+        <div style={{
+          background: 'var(--surf-card)', border: '1px solid var(--border)',
+          borderRadius: 12, padding: '12px 14px',
+          display: 'flex', alignItems: 'center', gap: 14,
+        }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="mono" style={{
+              fontSize: 9, color: 'var(--gunmetal)', letterSpacing: 0.14,
+              textTransform: 'uppercase', marginBottom: 3,
+            }}>{t.label}</div>
+            <div style={{
+              fontSize: 12, color: 'var(--steel)', lineHeight: 1.3,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>{t.sub}</div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div className="mono" style={{ fontSize: 18, fontWeight: 600, color: 'var(--tech-white)', letterSpacing: -0.2 }}>
+              {totalCount}
+            </div>
+            <div className="mono" style={{ fontSize: 9, color: 'var(--gunmetal)', letterSpacing: 0.1, textTransform: 'uppercase' }}>
+              ítems
+            </div>
+          </div>
+          {totalValue > 0 && (
+            <div style={{ textAlign: 'right', borderLeft: '1px solid var(--border)', paddingLeft: 14 }}>
+              <div className="mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--tech-white)' }}>
+                ${(totalValue / 1000).toFixed(0)}k
+              </div>
+              <div className="mono" style={{ fontSize: 9, color: 'var(--gunmetal)', letterSpacing: 0.1, textTransform: 'uppercase' }}>
+                valor
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {lowItems.length > 0 && (
+        <section style={{ marginBottom: 18 }}>
+          <SectionHeader
+            label="Reabastecer"
+            count={`${lowItems.length} ${lowItems.length === 1 ? 'ítem' : 'ítems'}`}
+            warn
+            onAction={() => {}}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '0 16px' }}>
+            {lowItems.map((it) => <SupplyRow key={it.id} item={it} />)}
+          </div>
+        </section>
+      )}
+
+      <section style={{ marginBottom: 18 }}>
+        <SectionHeader
+          label={lowItems.length ? 'En stock' : 'Inventario'}
+          count={`${okItems.length} ${okItems.length === 1 ? 'ítem' : 'ítems'}`}
+        />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '0 16px' }}>
+          {okItems.map((it) => <SupplyRow key={it.id} item={it} />)}
+        </div>
+      </section>
+    </React.Fragment>
+  );
+}
+
+// ─── compras tab ──────────────────────────────────────────────────────────
+function ComprasTab() {
+  const active = COMPRAS.filter((p) => p.status !== 'completado');
+  const past   = COMPRAS.filter((p) => p.status === 'completado');
+  const onRoute = active.reduce((s, p) => s + p.total, 0);
+
+  return (
+    <React.Fragment>
+      <div style={{ padding: '0 16px', marginBottom: 12 }}>
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(167, 139, 250, 0.08), rgba(59, 130, 246, 0.04)), var(--surf-card)',
+          border: '1px solid var(--border)',
+          borderRadius: 12, padding: '12px 14px',
+          display: 'flex', alignItems: 'center', gap: 14,
+        }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+            background: 'rgba(167, 139, 250, 0.14)',
+            border: '1px solid rgba(167, 139, 250, 0.35)',
+            color: '#A78BFA',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <IconTruck size={17} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="mono" style={{
+              fontSize: 9, color: 'var(--gunmetal)', letterSpacing: 0.14,
+              textTransform: 'uppercase', marginBottom: 2,
+            }}>En ruta</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+              <span className="mono" style={{ fontSize: 19, fontWeight: 600, color: 'var(--tech-white)', letterSpacing: -0.3 }}>
+                {onRoute >= 1000000 ? `$${(onRoute / 1000000).toFixed(2)}M` : `$${(onRoute / 1000).toFixed(0)}k`}
+              </span>
+              <span className="mono" style={{ fontSize: 10.5, color: 'var(--gunmetal)' }}>· {active.length} POs activas</span>
+            </div>
+          </div>
+          <button type="button" style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            padding: '7px 10px', borderRadius: 8,
+            background: 'rgba(167, 139, 250, 0.12)',
+            border: '1px solid rgba(167, 139, 250, 0.35)',
+            color: '#A78BFA',
+            font: '500 11.5px var(--font-sans)',
+            cursor: 'default',
+          }}>
+            <IconPlus size={11} /> Nueva
+          </button>
+        </div>
+      </div>
+
+      {active.length > 0 && (
+        <section style={{ marginBottom: 18 }}>
+          <SectionHeader
+            label="Activas"
+            count={`${active.length} ${active.length === 1 ? 'orden' : 'órdenes'}`}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 16px' }}>
+            {active.map((po) => <POCard key={po.id} po={po} />)}
+          </div>
+        </section>
+      )}
+
+      {past.length > 0 && (
+        <section style={{ marginBottom: 18 }}>
+          <SectionHeader
+            label="Recibidas"
+            count={`${past.length} este mes`}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 16px' }}>
+            {past.map((po) => <POCard key={po.id} po={po} />)}
+          </div>
+        </section>
+      )}
+    </React.Fragment>
   );
 }
 
