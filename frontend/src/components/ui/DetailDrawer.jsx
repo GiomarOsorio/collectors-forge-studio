@@ -17,10 +17,12 @@ import { X } from 'lucide-react';
  * @param {boolean} props.open
  * @param {() => void} props.onClose
  * @param {React.ReactNode} [props.title]
- * @param {number} [props.width=420]
+ * @param {string} [props.eyebrow] - Texto pequeño mayúsculas sobre el title (ID/categoría/etc.)
+ * @param {React.ReactNode} [props.footer] - Footer fijo con acciones (botones)
+ * @param {number} [props.width=460]
  * @param {React.ReactNode} props.children
  */
-export default function DetailDrawer({ open, onClose, title, width = 420, children }) {
+export default function DetailDrawer({ open, onClose, title, eyebrow, footer, width = 460, children }) {
   // ESC cierra; lock body scroll.
   useEffect(() => {
     if (!open) return;
@@ -41,7 +43,7 @@ export default function DetailDrawer({ open, onClose, title, width = 420, childr
       {/* Backdrop */}
       <div
         onClick={onClose}
-        className={`fixed inset-0 z-40 bg-black/60 transition-opacity duration-300 ${
+        className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-200 ${
           open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
         aria-hidden="true"
@@ -50,23 +52,37 @@ export default function DetailDrawer({ open, onClose, title, width = 420, childr
       <aside
         role="dialog"
         aria-modal="true"
-        className={`fixed top-0 right-0 bottom-0 z-50 bg-[var(--color-surf-sidebar)] border-l border-[var(--color-border-soft)] shadow-2xl flex flex-col transition-transform duration-300 ease-out ${
+        className={`fixed top-0 right-0 bottom-0 z-50 bg-[var(--color-surf-card)] border-l border-[var(--color-border)] shadow-2xl flex flex-col transition-transform duration-300 ease-out ${
           open ? 'translate-x-0' : 'translate-x-full'
         }`}
         style={{ width: '100%', maxWidth: width }}
       >
-        <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--color-border-soft)] shrink-0">
-          <h2 className="text-sm font-semibold text-tech-white truncate">{title}</h2>
+        <header className="flex items-start gap-3 px-4 pt-3.5 pb-3 border-b border-[var(--color-border-soft)] shrink-0">
+          <div className="flex-1 min-w-0">
+            {eyebrow && (
+              <p className="mono text-[9.5px] text-gunmetal uppercase tracking-widest mb-1">
+                {eyebrow}
+              </p>
+            )}
+            <h2 className="text-base font-semibold text-tech-white tracking-tight leading-tight truncate">
+              {title}
+            </h2>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="btn btn-ghost btn-icon"
             aria-label="Cerrar"
+            className="w-7 h-7 rounded-lg bg-transparent border border-[var(--color-border)] text-steel inline-flex items-center justify-center shrink-0 hover:bg-[var(--color-surf-hover)] transition-colors"
           >
-            <X size={16} />
+            <X size={14} />
           </button>
         </header>
-        <div className="flex-1 overflow-y-auto">{children}</div>
+        <div className="flex-1 overflow-y-auto p-4">{children}</div>
+        {footer && (
+          <footer className="px-4 py-3 border-t border-[var(--color-border-soft)] bg-[var(--color-surf-card-2)] flex gap-2 shrink-0">
+            {footer}
+          </footer>
+        )}
       </aside>
     </>
   );
