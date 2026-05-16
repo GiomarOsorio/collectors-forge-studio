@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   Archive,
   ChevronRight,
@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Button, Card, DetailDrawer, KPI, MobileSheet } from '../../components/ui';
+import MobileAppHeader from '../../components/MobileAppHeader';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../context/AuthContext';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -232,6 +233,7 @@ export default function VaultPageV2() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { user } = useAuth();
+  const { openSidebar } = useOutletContext() || {};
   const isAdmin = user?.role === 'admin';
   const confirm = useConfirm();
 
@@ -333,6 +335,13 @@ export default function VaultPageV2() {
   if (isMobile) {
     return (
       <div className="flex flex-col">
+        <MobileAppHeader
+          appName="Vault"
+          appIcon={Archive}
+          appAccent={ACCENT}
+          title="Galería"
+          onMenu={() => openSidebar?.()}
+        />
         <div className="px-4 mt-3">
           <Card className="p-4 flex flex-col gap-3 industrial-grid">
             <div className="flex items-baseline justify-between">

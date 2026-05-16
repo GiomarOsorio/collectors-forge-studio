@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   Calculator,
   Calendar,
@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Button, Card, DetailDrawer, KPI, MobileSheet } from '../../components/ui';
+import MobileAppHeader from '../../components/MobileAppHeader';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useConfirm } from '../../components/ConfirmDialog';
 import {
@@ -402,6 +403,7 @@ export default function CostPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const confirm = useConfirm();
+  const { openSidebar } = useOutletContext() || {};
 
   const [tab, setTab] = useState('cotizaciones');
   const [query, setQuery] = useState('');
@@ -531,8 +533,16 @@ export default function CostPage() {
 
   // ── Mobile shell ──────────────────────────────────────────────────────────
   if (isMobile) {
+    const tabLabel = TABS.find((t) => t.id === tab)?.label || tab;
     return (
       <div className="flex flex-col">
+        <MobileAppHeader
+          appName="Cost"
+          appIcon={Calculator}
+          appAccent="#2DD4BF"
+          title={tabLabel}
+          onMenu={() => openSidebar?.()}
+        />
         <div className="px-4 mt-3">
           <Card className="p-4 flex flex-col gap-3 industrial-grid">
             <div className="flex items-baseline justify-between">

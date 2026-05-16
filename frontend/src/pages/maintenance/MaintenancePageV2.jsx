@@ -12,7 +12,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Button, Card, DetailDrawer, KPI, MobileSheet } from '../../components/ui';
+import MobileAppHeader from '../../components/MobileAppHeader';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { getMaintenanceLogs, getMaintenanceSummary } from '../../services/api';
 import { MAINTENANCE_TYPES } from '../../config/maintenance';
@@ -322,6 +323,7 @@ function LogDrawerBody({ log }) {
 export default function MaintenancePageV2() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { openSidebar } = useOutletContext() || {};
 
   const [tab, setTab] = useState('dashboard');
   const [query, setQuery] = useState('');
@@ -434,8 +436,16 @@ export default function MaintenancePageV2() {
   );
 
   if (isMobile) {
+    const tabLabel = TABS.find((t) => t.id === tab)?.label || tab;
     return (
       <div className="flex flex-col">
+        <MobileAppHeader
+          appName="Mantenimiento"
+          appIcon={Wrench}
+          appAccent={ACCENT}
+          title={tabLabel}
+          onMenu={() => openSidebar?.()}
+        />
         <div className="px-4 mt-3">
           <Card className="p-4 flex flex-col gap-3 industrial-grid">
             <div className="flex items-baseline justify-between">
