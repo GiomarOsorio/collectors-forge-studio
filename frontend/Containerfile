@@ -4,12 +4,20 @@ FROM docker.io/node:20-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+# --ignore-scripts evita que `prepare` (husky) aborte npm ci en el
+# container (sin .git, husky falla y deja node_modules a medio instalar).
+RUN npm ci --ignore-scripts
 
-# Verify that critical deps actually resolved (busts the build early con
-# error legible si el cache de podman/npm dejó un node_modules incompleto).
+# Verifica que las deps críticas estén realmente instaladas. Si esto
+# falla, el cache de podman o el container dejaron un node_modules
+# incompleto — el error es legible.
 RUN npm ls @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities react-router-dom \
     || (echo "ERROR: deps faltantes tras npm ci. Revisar cache podman." && exit 1)
+
+# Print explícito de lo que hay en node_modules/@dnd-kit/ para depurar
+# casos donde npm ls cachea OK pero los archivos no están físicamente.
+RUN ls -la node_modules/@dnd-kit/ \
+    || (echo "ERROR: node_modules/@dnd-kit/ vacío o ausente." && exit 1)
 
 COPY . .
 RUN npm run build
