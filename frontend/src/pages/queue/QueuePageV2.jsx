@@ -12,7 +12,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   CheckCircle2,
   ChevronRight,
@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Button, Card, DetailDrawer, KPI, MobileSheet } from '../../components/ui';
+import MobileAppHeader from '../../components/MobileAppHeader';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useConfirm } from '../../components/ConfirmDialog';
 import {
@@ -321,6 +322,7 @@ function QueueDrawerBody({ item, onAction, onDelete, onClose }) {
 export default function QueuePageV2() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { openSidebar } = useOutletContext() || {};
   const confirm = useConfirm();
 
   const [tab, setTab] = useState('activa');
@@ -474,8 +476,16 @@ export default function QueuePageV2() {
 
   // ── Mobile shell ─────────────────────────────────────────────────────────
   if (isMobile) {
+    const tabLabel = TABS.find((t) => t.id === tab)?.label || tab;
     return (
       <div className="flex flex-col">
+        <MobileAppHeader
+          appName="Cola"
+          appIcon={ListOrdered}
+          appAccent={ACCENT}
+          title={tabLabel}
+          onMenu={() => openSidebar?.()}
+        />
         <div className="px-4 mt-3">
           <Card className="p-4 flex flex-col gap-3 industrial-grid">
             <div className="flex items-baseline justify-between">
