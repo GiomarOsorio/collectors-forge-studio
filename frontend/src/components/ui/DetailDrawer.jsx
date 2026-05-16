@@ -10,7 +10,7 @@
  */
 
 import { useEffect } from 'react';
-import { X } from 'lucide-react';
+import { Pencil, X } from 'lucide-react';
 
 /**
  * @param {Object} props
@@ -19,10 +19,11 @@ import { X } from 'lucide-react';
  * @param {React.ReactNode} [props.title]
  * @param {string} [props.eyebrow] - Texto pequeño mayúsculas sobre el title (ID/categoría/etc.)
  * @param {React.ReactNode} [props.footer] - Footer fijo con acciones (botones)
+ * @param {(() => void)} [props.onEdit] - Si se provee, muestra un Pencil icon button antes del Close
  * @param {number} [props.width=460]
  * @param {React.ReactNode} props.children
  */
-export default function DetailDrawer({ open, onClose, title, eyebrow, footer, width = 460, children }) {
+export default function DetailDrawer({ open, onClose, title, eyebrow, footer, onEdit, width = 460, children }) {
   // ESC cierra; lock body scroll.
   useEffect(() => {
     if (!open) return;
@@ -68,6 +69,16 @@ export default function DetailDrawer({ open, onClose, title, eyebrow, footer, wi
               {title}
             </h2>
           </div>
+          {onEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              aria-label="Editar"
+              className="w-7 h-7 rounded-lg bg-transparent border border-[var(--color-border)] text-steel inline-flex items-center justify-center shrink-0 hover:bg-[var(--color-surf-hover)] hover:text-tech-white transition-colors"
+            >
+              <Pencil size={13} />
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}
