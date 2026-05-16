@@ -266,6 +266,36 @@ const IconEdit = (p) => (
     <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
   </IconBase>
 );
+const IconTruck = (p) => (
+  <IconBase {...p}>
+    <path d="M1 3h15v13H1z" />
+    <path d="M16 8h4l3 3v5h-7V8z" />
+    <circle cx="5.5" cy="18.5" r="2.5" />
+    <circle cx="18.5" cy="18.5" r="2.5" />
+  </IconBase>
+);
+const IconCheck = (p) => (
+  <IconBase {...p}>
+    <polyline points="20 6 9 17 4 12" />
+  </IconBase>
+);
+const IconZap = (p) => (
+  <IconBase {...p}>
+    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+  </IconBase>
+);
+const IconLayers = (p) => (
+  <IconBase {...p}>
+    <polygon points="12 2 2 7 12 12 22 7 12 2" />
+    <polyline points="2 17 12 22 22 17" />
+    <polyline points="2 12 12 17 22 12" />
+  </IconBase>
+);
+const IconFlame = (p) => (
+  <IconBase {...p}>
+    <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
+  </IconBase>
+);
 
 // expose
 Object.assign(window, {
@@ -277,4 +307,5 @@ Object.assign(window, {
   IconBell, IconMenu, IconTrendUp, IconTrendDown, IconDrag, IconArrowUpRight,
   IconClock, IconMapPin, IconBox, IconScissors, IconDroplet, IconBeaker,
   IconRefresh, IconHistory, IconEdit,
+  IconTruck, IconCheck, IconZap, IconLayers, IconFlame,
 });

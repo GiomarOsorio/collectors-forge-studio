@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="es-CO">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Configuración · Collector's Forge Studio</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ─── CFS design tokens ─────────────────────────────────────────── */
+    :root {
+      /* brand */
+      --forge-teal: #2DD4BF;
+      --deep-teal: #14B8A6;
+      --forge-amber: #FBBF24;
+      --forge-rose: #F43F5E;
+
+      /* app accents */
+      --app-cost: #2DD4BF;
+      --app-inventory: #3B82F6;
+      --app-slicer: #F59E0B;
+      --app-mtto: #8B5CF6;
+      --app-queue: #14B8A6;
+      --app-vault: #F43F5E;
+      --app-company: #6366F1;
+
+      /* surfaces */
+      --forge-black: #0F1219;
+      --surf-sidebar: #0A0E16;
+      --surf-card: #111520;
+      --surf-card-2: #161B27;
+      --surf-hover: #1A2030;
+      --border-soft: #1C2230;
+      --border: #222630;
+      --border-strong: #303642;
+      --border-bright: #3B4150;
+
+      /* text */
+      --tech-white: #E4E8ED;
+      --steel: #94A0AE;
+      --gunmetal: #7A8494;
+      --gunmetal-dim: #5A6573;
+
+      /* type */
+      --font-sans: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    html { background: var(--forge-black); }
+    body {
+      font-family: var(--font-sans);
+      background: var(--forge-black);
+      color: var(--tech-white);
+      font-size: 14px;
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      min-height: 100vh;
+    }
+    .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+      background: #222630;
+      border-radius: 6px;
+      border: 2px solid var(--forge-black);
+    }
+    ::-webkit-scrollbar-thumb:hover { background: #303642; }
+
+    /* focus */
+    :focus-visible {
+      outline: 2px solid var(--forge-teal);
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+
+    /* selection */
+    ::selection { background: rgba(45, 212, 191, 0.3); color: var(--tech-white); }
+
+    /* utility */
+    .lbl-eyebrow {
+      font-size: 10.5px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--gunmetal);
+    }
+
+    /* dotted background for "industrial" texture, very subtle */
+    .industrial-grid {
+      background-image: radial-gradient(circle, rgba(148, 160, 174, 0.05) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+
+    /* keyframes */
+    @keyframes pulse-soft { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+    @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+
+    .pulse-soft { animation: pulse-soft 2.4s ease-in-out infinite; }
+
+    /* drawer */
+    .drawer-enter { transform: translateX(100%); }
+    .drawer-active { transform: translateX(0); transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1); }
+    .drawer-backdrop { opacity: 0; transition: opacity 240ms ease; }
+    .drawer-backdrop-active { opacity: 1; }
+
+    /* button base */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 7px;
+      border: 1px solid var(--border-strong);
+      background: var(--surf-card);
+      color: var(--tech-white);
+      font: 500 13px/1 var(--font-sans);
+      cursor: pointer;
+      transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+      user-select: none;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .btn:hover { background: var(--surf-hover); border-color: var(--border-bright); }
+    .btn-primary {
+      background: var(--forge-teal);
+      border-color: var(--forge-teal);
+      color: #0A1014;
+    }
+    .btn-primary:hover { background: var(--deep-teal); border-color: var(--deep-teal); }
+    .btn-ghost { background: transparent; border-color: transparent; color: var(--steel); }
+    .btn-ghost:hover { background: var(--surf-hover); color: var(--tech-white); border-color: transparent; }
+    .btn-sm { padding: 6px 9px; font-size: 12px; }
+    .btn-icon { padding: 7px; }
+
+    /* chip */
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: transparent;
+      font: 500 11.5px/1.2 var(--font-sans);
+      color: var(--steel);
+      cursor: pointer;
+      user-select: none;
+      transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+    }
+    .chip:hover { background: var(--surf-hover); color: var(--tech-white); }
+    .chip-active {
+      background: rgba(59, 130, 246, 0.12);
+      border-color: rgba(59, 130, 246, 0.55);
+      color: #93C5FD;
+    }
+
+    /* input */
+    .input {
+      background: var(--surf-card);
+      border: 1px solid var(--border-strong);
+      color: var(--tech-white);
+      padding: 8px 11px;
+      border-radius: 7px;
+      font: 400 13px var(--font-sans);
+      width: 100%;
+      transition: border-color 120ms ease, background 120ms ease;
+    }
+    .input::placeholder { color: var(--gunmetal-dim); }
+    .input:focus { outline: none; border-color: var(--forge-teal); background: var(--surf-card-2); }
+
+    /* table */
+    .tbl { width: 100%; border-collapse: collapse; }
+    .tbl th {
+      text-align: left;
+      font: 600 10.5px/1.2 var(--font-sans);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--gunmetal);
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: var(--forge-black);
+      z-index: 1;
+    }
+    .tbl td {
+      padding: 12px;
+      border-bottom: 1px solid var(--border-soft);
+      font-size: 13px;
+      color: var(--tech-white);
+      vertical-align: middle;
+    }
+    .tbl tr:hover td { background: rgba(26, 32, 48, 0.55); }
+
+    /* card */
+    .card {
+      background: var(--surf-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+    }
+    .card-interactive { cursor: pointer; }
+    .card-interactive:hover {
+      border-color: var(--border-bright);
+      background: var(--surf-card-2);
+    }
+
+    /* sticky toolbar shadow when scrolled */
+    .toolbar-sticky {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: linear-gradient(180deg, var(--forge-black) 0%, var(--forge-black) 92%, rgba(15, 18, 25, 0) 100%);
+    }
+
+    /* keep the lucide-style strokes crisp */
+    svg { display: block; }
+    .icon { stroke-width: 2; stroke: currentColor; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* small responsive helpers */
+    .hide-xl { display: block; }
+    .show-xl { display: none; }
+    @media (min-width: 1280px) {
+      .hide-xl { display: none; }
+      .show-xl { display: block; }
+    }
+
+    #root { min-height: 100vh; }
+
+    /* persistent loader before React mounts */
+    .boot {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      color: var(--gunmetal);
+      font: 500 12px var(--font-mono);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div class="boot">cargando configuración…</div>
+  </div>
+
+  <!-- React 18 pinned -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="icons.jsx"></script>
+  <script type="text/babel" src="data.jsx"></script>
+  <script type="text/babel" src="sidebar.jsx"></script>
+  <script type="text/babel" src="components.jsx"></script>
+  <script type="text/babel" src="settings.jsx"></script>
+</body>
+</html>
