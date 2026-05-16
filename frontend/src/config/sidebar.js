@@ -19,12 +19,10 @@ import {
   FileCode,
   FileEdit,
   FileText,
-  History,
   Layers,
   LayoutDashboard,
   ListOrdered,
   Package,
-  PackageOpen,
   Palette,
   Printer,
   Settings,
@@ -33,7 +31,6 @@ import {
   User,
   Users,
   Wrench,
-  Zap,
 } from 'lucide-react';
 
 /**
@@ -69,7 +66,6 @@ export const SIDEBAR_APPS = [
       { to: '/cost/v2',            icon: FileText,   label: 'Cotizaciones', end: true },
       { to: '/cost/calculator/v2', icon: Calculator, label: 'Calcular pieza' },
       { to: '/cost/manual',        icon: FileEdit,   label: 'Nueva cotización' },
-      { to: '/cost/calculator',    icon: Calculator, label: 'Calculadora completa' },
       { to: '/cost/printers',      icon: Printer,    label: 'Impresoras' },
       { to: '/cost/settings',      icon: Settings,   label: 'Tarifa & ajustes' },
     ],
@@ -82,15 +78,10 @@ export const SIDEBAR_APPS = [
     activeClass: 'bg-blue-500/15 text-blue-400',
     badgeKey: 'lowStock',
     items: [
-      { to: '/inventory/v2',          icon: Layers,         label: 'Vista nueva', end: true },
-      { to: '/inventory/stock',       icon: PackageOpen,    label: 'Stock (vista clásica)' },
-      { to: '/inventory/filaments',   icon: Layers,         label: 'Filamentos (clásica)' },
-      { to: '/inventory/supplies',    icon: Package,        label: 'Insumos (clásica)' },
-      { to: '/inventory/tools',       icon: Wrench,         label: 'Herramientas (clásica)' },
-      { to: '/inventory/consumables', icon: Zap,            label: 'Consumibles (clásica)' },
-      { to: '/inventory/purchases',   icon: ShoppingCart,   label: 'Pedidos' },
-      { to: '/inventory/prints',      icon: Printer,        label: 'Disponible para venta' },
-      { to: '/inventory/io',          icon: ArrowLeftRight, label: 'Importar / Exportar' },
+      { to: '/inventory/v2',        icon: Layers,         label: 'Resumen', end: true },
+      { to: '/inventory/purchases', icon: ShoppingCart,   label: 'Pedidos' },
+      { to: '/inventory/prints',    icon: Printer,        label: 'Disponible para venta' },
+      { to: '/inventory/io',        icon: ArrowLeftRight, label: 'Importar / Exportar' },
     ],
   },
   {
@@ -100,9 +91,8 @@ export const SIDEBAR_APPS = [
     color: '#F59E0B',
     activeClass: 'bg-amber-400/15 text-amber-400',
     items: [
-      { to: '/slicer/v2',      icon: Layers,  label: 'Historial', end: true },
-      { to: '/slicer/upload',  icon: Upload,  label: 'Subir modelo' },
-      { to: '/slicer/history', icon: History, label: 'Historial (clásico)' },
+      { to: '/slicer/v2',     icon: Layers, label: 'Historial', end: true },
+      { to: '/slicer/upload', icon: Upload, label: 'Subir modelo' },
     ],
   },
   {
@@ -113,10 +103,9 @@ export const SIDEBAR_APPS = [
     activeClass: 'bg-violet-500/15 text-violet-400',
     badgeKey: 'overdueMaintenance',
     items: [
-      { to: '/maintenance/v2',        icon: LayoutDashboard, label: 'Dashboard', end: true },
-      { to: '/maintenance/dashboard', icon: LayoutDashboard, label: 'Dashboard (clásico)' },
-      { to: '/maintenance/logs',      icon: ClipboardList,   label: 'Historial logs' },
-      { to: '/maintenance/printers',  icon: Printer,         label: 'Impresoras' },
+      { to: '/maintenance/v2',       icon: LayoutDashboard, label: 'Dashboard', end: true },
+      { to: '/maintenance/logs',     icon: ClipboardList,   label: 'Historial logs' },
+      { to: '/maintenance/printers', icon: Printer,         label: 'Impresoras' },
     ],
   },
   {
@@ -129,7 +118,6 @@ export const SIDEBAR_APPS = [
     items: [
       { to: '/queue/v2',      icon: ListOrdered, label: 'Cola activa', end: true },
       { to: '/queue/history', icon: Clock,       label: 'Historial' },
-      { to: '/queue/legacy',  icon: ListOrdered, label: 'Vista clásica' },
     ],
   },
   {
@@ -140,7 +128,6 @@ export const SIDEBAR_APPS = [
     activeClass: 'bg-rose-500/15 text-rose-400',
     items: [
       { to: '/vault',        icon: Archive, label: 'Galería', end: true },
-      { to: '/vault/legacy', icon: Archive, label: 'Galería (clásica)' },
       { to: '/vault/upload', icon: Upload,  label: 'Subir modelo', adminOnly: true },
     ],
   },
