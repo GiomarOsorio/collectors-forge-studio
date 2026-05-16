@@ -501,7 +501,7 @@ function FilamentTable({ items, onRowClick }) {
 
 // ─── Drawer body ─────────────────────────────────────────────────────────────
 
-function FilamentDrawerBody({ f }) {
+function FilamentDrawerBody({ f, onReassign }) {
   if (!f) return null;
   const level = stockLevel(f);
   const p = fillPercent(f);
@@ -593,6 +593,23 @@ function FilamentDrawerBody({ f }) {
         </Card>
       )}
 
+      {/* Acciones inline (1:1 design Claude — antes del Historial, no en footer) */}
+      <div className="flex gap-2">
+        <Link
+          to="/inventory/purchases?new=1"
+          className="btn btn-primary btn-sm flex-1 justify-center"
+        >
+          <ShoppingCart size={13} /> Agregar a compras
+        </Link>
+        <button
+          type="button"
+          onClick={() => onReassign?.(f)}
+          className="btn btn-sm flex-1 justify-center"
+        >
+          <RefreshCw size={13} /> Reasignar batch
+        </button>
+      </div>
+
       {/* Historial reciente — placeholder hasta endpoint real (quotes/queue) */}
       <div>
         <div className="lbl-eyebrow mb-2 inline-flex items-center gap-1.5">
@@ -613,31 +630,6 @@ function FilamentDrawerBody({ f }) {
         )}
       </div>
     </div>
-  );
-}
-
-/**
- * Footer del FilamentDetailDrawer: acciones primarias + secundarias.
- * Se renderiza dentro del slot `footer` del primitive DetailDrawer v2.
- */
-function FilamentDrawerFooter({ f, onReassign }) {
-  if (!f) return null;
-  return (
-    <>
-      <Link
-        to="/inventory/purchases?new=1"
-        className="btn btn-primary btn-sm flex-1 justify-center"
-      >
-        <ShoppingCart size={13} /> Agregar a compras
-      </Link>
-      <button
-        type="button"
-        onClick={() => onReassign?.(f)}
-        className="btn btn-sm flex-1 justify-center"
-      >
-        <RefreshCw size={13} /> Reasignar batch
-      </button>
-    </>
   );
 }
 
@@ -2308,15 +2300,10 @@ export default function InventoryPage() {
               : undefined
           }
         >
-          <FilamentDrawerBody f={selected} />
-          {selected && (
-            <div className="px-5 pt-3 pb-5 border-t border-[var(--color-border-soft)] flex gap-2 sticky bottom-0 bg-[var(--color-surf-sidebar)]">
-              <FilamentDrawerFooter
-                f={selected}
-                onReassign={() => toast('Reasignar batch llega pronto.')}
-              />
-            </div>
-          )}
+          <FilamentDrawerBody
+            f={selected}
+            onReassign={() => toast('Reasignar batch llega pronto.')}
+          />
         </MobileSheet>
         <MobileSheet
           open={!!selectedItem}
@@ -2640,16 +2627,11 @@ export default function InventoryPage() {
               }
             : undefined
         }
-        footer={
-          selected && (
-            <FilamentDrawerFooter
-              f={selected}
-              onReassign={() => toast('Reasignar batch llega pronto.')}
-            />
-          )
-        }
       >
-        <FilamentDrawerBody f={selected} />
+        <FilamentDrawerBody
+          f={selected}
+          onReassign={() => toast('Reasignar batch llega pronto.')}
+        />
       </DetailDrawer>
       <DetailDrawer
         open={!!selectedItem}
