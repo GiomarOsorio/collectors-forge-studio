@@ -154,7 +154,15 @@ loginctl enable-linger "$(whoami)" 2>/dev/null || true
 
 echo "→ Construyendo imágenes de la aplicación..."
 podman build -t cfs-backend -f "$DEPLOY_PATH/backend/Containerfile" "$DEPLOY_PATH/backend/"
-podman build -t cfs-frontend -f "$DEPLOY_PATH/frontend/Containerfile" "$DEPLOY_PATH/frontend/"
+
+# Frontend: --no-cache obligatorio. El cache layer de `COPY pkg+lock`
+# se queda pegado a un node_modules viejo aunque cambies la versión en
+# package.json — terminó corrompiendo varios deploys (`@dnd-kit/core`
+# no resuelve en vite build aunque `npm ls` cacheado diga que está).
+# El frontend es chico, el rebuild son ~30s. No vale la pena el cache.
+echo "→ Frontend con --no-cache (evita layer cache corrupto de npm ci)..."
+podman build --no-cache -t cfs-frontend -f "$DEPLOY_PATH/frontend/Containerfile" "$DEPLOY_PATH/frontend/"
+
 podman build -t cfs-slicer -f "$DEPLOY_PATH/slicer/Containerfile" "$DEPLOY_PATH/slicer/"
 podman build -t cfs-tracker -f "$DEPLOY_PATH/tracker/Containerfile" "$DEPLOY_PATH/tracker/"
 
