@@ -10,8 +10,8 @@ import { expect, test } from '@playwright/test';
 import { loginAsDev } from './helpers/auth.js';
 
 test.describe('Inventory mobile — Claude Design fidelity', () => {
-  test.skip(({ browserName }, testInfo) => testInfo.project.name !== 'mobile-iphone12',
-    'Solo proyecto mobile');
+  // En describe block, test.skip recibe sólo el `testInfo` como arg.
+  test.skip(({ project }) => project.name !== 'mobile-iphone12', 'Solo proyecto mobile');
 
   test.beforeEach(async ({ page }) => {
     await loginAsDev(page);
