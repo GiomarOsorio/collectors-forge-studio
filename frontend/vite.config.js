@@ -36,11 +36,21 @@ export default defineConfig({
         manualChunks: {
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
           'vendor-three': ['three', '@react-three/fiber', '@react-three/drei'],
+          // `@dnd-kit/*` debe estar explícito en manualChunks. Sin esto
+          // el build en alpine (node 20) intermitentemente falla con
+          // "Rollup failed to resolve import @dnd-kit/core" pese a que
+          // npm ls + node require.resolve lo encuentran. Forzar el chunk
+          // hace que Rollup lo trate como vendor y resuelva 1ra pasada.
+          'vendor-dnd':   ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
           'vendor-ui':    ['lucide-react'],
           'vendor-misc':  ['axios', 'react-hot-toast'],
         },
       },
     },
+  },
+  // Pre-bundle @dnd-kit en dev también — defensivo, mantiene paridad.
+  optimizeDeps: {
+    include: ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
   },
   test: {
     environment: 'jsdom',
