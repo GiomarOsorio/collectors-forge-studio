@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import {
   Building2,
   CheckCircle2,
@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Card, KPI } from '../../components/ui';
+import MobileAppHeader from '../../components/MobileAppHeader';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { getCompany, getCompanyTemplates } from '../../services/api';
 
@@ -32,6 +33,7 @@ const ACCENT = '#6366F1';
 
 export default function CompanyPageV2() {
   const isMobile = useIsMobile();
+  const { openSidebar } = useOutletContext() || {};
   const [company, setCompany] = useState(null);
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -227,6 +229,13 @@ export default function CompanyPageV2() {
   if (isMobile) {
     return (
       <div className="flex flex-col pb-8">
+        <MobileAppHeader
+          appName="Compañía"
+          appIcon={Building2}
+          appAccent={ACCENT}
+          title="Resumen"
+          onMenu={() => openSidebar?.()}
+        />
         <div className="px-4 mt-3">
           <Card className="p-4 flex flex-col gap-2 industrial-grid">
             <span className="lbl-eyebrow">Compañía · estado</span>
