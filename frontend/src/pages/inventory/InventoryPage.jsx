@@ -1613,12 +1613,10 @@ export default function InventoryPage() {
     return (
       <div className="flex flex-col">
         <MobileInPageHeader tab={tab} count={counts[tab] ?? 0} />
-        {tab === 'filamentos' && (
-          <>
-            <MobileHeroStatus stats={stats} consumption14d={CONSUMPTION_PLACEHOLDER} />
-            <MobileMiniKPIs stats={stats} openPOs={openPOs} openPOsValue={openPOsValue} />
-          </>
-        )}
+        {/* Hero + mini KPIs visibles en TODOS los tabs — son indicadores
+            globales del inventario, no específicos del tab filamentos. */}
+        <MobileHeroStatus stats={stats} consumption14d={CONSUMPTION_PLACEHOLDER} />
+        <MobileMiniKPIs stats={stats} openPOs={openPOs} openPOsValue={openPOsValue} />
         <MobileTabs value={tab} onChange={setTab} counts={counts} />
 
         {tab === 'filamentos' ? (
