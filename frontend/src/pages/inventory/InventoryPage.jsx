@@ -35,7 +35,6 @@ import {
   History,
   List,
   MapPin,
-  Menu,
   Pencil,
   Plus,
   Scissors,
@@ -59,6 +58,7 @@ import {
   StatusPill,
   Swatch,
 } from '../../components/ui';
+import MobileAppHeader from '../../components/MobileAppHeader';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { getInventoryItems, getPurchaseOrders } from '../../services/api';
 import { MATERIALS, MATERIAL_ORDER } from '../../config/materials';
@@ -1093,68 +1093,6 @@ function PurchaseDrawerBody({ po }) {
 // Esta vista sólo renderiza el contenido específico del inventario.
 
 /**
- * Header in-page del mobile (replica `inventory-mobile.jsx::MobileHeader`):
- * hamburger ⇒ abre sidebar, eyebrow "Inventario" + título dinámico (label
- * del tab activo), search ⇒ overlay y bell ⇒ notificaciones (con dot amber).
- *
- * @param {Object} props
- * @param {string}   props.tab          - id del tab activo (filamentos/insumos/...)
- * @param {() => void} props.onMenu     - abre la sidebar mobile
- * @param {() => void} props.onSearch   - abre el overlay de búsqueda
- */
-function MobileInPageHeader({ tab, onMenu, onSearch }) {
-  const tabLabel = TABS.find((t) => t.id === tab)?.label || tab;
-  const iconBtnClass =
-    'w-9 h-9 rounded-lg border border-[var(--color-border)] inline-flex items-center justify-center text-tech-white bg-transparent shrink-0 active:bg-[var(--color-surf-hover)]';
-  return (
-    <div className="px-4 pt-1 pb-2.5 flex items-center gap-2.5">
-      <button
-        type="button"
-        onClick={onMenu}
-        aria-label="Menú"
-        className={iconBtnClass}
-      >
-        <Menu size={18} />
-      </button>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span
-            className="inline-flex items-center justify-center w-[18px] h-[18px] rounded shrink-0"
-            style={{ background: 'rgba(59, 130, 246, 0.14)', color: '#3B82F6' }}
-          >
-            <Box size={10} />
-          </span>
-          <span className="text-[11px] text-gunmetal tracking-wide">Inventario</span>
-        </div>
-        <h1 className="text-[18px] font-semibold text-tech-white tracking-tight leading-tight mt-px capitalize">
-          {tabLabel}
-        </h1>
-      </div>
-      <button
-        type="button"
-        onClick={onSearch}
-        aria-label="Buscar"
-        className={iconBtnClass}
-      >
-        <Search size={17} />
-      </button>
-      <button
-        type="button"
-        aria-label="Notificaciones"
-        className={`${iconBtnClass} relative`}
-      >
-        <Bell size={17} />
-        <span
-          aria-hidden="true"
-          className="absolute top-1.5 right-1.5 w-[7px] h-[7px] rounded-full bg-amber-400"
-          style={{ boxShadow: '0 0 0 2px var(--color-forge-black)' }}
-        />
-      </button>
-    </div>
-  );
-}
-
-/**
  * Overlay de búsqueda mobile (replica `inventory-mobile.jsx::SearchOverlay`).
  * Aparece flotando sobre el header y permite buscar por color/batch/ubicación.
  */
@@ -1681,8 +1619,11 @@ export default function InventoryPage() {
   if (isMobile) {
     return (
       <div className="flex flex-col">
-        <MobileInPageHeader
-          tab={tab}
+        <MobileAppHeader
+          appName="Inventario"
+          appIcon={Box}
+          appAccent="#3B82F6"
+          title={TABS.find((t) => t.id === tab)?.label || tab}
           onMenu={() => openSidebar?.()}
           onSearch={() => setSearchOpen(true)}
         />
