@@ -10,7 +10,7 @@
  */
 
 import { useEffect } from 'react';
-import { X } from 'lucide-react';
+import { Pencil, X } from 'lucide-react';
 
 /**
  * @param {Object} props
@@ -18,9 +18,10 @@ import { X } from 'lucide-react';
  * @param {() => void} props.onClose
  * @param {React.ReactNode} [props.title]
  * @param {('half'|'full')} [props.height='full']
+ * @param {(() => void)} [props.onEdit] - Si se provee, muestra un Pencil icon button antes del Close
  * @param {React.ReactNode} props.children
  */
-export default function MobileSheet({ open, onClose, title, height = 'full', children }) {
+export default function MobileSheet({ open, onClose, title, height = 'full', onEdit, children }) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => {
@@ -55,8 +56,18 @@ export default function MobileSheet({ open, onClose, title, height = 'full', chi
         <div className="flex items-center justify-center pt-2 pb-1 shrink-0">
           <span className="block w-10 h-1 rounded-full bg-[var(--color-border-strong)]" />
         </div>
-        <header className="flex items-center justify-between gap-3 px-4 pb-3 border-b border-[var(--color-border-soft)] shrink-0">
-          <h2 className="text-sm font-semibold text-tech-white truncate">{title}</h2>
+        <header className="flex items-center justify-between gap-2 px-4 pb-3 border-b border-[var(--color-border-soft)] shrink-0">
+          <h2 className="text-sm font-semibold text-tech-white truncate flex-1">{title}</h2>
+          {onEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="btn btn-ghost btn-icon"
+              aria-label="Editar"
+            >
+              <Pencil size={14} />
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}
