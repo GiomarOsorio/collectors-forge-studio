@@ -7,8 +7,12 @@
  * @module pages/StudioHomePage
  */
 
+import { Home } from 'lucide-react';
+import { useOutletContext } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Dashboard from '../components/Dashboard';
+import MobileAppHeader from '../components/MobileAppHeader';
+import { useIsMobile } from '../hooks/useMediaQuery';
 
 /**
  * Página de inicio del Studio con dashboard de widgets.
@@ -17,6 +21,28 @@ import Dashboard from '../components/Dashboard';
  */
 export default function StudioHomePage() {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
+  const { openSidebar } = useOutletContext() || {};
+
+  if (isMobile) {
+    return (
+      <div className="flex flex-col">
+        <MobileAppHeader
+          appName="Studio"
+          appIcon={Home}
+          appAccent="#2DD4BF"
+          title={`Hola${user?.username ? `, ${user.username}` : ''}`}
+          onMenu={() => openSidebar?.()}
+        />
+        <div className="px-4 mt-1">
+          <p className="text-steel text-[12.5px] leading-snug mb-3">
+            Estado del taller en vivo. Reordena, redimensiona u oculta los widgets a tu gusto.
+          </p>
+          <Dashboard />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto">

@@ -20,20 +20,28 @@ test.describe('Slicer — flujos críticos', () => {
     await expect(page.getByRole('button', { name: /historial/i }).first()).toBeVisible();
   });
 
-  test('tab Subir muestra 3 flow cards (.3mf/.gcode, STL, MakerWorld)', async ({ page }) => {
+  test('tab Subir muestra los 3 flujos (.3mf/.gcode, STL, MakerWorld)', async ({ page }) => {
     await page.goto('/slicer/v2');
     await page.getByRole('button', { name: /^subir$/i }).first().click();
     await expect(page.getByText(/\.3mf \/ \.gcode/i)).toBeVisible();
     await expect(page.getByText(/^STL$/)).toBeVisible();
-    await expect(page.getByText(/MakerWorld URL/i)).toBeVisible();
+    // En el nuevo SlicerUploadPanel el flujo MakerWorld aparece como un input
+    // + heading "Importar desde MakerWorld" (antes era una flow card aparte).
+    await expect(page.getByText(/MakerWorld/i).first()).toBeVisible();
   });
 
-  test('CTA "Subir modelo" del header navega al uploader', async ({ page }, testInfo) => {
+  test('CTA "Subir modelo" del header switchea al tab Subir (sin navegar)', async ({ page }, testInfo) => {
     // CTA del header solo en desktop. En mobile el equivalente es el FAB.
     test.skip(testInfo.project.name === 'mobile-iphone12', 'CTA solo en desktop');
     await page.goto('/slicer/v2');
     await page.waitForLoadState('networkidle');
-    const cta = page.getByRole('link', { name: /subir modelo/i }).first();
-    await expect(cta).toHaveAttribute('href', '/slicer/upload');
+    // Tras la limpieza de UI vieja, ya no es un <Link to="/slicer/upload"> —
+    // ahora es un <button> que hace setTab('subir') in-page.
+    const cta = page.getByRole('button', { name: /subir modelo/i }).first();
+    await expect(cta).toBeVisible();
+    await cta.click();
+    // El upload panel inline aparece (no hay navegación, sigue en /slicer/v2).
+    await expect(page).toHaveURL(/\/slicer\/v2$/);
+    await expect(page.getByText(/suelta tu modelo/i)).toBeVisible();
   });
 });
