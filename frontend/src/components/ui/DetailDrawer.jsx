@@ -49,16 +49,26 @@ export default function DetailDrawer({ open, onClose, title, eyebrow, footer, on
         }`}
         aria-hidden="true"
       />
-      {/* Panel */}
+      {/* Panel — grid layout para garantizar que header/body/footer
+          quedan en sus rows sin que el body pueda crecer y empujar al
+          footer fuera del viewport (problema reportado con flex). */}
       <aside
         role="dialog"
         aria-modal="true"
-        className={`fixed top-0 right-0 bottom-0 z-50 bg-[var(--color-surf-card)] border-l border-[var(--color-border)] shadow-2xl flex flex-col transition-transform duration-300 ease-out ${
+        className={`fixed top-0 right-0 bottom-0 z-50 bg-[var(--color-surf-card)] border-l border-[var(--color-border)] shadow-2xl transition-transform duration-300 ease-out ${
           open ? 'translate-x-0' : 'translate-x-full'
         }`}
-        style={{ width: '100%', maxWidth: width }}
+        style={{
+          width: '100%',
+          maxWidth: width,
+          display: 'grid',
+          gridTemplateRows: footer ? 'auto 1fr auto' : 'auto 1fr',
+        }}
       >
-        <header className="flex items-start gap-3 px-4 pt-3.5 pb-3 border-b border-[var(--color-border-soft)] shrink-0">
+        <header
+          className="flex items-start gap-3 px-4 pt-3.5 pb-3 border-b border-[var(--color-border-soft)]"
+          style={{ minHeight: 0 }}
+        >
           <div className="flex-1 min-w-0">
             {eyebrow && (
               <p className="mono text-[9.5px] text-gunmetal uppercase tracking-widest mb-1">
@@ -89,7 +99,7 @@ export default function DetailDrawer({ open, onClose, title, eyebrow, footer, on
           </button>
         </header>
         <div
-          className="flex-1 overflow-y-auto p-4"
+          className="overflow-y-auto p-4"
           style={{ minHeight: 0 }}
         >
           {children}
@@ -98,7 +108,6 @@ export default function DetailDrawer({ open, onClose, title, eyebrow, footer, on
           <footer
             className="flex items-center gap-2"
             style={{
-              flexShrink: 0,
               padding: '12px 16px',
               borderTop: '1px solid var(--color-border-soft)',
               background: 'var(--color-surf-card-2)',
