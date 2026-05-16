@@ -10,10 +10,11 @@ import { expect, test } from '@playwright/test';
 import { loginAsDev } from './helpers/auth.js';
 
 test.describe('Inventory mobile — Claude Design fidelity', () => {
-  // En describe block, test.skip recibe sólo el `testInfo` como arg.
-  test.skip(({ project }) => project.name !== 'mobile-iphone12', 'Solo proyecto mobile');
-
-  test.beforeEach(async ({ page }) => {
+  // Skip cuando no estamos en el proyecto `mobile-iphone12`. Playwright
+  // no expone `project` como fixture en test.skip(); hay que pedirlo via
+  // testInfo dentro del beforeEach.
+  test.beforeEach(async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile-iphone12', 'Solo proyecto mobile');
     await loginAsDev(page);
     await page.goto('/inventory/v2');
     await page.waitForLoadState('networkidle');
