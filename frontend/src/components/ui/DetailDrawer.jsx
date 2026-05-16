@@ -88,9 +88,23 @@ export default function DetailDrawer({ open, onClose, title, eyebrow, footer, on
             <X size={14} />
           </button>
         </header>
-        <div className="flex-1 overflow-y-auto p-4">{children}</div>
+        <div
+          className="flex-1 overflow-y-auto p-4"
+          style={{ minHeight: 0 }}
+        >
+          {children}
+        </div>
         {footer && (
-          <footer className="px-4 py-3 border-t border-[var(--color-border-soft)] bg-[var(--color-surf-card-2)] flex gap-2 shrink-0">
+          <footer
+            className="flex items-center gap-2"
+            style={{
+              flexShrink: 0,
+              padding: '12px 16px',
+              borderTop: '1px solid var(--color-border-soft)',
+              background: 'var(--color-surf-card-2)',
+              minHeight: 60,
+            }}
+          >
             {footer}
           </footer>
         )}
