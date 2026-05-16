@@ -91,8 +91,7 @@ export const SIDEBAR_APPS = [
     color: '#F59E0B',
     activeClass: 'bg-amber-400/15 text-amber-400',
     items: [
-      { to: '/slicer/v2',     icon: Layers, label: 'Historial', end: true },
-      { to: '/slicer/upload', icon: Upload, label: 'Subir modelo' },
+      { to: '/slicer/v2', icon: Layers, label: 'Slicer', end: true },
     ],
   },
   {
