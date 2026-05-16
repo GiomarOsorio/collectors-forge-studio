@@ -16,6 +16,13 @@ WORKDIR /app
 # código actual.
 COPY . .
 
+# CRÍTICO: borrar cualquier node_modules / dist / .vite que se haya
+# colado del host (.containerignore en podman ha mostrado ser
+# inconsistente — a veces COPY ignora exclusiones). Sin este rm,
+# `npm ci` puede dejar un layout corrupto donde npm ls dice OK pero
+# vite no encuentra los modules en el lookup path correcto.
+RUN rm -rf node_modules dist .vite
+
 # Print de la versión del package.json para confirmar que el COPY trajo
 # lo último (no un layer cacheado).
 RUN echo "── frontend package.json version ──" && \
@@ -29,9 +36,17 @@ RUN npm ci --ignore-scripts
 RUN npm ls @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities react-router-dom \
     || (echo "ERROR: deps faltantes tras npm ci." && exit 1)
 
-# Print explícito justo antes de build.
-RUN ls node_modules/@dnd-kit/core/dist/ 2>/dev/null | head -3 \
-    || (echo "ERROR: @dnd-kit/core/dist no existe físicamente." && exit 1)
+# Verifica que Node puede RESOLVER (no solo listar) @dnd-kit/core.
+# Si npm ls dice OK pero node no lo resuelve, el path/exports del
+# package está roto.
+RUN node -e "console.log('resolved:', require.resolve('@dnd-kit/core'))" \
+    || (echo "ERROR: Node no resuelve @dnd-kit/core." && exit 1)
+
+# Print de los archivos del dist + del package.json del module para
+# descartar issues con exports/main.
+RUN ls node_modules/@dnd-kit/core/dist/ | head -5 && \
+    echo "── @dnd-kit/core package.json exports/main: ──" && \
+    cat node_modules/@dnd-kit/core/package.json | head -50
 
 RUN npm run build
 
