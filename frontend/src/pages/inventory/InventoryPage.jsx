@@ -35,6 +35,7 @@ import {
   History,
   List,
   MapPin,
+  Pencil,
   Plus,
   RefreshCw,
   Scissors,
@@ -1488,6 +1489,12 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
     setForm(mode === 'edit' && initial ? filamentToForm(initial) : emptyFilamentForm());
     setErrors({});
   }, [open, mode, initial]);
+
+  // Guard temprano: si no está abierto, no rendereamos nada — evita que
+  // un crash dentro del form (ej. ícono undefined) deje DOM zombi visible
+  // en la pantalla y previene side-effects de wrappers que igual hacen
+  // body scroll lock con open=false.
+  if (!open) return null;
 
   const update = (k, v) => setForm((cur) => ({ ...cur, [k]: v }));
 
