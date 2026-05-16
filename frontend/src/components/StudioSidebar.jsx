@@ -1,12 +1,14 @@
 /**
- * @file Sidebar unificada de Collector's Forge Studio.
+ * @file Sidebar unificada de Collector's Forge Studio (port Claude Design v2).
  *
- * Reemplaza los 8 layouts por app (CostLayout, InventoryLayout, etc.) con una
- * única sidebar global que muestra todas las apps como secciones colapsables,
- * con drag&drop para reordenar y badges en vivo para cola/stock/mantenimiento.
- *
- * Inspirado en `bambuddy/frontend/src/components/Layout.tsx` con la paleta
- * `forge-*` de CFS (sin `bambu-green`).
+ * Replica el `sidebar.jsx` del design Claude:
+ *  - Brand header (logo + título)
+ *  - Search visual (⌘K placeholder)
+ *  - APPS section: lista FLAT (sin dropdown por app) con drag&drop para
+ *    reordenar. Click en el app navega a su ruta principal.
+ *  - Sección SECUNDARIA: muestra inline los sub-items del app activo
+ *    (eyebrow = nombre del app, sub-items con count badge)
+ *  - Footer: avatar + username + rol·ciudad + gear ⚙️ (Settings) + LogOut
  *
  * @module components/StudioSidebar
  */
@@ -27,131 +29,96 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import {
-  ChevronDown,
-  ChevronRight,
-  GripVertical,
-  LogOut,
-  X,
-} from 'lucide-react';
+import { GripVertical, LogOut, Search, Settings, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useBadges } from '../hooks/useBadges';
 import { SETTINGS_APP, SIDEBAR_APPS, getActiveApp } from '../config/sidebar';
 
 const ORDER_STORAGE_KEY = 'cfs.sidebar.order';
-const EXPANDED_STORAGE_KEY = 'cfs.sidebar.expanded';
 
 /**
- * Pinta un badge numérico circular en la esquina del ícono del app.
+ * Resuelve la ruta principal de un app (primer item del array).
  *
- * @param {{ count: number }} props
- * @returns {JSX.Element|null}
+ * @param {{ items: Array<{ to: string }> }} app
+ * @returns {string}
  */
-function Badge({ count }) {
+function appHomeRoute(app) {
+  return app?.items?.[0]?.to || `/${app?.id || ''}`;
+}
+
+/**
+ * Badge numérico mono compacto al lado del label de un app.
+ *
+ * @param {{ count: number, tone?: 'warn'|'info' }} props
+ */
+function AppBadge({ count, tone = 'warn' }) {
   if (!count) return null;
+  const palette =
+    tone === 'warn'
+      ? { bg: 'rgba(251, 191, 36, 0.14)', fg: '#FBBF24', border: 'rgba(251, 191, 36, 0.25)' }
+      : { bg: 'rgba(45, 212, 191, 0.14)', fg: '#2DD4BF', border: 'rgba(45, 212, 191, 0.25)' };
   return (
-    <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-bold rounded-full bg-rose-500 text-white border-2 border-[#0A0E16]">
+    <span
+      className="mono text-[10px] font-semibold px-1.5 rounded-full border whitespace-nowrap shrink-0"
+      style={{ background: palette.bg, color: palette.fg, borderColor: palette.border }}
+    >
       {count > 99 ? '99+' : count}
     </span>
   );
 }
 
 /**
- * Subitems del app (rutas internas tipo /cost/calculator).
- *
- * @param {{ items: Array, isAdmin: boolean, onNavigate: () => void, activeClass: string }} props
- * @returns {JSX.Element}
+ * Fila de app (flat, draggable). Click navega a la ruta principal del app.
+ * Aplica accent left-bar cuando está activo.
  */
-function AppItems({ items, isAdmin, onNavigate, activeClass }) {
-  return (
-    <ul className="ml-7 mt-1 mb-2 space-y-0.5 border-l border-[#222630] pl-3">
-      {items
-        .filter((item) => !item.adminOnly || isAdmin)
-        .map((item) => {
-          const Icon = item.icon;
-          return (
-            <li key={item.to}>
-              <NavLink
-                to={item.to}
-                end={item.end}
-                onClick={onNavigate}
-                className={({ isActive }) =>
-                  `flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
-                    isActive
-                      ? `${activeClass} font-medium`
-                      : 'text-steel hover:bg-[#222630] hover:text-tech-white'
-                  }`
-                }
-              >
-                <Icon size={15} className="shrink-0" />
-                <span className="truncate">{item.label}</span>
-              </NavLink>
-            </li>
-          );
-        })}
-    </ul>
-  );
-}
-
-/**
- * Cabecera + items de una app dentro de la sidebar.
- *
- * @param {{ app: any, expanded: boolean, onToggle: () => void, badgeCount: number, isAdmin: boolean, onNavigate: () => void, dragHandle?: object }} props
- * @returns {JSX.Element}
- */
-function AppSection({ app, expanded, onToggle, badgeCount, isAdmin, onNavigate, dragHandle }) {
+function AppRow({ app, active, badgeCount, dragHandle, onNavigate }) {
   const Icon = app.icon;
   return (
-    <div className="group">
-      <div className="flex items-center gap-0.5">
-        {dragHandle && (
-          <button
-            {...dragHandle}
-            type="button"
-            className="p-1 text-gunmetal opacity-0 group-hover:opacity-60 hover:opacity-100 cursor-grab active:cursor-grabbing"
-            aria-label={`Reordenar ${app.name}`}
-            title="Arrastrar para reordenar"
-          >
-            <GripVertical size={14} />
-          </button>
-        )}
+    <div className="group flex items-center gap-0.5">
+      {dragHandle && (
         <button
+          {...dragHandle}
           type="button"
-          onClick={onToggle}
-          className="flex-1 flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#222630] transition-colors text-left"
-          aria-expanded={expanded}
+          className="p-1 text-gunmetal-dim opacity-0 group-hover:opacity-60 hover:opacity-100 cursor-grab active:cursor-grabbing shrink-0"
+          aria-label={`Reordenar ${app.name}`}
+          title="Arrastrar para reordenar"
         >
-          <div className="relative shrink-0">
-            <Icon size={20} style={{ color: app.color }} />
-            <Badge count={badgeCount} />
-          </div>
-          <span className="flex-1 text-sm font-medium text-tech-white truncate">{app.name}</span>
-          {expanded ? (
-            <ChevronDown size={16} className="text-gunmetal shrink-0" />
-          ) : (
-            <ChevronRight size={16} className="text-gunmetal shrink-0" />
-          )}
+          <GripVertical size={14} />
         </button>
-      </div>
-      {expanded && (
-        <AppItems
-          items={app.items}
-          isAdmin={isAdmin}
-          onNavigate={onNavigate}
-          activeClass={app.activeClass}
-        />
       )}
+      <NavLink
+        to={appHomeRoute(app)}
+        onClick={onNavigate}
+        className={`relative flex-1 flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-colors border ${
+          active
+            ? 'bg-blue-500/8 border-blue-500/22 text-tech-white'
+            : 'bg-transparent border-transparent text-steel hover:bg-[#1A2030] hover:text-tech-white'
+        }`}
+        style={
+          active
+            ? { background: `color-mix(in oklab, ${app.color} 8%, transparent)`, borderColor: `color-mix(in oklab, ${app.color} 22%, transparent)` }
+            : undefined
+        }
+      >
+        {active && (
+          <span
+            aria-hidden="true"
+            className="absolute -left-px top-1.5 bottom-1.5 w-0.5 rounded-sm"
+            style={{ background: app.color }}
+          />
+        )}
+        <Icon size={16} style={{ color: app.color }} className="shrink-0" />
+        <span className="flex-1 truncate text-left">{app.name}</span>
+        <AppBadge count={badgeCount} tone={app.badgeKey === 'pendingQueue' ? 'info' : 'warn'} />
+      </NavLink>
     </div>
   );
 }
 
 /**
- * Wrapper sortable de @dnd-kit para una sección de app.
- *
- * @param {{ id: string, children: (handleProps: object) => React.ReactNode }} props
- * @returns {JSX.Element}
+ * Wrapper sortable @dnd-kit.
  */
-function SortableSection({ id, children }) {
+function SortableAppRow({ id, children }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -166,11 +133,7 @@ function SortableSection({ id, children }) {
 }
 
 /**
- * Lee y normaliza el orden guardado de las apps, asegurando que incluya todos
- * los `validIds` (ignorando obsoletos y agregando los nuevos al final).
- *
- * @param {Set<string>} validIds
- * @returns {string[]}
+ * Lee y normaliza el orden de apps guardado en localStorage.
  */
 function loadOrder(validIds) {
   try {
@@ -179,38 +142,65 @@ function loadOrder(validIds) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
         const filtered = parsed.filter((id) => validIds.has(id));
-        for (const id of validIds) {
-          if (!filtered.includes(id)) filtered.push(id);
-        }
+        for (const id of validIds) if (!filtered.includes(id)) filtered.push(id);
         return filtered;
       }
     }
   } catch {
-    /* fallback debajo */
+    /* fallback */
   }
   return Array.from(validIds);
 }
 
 /**
- * Lee el mapa de secciones expandidas (`{ [appId]: boolean }`).
- *
- * @returns {Record<string, boolean>}
+ * Sección secundaria — muestra los sub-items del app actualmente activo.
+ * Usa el `app.color` como accent para los counts. Si no hay app activa
+ * (ej. en Studio Home `/`) no se renderiza nada.
  */
-function loadExpanded() {
-  try {
-    const raw = localStorage.getItem(EXPANDED_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') return parsed;
-    }
-  } catch {
-    /* nada */
-  }
-  return {};
+function ActiveAppSection({ app, isAdmin, onNavigate }) {
+  if (!app) return null;
+  const items = app.items.filter((it) => !it.adminOnly || isAdmin);
+  if (!items.length) return null;
+  return (
+    <div className="mt-4 px-2">
+      <div className="px-2 pb-2 flex items-center gap-1.5">
+        <span
+          className="lbl-eyebrow text-[10px] tracking-widest"
+          style={{ color: 'var(--color-gunmetal-dim)' }}
+        >
+          {app.name}
+        </span>
+      </div>
+      <ul className="flex flex-col gap-0.5">
+        {items.map((item) => {
+          const Icon = item.icon;
+          return (
+            <li key={item.to}>
+              <NavLink
+                to={item.to}
+                end={item.end}
+                onClick={onNavigate}
+                className={({ isActive }) =>
+                  `flex items-center gap-2 px-2.5 py-1.5 rounded-md text-[12.5px] transition-colors ${
+                    isActive
+                      ? 'bg-[#1A2030] text-tech-white'
+                      : 'text-steel hover:bg-[#1A2030] hover:text-tech-white'
+                  }`
+                }
+              >
+                <Icon size={13} style={{ color: app.color }} className="shrink-0 opacity-80" />
+                <span className="flex-1 truncate">{item.label}</span>
+              </NavLink>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
 }
 
 /**
- * Sidebar global de Collector's Forge Studio.
+ * Sidebar global de Collector's Forge Studio (rediseñada Claude Design v2).
  *
  * @param {{ open: boolean, onClose: () => void }} props
  *   open  — visibilidad del drawer en mobile (xl:siempre visible).
@@ -231,9 +221,8 @@ export default function StudioSidebar({ open, onClose }) {
   const validIds = useMemo(() => new Set(visibleApps.map((a) => a.id)), [visibleApps]);
 
   const [order, setOrder] = useState(() => loadOrder(validIds));
-  const [expanded, setExpanded] = useState(() => loadExpanded());
 
-  // Re-sincronizar orden si cambian las apps visibles (login admin/operator).
+  // Resync orden si cambia el set de apps visibles (login admin/operator).
   useEffect(() => {
     setOrder((prev) => {
       const filtered = prev.filter((id) => validIds.has(id));
@@ -242,22 +231,9 @@ export default function StudioSidebar({ open, onClose }) {
     });
   }, [validIds]);
 
-  // Persistir orden y secciones expandidas.
   useEffect(() => {
     localStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(order));
   }, [order]);
-  useEffect(() => {
-    localStorage.setItem(EXPANDED_STORAGE_KEY, JSON.stringify(expanded));
-  }, [expanded]);
-
-  // Auto-expandir la app activa.
-  useEffect(() => {
-    const active = getActiveApp(location.pathname);
-    if (active && !expanded[active.id]) {
-      setExpanded((prev) => ({ ...prev, [active.id]: true }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -269,9 +245,6 @@ export default function StudioSidebar({ open, onClose }) {
     setOrder((prev) => arrayMove(prev, prev.indexOf(active.id), prev.indexOf(over.id)));
   };
 
-  const toggle = (id) =>
-    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
-
   const handleLogout = () => {
     logout();
     navigate('/login');
@@ -281,7 +254,13 @@ export default function StudioSidebar({ open, onClose }) {
     .map((id) => visibleApps.find((a) => a.id === id))
     .filter(Boolean);
 
-  const settingsExpanded = !!expanded[SETTINGS_APP.id];
+  // App activa = primer app cuya ruta hace match con location.pathname.
+  // Settings se trata como app secundaria solo si estamos en /settings/*.
+  const activeApp = useMemo(() => {
+    const fromHelper = getActiveApp(location.pathname);
+    if (fromHelper) return fromHelper;
+    return null;
+  }, [location.pathname]);
 
   return (
     <>
@@ -295,27 +274,29 @@ export default function StudioSidebar({ open, onClose }) {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#0A0E16] text-tech-white border-r border-[#222630] flex flex-col transition-transform duration-300 ${
+        className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#0A0E16] text-tech-white border-r border-[#1C2230] flex flex-col transition-transform duration-300 ${
           open ? 'translate-x-0' : '-translate-x-full'
         } lg:translate-x-0`}
       >
-        {/* Header con logo */}
-        <div className="px-4 py-4 border-b border-[#222630] flex items-center justify-between gap-2">
+        {/* Brand */}
+        <div className="px-3.5 py-3.5 border-b border-[#1C2230] flex items-center justify-between gap-2">
           <Link
             to="/"
             onClick={onClose}
-            className="flex items-center gap-3 min-w-0 hover:opacity-80 transition-opacity group"
+            className="flex items-center gap-2.5 min-w-0 hover:opacity-90 transition-opacity group flex-1"
           >
             <img
               src="/logo.png"
               alt="Collector's Forge"
-              className="h-9 w-9 object-contain shrink-0 group-hover:scale-105 transition-transform"
+              className="h-7 w-7 object-contain shrink-0 group-hover:scale-105 transition-transform"
             />
-            <div className="min-w-0">
-              <p className="text-[10px] font-medium text-gunmetal leading-none uppercase tracking-widest">
+            <div className="min-w-0 flex flex-col leading-tight">
+              <span className="text-[13px] font-semibold text-tech-white truncate">
                 Collector's Forge
-              </p>
-              <h1 className="text-base font-bold text-tech-white leading-tight truncate">Studio</h1>
+              </span>
+              <span className="mono text-[10px] text-gunmetal-dim tracking-wider">
+                STUDIO · v0.4
+              </span>
             </div>
           </Link>
           <button
@@ -324,68 +305,109 @@ export default function StudioSidebar({ open, onClose }) {
             className="p-1 text-gunmetal hover:text-tech-white lg:hidden"
             aria-label="Cerrar menú"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
-        {/* Navegación */}
-        <nav className="flex-1 overflow-y-auto p-2">
+        {/* Search (visual, ⌘K placeholder) */}
+        <div className="px-3 py-2.5">
+          <div
+            className="flex items-center gap-2 px-2.5 py-1.5 rounded-md border text-gunmetal-dim"
+            style={{ background: '#0F1219', borderColor: '#1C2230' }}
+          >
+            <Search size={13} />
+            <span className="flex-1 text-xs">Buscar…</span>
+            <span
+              className="mono text-[10px] px-1 rounded-sm border"
+              style={{ borderColor: '#1C2230' }}
+            >
+              ⌘K
+            </span>
+          </div>
+        </div>
+
+        {/* Apps + secondary (active app items) */}
+        <nav className="flex-1 overflow-y-auto px-2 pt-1 pb-2">
+          {/* APPS eyebrow */}
+          <div className="px-2 pb-1.5 flex items-center gap-1.5">
+            <span
+              className="lbl-eyebrow text-[10px] tracking-widest"
+              style={{ color: 'var(--color-gunmetal-dim)' }}
+            >
+              Apps
+            </span>
+          </div>
+
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={order} strategy={verticalListSortingStrategy}>
-              <ul className="space-y-1">
+              <ul className="flex flex-col gap-0.5">
                 {orderedApps.map((app) => (
-                  <SortableSection key={app.id} id={app.id}>
+                  <SortableAppRow key={app.id} id={app.id}>
                     {(handleProps) => (
-                      <AppSection
+                      <AppRow
                         app={app}
-                        expanded={!!expanded[app.id]}
-                        onToggle={() => toggle(app.id)}
+                        active={activeApp?.id === app.id}
                         badgeCount={app.badgeKey ? badges[app.badgeKey] || 0 : 0}
-                        isAdmin={isAdmin}
-                        onNavigate={onClose}
                         dragHandle={handleProps}
+                        onNavigate={onClose}
                       />
                     )}
-                  </SortableSection>
+                  </SortableAppRow>
                 ))}
               </ul>
             </SortableContext>
           </DndContext>
 
-          {/* Settings — fija al final, sin drag */}
-          <div className="mt-3 pt-3 border-t border-[#222630]">
-            <AppSection
-              app={SETTINGS_APP}
-              expanded={settingsExpanded}
-              onToggle={() => toggle(SETTINGS_APP.id)}
-              badgeCount={0}
-              isAdmin={isAdmin}
-              onNavigate={onClose}
-            />
-          </div>
+          {/* Secondary section — sub-items del app activo */}
+          <ActiveAppSection app={activeApp} isAdmin={isAdmin} onNavigate={onClose} />
         </nav>
 
-        {/* Footer: usuario + logout */}
-        <div className="p-3 border-t border-[#222630] flex items-center justify-between gap-2">
+        {/* Footer: avatar + user + Settings ⚙️ + Logout */}
+        <div className="px-3 py-2.5 border-t border-[#1C2230] flex items-center gap-2.5">
+          <div
+            className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-semibold text-tech-white shrink-0 border"
+            style={{ background: '#1A2030', borderColor: '#303642', fontFamily: 'var(--font-mono)' }}
+          >
+            {(user?.username || '?').charAt(0).toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0 leading-tight">
+            <NavLink
+              to="/settings/account"
+              onClick={onClose}
+              className="text-[12px] font-medium text-tech-white truncate hover:text-forge-teal transition-colors block"
+              title={`${user?.username} (${user?.role || '—'})`}
+            >
+              {user?.username || '—'}
+            </NavLink>
+            <span className="mono text-[10px] text-gunmetal-dim tracking-wide truncate block">
+              {user?.role || '—'}
+            </span>
+          </div>
           <NavLink
             to="/settings/account"
             onClick={onClose}
-            className="text-gunmetal hover:text-tech-white text-sm transition-colors truncate"
-            title="Mi cuenta"
+            aria-label="Configuración"
+            title="Configuración"
+            className="p-1.5 text-gunmetal hover:text-tech-white rounded-md hover:bg-[#1A2030] transition-colors shrink-0"
           >
-            {user?.username}
+            <Settings size={14} />
           </NavLink>
           <button
             type="button"
             onClick={handleLogout}
-            className="tf-btn-ghost shrink-0"
+            className="p-1.5 text-gunmetal hover:text-tech-white rounded-md hover:bg-[#1A2030] transition-colors shrink-0"
             title="Cerrar sesión"
             aria-label="Cerrar sesión"
           >
-            <LogOut size={18} />
+            <LogOut size={14} />
           </button>
         </div>
       </aside>
     </>
   );
 }
+
+// SETTINGS_APP queda exportado en config/sidebar.js para Breadcrumb y otros
+// consumidores. Aquí ya no se renderiza como sección — se accede vía el
+// gear ⚙️ del footer.
+export { SETTINGS_APP };
