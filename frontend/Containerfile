@@ -1,25 +1,38 @@
 # Build stage
 FROM docker.io/node:20-alpine AS build
 
+# LABEL para que `podman image prune --filter label=...` pueda limpiar
+# los layers intermedios huérfanos antes del próximo build.
+LABEL stage=cfs-frontend-build
+
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+# Copy del código + manifests EN UN SOLO STEP. Importante: ya no
+# separamos `COPY package.json` antes de `npm ci` — eso causaba que el
+# layer cacheado de npm ci se reusara aunque el package-lock cambiara
+# (bug observado en este server podman: ignora --no-cache en algunas
+# ocasiones). Al instalar deps DESPUÉS del COPY, garantizamos que
+# node_modules siempre coincide con el package-lock que viene en el
+# código actual.
+COPY . .
+
+# Print de la versión del package.json para confirmar que el COPY trajo
+# lo último (no un layer cacheado).
+RUN echo "── frontend package.json version ──" && \
+    grep '"version"' package.json | head -1
+
 # --ignore-scripts evita que `prepare` (husky) aborte npm ci en el
 # container (sin .git, husky falla y deja node_modules a medio instalar).
 RUN npm ci --ignore-scripts
 
-# Verifica que las deps críticas estén realmente instaladas. Si esto
-# falla, el cache de podman o el container dejaron un node_modules
-# incompleto — el error es legible.
+# Verifica que las deps críticas estén realmente instaladas.
 RUN npm ls @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities react-router-dom \
-    || (echo "ERROR: deps faltantes tras npm ci. Revisar cache podman." && exit 1)
+    || (echo "ERROR: deps faltantes tras npm ci." && exit 1)
 
-# Print explícito de lo que hay en node_modules/@dnd-kit/ para depurar
-# casos donde npm ls cachea OK pero los archivos no están físicamente.
-RUN ls -la node_modules/@dnd-kit/ \
-    || (echo "ERROR: node_modules/@dnd-kit/ vacío o ausente." && exit 1)
+# Print explícito justo antes de build.
+RUN ls node_modules/@dnd-kit/core/dist/ 2>/dev/null | head -3 \
+    || (echo "ERROR: @dnd-kit/core/dist no existe físicamente." && exit 1)
 
-COPY . .
 RUN npm run build
 
 # Production stage
