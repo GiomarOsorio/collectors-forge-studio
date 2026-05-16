@@ -34,7 +34,16 @@ import {
   X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Button, Card, DetailDrawer, KPI, MobileSheet } from '../../components/ui';
+import {
+  Button,
+  Card,
+  DetailDrawer,
+  DropZone,
+  EmptyState,
+  KPI,
+  MobileSheet,
+  StatusPill,
+} from '../../components/ui';
 import MobileAppHeader from '../../components/MobileAppHeader';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -82,22 +91,26 @@ const fmtDate = (iso) => {
 };
 
 /**
- * Mapea status del backend a etiqueta + esquema de color.
+ * Mapea status del backend a metadata para `StatusPill` (label + tone + icon).
  *
- * @param {string} status
+ * Tonos:
+ *   - `done`     → completado / éxito (verde)
+ *   - `danger`   → fallido / error (rojo)
+ *   - `warn`     → procesando / queued (amber, con loader animado)
+ *   - `neutral`  → estado desconocido
  */
 function statusBadge(status) {
   const s = (status || '').toLowerCase();
   if (s === 'completed' || s === 'done' || s === 'success') {
-    return { label: 'Listo', color: '#34D399', icon: CheckCircle2 };
+    return { label: 'Listo', tone: 'done', icon: CheckCircle2, spin: false };
   }
   if (s === 'failed' || s === 'error') {
-    return { label: 'Falló', color: '#F87171', icon: AlertTriangle };
+    return { label: 'Falló', tone: 'danger', icon: AlertTriangle, spin: false };
   }
   if (s === 'pending' || s === 'processing' || s === 'queued' || s === 'running') {
-    return { label: 'Procesando', color: '#FBBF24', icon: Loader2 };
+    return { label: 'Procesando', tone: 'warn', icon: Loader2, spin: true };
   }
-  return { label: status || '—', color: '#94A0AE', icon: Clock };
+  return { label: status || 'Sin estado', tone: 'neutral', icon: Clock, spin: false };
 }
 
 /**
@@ -197,7 +210,7 @@ function SlicerTabs({ value, onChange, counts }) {
 
 // ─── Subir: 3 flow cards ────────────────────────────────────────────────────
 
-function UploadFlowCards() {
+function UploadFlowCards({ onDrop }) {
   const flows = [
     {
       to: '/slicer/upload',
@@ -225,45 +238,66 @@ function UploadFlowCards() {
     },
   ];
   return (
-    <div className="px-6 pt-4 pb-8 grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
-      {flows.map((f) => {
-        const Icon = f.icon;
-        return (
-          <Link key={f.title} to={f.to} className="block">
-            <Card interactive className="p-5 h-full flex flex-col gap-3">
-              <div className="flex items-start gap-3">
-                <span
-                  className="inline-flex items-center justify-center w-12 h-12 rounded-xl shrink-0"
-                  style={{
-                    background: `${f.tagColor}1A`,
-                    color: f.tagColor,
-                    border: `1px solid ${f.tagColor}40`,
-                  }}
-                >
-                  <Icon size={22} />
-                </span>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-base font-semibold text-tech-white">{f.title}</h3>
+    <div className="px-6 pt-4 pb-8 flex flex-col gap-5">
+      {/* DropZone hero — el flujo más común (.3mf / .gcode / .stl) */}
+      <div style={{ ['--page-accent']: ACCENT }}>
+        <DropZone
+          accept=".3mf,.gcode,.stl"
+          hint="Suelta tu modelo aquí"
+          meta="o pulsa para seleccionar · .3mf · .gcode · .stl"
+          cta="Examinar archivos"
+          accent={ACCENT}
+          onFiles={(files) => onDrop?.(files)}
+        />
+      </div>
+
+      <div className="lbl-eyebrow text-[10px] tracking-widest pt-2 px-1">
+        O elige un flujo específico
+      </div>
+
+      <div
+        className="grid gap-4"
+        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}
+      >
+        {flows.map((f) => {
+          const Icon = f.icon;
+          return (
+            <Link key={f.title} to={f.to} className="block">
+              <Card interactive className="p-5 h-full flex flex-col gap-3">
+                <div className="flex items-start gap-3">
                   <span
-                    className="mono text-[10px] px-1.5 py-px rounded-sm tracking-wider mt-1 inline-block"
+                    className="inline-flex items-center justify-center w-12 h-12 rounded-xl shrink-0"
                     style={{
                       background: `${f.tagColor}1A`,
-                      border: `1px solid ${f.tagColor}40`,
                       color: f.tagColor,
+                      border: `1px solid ${f.tagColor}40`,
                     }}
                   >
-                    {f.tag}
+                    <Icon size={22} />
                   </span>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-base font-semibold text-tech-white">{f.title}</h3>
+                    <span
+                      className="mono text-[10px] px-1.5 py-px rounded-sm tracking-wider mt-1 inline-block"
+                      style={{
+                        background: `${f.tagColor}1A`,
+                        border: `1px solid ${f.tagColor}40`,
+                        color: f.tagColor,
+                      }}
+                    >
+                      {f.tag}
+                    </span>
+                  </div>
                 </div>
-              </div>
-              <p className="text-sm text-steel leading-snug">{f.desc}</p>
-              <span className="mt-auto text-xs text-amber-400 inline-flex items-center gap-1 font-medium">
-                Iniciar flujo <ChevronRight size={12} />
-              </span>
-            </Card>
-          </Link>
-        );
-      })}
+                <p className="text-sm text-steel leading-snug">{f.desc}</p>
+                <span className="mt-auto text-xs text-amber-400 inline-flex items-center gap-1 font-medium">
+                  Iniciar flujo <ChevronRight size={12} />
+                </span>
+              </Card>
+            </Link>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -272,7 +306,6 @@ function UploadFlowCards() {
 
 function JobCard({ job, onClick }) {
   const badge = statusBadge(job.status);
-  const Badge = badge.icon;
   const src = sourceMeta(job.source);
   const SrcIcon = src.icon;
   const platesCount = Array.isArray(job.plates_data) ? job.plates_data.length : 0;
@@ -296,17 +329,9 @@ function JobCard({ job, onClick }) {
         </span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
-            <span
-              className="mono inline-flex items-center gap-1 text-[9.5px] px-1.5 py-px rounded-sm tracking-wider"
-              style={{
-                background: `${badge.color}1A`,
-                border: `1px solid ${badge.color}40`,
-                color: badge.color,
-              }}
-            >
-              <Badge size={9} className={badge.label === 'Procesando' ? 'animate-spin' : ''} />
-              {badge.label.toUpperCase()}
-            </span>
+            <StatusPill tone={badge.tone} icon={badge.icon}>
+              {badge.label}
+            </StatusPill>
             <span className="mono text-[9.5px] px-1.5 py-px rounded-sm bg-white/5 border border-[var(--color-border)] text-steel tracking-wider">
               {src.label}
             </span>
@@ -346,7 +371,6 @@ function JobCard({ job, onClick }) {
 
 function JobRow({ job, onClick }) {
   const badge = statusBadge(job.status);
-  const Badge = badge.icon;
   const src = sourceMeta(job.source);
   const SrcIcon = src.icon;
   return (
@@ -367,17 +391,9 @@ function JobRow({ job, onClick }) {
       </span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5">
-          <span
-            className="mono inline-flex items-center gap-0.5 text-[9.5px] px-1 py-px rounded-sm"
-            style={{
-              background: `${badge.color}1A`,
-              border: `1px solid ${badge.color}40`,
-              color: badge.color,
-            }}
-          >
-            <Badge size={9} className={badge.label === 'Procesando' ? 'animate-spin' : ''} />
-            {badge.label.toUpperCase()}
-          </span>
+          <StatusPill tone={badge.tone} icon={badge.icon}>
+            {badge.label}
+          </StatusPill>
         </div>
         <p className="text-sm font-semibold text-tech-white truncate">
           {job.original_filename || job.makerworld_url || `Job #${job.id}`}
@@ -393,39 +409,19 @@ function JobRow({ job, onClick }) {
 
 // ─── Drawer body ────────────────────────────────────────────────────────────
 
-function JobDrawerBody({ job, onDelete, onClose }) {
-  const navigate = useNavigate();
+function JobDrawerBody({ job }) {
   if (!job) return null;
   const badge = statusBadge(job.status);
-  const Badge = badge.icon;
   const plates = Array.isArray(job.plates_data) ? job.plates_data : [];
-
-  const useInCalculator = () => {
-    const w = job.filament_weight_g;
-    const t = (job.print_time_seconds || 0) / 3600;
-    const params = new URLSearchParams();
-    if (w) params.set('weight_grams', String(w));
-    if (t) params.set('print_time_hours', String(t));
-    if (job.filament_type) params.set('filament_type', job.filament_type);
-    navigate(`/cost/calculator?${params.toString()}`);
-  };
 
   return (
     <div className="p-5 flex flex-col gap-4">
       {/* Hero */}
       <div>
         <div className="flex items-center gap-1.5 mb-1.5">
-          <span
-            className="mono inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm tracking-wider"
-            style={{
-              background: `${badge.color}1A`,
-              border: `1px solid ${badge.color}40`,
-              color: badge.color,
-            }}
-          >
-            <Badge size={11} className={badge.label === 'Procesando' ? 'animate-spin' : ''} />
-            {badge.label.toUpperCase()}
-          </span>
+          <StatusPill tone={badge.tone} icon={badge.icon} size="lg">
+            {badge.label}
+          </StatusPill>
           <span className="mono text-[10px] px-1.5 py-0.5 rounded-sm bg-white/5 border border-[var(--color-border)] text-steel tracking-wider">
             {sourceMeta(job.source).label}
           </span>
@@ -517,25 +513,46 @@ function JobDrawerBody({ job, onDelete, onClose }) {
         </div>
       )}
 
-      <div className="flex gap-2 pt-2 border-t border-[var(--color-border-soft)]">
-        <Button variant="primary" icon={Calculator} onClick={useInCalculator} className="flex-1">
-          Usar en Calculadora
-        </Button>
-        <Link to={`/slicer/jobs/${job.id}`} className="btn btn-ghost btn-sm">
-          Ver detalle completo
-        </Link>
-        <Button
-          variant="ghost"
-          icon={Trash2}
-          onClick={async () => {
-            const ok = await onDelete(job);
-            if (ok) onClose();
-          }}
-          className="text-rose-400 hover:text-rose-300"
-          aria-label="Eliminar job"
-        />
-      </div>
     </div>
+  );
+}
+
+/**
+ * Footer del JobDetailDrawer: acciones primarias + secundarias.
+ * Se renderiza en el slot `footer` del DetailDrawer v2 (desktop) o inline
+ * en el MobileSheet (mobile).
+ */
+function JobDrawerFooter({ job, onDelete, onClose }) {
+  const navigate = useNavigate();
+  if (!job) return null;
+  const useInCalculator = () => {
+    const w = job.filament_weight_g;
+    const t = (job.print_time_seconds || 0) / 3600;
+    const params = new URLSearchParams();
+    if (w) params.set('weight_grams', String(w));
+    if (t) params.set('print_time_hours', String(t));
+    if (job.filament_type) params.set('filament_type', job.filament_type);
+    navigate(`/cost/calculator?${params.toString()}`);
+  };
+  return (
+    <>
+      <Button variant="primary" icon={Calculator} onClick={useInCalculator} className="flex-1 justify-center">
+        Usar en Calculadora
+      </Button>
+      <Link to={`/slicer/jobs/${job.id}`} className="btn btn-ghost btn-sm">
+        Ver detalle
+      </Link>
+      <Button
+        variant="ghost"
+        icon={Trash2}
+        onClick={async () => {
+          const ok = await onDelete(job);
+          if (ok) onClose();
+        }}
+        className="text-rose-400 hover:text-rose-300"
+        aria-label="Eliminar job"
+      />
+    </>
   );
 }
 
@@ -709,7 +726,14 @@ export default function SlicerPage() {
         </div>
 
         {tab === 'subir' ? (
-          <UploadFlowCards />
+          <UploadFlowCards
+            onDrop={(files) => {
+              if (files?.length) {
+                toast(`${files.length} archivo${files.length === 1 ? '' : 's'} listo — redirigiendo al uploader…`);
+              }
+              navigate('/slicer/upload');
+            }}
+          />
         ) : (
           <>
             <div className="px-4 mt-3">
@@ -757,17 +781,16 @@ export default function SlicerPage() {
             {loading ? (
               <p className="px-4 py-12 text-center text-gunmetal text-sm">Cargando jobs…</p>
             ) : filtered.length === 0 ? (
-              <div className="px-4 py-12 flex flex-col items-center gap-2 text-center">
-                <Layers size={22} className="text-gunmetal-dim" />
-                <p className="text-sm font-semibold text-tech-white">
-                  {jobs.length === 0 ? 'Aún no hay jobs' : 'Sin resultados'}
-                </p>
-                <p className="text-xs text-gunmetal max-w-xs">
-                  {jobs.length === 0
+              <EmptyState
+                icon={Layers}
+                accent={ACCENT}
+                title={jobs.length === 0 ? 'Aún no hay jobs' : 'Sin resultados'}
+                hint={
+                  jobs.length === 0
                     ? 'Toca + para subir tu primer modelo.'
-                    : 'Cambia el filtro o limpia la búsqueda.'}
-                </p>
-              </div>
+                    : 'Cambia el filtro o limpia la búsqueda.'
+                }
+              />
             ) : (
               <ul className="mt-3 pb-28">
                 {filtered.map((j) => (
@@ -798,14 +821,22 @@ export default function SlicerPage() {
         <MobileSheet
           open={!!selected}
           onClose={() => setSelected(null)}
-          title={selected ? `Job #${selected.id}` : ''}
+          title={
+            selected?.original_filename ||
+            (selected ? `Job #${selected.id}` : '')
+          }
           height="full"
         >
-          <JobDrawerBody
-            job={selected}
-            onDelete={handleDelete}
-            onClose={() => setSelected(null)}
-          />
+          <JobDrawerBody job={selected} />
+          {selected && (
+            <div className="px-5 pt-3 pb-5 border-t border-[var(--color-border-soft)] flex gap-2 sticky bottom-0 bg-[var(--color-surf-sidebar)]">
+              <JobDrawerFooter
+                job={selected}
+                onDelete={handleDelete}
+                onClose={() => setSelected(null)}
+              />
+            </div>
+          )}
         </MobileSheet>
       </div>
     );
@@ -896,31 +927,23 @@ export default function SlicerPage() {
           {loading ? (
             <p className="px-6 py-16 text-center text-gunmetal text-sm">Cargando jobs…</p>
           ) : filtered.length === 0 ? (
-            <div className="px-6 py-16 flex flex-col items-center gap-3 text-center">
-              <div
-                className="w-14 h-14 rounded-full flex items-center justify-center"
-                style={{
-                  background: `${ACCENT}1A`,
-                  border: `1px solid ${ACCENT}40`,
-                  color: ACCENT,
-                }}
-              >
-                <Layers size={22} />
-              </div>
-              <p className="text-sm font-semibold text-tech-white">
-                {jobs.length === 0 ? 'Aún no hay jobs' : 'Sin resultados'}
-              </p>
-              <p className="text-xs text-gunmetal max-w-sm">
-                {jobs.length === 0
+            <EmptyState
+              icon={Layers}
+              accent={ACCENT}
+              title={jobs.length === 0 ? 'Aún no hay jobs' : 'Sin resultados'}
+              hint={
+                jobs.length === 0
                   ? 'Sube tu primer modelo para empezar a usarlo en la calculadora.'
-                  : 'Cambia el filtro o limpia la búsqueda.'}
-              </p>
-              {jobs.length === 0 && (
-                <Link to="/slicer/upload" className="btn btn-primary btn-sm">
-                  <Upload size={13} /> Subir modelo
-                </Link>
-              )}
-            </div>
+                  : 'Cambia el filtro o limpia la búsqueda.'
+              }
+              action={
+                jobs.length === 0 ? (
+                  <Link to="/slicer/upload" className="btn btn-primary btn-sm">
+                    <Upload size={13} /> Subir modelo
+                  </Link>
+                ) : null
+              }
+            />
           ) : (
             <div
               className="px-6 pb-8 grid gap-3"
@@ -937,14 +960,23 @@ export default function SlicerPage() {
       <DetailDrawer
         open={!!selected}
         onClose={() => setSelected(null)}
-        title={selected ? `Job #${selected.id}` : ''}
-        width={460}
+        eyebrow={selected ? `JOB-${String(selected.id).padStart(4, '0')}` : undefined}
+        title={
+          selected?.original_filename ||
+          (selected ? `Job #${selected.id}` : '')
+        }
+        width={480}
+        footer={
+          selected && (
+            <JobDrawerFooter
+              job={selected}
+              onDelete={handleDelete}
+              onClose={() => setSelected(null)}
+            />
+          )
+        }
       >
-        <JobDrawerBody
-          job={selected}
-          onDelete={handleDelete}
-          onClose={() => setSelected(null)}
-        />
+        <JobDrawerBody job={selected} />
       </DetailDrawer>
 
       <footer className="mt-auto px-6 py-2.5 border-t border-[var(--color-border-soft)] bg-[var(--color-surf-sidebar)] flex flex-wrap items-center gap-4 text-[11px] text-gunmetal">
