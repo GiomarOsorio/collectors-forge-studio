@@ -28,7 +28,9 @@ test.describe('Slicer — flujos críticos', () => {
     await expect(page.getByText(/MakerWorld URL/i)).toBeVisible();
   });
 
-  test('CTA "Subir modelo" del header navega al uploader', async ({ page }) => {
+  test('CTA "Subir modelo" del header navega al uploader', async ({ page }, testInfo) => {
+    // CTA del header solo en desktop. En mobile el equivalente es el FAB.
+    test.skip(testInfo.project.name === 'mobile-iphone12', 'CTA solo en desktop');
     await page.goto('/slicer/v2');
     await page.waitForLoadState('networkidle');
     const cta = page.getByRole('link', { name: /subir modelo/i }).first();

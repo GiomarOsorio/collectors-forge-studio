@@ -14,10 +14,12 @@ test.describe('Cost — flujos críticos', () => {
     await loginAsDev(page);
   });
 
-  test('navega de /cost/v2 a la calculadora vía CTA', async ({ page }) => {
+  test('navega de /cost/v2 a la calculadora vía CTA', async ({ page }, testInfo) => {
+    // El CTA "Nueva cotización" vive en el header desktop. En mobile no existe
+    // (el equivalente es el FAB). Skip mobile.
+    test.skip(testInfo.project.name === 'mobile-iphone12', 'CTA solo en desktop');
     await page.goto('/cost/v2');
     await page.waitForLoadState('networkidle');
-    // CTA "Nueva cotización" en el header → /cost/manual (vista clásica)
     const ctaNueva = page.getByRole('link', { name: /nueva cotización/i }).first();
     await expect(ctaNueva).toBeVisible();
   });
