@@ -39,13 +39,20 @@ export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const closeSidebar = () => setSidebarOpen(false);
 
+  // Contexto compartido para que las páginas puedan abrir la sidebar mobile
+  // desde su propio botón de menú (replica el `onMenu` del design).
+  const outletContext = { openSidebar: () => setSidebarOpen(true) };
+
   // ── Shell mobile (≤1023px) ───────────────────────────────────────────────
   if (isMobile) {
     return (
       <div className="min-h-screen bg-forge-black flex flex-col">
+        {/* Sidebar como drawer mobile — solo abre cuando la página dispara
+            el botón menú vía useOutletContext().openSidebar(). */}
+        <StudioSidebar open={sidebarOpen} onClose={closeSidebar} />
         <main className="flex-1 overflow-y-auto overflow-x-hidden pb-20">
           <Suspense fallback={<PageFallback />}>
-            <Outlet />
+            <Outlet context={outletContext} />
           </Suspense>
         </main>
         <MobileBottomNav />
@@ -66,7 +73,7 @@ export default function AppLayout() {
           >
             <Breadcrumb />
             <Suspense fallback={<PageFallback />}>
-              <Outlet />
+              <Outlet context={outletContext} />
             </Suspense>
           </div>
         </main>

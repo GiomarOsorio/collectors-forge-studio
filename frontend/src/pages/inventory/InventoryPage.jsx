@@ -16,7 +16,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -35,6 +35,7 @@ import {
   History,
   List,
   MapPin,
+  Menu,
   Pencil,
   Plus,
   Scissors,
@@ -1092,32 +1093,96 @@ function PurchaseDrawerBody({ po }) {
 // Esta vista sólo renderiza el contenido específico del inventario.
 
 /**
- * Header in-page del mobile: ícono badge de la app + nombre del tab + count.
- * Replica el patrón del design (no reemplaza al hamburger de AppLayout, lo complementa).
+ * Header in-page del mobile (replica `inventory-mobile.jsx::MobileHeader`):
+ * hamburger ⇒ abre sidebar, eyebrow "Inventario" + título dinámico (label
+ * del tab activo), search ⇒ overlay y bell ⇒ notificaciones (con dot amber).
+ *
+ * @param {Object} props
+ * @param {string}   props.tab          - id del tab activo (filamentos/insumos/...)
+ * @param {() => void} props.onMenu     - abre la sidebar mobile
+ * @param {() => void} props.onSearch   - abre el overlay de búsqueda
  */
-function MobileInPageHeader({ tab, count }) {
+function MobileInPageHeader({ tab, onMenu, onSearch }) {
+  const tabLabel = TABS.find((t) => t.id === tab)?.label || tab;
+  const iconBtnClass =
+    'w-9 h-9 rounded-lg border border-[var(--color-border)] inline-flex items-center justify-center text-tech-white bg-transparent shrink-0 active:bg-[var(--color-surf-hover)]';
   return (
-    <div className="px-4 pt-3 pb-2 flex items-center gap-2.5">
+    <div className="px-4 pt-1 pb-2.5 flex items-center gap-2.5">
+      <button
+        type="button"
+        onClick={onMenu}
+        aria-label="Menú"
+        className={iconBtnClass}
+      >
+        <Menu size={18} />
+      </button>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <span
-            className="inline-flex items-center justify-center w-5 h-5 rounded shrink-0"
-            style={{
-              background: 'rgba(59, 130, 246, 0.14)',
-              color: '#3B82F6',
-            }}
+            className="inline-flex items-center justify-center w-[18px] h-[18px] rounded shrink-0"
+            style={{ background: 'rgba(59, 130, 246, 0.14)', color: '#3B82F6' }}
           >
-            <Box size={11} />
+            <Box size={10} />
           </span>
           <span className="text-[11px] text-gunmetal tracking-wide">Inventario</span>
         </div>
-        <h1 className="text-lg font-semibold text-tech-white tracking-tight leading-tight capitalize mt-0.5">
-          {tab}
+        <h1 className="text-[18px] font-semibold text-tech-white tracking-tight leading-tight mt-px capitalize">
+          {tabLabel}
         </h1>
       </div>
-      <span className="mono text-[10px] px-1.5 py-0.5 rounded-sm bg-white/5 border border-[var(--color-border)] text-steel tracking-wider shrink-0">
-        {count}
-      </span>
+      <button
+        type="button"
+        onClick={onSearch}
+        aria-label="Buscar"
+        className={iconBtnClass}
+      >
+        <Search size={17} />
+      </button>
+      <button
+        type="button"
+        aria-label="Notificaciones"
+        className={`${iconBtnClass} relative`}
+      >
+        <Bell size={17} />
+        <span
+          aria-hidden="true"
+          className="absolute top-1.5 right-1.5 w-[7px] h-[7px] rounded-full bg-amber-400"
+          style={{ boxShadow: '0 0 0 2px var(--color-forge-black)' }}
+        />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Overlay de búsqueda mobile (replica `inventory-mobile.jsx::SearchOverlay`).
+ * Aparece flotando sobre el header y permite buscar por color/batch/ubicación.
+ */
+function MobileSearchOverlay({ open, onClose, query, onQuery }) {
+  if (!open) return null;
+  return (
+    <div
+      className="fixed top-16 left-4 right-4 z-40 flex items-center gap-2 px-3 py-2.5 rounded-xl border border-[var(--color-border-strong)] shadow-2xl"
+      style={{ background: 'var(--color-surf-card)', boxShadow: '0 12px 24px rgba(0,0,0,0.4)' }}
+      role="dialog"
+      aria-label="Buscar"
+    >
+      <Search size={15} className="text-gunmetal shrink-0" />
+      <input
+        autoFocus
+        value={query}
+        onChange={(e) => onQuery(e.target.value)}
+        placeholder="Color, batch, ubicación…"
+        className="flex-1 min-w-0 bg-transparent border-0 outline-0 text-tech-white text-sm placeholder:text-gunmetal-dim"
+      />
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Cerrar búsqueda"
+        className="text-gunmetal hover:text-tech-white shrink-0"
+      >
+        <X size={15} />
+      </button>
     </div>
   );
 }
@@ -1326,7 +1391,7 @@ function FilamentRow({ f, onClick }) {
     <button
       type="button"
       onClick={() => onClick(f)}
-      className="w-full text-left flex items-center gap-3 mx-4 mb-2 px-3 py-3 rounded-xl bg-[var(--color-surf-card)] border border-[var(--color-border)] active:scale-[0.98] active:bg-[var(--color-surf-hover)] hover:bg-[var(--color-surf-hover)]/60 transition-all"
+      className="w-full text-left flex items-center gap-3 px-3 py-3 rounded-xl bg-[var(--color-surf-card)] border border-[var(--color-border)] active:scale-[0.98] active:bg-[var(--color-surf-hover)] hover:bg-[var(--color-surf-hover)]/60 transition-all"
     >
       <Swatch color={f.color} size={40} level={level} />
       <div className="flex-1 min-w-0">
@@ -1349,7 +1414,7 @@ function FilamentRow({ f, onClick }) {
           {f.batch ? ` · ${f.batch}` : ''}
         </p>
       </div>
-      <div className="flex flex-col items-end shrink-0 gap-1 min-w-[64px]">
+      <div className="flex flex-col items-end shrink-0 gap-1 min-w-[60px]">
         <span className="mono text-sm font-semibold text-tech-white">
           {Math.round(p)}
           <span className="text-gunmetal text-[10px]">%</span>
@@ -1395,11 +1460,15 @@ function MobileFAB({ onClick, label = 'Agregar' }) {
 export default function InventoryPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  // El AppLayout expone `openSidebar` para que el header mobile pueda
+  // abrir el drawer (replica el `onMenu` del design).
+  const { openSidebar } = useOutletContext() || {};
   const [tab, setTab] = useState('filamentos');
   const [view, setView] = useState('grid');
   const [query, setQuery] = useState('');
   const [materialFilters, setMaterialFilters] = useState([]);
   const [sort, setSort] = useState('lowFirst');
+  const [searchOpen, setSearchOpen] = useState(false);
   // Drawer/sheet state — un slot por tipo para no mezclar bodies.
   const [selected, setSelected] = useState(null);            // filamento
   const [selectedItem, setSelectedItem] = useState(null);    // insumo / herramienta / consumible
@@ -1612,7 +1681,17 @@ export default function InventoryPage() {
   if (isMobile) {
     return (
       <div className="flex flex-col">
-        <MobileInPageHeader tab={tab} count={counts[tab] ?? 0} />
+        <MobileInPageHeader
+          tab={tab}
+          onMenu={() => openSidebar?.()}
+          onSearch={() => setSearchOpen(true)}
+        />
+        <MobileSearchOverlay
+          open={searchOpen}
+          onClose={() => setSearchOpen(false)}
+          query={query}
+          onQuery={setQuery}
+        />
         {/* Hero + mini KPIs visibles en TODOS los tabs — son indicadores
             globales del inventario, no específicos del tab filamentos. */}
         <MobileHeroStatus stats={stats} consumption14d={CONSUMPTION_PLACEHOLDER} />
@@ -1678,7 +1757,7 @@ export default function InventoryPage() {
                         </Link>
                       )}
                     </div>
-                    <ul>
+                    <ul className="px-4 flex flex-col gap-2">
                       {g.items.map((f) => (
                         <li key={f.id}>
                           <FilamentRow f={f} onClick={setSelected} />

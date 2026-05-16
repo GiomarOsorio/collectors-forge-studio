@@ -65,19 +65,28 @@ describe('AppLayout — shell mobile (≤lg)', () => {
 
   it('renderiza MobileBottomNav con los 5 ítems', () => {
     renderLayout();
-    expect(screen.getByText('Costos')).toBeInTheDocument();
-    expect(screen.getByText('Inventario')).toBeInTheDocument();
-    expect(screen.getByText('Cola')).toBeInTheDocument();
-    expect(screen.getByText('Slicer')).toBeInTheDocument();
+    // 'Costos', 'Inventario', 'Cola' y 'Slicer' aparecen tanto en bottom nav
+    // como en la sidebar drawer — basta con verificar que existe al menos uno.
+    expect(screen.getAllByText('Costos').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Inventario').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Cola').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Slicer').length).toBeGreaterThan(0);
+    // 'Mantto' es solo de la bottom nav (la sidebar dice 'Mantenimiento')
     expect(screen.getByText('Mantto')).toBeInTheDocument();
   });
 
-  it('NO renderiza el footer del shell desktop ni la sidebar', () => {
+  it('NO renderiza el footer del shell desktop', () => {
     renderLayout();
     expect(screen.queryByText(/Medellín, Colombia/i)).toBeNull();
-    // Sidebar 'Collector's Forge' aside header no debería aparecer
-    const asides = document.querySelectorAll('aside');
-    expect(asides.length).toBe(0);
+  });
+
+  it('renderiza la sidebar como drawer mobile (initially closed)', () => {
+    renderLayout();
+    // La sidebar existe como <aside> pero con translate-x-full (drawer
+    // cerrado). El page invoca openSidebar() vía useOutletContext para abrirla.
+    const aside = document.querySelector('aside');
+    expect(aside).not.toBeNull();
+    expect(aside.className).toContain('-translate-x-full');
   });
 
   it('renderiza el contenido de la página (Outlet)', () => {
