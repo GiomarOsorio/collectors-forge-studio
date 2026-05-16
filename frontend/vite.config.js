@@ -47,5 +47,9 @@ export default defineConfig({
     globals: true,
     setupFiles: './src/__tests__/setup.js',
     css: false,
+    // Vitest sólo corre unit tests en src/. Los tests Playwright en tests-e2e/
+    // los corre `npm run e2e` (script aparte) con su propio runner.
+    include: ['src/**/*.{test,spec}.{js,jsx,ts,tsx}'],
+    exclude: ['tests-e2e/**', 'node_modules/**', 'dist/**'],
   },
 })
