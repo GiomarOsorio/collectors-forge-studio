@@ -733,18 +733,33 @@ export const getVaultStats = () => api.get('/vault/stats');
 export const fetchVaultMetadata = (url) => api.post('/vault/fetch-metadata', { url });
 
 /**
- * Sube un archivo .3mf al Vault con sus metadatos.
- * @param {FormData} formData - Campos: file (UploadFile) + metadata (JSON string)
- * @param {Function} onUploadProgress - Callback axios para barra de progreso
+ * Sube source_file (.3mf editable) y/o print_file (.gcode.3mf laminado) al
+ * Vault con metadata compartida. Al menos uno tiene que estar presente.
+ *
+ * El caller arma el FormData con las claves:
+ *   - `metadata`     (string JSON con ModelFileCreate)
+ *   - `source_file`  (File, opcional)
+ *   - `print_file`   (File, opcional)
+ *
+ * @param {FormData} formData
+ * @param {Function} [onUploadProgress] - Callback axios para barra de progreso
  */
 export const uploadVaultFile = (formData, onUploadProgress) =>
   api.post('/vault/upload', formData, { onUploadProgress });
 
 /**
- * Descarga el archivo del Vault a través del backend (proxy, MinIO privado).
+ * Descarga el .3mf editable de un modelo. 404 si el modelo no lo tiene.
  * @param {number} id - ID del archivo en el Vault
  */
-export const downloadVaultFile = (id) => api.get(`/vault/${id}/download`, { responseType: 'blob' });
+export const downloadVaultSource = (id) =>
+  api.get(`/vault/${id}/download/source`, { responseType: 'blob' });
+
+/**
+ * Descarga el .gcode.3mf laminado de un modelo. 404 si no lo tiene.
+ * @param {number} id - ID del archivo en el Vault
+ */
+export const downloadVaultPrint = (id) =>
+  api.get(`/vault/${id}/download/print`, { responseType: 'blob' });
 
 /**
  * Actualiza los metadatos de un archivo del Vault (solo admins).
@@ -754,15 +769,27 @@ export const downloadVaultFile = (id) => api.get(`/vault/${id}/download`, { resp
 export const updateVaultFile = (id, data) => api.put(`/vault/${id}`, data);
 
 /**
- * Reemplaza el archivo .3mf de un modelo conservando sus metadatos (solo admins).
- * @param {number} id - ID del archivo
- * @param {File} file - Nuevo archivo .3mf
- * @param {Function} [onUploadProgress] - Callback de progreso
+ * Reemplaza el slot `source` (.3mf editable) conservando metadatos. Solo admins.
+ * @param {number} id
+ * @param {File} file - Nuevo .3mf editable
+ * @param {Function} [onUploadProgress]
  */
-export const replaceVaultFile = (id, file, onUploadProgress) => {
+export const replaceVaultSource = (id, file, onUploadProgress) => {
   const formData = new FormData();
   formData.append('file', file);
-  return api.post(`/vault/${id}/replace`, formData, { onUploadProgress });
+  return api.post(`/vault/${id}/replace/source`, formData, { onUploadProgress });
+};
+
+/**
+ * Reemplaza el slot `print` (.gcode.3mf laminado) conservando metadatos. Solo admins.
+ * @param {number} id
+ * @param {File} file - Nuevo .gcode.3mf
+ * @param {Function} [onUploadProgress]
+ */
+export const replaceVaultPrint = (id, file, onUploadProgress) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api.post(`/vault/${id}/replace/print`, formData, { onUploadProgress });
 };
 
 /**
