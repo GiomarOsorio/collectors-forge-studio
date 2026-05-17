@@ -382,19 +382,43 @@ describe('DetailDrawer v2 API', () => {
     expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeInTheDocument();
   });
 
-  it('REGRESIÓN: aside usa display:grid con gridTemplateRows correcto', () => {
-    // CSS Grid es lo que garantiza que el footer queda visible
-    // independiente del alto del body. Si alguien regresa a flex,
-    // este test falla.
+  it('REGRESIÓN: footer está pinned al bottom del aside (position:absolute)', () => {
+    // El footer del DetailDrawer usa posicionamiento absoluto para
+    // garantizar que SIEMPRE está al fondo del aside, sin depender de
+    // flex/grid quirks que reportaron el footer cortado en distintos
+    // viewports/browsers.
     const { container } = render(
       <DetailDrawer open={true} onClose={() => {}} title="X" footer={<span>F</span>}>
         body
       </DetailDrawer>,
     );
-    const aside = container.querySelector('aside');
-    expect(aside).not.toBeNull();
-    expect(aside.style.display).toBe('grid');
-    expect(aside.style.gridTemplateRows).toBe('auto 1fr auto');
+    const footerEl = container.querySelector('footer');
+    expect(footerEl).not.toBeNull();
+    expect(footerEl.style.position).toBe('absolute');
+    expect(footerEl.style.bottom).toBe('0px');
+  });
+
+  it('REGRESIÓN: body del drawer está absolute con top=HEADER y bottom=FOOTER (con footer) o 0 (sin footer)', () => {
+    // El body usa absolute positioning entre header y footer para
+    // garantizar scroll interno sin empujar al footer fuera del viewport.
+    const { container, rerender } = render(
+      <DetailDrawer open={true} onClose={() => {}} title="X" footer={<span>F</span>}>
+        body
+      </DetailDrawer>,
+    );
+    const bodyDiv = container.querySelector('aside > div');
+    expect(bodyDiv).not.toBeNull();
+    expect(bodyDiv.style.position).toBe('absolute');
+    expect(bodyDiv.style.bottom).toBe('64px'); // FOOTER_HEIGHT
+    expect(bodyDiv.style.overflowY).toBe('auto');
+
+    rerender(
+      <DetailDrawer open={true} onClose={() => {}} title="X">
+        body sin footer
+      </DetailDrawer>,
+    );
+    const bodyDivNoFooter = container.querySelector('aside > div');
+    expect(bodyDivNoFooter.style.bottom).toBe('0px'); // sin footer
   });
 });
 

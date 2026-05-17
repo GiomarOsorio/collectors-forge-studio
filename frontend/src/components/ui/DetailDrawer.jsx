@@ -1,8 +1,20 @@
 /**
  * @file DetailDrawer primitive: panel deslizable derecho con backdrop.
  *
- * Aparece cuando `open=true`, sale por derecha con animación CSS. `Esc` o
- * click en backdrop cierra. Bloquea scroll del body mientras está abierto.
+ * Estructura interna usa **posicionamiento absoluto** para garantizar
+ * layout determinístico header/body/footer:
+ *
+ *   aside (fixed top/right/bottom — full viewport height)
+ *     ├ header (absolute top:0 — altura HEADER_H)
+ *     ├ body   (absolute top:HEADER_H bottom:footer? FOOTER_H : 0 — scroll interno)
+ *     └ footer (absolute bottom:0 — altura FOOTER_H, solo si se provee)
+ *
+ * Esto es a prueba de balas vs. flex/grid quirks que reportaron el
+ * footer cortado en distintos browsers/viewports. Si `open=false`, el
+ * componente retorna `null` (no DOM zombi).
+ *
+ * `Esc` o click en backdrop cierra. Bloquea scroll del body mientras
+ * está abierto.
  *
  * Inspirado en `claude design/inventory.jsx::DetailDrawer`.
  *
@@ -11,6 +23,9 @@
 
 import { useEffect } from 'react';
 import { Pencil, X } from 'lucide-react';
+
+const HEADER_HEIGHT = 64; // px — header con eyebrow + title + acciones
+const FOOTER_HEIGHT = 64; // px — footer con botones (Cancelar/Guardar)
 
 /**
  * @param {Object} props
@@ -39,11 +54,8 @@ export default function DetailDrawer({ open, onClose, title, eyebrow, footer, on
     };
   }, [open, onClose]);
 
-  // Guard temprano: si está cerrado, NO renderizamos NADA en el DOM.
-  // Esto previene la "regresión del menú lateral vacío" (drawer/aside
-  // visible cuando debería estar oculto por translate-x-full). Sacrifica
-  // la slide-in animation a cambio de garantía absoluta de que el
-  // drawer no se ve cuando open=false.
+  // Guard temprano: si está cerrado, NO renderizamos NADA. Previene la
+  // regresión del "menú lateral vacío" reportada por Giomar.
   if (!open) return null;
 
   return (
@@ -51,26 +63,49 @@ export default function DetailDrawer({ open, onClose, title, eyebrow, footer, on
       {/* Backdrop */}
       <div
         onClick={onClose}
-        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
         aria-hidden="true"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 40,
+          background: 'rgba(0, 0, 0, 0.6)',
+          backdropFilter: 'blur(4px)',
+          WebkitBackdropFilter: 'blur(4px)',
+        }}
       />
-      {/* Panel — grid layout para garantizar que header/body/footer
-          quedan en sus rows sin que el body pueda crecer y empujar al
-          footer fuera del viewport (problema reportado con flex). */}
+      {/* Panel — todas las dimensiones inline para evitar quirks de
+          Tailwind/flex/grid que han roto el footer en distintos viewports. */}
       <aside
         role="dialog"
         aria-modal="true"
-        className="fixed top-0 right-0 bottom-0 z-50 bg-[var(--color-surf-card)] border-l border-[var(--color-border)] shadow-2xl"
         style={{
+          position: 'fixed',
+          top: 0,
+          right: 0,
+          bottom: 0,
           width: '100%',
           maxWidth: width,
-          display: 'grid',
-          gridTemplateRows: footer ? 'auto 1fr auto' : 'auto 1fr',
+          zIndex: 50,
+          background: 'var(--color-surf-card)',
+          borderLeft: '1px solid var(--color-border)',
+          boxShadow: '-12px 0 40px rgba(0, 0, 0, 0.4)',
         }}
       >
+        {/* HEADER — pinned al top, altura fija */}
         <header
-          className="flex items-start gap-3 px-4 pt-3.5 pb-3 border-b border-[var(--color-border-soft)]"
-          style={{ minHeight: 0 }}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: HEADER_HEIGHT,
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 12,
+            padding: '14px 16px',
+            borderBottom: '1px solid var(--color-border-soft)',
+            background: 'var(--color-surf-card)',
+          }}
         >
           <div className="flex-1 min-w-0">
             {eyebrow && (
@@ -101,20 +136,39 @@ export default function DetailDrawer({ open, onClose, title, eyebrow, footer, on
             <X size={14} />
           </button>
         </header>
+
+        {/* BODY — entre header y footer, scroll interno */}
         <div
-          className="overflow-y-auto p-4"
-          style={{ minHeight: 0 }}
+          style={{
+            position: 'absolute',
+            top: HEADER_HEIGHT,
+            bottom: footer ? FOOTER_HEIGHT : 0,
+            left: 0,
+            right: 0,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            padding: 16,
+          }}
         >
           {children}
         </div>
+
+        {/* FOOTER — pinned al bottom, altura fija. Solo si se provee. */}
         {footer && (
           <footer
-            className="flex items-center gap-2"
             style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: FOOTER_HEIGHT,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
               padding: '12px 16px',
               borderTop: '1px solid var(--color-border-soft)',
               background: 'var(--color-surf-card-2)',
-              minHeight: 60,
+              zIndex: 1,
             }}
           >
             {footer}
