@@ -10,6 +10,7 @@
  */
 
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Pencil, X } from 'lucide-react';
 
 /**
@@ -41,7 +42,9 @@ export default function MobileSheet({ open, onClose, title, height = 'full', onE
   // debería estar oculto por translate-y-full.
   if (!open) return null;
 
-  return (
+  // Render en PORTAL al document.body — saca al sheet de cualquier
+  // parent con transform/filter/perspective que rompería el position:fixed.
+  const sheet = (
     <>
       <div
         onClick={onClose}
@@ -84,4 +87,6 @@ export default function MobileSheet({ open, onClose, title, height = 'full', onE
       </div>
     </>
   );
+
+  return createPortal(sheet, document.body);
 }
