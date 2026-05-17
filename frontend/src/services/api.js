@@ -710,6 +710,21 @@ export const getQueueHistory = () => api.get('/queue/history');
 /** Agrega una cotización guardada a la cola de impresión. */
 export const addToQueue = (data) => api.post('/queue/', data);
 
+/**
+ * Agrega un modelo del Vault (con .gcode.3mf) a la cola. Backend denormaliza
+ * peso/tiempo/printer/filament en el item para que cambios futuros en el
+ * Vault no afecten items ya encolados.
+ *
+ * @param {Object} data
+ * @param {number} data.vault_model_id
+ * @param {number} data.printer_id
+ * @param {number} [data.filament_id]
+ * @param {number} [data.quantity=1]
+ * @param {string} [data.notes]
+ */
+export const addToQueueFromVault = (data) =>
+  api.post('/queue/from-vault', data);
+
 /** Cambia el estado de un ítem de la cola (printing | done | cancelled). */
 export const updateQueueStatus = (id, data) => api.put(`/queue/${id}/status`, data);
 
