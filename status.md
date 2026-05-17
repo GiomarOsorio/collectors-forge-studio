@@ -2,8 +2,8 @@
 
 **Última actualización**: 2026-05-17
 **Working dir**: `/home/tavo/Documentos/Github/collectors-forge-studio`
-**Main**: limpio (24 PRs merged)
-**Próximo**: PR Compras (PurchaseOrder form drawer en `/inventory/v2`)
+**Main**: limpio (27 PRs merged — PR #27 Queue v2 ya en main)
+**Próximo**: Fase 4 — Maintenance v2 (`feat/design-v2-maintenance`)
 
 ---
 
@@ -53,6 +53,18 @@ PRs #3, #5, #6, #8, #12, #15, #16, #17, #21, #23, #24:
 - `DetailDrawer` usa **posicionamiento absoluto** (header/body/footer con `position:absolute` + alturas fijas) — bypass total de quirks flex/grid
 - `DetailDrawer` + `MobileSheet` usan **`createPortal` a `document.body`** — evita bugs de `position:fixed` dentro de parents con `transform`
 - 9 tests REGRESIÓN-guard nuevos garantizan que estos bugs no vuelven
+
+### Queue (Fase 3) — visual refresh
+
+PR #27:
+
+- `statusBadge` → `{label, tone, icon}` apto para `StatusPill` (printing/done/danger/pending)
+- `QueueCard` / `QueueRow` / `QueueDrawerBody` usan `StatusPill` (sin pills inline con hex hardcoded)
+- Split `QueueDrawerBody` en cuerpo (info read-only) + `QueueDrawerFooter` (acciones primarias)
+- `DetailDrawer` v2 con `eyebrow="COLA · POSICIÓN #N"` + `footer` slot (Iniciar / Marcar listo / Cancelar / Eliminar)
+- `MobileSheet` con footer sticky inline (patrón Slicer/Filament)
+- `EmptyState` v2 para "Cola vacía" / "Sin historial" (mobile + desktop)
+- **PENDIENTE para Fase 5**: el botón "Agregar a cola" todavía navega a `/cost/quotes` (stub temporal). Debería abrir un picker de Vault que liste modelos con `.gcode.3mf` y los meta en cola con `weight_g` + `time_h` ya resueltos. Spec en `pending-screens.md` sección 20.1.
 
 ### Slicer (Fase 2) — visual refresh + nuevo upload inline
 
@@ -105,6 +117,8 @@ Múltiples PRs (#9, #10, #11, #14, #18, #19, #20):
 | 8 | **Borrar pages/routes legacy** | `/inventory/stock`, `/inventory/filaments`, `/slicer/upload`, etc. siguen activos en `App.jsx` aunque sidebar/v2 ya no los referencian. Limpieza más invasiva. |
 | 9 | **Visual regression baselines** | Fase 8 — generar con `npm run e2e:update-snapshots`, commit `tests-e2e/__screenshots__/`, remover `continue-on-error` + `--grep-invert` del workflow. |
 | 10 | **Slicer live editor** | El design v2 tiene preview canvas + settings inline + estimate live (paradigma "live editor"). No implementado, requiere endpoints backend nuevos para slice tiempo real. |
+| 11 | **Queue → Vault picker** | Botón "Agregar a cola" hoy redirige a `/cost/quotes` (stub). Debe abrir un drawer/sheet con lista de modelos del Vault que tengan `.gcode.3mf` y crear el `PrintQueueItem` con `weight_g` + `time_h` + `filament_type` ya resueltos. **Se aborda en Fase 5** porque requiere cambios en el modelo `ModelFile` (soportar `print_file` además del `source_file`) + nuevo endpoint `getVaultPrintReady()` + columnas `vault_model_id` y `print_file_snapshot_path` en `PrintQueueItem`. Spec: `pending-screens.md` sección 20.1. |
+| 12 | **Vault `.gcode.3mf`** | Hoy `ModelFile` solo guarda `.3mf` editable. Para que el picker de Queue (item #11) funcione, el Vault necesita aceptar también el paquete laminado `.gcode.3mf` y parsear su header (peso, tiempo, modelo impresora, filamento). Migración + UI Upload con dos slots (editable / laminado). Parte de Fase 5. Spec: `pending-screens.md` sección 20. |
 
 ---
 
@@ -114,7 +128,7 @@ Múltiples PRs (#9, #10, #11, #14, #18, #19, #20):
 |---|---|---|---|
 | 3 | Queue v2 | `claude design/queue.jsx` + `queue-mobile.jsx` + screenshots | `feat/design-v2-queue` |
 | 4 | Maintenance v2 | `claude design/maintenance.jsx` + `maintenance-mobile.jsx` + `maint*.png` | `feat/design-v2-maintenance` |
-| 5 | Vault v2 | `claude design/vault.jsx` + `vault-mobile.jsx` + `vault-thumbs.jsx` | `feat/design-v2-vault` |
+| 5 | Vault v2 (+ `.gcode.3mf` + picker Queue) | `claude design/vault.jsx` + `vault-mobile.jsx` + `vault-thumbs.jsx` + `pending-screens.md` §20/§20.1 | `feat/design-v2-vault` |
 | 6 | Company v2 | `claude design/company.jsx` + `company-mobile.jsx` | `feat/design-v2-company` |
 | 7 | Settings v2 (**NUEVA**) | `claude design/settings.jsx` + `settings-mobile.jsx` | `feat/design-v2-settings` |
 | 8 | Visual baselines + CI gate | — | `chore/visual-baselines` |
