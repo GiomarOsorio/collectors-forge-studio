@@ -1,8 +1,9 @@
 # Estado de trabajo — port Claude Design v2
 
-**Última actualización**: 2026-05-16
+**Última actualización**: 2026-05-17
 **Working dir**: `/home/tavo/Documentos/Github/collectors-forge-studio`
-**Main**: limpio (21 PRs merged hasta ahora — pendiente confirmar #19/#20/#21)
+**Main**: limpio (24 PRs merged)
+**Próximo**: PR Compras (PurchaseOrder form drawer en `/inventory/v2`)
 
 ---
 
@@ -14,11 +15,11 @@
 - **Sidebar v2** (PR #4): refactor 1:1 con `claude design/sidebar.jsx` — flat apps list (sin dropdown por app), accent left-bar en activo, sección secundaria con sub-items del app activo, gear ⚙️ en footer.
 - **MobileAppHeader compartido** (PR #7): en `components/MobileAppHeader.jsx` — hamburger + eyebrow + título + search opcional + bell. Aplicado en las 7 apps v2.
 - **AppLayout** (PR #6): mobile shell renderiza `StudioSidebar` como drawer + expone `openSidebar()` vía `useOutletContext()`.
-- **StudioHomePage** (PR Slicer): MobileAppHeader agregado a `/` (mobile).
+- **StudioHomePage**: MobileAppHeader agregado a `/` (mobile).
 
-### Inventory (Fase 1) — completo
+### Inventory (Fase 1) — completo + iteraciones
 
-PRs #3, #5, #6, #8, #12, #15, #16, #17, #21:
+PRs #3, #5, #6, #8, #12, #15, #16, #17, #21, #23, #24:
 
 - 5 tabs internas (Filamentos, Insumos, Herramientas, Consumibles, Compras)
 - KPIs desktop: Capital, Material, Consumo 14d (sparkline), Stock bajo, Próx. compras
@@ -29,16 +30,29 @@ PRs #3, #5, #6, #8, #12, #15, #16, #17, #21:
 - StatusPill para PO badges (en camino azul, procesando amber, completado verde, etc.)
 - PurchaseCard con line item chips (≤6 + overflow indicator)
 - EmptyState v2 reemplazando empty states inline (6 lugares)
-- Drawer body con "Agregar a compras" + "Reasignar batch" INLINE (1:1 design, no en footer)
-- **FilamentFormDrawer**: drawer derecho desktop / bottom sheet mobile
+- Drawer body con "Agregar a compras" + "Reasignar batch" INLINE (1:1 design)
+- **`FilamentFormDrawer`**: drawer derecho desktop / bottom sheet mobile
   - Create + Edit modes con PUT/POST a `/inventory/items/`
   - 5 secciones: Identificación / Stock / Técnico / Proveedor & costo / Notas
-  - Todos los campos del modelo backend (name, description, color_*, filament_type, weight_per_roll, quantity, min_quantity, filament_diameter (1.75 default), filament_density (auto-fill por tipo), supplier_*, etc.)
+  - Todos los campos del modelo + `sale_price` nuevo
+  - **Precios de filamento en USD** (la calculadora los maneja así)
+  - `fmtUSD()` formatter (`$25.00` con 2 decimales)
   - Optimistic update tras save (`filamentsRawById` cache local)
-  - **`if (!open) return null`** — guard que previene drawer zombi visible
-- `DetailDrawer` + `MobileSheet` primitives ahora **`return null` cuando `open=false`** (fix bulletproof contra regresiones)
-- `DetailDrawer` usa **CSS Grid** (`gridTemplateRows: 'auto 1fr auto'`) en lugar de flex — footer SIEMPRE visible
-- 6 tests REGRESIÓN nuevos que garantizan que estos bugs no vuelven
+  - **`if (!open) return null`** — guard que previene drawer zombi
+- **`ItemFormDrawer`** (NUEVO, PR #24) para Insumo/Herramienta/Consumible
+  - Mismo patrón que FilamentFormDrawer
+  - Secciones: Identificación / Stock / Costo & venta / Proveedor / Notas
+  - Sección extra "Vida útil (h)" cuando `category=Consumible`
+  - Wiring: mobile FAB / desktop + button / empty state / view drawer Pencil
+- Removido link "Editar en vista clásica" del view drawer (último ref a UI vieja desde v2)
+- **`sale_price` field** en TODAS las categorías (filamento: USD/kg; resto: COP/unidad)
+  - Backend: nueva columna nullable + migración Alembic `k5l6m7n8o9p0`
+  - Schemas Pydantic actualizados
+- **Bug cursor jump FIXEADO** (PR #24): `FormFieldRow`/`FormSectionTitle` extraídos a module-level. Test REGRESIÓN-guard nuevo (`formFieldFocus.test.jsx`) documenta el bad/good pattern
+- `DetailDrawer` + `MobileSheet` primitives ahora **`return null` cuando `open=false`** (fix bulletproof contra regresiones drawer-zombi)
+- `DetailDrawer` usa **posicionamiento absoluto** (header/body/footer con `position:absolute` + alturas fijas) — bypass total de quirks flex/grid
+- `DetailDrawer` + `MobileSheet` usan **`createPortal` a `document.body`** — evita bugs de `position:fixed` dentro de parents con `transform`
+- 9 tests REGRESIÓN-guard nuevos garantizan que estos bugs no vuelven
 
 ### Slicer (Fase 2) — visual refresh + nuevo upload inline
 
@@ -53,11 +67,9 @@ PR #13:
   - `.3mf / .gcode` → `uploadGcode(file)` (parse inmediato)
   - `STL` → `uploadStl(file)` (background OrcaSlicer)
   - MakerWorld URL → `fetchMakerworld(url)` (auto-fetch)
-  - Detección por extensión, toast feedback, callback inserta job + switch a Historial
 - Mobile FAB → `setTab('subir')` (no más nav externa)
-- Desktop header "Subir modelo" → button con `setTab` (no más Link)
-- Drawer footer "Ver detalle" Link a `/slicer/jobs/:id` → quitado
-- Sidebar item `'/slicer/upload'` → quitado (sidebar.js)
+- Desktop header "Subir modelo" → button con `setTab`
+- Sidebar item `/slicer/upload` → quitado
 
 ### Deploy
 
@@ -74,8 +86,7 @@ Múltiples PRs (#9, #10, #11, #14, #18, #19, #20):
 
 ### Testing
 
-- 143 tests Vitest (137 + 6 nuevos de REGRESIÓN sobre drawers)
-- Cobertura: primitives v1+v2, drawer abierto/cerrado/ciclo, layout grid, mobile responsive, adapter, AppLayout shell mobile/desktop
+- **147 tests Vitest** (cobertura primitives v1+v2, drawer abierto/cerrado/ciclo, layout absolute + portal, mobile responsive, adapter, AppLayout shell, formFieldFocus REGRESIÓN)
 - Playwright E2E con 2 projects (desktop-chrome + mobile-iphone12) — sigue con `continue-on-error: true` hasta Fase 8
 
 ---
@@ -84,15 +95,16 @@ Múltiples PRs (#9, #10, #11, #14, #18, #19, #20):
 
 | # | Item | Notas |
 |---|---|---|
-| 1 | **Soporte QHD/4K** | Layouts diseñados para ≤1280px. Pantallas más grandes desperdician espacio. Ver `claude design/pending-screens.md` sección 0.9 para spec del designer. |
+| 1 | **Soporte QHD/4K** | Layouts diseñados para ≤1280px. Spec en `claude design/pending-screens.md` sección 0.9. |
 | 2 | **Reasignar batch** | Botón en drawer hace toast "llega pronto". Necesita UI: selector de batches existentes o crear batch nuevo. |
-| 3 | **Add modal Insumos / Herramientas / Consumibles** | Por ahora `+ Agregar` en esas categorías toast "llega pronto". Cada categoría necesita su form. |
+| 3 | **Compras form drawer** | `/inventory/v2` tab Compras todavía navega a `/inventory/purchases` legacy. PR pendiente — modelo `PurchaseOrder` con `items[]` array, más complejo. **EN CURSO**. |
 | 4 | **Notificaciones (bell)** | Botón visual en MobileAppHeader + desktop header. Sin funcionalidad — necesita endpoint backend + dropdown. |
 | 5 | **Search overlay mobile** | Solo Inventory lo implementa. Cost / Slicer / Queue / Maintenance / Vault / Compañía pueden agregarlo. |
 | 6 | **Historial reciente del filamento** | Section en drawer hoy con texto "pendiente". Necesita endpoint que retorne consumos desde quotes + queue. |
-| 7 | **Borrar pages/routes legacy** | `/inventory/stock`, `/inventory/filaments`, `/slicer/upload`, `/slicer/jobs/:id`, etc. siguen activos en `App.jsx` aunque sidebar ya no los referencia. Limpieza más invasiva — hacer cuando confirmemos que v2 cubre 100% de uso. |
-| 8 | **Visual regression baselines** | Fase 8 — generar con `npm run e2e:update-snapshots`, commit `tests-e2e/__screenshots__/`, remover `continue-on-error` + `--grep-invert` del workflow. |
-| 9 | **Slicer live editor** | El design v2 tiene preview canvas + settings inline + estimate live (paradigma "live editor"). No implementado, requiere endpoints backend nuevos para slice tiempo real. |
+| 7 | **Consumo 14d sparkline** | `CONSUMPTION_PLACEHOLDER` hardcoded en el código. Necesita endpoint backend de historial de uso. |
+| 8 | **Borrar pages/routes legacy** | `/inventory/stock`, `/inventory/filaments`, `/slicer/upload`, etc. siguen activos en `App.jsx` aunque sidebar/v2 ya no los referencian. Limpieza más invasiva. |
+| 9 | **Visual regression baselines** | Fase 8 — generar con `npm run e2e:update-snapshots`, commit `tests-e2e/__screenshots__/`, remover `continue-on-error` + `--grep-invert` del workflow. |
+| 10 | **Slicer live editor** | El design v2 tiene preview canvas + settings inline + estimate live (paradigma "live editor"). No implementado, requiere endpoints backend nuevos para slice tiempo real. |
 
 ---
 
@@ -135,6 +147,8 @@ Múltiples PRs (#9, #10, #11, #14, #18, #19, #20):
 | **Branch + PR** | Nunca push directo a main. Siempre rama → PR → CI → merge |
 | **Sin "clásicas"** | Si v2 cubre la funcionalidad, eliminar refs en sidebar y links |
 | **Tests REGRESIÓN** | Agregar tests que cubran el bug arreglado (no solo el happy path). Cubrir estados `open=false` / vacío / error |
+| **Helpers a module-level** | NUNCA definir sub-componentes dentro de un componente. ESLint `react-hooks/static-components` lo captura |
+| **USD vs COP** | Filamentos: USD (la calculadora los usa así). Insumos/Herramientas/Consumibles: COP (compras locales) |
 
 ---
 
@@ -151,12 +165,19 @@ Múltiples PRs (#9, #10, #11, #14, #18, #19, #20):
 
 **v1**: `Button`, `Card`, `Chip`, `Input`, `KPI`, `Sparkline`, `Swatch`
 **v2**: `PageShell`, `PageHeader`, `KPITile`, `StatusPill` (+ `STATUS_PRESETS`), `DropZone`, `ProgressBar`, `SearchField`, `ToolbarRow`, `EmptyState`
-**Drawer/sheet**: `DetailDrawer` (eyebrow + footer + onEdit + `return null` cuando closed), `MobileSheet` (onEdit + `return null` cuando closed)
+**Drawer/sheet**: `DetailDrawer` (eyebrow + footer + onEdit + `return null` cuando closed + `createPortal` + absolute positioning), `MobileSheet` (onEdit + `return null` cuando closed + `createPortal`)
 **Header mobile**: `components/MobileAppHeader.jsx`
+**Form helpers (Inventory)**: `FormFieldRow`, `FormSectionTitle`, `FORM_INPUT_CLS` (module-level en `pages/inventory/InventoryPage.jsx`)
+
+### Formatters disponibles (`utils/inventoryAdapter.js`)
+
+- `fmtCOP(n)` — `$ 25.000` (es-CO, no decimales si >1000) — para Insumos/Herr/Cons locales
+- `fmtUSD(n)` — `$25.00` (en-US, 2 decimales) — para precios de Filamento (calculadora)
+- `fmtKg(g)`, `fmtG(g)`, `fmtPct(n)`
 
 ### Rutas v2 montadas en `App.jsx`
 - `/` → `StudioHomePage` ✅ (con MobileAppHeader)
-- `/inventory/v2` → `InventoryPage` ✅ Fase 1
+- `/inventory/v2` → `InventoryPage` ✅ Fase 1 (Filamentos + Insumos/Herr/Cons editables; Compras pendiente)
 - `/cost/v2` → `CostPage` ⏳ no v2 design todavía
 - `/cost/calculator/v2` → `CalculatorPageV2`
 - `/slicer/v2` → `SlicerPage` ✅ Fase 2
@@ -169,14 +190,13 @@ Múltiples PRs (#9, #10, #11, #14, #18, #19, #20):
 ### Mobile responsive
 - `useIsMobile()` hook → `(max-width: 1023px)`
 - Mobile shell tiene FAB + MobileBottomNav fija
-- `AppLayout` mobile expone `openSidebar` vía `useOutletContext()` — cada page lo consume + pasa a `MobileAppHeader.onMenu`
+- `AppLayout` mobile expone `openSidebar` vía `useOutletContext()`
 - Desktop shell tiene StudioSidebar fija + DetailDrawer derecho
-- **QHD/4K (≥1440px)**: aún no optimizado — ver backlog item #1 + `pending-screens.md` sección 0.9
+- **QHD/4K (≥1440px)**: aún no optimizado — ver backlog #1 + `pending-screens.md` 0.9
 
 ### Auth bypass para tests/dev
 - `frontend/src/context/AuthContext.jsx` exporta `DEV_BYPASS_TOKEN` + `DEV_BYPASS_USER`
 - `/login` muestra botón "Bypass dev" cuando `import.meta.env.DEV`
-- Helpers en `tests-e2e/helpers/auth.js` + `apiMock.js`
 
 ### CI/CD
 - 4 jobs en `.github/workflows/deploy.yml`: `lint` / `test-backend` / `test-frontend` / `e2e-frontend`
@@ -186,13 +206,25 @@ Múltiples PRs (#9, #10, #11, #14, #18, #19, #20):
 
 ---
 
+## Migraciones BD pendientes en servidor
+
+Si Giomar no ha corrido la última:
+
+```bash
+podman exec -it cfs-backend alembic upgrade head
+```
+
+Aplica hasta `k5l6m7n8o9p0` (head actual: `sale_price` column).
+
+---
+
 ## Comandos útiles
 
 ```bash
 # Frontend
 cd frontend
 npm install                        # husky se auto-instala
-npm test -- --run                  # Vitest (143 pass / 26 skip esperado)
+npm test -- --run                  # Vitest (147 pass / 26 skip esperado)
 npm run lint                       # ESLint (0 errors, warns OK)
 npm run build                      # verify build
 npm run e2e                        # Playwright (requiere dev server)
@@ -223,7 +255,7 @@ ssh server "cd ~/collectors-forge-studio && git pull origin main && ./deploy.sh"
 - `<app>.jsx` + `<app>-mobile.jsx` — designs por app
 - `<App>.html` + `<App> móvil.html` — HTML previews
 - `screenshots/` — capturas
-- **`pending-screens.md`** — spec de 22 pantallas pendientes de diseñar para Claude Design (incluye patrones compartidos + QHD/4K)
+- **`pending-screens.md`** — spec de 22 pantallas pendientes para Claude Design (incluye patrones compartidos + QHD/4K)
 
 **Configuración**:
 - `CLAUDE.md` — contexto general
@@ -233,6 +265,6 @@ ssh server "cd ~/collectors-forge-studio && git pull origin main && ./deploy.sh"
 - `frontend/src/components/ui/index.js` — barrel de primitives
 
 **Tests**:
-- `frontend/src/__tests__/` — Vitest unit (143 pass)
+- `frontend/src/__tests__/` — Vitest unit (147 pass)
 - `frontend/tests-e2e/` — Playwright E2E + visual
 - `backend/tests/` — pytest (402+)
