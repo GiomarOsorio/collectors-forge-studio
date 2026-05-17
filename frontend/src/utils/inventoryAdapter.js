@@ -39,6 +39,7 @@ export function mapToFilament(item) {
     remaining,
     total,
     costPerKg: Number(item.price_per_kg) || 0,
+    salePerKg: item.sale_price != null ? Number(item.sale_price) : null,
     location: item.location || '',
     lowStock: !!item.low_stock,
     minQuantity: Number(item.min_quantity) || 0,
@@ -140,6 +141,18 @@ export const fmtCOP = (n) => {
   const abs = Math.abs(Number(n));
   if (abs >= 1000) return `$ ${Math.round(Number(n)).toLocaleString('es-CO')}`;
   return `$ ${Number(n).toFixed(0)}`;
+};
+
+/**
+ * Formato USD para precios de filamento (la calculadora los maneja en USD,
+ * no COP). Ej: 25 → "$25.00", 1499.5 → "$1,499.50".
+ */
+export const fmtUSD = (n) => {
+  if (n == null || !Number.isFinite(Number(n))) return '—';
+  return `$${Number(n).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 };
 
 export const fmtKg = (g) => {

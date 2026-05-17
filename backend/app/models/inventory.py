@@ -59,6 +59,12 @@ class InventoryItem(Base):
         Numeric(12, 2), nullable=False, server_default=text("'0'")
     )
 
+    # Precio de venta sugerido al cliente. Distinto del costo:
+    #   - Filamento: COP/kg sugerido para cotizaciones
+    #   - Insumo / Herramienta / Consumible: COP/unidad cobrable
+    # Nullable: items pre-feature quedan con NULL.
+    sale_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
+
     # Datos del proveedor
     supplier_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     supplier_contact: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
