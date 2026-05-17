@@ -74,6 +74,7 @@ import {
   fmtCOP,
   fmtG,
   fmtKg,
+  fmtUSD,
   groupFilaments,
   mapToFilament,
   stockLevel,
@@ -91,8 +92,8 @@ function KPIStrip({ stats, openPOs, openPOsValue }) {
       <div className="flex-1 min-w-[180px] flex">
         <KPI
           label="Capital"
-          value={`$${(stats.totalValue / 1_000_000).toFixed(2)}M`}
-          unit="COP"
+          value={fmtUSD(stats.totalValue)}
+          unit="USD"
           sub="valor en inventario"
           accent="#3B82F6"
           icon={ArrowUpRight}
@@ -377,7 +378,7 @@ function FilamentCard({ f, onClick }) {
         </div>
         <div className="flex flex-col items-end min-w-0">
           <span className="lbl-eyebrow text-[9px]">Costo/kg</span>
-          <span className="mono text-xs text-tech-white whitespace-nowrap">{fmtCOP(f.costPerKg)}</span>
+          <span className="mono text-xs text-tech-white whitespace-nowrap">{fmtUSD(f.costPerKg)}</span>
         </div>
       </div>
 
@@ -487,7 +488,7 @@ function FilamentTable({ items, onRowClick }) {
                       </div>
                     </div>
                   </td>
-                  <td className="px-3 py-3 w-[110px] mono text-xs text-tech-white">{fmtCOP(f.costPerKg)}</td>
+                  <td className="px-3 py-3 w-[110px] mono text-xs text-tech-white">{fmtUSD(f.costPerKg)}</td>
                   <td className="px-3 py-3 mono text-[11px] text-steel">{f.location || '—'}</td>
                 </tr>
               );
@@ -505,7 +506,8 @@ function FilamentDrawerBody({ f, onReassign }) {
   if (!f) return null;
   const level = stockLevel(f);
   const p = fillPercent(f);
-  const remainValueCop = (f.remaining / 1000) * f.costPerKg;
+  // costPerKg está en USD, los gramos restantes / 1000 → kg → valor USD
+  const remainValueUsd = (f.remaining / 1000) * f.costPerKg;
   const lastUsedLabel = lastUsedFromDate(f.updatedAt);
   const locationShort = f.location
     ? (f.location.split(' · ').slice(-1)[0] || f.location)
@@ -570,10 +572,14 @@ function FilamentDrawerBody({ f, onReassign }) {
         </div>
       </div>
 
-      {/* Stats grid 2×3 */}
+      {/* Stats grid 2×3+ */}
       <div className="grid grid-cols-2 gap-1.5">
-        <SheetStat label="Valor restante" value={fmtCOP(remainValueCop)} />
-        <SheetStat label="Costo / kg" value={fmtCOP(f.costPerKg)} />
+        <SheetStat label="Valor restante" value={fmtUSD(remainValueUsd)} />
+        <SheetStat label="Costo / kg" value={fmtUSD(f.costPerKg)} />
+        <SheetStat
+          label="Precio venta / kg"
+          value={f.salePerKg != null ? fmtUSD(f.salePerKg) : '—'}
+        />
         <SheetStat label="Spool original" value={fmtKg(f.total)} />
         <SheetStat label="Ubicación" value={locationShort} icon={MapPin} />
         <SheetStat label="Último uso" value={lastUsedLabel} icon={Clock} />
@@ -880,11 +886,8 @@ function InventoryItemDrawerBody({ item }) {
         </Card>
       )}
 
-      <div className="flex gap-2 pt-2 border-t border-[var(--color-border-soft)]">
-        <Link to="/inventory/stock" className="btn btn-primary btn-sm flex-1">
-          Editar en vista clásica
-        </Link>
-      </div>
+      {/* "Editar en vista clásica" eliminado — ahora la edición vive en el
+          ItemFormDrawer accesible vía el ícono Pencil del header del view drawer. */}
     </div>
   );
 }
@@ -1152,9 +1155,9 @@ function MobileHeroStatus({ stats, consumption14d }) {
             <p className="lbl-eyebrow">Capital invertido</p>
             <div className="flex items-baseline gap-1.5 mt-1.5">
               <span className="mono text-[28px] font-semibold text-tech-white tracking-tight leading-none">
-                ${(stats.totalValue / 1_000_000).toFixed(2)}M
+                {fmtUSD(stats.totalValue)}
               </span>
-              <span className="mono text-xs text-gunmetal">COP</span>
+              <span className="mono text-xs text-gunmetal">USD</span>
             </div>
             <div className="inline-flex items-center gap-1 mt-2 text-[11px]">
               <TrendingUp size={11} className="text-emerald-400" />
@@ -1407,6 +1410,41 @@ const FILAMENT_DENSITY_DEFAULTS = {
   Nylon: 1.14,
 };
 
+// ─── Reusable form helpers (module-level — CRÍTICO) ─────────────────────────
+// Estos componentes DEBEN vivir fuera del form drawer. Si se definen
+// dentro de la función del drawer, cada re-render crea componentes NUEVOS,
+// React desmonta/remonta los inputs en cada keystroke, y el foco salta
+// al primer input con `autoFocus` (bug reportado: cursor salta a "Nombre
+// interno" cada vez que escribís en otro campo).
+
+const FORM_INPUT_CLS =
+  'w-full bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm placeholder:text-gunmetal-dim outline-none focus:border-blue-500';
+
+function FormFieldRow({ label, required, error, children }) {
+  return (
+    <label className="flex flex-col gap-1 min-w-0">
+      <span className="lbl-eyebrow text-[10px] flex items-center gap-1">
+        {label}
+        {required && <span className="text-rose-400" aria-label="requerido">*</span>}
+        {error && (
+          <span className="ml-auto text-rose-300 normal-case tracking-normal text-[10px] font-normal">
+            {error}
+          </span>
+        )}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function FormSectionTitle({ children }) {
+  return (
+    <div className="lbl-eyebrow text-[10px] mt-2 pb-1 border-b border-[var(--color-border-soft)]">
+      {children}
+    </div>
+  );
+}
+
 function emptyFilamentForm() {
   return {
     name: '',
@@ -1420,6 +1458,7 @@ function emptyFilamentForm() {
     quantity: 1000,
     min_quantity: '',
     price_per_kg: '',
+    sale_price: '',
     filament_diameter: 1.75,
     filament_density: '',
     location: '',
@@ -1448,6 +1487,7 @@ function filamentToForm(raw) {
     quantity: Number(raw?.quantity) || 0,
     min_quantity: raw?.min_quantity != null ? Number(raw.min_quantity) : '',
     price_per_kg: raw?.price_per_kg != null ? Number(raw.price_per_kg) : '',
+    sale_price: raw?.sale_price != null ? Number(raw.sale_price) : '',
     filament_diameter: raw?.filament_diameter != null ? Number(raw.filament_diameter) : 1.75,
     filament_density: raw?.filament_density != null ? Number(raw.filament_density) : '',
     location: raw?.location || '',
@@ -1534,6 +1574,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
         color_name: form.color_name.trim(),
         color_hex: form.color_hex,
         price_per_kg: form.price_per_kg !== '' ? Number(form.price_per_kg) : null,
+        sale_price: form.sale_price !== '' ? Number(form.sale_price) : null,
         filament_diameter: form.filament_diameter !== '' ? Number(form.filament_diameter) : null,
         filament_density: form.filament_density !== '' ? Number(form.filament_density) : null,
         location: form.location.trim() || null,
@@ -1562,67 +1603,43 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
     }
   };
 
-  const inputCls =
-    'w-full bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm placeholder:text-gunmetal-dim outline-none focus:border-blue-500';
-
-  const FieldRow = ({ label, required, error, children }) => (
-    <label className="flex flex-col gap-1 min-w-0">
-      <span className="lbl-eyebrow text-[10px] flex items-center gap-1">
-        {label}
-        {required && <span className="text-rose-400" aria-label="requerido">*</span>}
-        {error && (
-          <span className="ml-auto text-rose-300 normal-case tracking-normal text-[10px] font-normal">
-            {error}
-          </span>
-        )}
-      </span>
-      {children}
-    </label>
-  );
-
-  const SectionTitle = ({ children }) => (
-    <div className="lbl-eyebrow text-[10px] mt-2 pb-1 border-b border-[var(--color-border-soft)]">
-      {children}
-    </div>
-  );
-
   const body = (
     <div className="flex flex-col gap-3">
       <p className="text-[12px] text-gunmetal">
         Los campos marcados con <span className="text-rose-400">*</span> son obligatorios.
       </p>
 
-      <SectionTitle>Identificación</SectionTitle>
+      <FormSectionTitle>Identificación</FormSectionTitle>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <FieldRow label="Nombre interno" required error={errors.name}>
+        <FormFieldRow label="Nombre interno" required error={errors.name}>
           <input
             value={form.name}
             onChange={(e) => update('name', e.target.value)}
             placeholder="ej. Spool A-2611"
-            className={inputCls}
+            className={FORM_INPUT_CLS}
             autoFocus
           />
-        </FieldRow>
-        <FieldRow label="Nombre del color" required error={errors.color_name}>
+        </FormFieldRow>
+        <FormFieldRow label="Nombre del color" required error={errors.color_name}>
           <input
             value={form.color_name}
             onChange={(e) => update('color_name', e.target.value)}
             placeholder="ej. Carbon Black"
-            className={inputCls}
+            className={FORM_INPUT_CLS}
           />
-        </FieldRow>
-        <FieldRow label="Material" required error={errors.filament_type}>
+        </FormFieldRow>
+        <FormFieldRow label="Material" required error={errors.filament_type}>
           <select
             value={form.filament_type}
             onChange={(e) => onTypeChange(e.target.value)}
-            className={inputCls}
+            className={FORM_INPUT_CLS}
           >
             {MATERIALS.map((m) => (
               <option key={m.id} value={m.id}>{m.name}</option>
             ))}
           </select>
-        </FieldRow>
-        <FieldRow label="Color (hex)">
+        </FormFieldRow>
+        <FormFieldRow label="Color (hex)">
           <div className="flex items-center gap-2">
             <input
               type="color"
@@ -1635,26 +1652,26 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
               value={form.color_hex}
               onChange={(e) => update('color_hex', e.target.value)}
               placeholder="#3B82F6"
-              className={`${inputCls} mono uppercase`}
+              className={`${FORM_INPUT_CLS} mono uppercase`}
             />
           </div>
-        </FieldRow>
+        </FormFieldRow>
         <div className="sm:col-span-2">
-          <FieldRow label="Descripción">
+          <FormFieldRow label="Descripción">
             <textarea
               rows={2}
               value={form.description}
               onChange={(e) => update('description', e.target.value)}
               placeholder="Detalles adicionales (acabado, opacidad, recomendaciones de uso…)"
-              className={`${inputCls} resize-y`}
+              className={`${FORM_INPUT_CLS} resize-y`}
             />
-          </FieldRow>
+          </FormFieldRow>
         </div>
       </div>
 
-      <SectionTitle>Stock</SectionTitle>
+      <FormSectionTitle>Stock</FormSectionTitle>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <FieldRow label="Peso total spool (g)" required error={errors.weight_per_roll}>
+        <FormFieldRow label="Peso total spool (g)" required error={errors.weight_per_roll}>
           <input
             type="number"
             min="1"
@@ -1665,20 +1682,20 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
               update('weight_per_roll', v);
               if (Number(form.quantity) > Number(v)) update('quantity', v);
             }}
-            className={`${inputCls} mono`}
+            className={`${FORM_INPUT_CLS} mono`}
           />
-        </FieldRow>
-        <FieldRow label="Restante actual (g)" required error={errors.quantity}>
+        </FormFieldRow>
+        <FormFieldRow label="Restante actual (g)" required error={errors.quantity}>
           <input
             type="number"
             min="0"
             step="1"
             value={form.quantity}
             onChange={(e) => update('quantity', e.target.value)}
-            className={`${inputCls} mono`}
+            className={`${FORM_INPUT_CLS} mono`}
           />
-        </FieldRow>
-        <FieldRow label="Stock mínimo (g)">
+        </FormFieldRow>
+        <FormFieldRow label="Stock mínimo (g)">
           <input
             type="number"
             min="0"
@@ -1686,10 +1703,10 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             value={form.min_quantity}
             onChange={(e) => update('min_quantity', e.target.value)}
             placeholder="ej. 200"
-            className={`${inputCls} mono`}
+            className={`${FORM_INPUT_CLS} mono`}
           />
-        </FieldRow>
-        <FieldRow label="¿Marcar como necesario comprar?">
+        </FormFieldRow>
+        <FormFieldRow label="¿Marcar como necesario comprar?">
           <label className="inline-flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -1701,12 +1718,12 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
               {form.needs_purchase ? 'Sí — aparece en el listado de pendientes' : 'No, stock OK'}
             </span>
           </label>
-        </FieldRow>
+        </FormFieldRow>
       </div>
 
-      <SectionTitle>Técnico</SectionTitle>
+      <FormSectionTitle>Técnico</FormSectionTitle>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <FieldRow label="Diámetro (mm)" error={errors.filament_diameter}>
+        <FormFieldRow label="Diámetro (mm)" error={errors.filament_diameter}>
           <input
             type="number"
             min="0"
@@ -1714,10 +1731,10 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             value={form.filament_diameter}
             onChange={(e) => update('filament_diameter', e.target.value)}
             placeholder="1.75"
-            className={`${inputCls} mono`}
+            className={`${FORM_INPUT_CLS} mono`}
           />
-        </FieldRow>
-        <FieldRow label="Densidad (g/cm³)">
+        </FormFieldRow>
+        <FormFieldRow label="Densidad (g/cm³)">
           <input
             type="number"
             min="0"
@@ -1725,76 +1742,88 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             value={form.filament_density}
             onChange={(e) => update('filament_density', e.target.value)}
             placeholder={FILAMENT_DENSITY_DEFAULTS[form.filament_type] || '1.24'}
-            className={`${inputCls} mono`}
+            className={`${FORM_INPUT_CLS} mono`}
           />
-        </FieldRow>
+        </FormFieldRow>
       </div>
 
-      <SectionTitle>Proveedor & costo</SectionTitle>
+      <FormSectionTitle>Proveedor & costo</FormSectionTitle>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <FieldRow label="Marca">
+        <FormFieldRow label="Marca">
           <input
             value={form.filament_brand}
             onChange={(e) => update('filament_brand', e.target.value)}
             placeholder="ej. BambuLab"
-            className={inputCls}
+            className={FORM_INPUT_CLS}
           />
-        </FieldRow>
-        <FieldRow label="Batch">
+        </FormFieldRow>
+        <FormFieldRow label="Batch">
           <input
             value={form.batch}
             onChange={(e) => update('batch', e.target.value)}
             placeholder="ej. A-2611"
-            className={`${inputCls} mono`}
+            className={`${FORM_INPUT_CLS} mono`}
           />
-        </FieldRow>
-        <FieldRow label="Proveedor (vendor)">
+        </FormFieldRow>
+        <FormFieldRow label="Proveedor (vendor)">
           <input
             value={form.supplier_name}
             onChange={(e) => update('supplier_name', e.target.value)}
             placeholder="ej. 3D Hardware Colombia"
-            className={inputCls}
+            className={FORM_INPUT_CLS}
           />
-        </FieldRow>
-        <FieldRow label="Contacto proveedor">
+        </FormFieldRow>
+        <FormFieldRow label="Contacto proveedor">
           <input
             value={form.supplier_contact}
             onChange={(e) => update('supplier_contact', e.target.value)}
             placeholder="email / tel / link"
-            className={inputCls}
+            className={FORM_INPUT_CLS}
           />
-        </FieldRow>
-        <FieldRow label="Precio por kg (COP)">
+        </FormFieldRow>
+        <FormFieldRow label="Precio costo por kg (USD)">
           <input
             type="number"
             min="0"
-            step="100"
+            step="0.01"
             value={form.price_per_kg}
             onChange={(e) => update('price_per_kg', e.target.value)}
-            placeholder="ej. 120000"
-            className={`${inputCls} mono`}
+            placeholder="ej. 25.00"
+            className={`${FORM_INPUT_CLS} mono`}
           />
-        </FieldRow>
-        <FieldRow label="Ubicación">
+        </FormFieldRow>
+        <FormFieldRow label="Precio de venta por kg (USD)">
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={form.sale_price}
+            onChange={(e) => update('sale_price', e.target.value)}
+            placeholder="ej. 40.00"
+            className={`${FORM_INPUT_CLS} mono`}
+          />
+        </FormFieldRow>
+        <FormFieldRow label="Ubicación">
           <input
             value={form.location}
             onChange={(e) => update('location', e.target.value)}
             placeholder="ej. Estante 1 · Caja A"
-            className={inputCls}
+            className={FORM_INPUT_CLS}
           />
-        </FieldRow>
+        </FormFieldRow>
+        <div /> {/* spacer */}
       </div>
 
-      <SectionTitle>Notas</SectionTitle>
-      <FieldRow label="Observaciones">
+      <FormSectionTitle>Notas</FormSectionTitle>
+      <FormFieldRow label="Observaciones">
         <textarea
           rows={3}
           value={form.notes}
           onChange={(e) => update('notes', e.target.value)}
           placeholder="Condiciones de almacenamiento, intentos previos, configuración recomendada…"
-          className={`${inputCls} resize-y`}
+          className={`${FORM_INPUT_CLS} resize-y`}
         />
-      </FieldRow>
+      </FormFieldRow>
     </div>
   );
 
@@ -1857,6 +1886,344 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
   );
 }
 
+// ─── Item Form Drawer (Insumo / Herramienta / Consumible) ────────────────
+
+/**
+ * Defaults por categoría — unidad y nombre display del header del drawer.
+ */
+const CATEGORY_DEFAULTS = {
+  Insumo:      { unit: 'unidades', accent: '#3B82F6', icon: Box,      label: 'insumo' },
+  Herramienta: { unit: 'unidades', accent: '#94A0AE', icon: Scissors, label: 'herramienta' },
+  Consumible:  { unit: 'unidades', accent: '#FBBF24', icon: Beaker,   label: 'consumible' },
+};
+
+function emptyItemForm(category) {
+  const cd = CATEGORY_DEFAULTS[category] || { unit: 'unidades' };
+  return {
+    name: '',
+    description: '',
+    unit: cd.unit,
+    quantity: 0,
+    min_quantity: '',
+    unit_cost: '',
+    sale_price: '',
+    supplier_name: '',
+    supplier_contact: '',
+    location: '',
+    needs_purchase: false,
+    notes: '',
+    // Consumible-specific
+    useful_life_hours: '',
+  };
+}
+
+function itemToForm(raw) {
+  return {
+    name: raw?.name || '',
+    description: raw?.description || '',
+    unit: raw?.unit || 'unidades',
+    quantity: Number(raw?.quantity) || 0,
+    min_quantity: raw?.min_quantity != null ? Number(raw.min_quantity) : '',
+    unit_cost: raw?.unit_cost != null ? Number(raw.unit_cost) : '',
+    sale_price: raw?.sale_price != null ? Number(raw.sale_price) : '',
+    supplier_name: raw?.supplier_name || '',
+    supplier_contact: raw?.supplier_contact || '',
+    location: raw?.location || '',
+    needs_purchase: !!raw?.needs_purchase,
+    notes: raw?.notes || '',
+    useful_life_hours: raw?.useful_life_hours != null ? Number(raw.useful_life_hours) : '',
+  };
+}
+
+/**
+ * Drawer para crear/editar Insumos, Herramientas y Consumibles.
+ * Sustituye la vista clásica `/inventory/stock?edit=X`.
+ *
+ * @param {Object} props
+ * @param {boolean}              props.open
+ * @param {() => void}           props.onClose
+ * @param {'Insumo'|'Herramienta'|'Consumible'} props.category
+ * @param {'create'|'edit'}      [props.mode='create']
+ * @param {Object}               [props.initial]
+ * @param {(item: Object) => void} [props.onSaved]
+ * @param {boolean}              props.isMobile
+ */
+function ItemFormDrawer({ open, onClose, category, mode = 'create', initial, onSaved, isMobile }) {
+  const [form, setForm] = useState(emptyItemForm(category));
+  const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setForm(mode === 'edit' && initial ? itemToForm(initial) : emptyItemForm(category));
+    setErrors({});
+  }, [open, mode, initial, category]);
+
+  if (!open) return null;
+
+  const cd = CATEGORY_DEFAULTS[category] || CATEGORY_DEFAULTS.Insumo;
+  const CategoryIcon = cd.icon;
+  const update = (k, v) => setForm((cur) => ({ ...cur, [k]: v }));
+
+  const validate = () => {
+    const next = {};
+    if (!form.name.trim()) next.name = 'Requerido';
+    if (!form.unit.trim()) next.unit = 'Requerido';
+    const q = Number(form.quantity);
+    if (q < 0) next.quantity = '≥ 0';
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  };
+
+  const submit = async () => {
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      const payload = {
+        name: form.name.trim(),
+        category,
+        description: form.description.trim() || null,
+        unit: form.unit.trim(),
+        quantity: Number(form.quantity),
+        min_quantity: form.min_quantity !== '' ? Number(form.min_quantity) : 0,
+        unit_cost: form.unit_cost !== '' ? Number(form.unit_cost) : 0,
+        sale_price: form.sale_price !== '' ? Number(form.sale_price) : null,
+        supplier_name: form.supplier_name.trim() || null,
+        supplier_contact: form.supplier_contact.trim() || null,
+        location: form.location.trim() || null,
+        needs_purchase: form.needs_purchase,
+        notes: form.notes.trim() || null,
+      };
+      if (category === 'Consumible' && form.useful_life_hours !== '') {
+        payload.useful_life_hours = Number(form.useful_life_hours);
+      }
+      const res = mode === 'edit'
+        ? await updateInventoryItem(initial.id, payload)
+        : await createInventoryItem(payload);
+      toast.success(mode === 'edit' ? `"${payload.name}" actualizado` : `"${payload.name}" agregado`);
+      onSaved?.(res.data);
+      onClose?.();
+    } catch (err) {
+      const msg = err?.response?.data?.detail || 'No se pudo guardar';
+      toast.error(typeof msg === 'string' ? msg : 'Error al guardar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const body = (
+    <div className="flex flex-col gap-3">
+      <p className="text-[12px] text-gunmetal">
+        Los campos marcados con <span className="text-rose-400">*</span> son obligatorios.
+      </p>
+
+      <FormSectionTitle>Identificación</FormSectionTitle>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <FormFieldRow label={`Nombre del ${cd.label}`} required error={errors.name}>
+          <input
+            value={form.name}
+            onChange={(e) => update('name', e.target.value)}
+            placeholder={`ej. Boquilla 0.4mm`}
+            className={FORM_INPUT_CLS}
+            autoFocus
+          />
+        </FormFieldRow>
+        <FormFieldRow label="Unidad" required error={errors.unit}>
+          <input
+            value={form.unit}
+            onChange={(e) => update('unit', e.target.value)}
+            placeholder="ej. unidades, ml, g"
+            className={FORM_INPUT_CLS}
+          />
+        </FormFieldRow>
+        <div className="sm:col-span-2">
+          <FormFieldRow label="Descripción">
+            <textarea
+              rows={2}
+              value={form.description}
+              onChange={(e) => update('description', e.target.value)}
+              placeholder="Detalles adicionales"
+              className={`${FORM_INPUT_CLS} resize-y`}
+            />
+          </FormFieldRow>
+        </div>
+      </div>
+
+      <FormSectionTitle>Stock</FormSectionTitle>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <FormFieldRow label="Cantidad actual" required error={errors.quantity}>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={form.quantity}
+            onChange={(e) => update('quantity', e.target.value)}
+            className={`${FORM_INPUT_CLS} mono`}
+          />
+        </FormFieldRow>
+        <FormFieldRow label="Stock mínimo">
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={form.min_quantity}
+            onChange={(e) => update('min_quantity', e.target.value)}
+            placeholder="ej. 5"
+            className={`${FORM_INPUT_CLS} mono`}
+          />
+        </FormFieldRow>
+        <FormFieldRow label="¿Marcar como necesario comprar?">
+          <label className="inline-flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.needs_purchase}
+              onChange={(e) => update('needs_purchase', e.target.checked)}
+              className="w-4 h-4 accent-amber-400"
+            />
+            <span className="text-[12px] text-steel">
+              {form.needs_purchase ? 'Sí — aparece en pendientes' : 'No, stock OK'}
+            </span>
+          </label>
+        </FormFieldRow>
+      </div>
+
+      <FormSectionTitle>Costo & venta</FormSectionTitle>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <FormFieldRow label="Costo unitario (COP)">
+          <input
+            type="number"
+            min="0"
+            step="100"
+            value={form.unit_cost}
+            onChange={(e) => update('unit_cost', e.target.value)}
+            placeholder="ej. 5000"
+            className={`${FORM_INPUT_CLS} mono`}
+          />
+        </FormFieldRow>
+        <FormFieldRow label="Precio de venta (COP)">
+          <input
+            type="number"
+            min="0"
+            step="100"
+            value={form.sale_price}
+            onChange={(e) => update('sale_price', e.target.value)}
+            placeholder="ej. 8000"
+            className={`${FORM_INPUT_CLS} mono`}
+          />
+        </FormFieldRow>
+        {category === 'Consumible' && (
+          <FormFieldRow label="Vida útil (horas de impresión)">
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={form.useful_life_hours}
+              onChange={(e) => update('useful_life_hours', e.target.value)}
+              placeholder="ej. 500"
+              className={`${FORM_INPUT_CLS} mono`}
+            />
+          </FormFieldRow>
+        )}
+      </div>
+
+      <FormSectionTitle>Proveedor & ubicación</FormSectionTitle>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <FormFieldRow label="Proveedor (vendor)">
+          <input
+            value={form.supplier_name}
+            onChange={(e) => update('supplier_name', e.target.value)}
+            placeholder="ej. 3D Hardware Colombia"
+            className={FORM_INPUT_CLS}
+          />
+        </FormFieldRow>
+        <FormFieldRow label="Contacto proveedor">
+          <input
+            value={form.supplier_contact}
+            onChange={(e) => update('supplier_contact', e.target.value)}
+            placeholder="email / tel / link"
+            className={FORM_INPUT_CLS}
+          />
+        </FormFieldRow>
+        <FormFieldRow label="Ubicación">
+          <input
+            value={form.location}
+            onChange={(e) => update('location', e.target.value)}
+            placeholder="ej. Cajón A · Estante 2"
+            className={FORM_INPUT_CLS}
+          />
+        </FormFieldRow>
+      </div>
+
+      <FormSectionTitle>Notas</FormSectionTitle>
+      <FormFieldRow label="Observaciones">
+        <textarea
+          rows={3}
+          value={form.notes}
+          onChange={(e) => update('notes', e.target.value)}
+          placeholder="Información extra, recomendaciones de uso…"
+          className={`${FORM_INPUT_CLS} resize-y`}
+        />
+      </FormFieldRow>
+    </div>
+  );
+
+  const footerSlot = (
+    <>
+      <button
+        type="button"
+        onClick={onClose}
+        className="btn btn-sm flex-1 justify-center"
+        disabled={saving}
+      >
+        Cancelar
+      </button>
+      <button
+        type="button"
+        onClick={submit}
+        disabled={saving}
+        className="btn btn-primary btn-sm flex-1 justify-center disabled:opacity-50"
+      >
+        {saving
+          ? 'Guardando…'
+          : mode === 'edit'
+            ? (<><Pencil size={13} /> Guardar cambios</>)
+            : (<><Plus size={13} /> Agregar</>)}
+      </button>
+    </>
+  );
+
+  const title = mode === 'edit'
+    ? (initial?.name || `Editar ${cd.label}`)
+    : `Agregar ${cd.label}`;
+  const eyebrow = mode === 'edit'
+    ? `Editando · ${cd.label}`
+    : `Inventario · nuevo ${cd.label}`;
+
+  if (isMobile) {
+    return (
+      <MobileSheet open={open} onClose={onClose} title={title} height="full">
+        <div className="px-5 pt-4 pb-2">{body}</div>
+        <div className="px-5 pt-3 pb-5 border-t border-[var(--color-border-soft)] flex gap-2 sticky bottom-0 bg-[var(--color-surf-sidebar)]">
+          {footerSlot}
+        </div>
+      </MobileSheet>
+    );
+  }
+
+  return (
+    <DetailDrawer
+      open={open}
+      onClose={onClose}
+      title={title}
+      eyebrow={eyebrow}
+      width={520}
+      footer={footerSlot}
+    >
+      {body}
+    </DetailDrawer>
+  );
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 /**
@@ -1877,7 +2244,11 @@ export default function InventoryPage() {
   const [sort, setSort] = useState('lowFirst');
   const [searchOpen, setSearchOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
-  const [editingRaw, setEditingRaw] = useState(null);  // raw backend item para edit mode
+  const [editingRaw, setEditingRaw] = useState(null);  // raw backend item para edit mode (filamento)
+  // Item form drawer (insumo/herramienta/consumible)
+  const [itemFormCategory, setItemFormCategory] = useState(null); // null | 'Insumo' | 'Herramienta' | 'Consumible'
+  const [itemFormMode, setItemFormMode] = useState('create');     // 'create' | 'edit'
+  const [editingItemRaw, setEditingItemRaw] = useState(null);     // raw backend item
   // Drawer/sheet state — un slot por tipo para no mezclar bodies.
   const [selected, setSelected] = useState(null);            // filamento
   const [selectedItem, setSelectedItem] = useState(null);    // insumo / herramienta / consumible
@@ -2276,8 +2647,18 @@ export default function InventoryPage() {
               setAddOpen(true);
               return;
             }
-            // Otras categorías aún no tienen modal v2 — TODO.
-            toast('Crear ítems en otras categorías llega pronto.');
+            // Insumo / Herramienta / Consumible → ItemFormDrawer
+            const catMap = {
+              insumos: 'Insumo',
+              herramientas: 'Herramienta',
+              consumibles: 'Consumible',
+            };
+            const cat = catMap[tab];
+            if (cat) {
+              setItemFormCategory(cat);
+              setItemFormMode('create');
+              setEditingItemRaw(null);
+            }
           }}
         />
 
@@ -2310,6 +2691,16 @@ export default function InventoryPage() {
           onClose={() => setSelectedItem(null)}
           title={selectedItem?.name}
           height="full"
+          onEdit={
+            selectedItem
+              ? () => {
+                  setEditingItemRaw(selectedItem);
+                  setItemFormCategory(selectedItem.category);
+                  setItemFormMode('edit');
+                  setSelectedItem(null);
+                }
+              : undefined
+          }
         >
           <InventoryItemDrawerBody item={selectedItem} />
         </MobileSheet>
@@ -2342,6 +2733,30 @@ export default function InventoryPage() {
               next[idx] = mapped;
               return next;
             });
+          }}
+        />
+
+        <ItemFormDrawer
+          open={!!itemFormCategory}
+          onClose={() => {
+            setItemFormCategory(null);
+            setEditingItemRaw(null);
+          }}
+          category={itemFormCategory || 'Insumo'}
+          mode={itemFormMode}
+          initial={editingItemRaw}
+          isMobile={isMobile}
+          onSaved={(item) => {
+            const upsert = (list, setList) => setList((cur) => {
+              const idx = cur.findIndex((x) => x.id === item.id);
+              if (idx === -1) return [item, ...cur];
+              const next = [...cur];
+              next[idx] = item;
+              return next;
+            });
+            if (item?.category === 'Insumo') upsert(supplies, setSupplies);
+            else if (item?.category === 'Herramienta') upsert(tools, setTools);
+            else if (item?.category === 'Consumible') upsert(consumables, setConsumables);
           }}
         />
       </div>
@@ -2387,8 +2802,22 @@ export default function InventoryPage() {
             onClick={() => {
               if (tab === 'filamentos') {
                 setAddOpen(true);
-              } else {
-                toast('Crear ítems en otras categorías llega pronto.');
+                return;
+              }
+              if (tab === 'compras') {
+                navigate('/inventory/purchases');
+                return;
+              }
+              const catMap = {
+                insumos: 'Insumo',
+                herramientas: 'Herramienta',
+                consumibles: 'Consumible',
+              };
+              const cat = catMap[tab];
+              if (cat) {
+                setItemFormCategory(cat);
+                setItemFormMode('create');
+                setEditingItemRaw(null);
               }
             }}
             className="btn btn-primary btn-sm"
@@ -2584,7 +3013,19 @@ export default function InventoryPage() {
                       rawList.length === 0 ? (
                         <button
                           type="button"
-                          onClick={() => toast('Crear ítems en otras categorías llega pronto.')}
+                          onClick={() => {
+                            const catMap = {
+                              insumos: 'Insumo',
+                              herramientas: 'Herramienta',
+                              consumibles: 'Consumible',
+                            };
+                            const cat = catMap[tab];
+                            if (cat) {
+                              setItemFormCategory(cat);
+                              setItemFormMode('create');
+                              setEditingItemRaw(null);
+                            }
+                          }}
                           className="btn btn-primary btn-sm"
                         >
                           <Plus size={13} /> Agregar primer ítem
@@ -2638,6 +3079,16 @@ export default function InventoryPage() {
         onClose={() => setSelectedItem(null)}
         title={selectedItem?.name || ''}
         width={460}
+        onEdit={
+          selectedItem
+            ? () => {
+                setEditingItemRaw(selectedItem);
+                setItemFormCategory(selectedItem.category);
+                setItemFormMode('edit');
+                setSelectedItem(null);
+              }
+            : undefined
+        }
       >
         <InventoryItemDrawerBody item={selectedItem} />
       </DetailDrawer>
@@ -2674,6 +3125,30 @@ export default function InventoryPage() {
         }}
       />
 
+      <ItemFormDrawer
+        open={!!itemFormCategory}
+        onClose={() => {
+          setItemFormCategory(null);
+          setEditingItemRaw(null);
+        }}
+        category={itemFormCategory || 'Insumo'}
+        mode={itemFormMode}
+        initial={editingItemRaw}
+        isMobile={isMobile}
+        onSaved={(item) => {
+          const upsert = (list, setList) => setList((cur) => {
+            const idx = cur.findIndex((x) => x.id === item.id);
+            if (idx === -1) return [item, ...cur];
+            const next = [...cur];
+            next[idx] = item;
+            return next;
+          });
+          if (item?.category === 'Insumo') upsert(supplies, setSupplies);
+          else if (item?.category === 'Herramienta') upsert(tools, setTools);
+          else if (item?.category === 'Consumible') upsert(consumables, setConsumables);
+        }}
+      />
+
       <footer className="mt-auto px-6 py-2.5 border-t border-[var(--color-border-soft)] bg-[var(--color-surf-sidebar)] flex flex-wrap items-center gap-4 text-[11px] text-gunmetal">
         <span className="inline-flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" style={{ boxShadow: '0 0 6px #34D39966' }} />
@@ -2682,7 +3157,7 @@ export default function InventoryPage() {
         <span className="w-px h-3 bg-[var(--color-border)]" />
         <span className="mono">{filaments.length} spools</span>
         <span className="mono">{(stats.totalGrams / 1000).toFixed(2)} kg</span>
-        <span className="mono">{fmtCOP(stats.totalValue)}</span>
+        <span className="mono">{fmtUSD(stats.totalValue)}</span>
         <span className="flex-1" />
         <span className="mono">es-CO · COP</span>
       </footer>

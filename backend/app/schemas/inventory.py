@@ -44,6 +44,8 @@ class InventoryItemCreate(BaseModel):
     quantity: Decimal = Field(default=Decimal("0"), ge=0)
     min_quantity: Decimal = Field(default=Decimal("0"), ge=0)
     unit_cost: Decimal = Field(default=Decimal("0"), ge=0)
+    # Precio de venta sugerido al cliente (cobrable). Nullable.
+    sale_price: Optional[Decimal] = Field(default=None, ge=0)
     supplier_name: Optional[str] = Field(default=None, max_length=200)
     supplier_contact: Optional[str] = Field(default=None, max_length=300)
     supplier_info: Optional[str] = None
@@ -96,6 +98,7 @@ class InventoryItemUpdate(BaseModel):
     quantity: Optional[Decimal] = Field(default=None, ge=0)
     min_quantity: Optional[Decimal] = Field(default=None, ge=0)
     unit_cost: Optional[Decimal] = Field(default=None, ge=0)
+    sale_price: Optional[Decimal] = Field(default=None, ge=0)
     supplier_name: Optional[str] = Field(default=None, max_length=200)
     supplier_contact: Optional[str] = Field(default=None, max_length=300)
     supplier_info: Optional[str] = None
@@ -154,6 +157,7 @@ class InventoryItemResponse(BaseModel):
     quantity: DecimalAsFloat
     min_quantity: DecimalAsFloat
     unit_cost: DecimalAsFloat
+    sale_price: Optional[DecimalAsFloat] = None
     supplier_name: Optional[str]
     supplier_contact: Optional[str]
     supplier_info: Optional[str]
