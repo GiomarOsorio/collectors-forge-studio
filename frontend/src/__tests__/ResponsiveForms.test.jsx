@@ -20,9 +20,7 @@ vi.mock('../services/api', () => ({
   }),
   getPrinters: vi.fn().mockResolvedValue({
     data: [{ id: 1, name: 'P1S', model: 'BambuLab P1S', purchase_price: 800,
-      power_consumption_watts: 350, estimated_lifespan_hours: 5000, current_hours: 100,
-      nozzle_price: 5, nozzle_lifespan_hours: 500, buildplate_price: 20,
-      buildplate_lifespan_hours: 2000, other_maintenance_per_hour: 0 }],
+      power_consumption_watts: 350, estimated_lifespan_hours: 5000, current_hours: 100 }],
   }),
   getSettings: vi.fn().mockResolvedValue({
     data: { electricity_rate: 0.15, failure_rate_percent: 5, labor_cost_per_hour: 5,
@@ -32,7 +30,7 @@ vi.mock('../services/api', () => ({
   calculateQuote: vi.fn().mockResolvedValue({
     data: {
       material_cost: 2.5, electricity_cost: 0.3, depreciation_cost: 0.8,
-      maintenance_cost: 0.2, labor_cost: 0.5, failure_cost: 0.2,
+      labor_cost: 0.5, failure_cost: 0.2,
       subtotal: 4.5, margin_percent: 30, margin_amount: 1.35,
       total_per_unit: 5.85, quantity: 1, total_price: 5.85,
       supplies_cost: 0, supplies_detail: [],

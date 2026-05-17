@@ -23,16 +23,17 @@ import { useConfirm } from '../components/ConfirmDialog';
  * Valores iniciales del formulario de impresora.
  * Los valores por defecto representan parametros tipicos:
  * - 5000 horas de vida util estimada
- * - 500 horas de vida util de boquilla
- * - 2000 horas de vida util de placa de construccion
+ *
+ * NOTA: los campos de mantenimiento (boquilla, placa, otros) fueron
+ * removidos. El costo de mantenimiento se rastrea en la app Mantenimiento
+ * (logs con descuento de inventario) y los Consumibles cubren el desgaste
+ * prospectivo en la calculadora.
  * @type {Object}
  */
 const emptyForm = {
   name: '', model: '', purchase_price: '', power_consumption_watts: '',
   estimated_lifespan_hours: '5000', current_hours: '0',
-  nozzle_price: '0', nozzle_lifespan_hours: '500',
-  buildplate_price: '0', buildplate_lifespan_hours: '2000',
-  other_maintenance_per_hour: '0', notes: '',
+  notes: '',
 };
 
 /**
@@ -188,30 +189,6 @@ export default function PrintersPage() {
                 <div>
                   <label className="tf-label">Horas de uso actual</label>
                   <input name="current_hours" type="number" value={form.current_hours} onChange={handleChange}
-                    className="tf-input" />
-                </div>
-              </div>
-
-              <h4 className="font-medium text-steel mt-4">Mantenimiento</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="tf-label">Precio boquilla ($)</label>
-                  <input name="nozzle_price" type="number" step="0.01" value={form.nozzle_price} onChange={handleChange}
-                    className="tf-input" />
-                </div>
-                <div>
-                  <label className="tf-label">Vida boquilla (h)</label>
-                  <input name="nozzle_lifespan_hours" type="number" value={form.nozzle_lifespan_hours} onChange={handleChange}
-                    className="tf-input" />
-                </div>
-                <div>
-                  <label className="tf-label">Precio placa ($)</label>
-                  <input name="buildplate_price" type="number" step="0.01" value={form.buildplate_price} onChange={handleChange}
-                    className="tf-input" />
-                </div>
-                <div>
-                  <label className="tf-label">Vida placa (h)</label>
-                  <input name="buildplate_lifespan_hours" type="number" value={form.buildplate_lifespan_hours} onChange={handleChange}
                     className="tf-input" />
                 </div>
               </div>

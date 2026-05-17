@@ -49,11 +49,6 @@ def _make_printer(**overrides):
         power_consumption_watts=Decimal("350"),
         purchase_price=Decimal("800"),
         estimated_lifespan_hours=Decimal("5000"),
-        nozzle_price=Decimal("5"),
-        nozzle_lifespan_hours=Decimal("500"),
-        buildplate_price=Decimal("20"),
-        buildplate_lifespan_hours=Decimal("2000"),
-        other_maintenance_per_hour=Decimal("0"),
     )
     defaults.update(overrides)
     return _FakePrinter(**defaults)
@@ -113,11 +108,6 @@ class TestFakePrinter:
         assert p.power_consumption_watts   == Decimal("350")
         assert p.purchase_price            == Decimal("800")
         assert p.estimated_lifespan_hours  == Decimal("5000")
-        assert p.nozzle_price              == Decimal("5")
-        assert p.nozzle_lifespan_hours     == Decimal("500")
-        assert p.buildplate_price          == Decimal("20")
-        assert p.buildplate_lifespan_hours == Decimal("2000")
-        assert p.other_maintenance_per_hour == Decimal("0")
 
     def test_depreciacion_correcta(self):
         """Depreciación = $800 / 5000h × 2h = $0.32."""
@@ -228,11 +218,6 @@ class TestQuoteManualRequestSchema:
         """Los campos opcionales tienen defaults correctos."""
         req = QuoteManualRequest(**self._base())
         assert req.quantity                   == 1
-        assert req.nozzle_price               == Decimal("0")
-        assert req.nozzle_lifespan_hours      == Decimal("500")
-        assert req.buildplate_price           == Decimal("0")
-        assert req.buildplate_lifespan_hours  == Decimal("2000")
-        assert req.other_maintenance_per_hour == Decimal("0")
         assert req.preparation_time_hours     == Decimal("0")
         assert req.post_processing_time_hours == Decimal("0")
         assert req.margin_percent             is None
@@ -342,15 +327,14 @@ class TestCotizacionManualIntegracion:
             material     = 100 × 0.025 = $2.50
             electricidad = 0.35kW × 2h × 0.15 = $0.105 → $0.11 (display)
             depreciación = 800/5000 × 2 = $0.32
-            mantenimiento = (5/500 + 20/2000 + 0) × 2 = (0.01 + 0.01) × 2 = $0.04
             mano de obra  = 0 (no hay prep/post)
 
             NOTA: el motor calcula en precisión completa y solo redondea al final.
-            base interna   = 2.50 + 0.105 + 0.32 + 0.04 = $2.965 (sin redondeo)
-            fallos internos = 2.965 × 0.05 = $0.14825
-            subtotal interno = 2.965 + 0.14825 = $3.11325 → $3.11
-            margen interno  = 3.11325 × 0.30 = $0.933975 → $0.93
-            total = 3.11325 + 0.933975 = $4.047225 → $4.05
+            base interna   = 2.50 + 0.105 + 0.32 = $2.925 (sin redondeo, sin mantenimiento)
+            fallos internos = 2.925 × 0.05 = $0.14625
+            subtotal interno = 2.925 + 0.14625 = $3.07125 → $3.07
+            margen interno  = 3.07125 × 0.30 = $0.921375 → $0.92
+            total = 3.07125 + 0.921375 = $3.992625 → $3.99
         """
         req = QuoteManualRequest(
             piece_name="Pieza de Prueba",
@@ -358,11 +342,6 @@ class TestCotizacionManualIntegracion:
             power_consumption_watts=Decimal("350"),
             purchase_price=Decimal("800"),
             estimated_lifespan_hours=Decimal("5000"),
-            nozzle_price=Decimal("5"),
-            nozzle_lifespan_hours=Decimal("500"),
-            buildplate_price=Decimal("20"),
-            buildplate_lifespan_hours=Decimal("2000"),
-            other_maintenance_per_hour=Decimal("0"),
             weight_grams=Decimal("100"),
             print_time_hours=Decimal("2"),
             preparation_time_hours=Decimal("0"),
@@ -376,11 +355,6 @@ class TestCotizacionManualIntegracion:
             power_consumption_watts=req.power_consumption_watts,
             purchase_price=req.purchase_price,
             estimated_lifespan_hours=req.estimated_lifespan_hours,
-            nozzle_price=req.nozzle_price,
-            nozzle_lifespan_hours=req.nozzle_lifespan_hours,
-            buildplate_price=req.buildplate_price,
-            buildplate_lifespan_hours=req.buildplate_lifespan_hours,
-            other_maintenance_per_hour=req.other_maintenance_per_hour,
         )
         settings = _FakeSettings(
             electricity_rate=Decimal("0.15"),
@@ -402,13 +376,12 @@ class TestCotizacionManualIntegracion:
         assert result.material_cost     == Decimal("2.50")
         assert result.electricity_cost  == Decimal("0.11")
         assert result.depreciation_cost == Decimal("0.32")
-        assert result.maintenance_cost  == Decimal("0.04")
         assert result.labor_cost        == Decimal("0.00")
-        assert result.failure_cost      == Decimal("0.15")
-        assert result.subtotal          == Decimal("3.11")   # base 2.965 + failure 0.14825 = 3.11325 → 3.11
+        assert result.failure_cost      == Decimal("0.15")   # 2.925 × 0.05 = 0.14625 → 0.15
+        assert result.subtotal          == Decimal("3.07")   # base 2.925 + failure 0.14625 = 3.07125 → 3.07
         assert result.margin_percent    == Decimal("30")
-        assert result.margin_amount     == Decimal("0.93")   # 3.11325 × 0.30 = 0.933975 → 0.93
-        assert result.total_price       == Decimal("4.05")   # 3.11325 + 0.933975 = 4.0473 → 4.05
+        assert result.margin_amount     == Decimal("0.92")   # 3.07125 × 0.30 = 0.921375 → 0.92
+        assert result.total_price       == Decimal("3.99")   # 3.07125 + 0.921375 = 3.9926 → 3.99
 
     def test_sobreescritura_tarifa_electrica_afecta_resultado(self):
         """
@@ -444,11 +417,6 @@ class TestCotizacionManualIntegracion:
             power_consumption_watts=Decimal("1000"),
             purchase_price=Decimal("0"),
             estimated_lifespan_hours=Decimal("5000"),
-            nozzle_price=Decimal("0"),
-            nozzle_lifespan_hours=Decimal("500"),
-            buildplate_price=Decimal("0"),
-            buildplate_lifespan_hours=Decimal("2000"),
-            other_maintenance_per_hour=Decimal("0"),
         )
         kwargs = dict(
             weight_grams=Decimal("0.001"),
@@ -472,11 +440,6 @@ class TestCotizacionManualIntegracion:
             power_consumption_watts=Decimal("180"),
             purchase_price=Decimal("700"),
             estimated_lifespan_hours=Decimal("5000"),
-            nozzle_price=Decimal("0"),
-            nozzle_lifespan_hours=Decimal("500"),
-            buildplate_price=Decimal("0"),
-            buildplate_lifespan_hours=Decimal("2000"),
-            other_maintenance_per_hour=Decimal("0"),
         )
         settings = _FakeSettings(
             electricity_rate=Decimal("0"),

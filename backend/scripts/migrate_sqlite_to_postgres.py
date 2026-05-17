@@ -64,11 +64,9 @@ NUMERIC_COLS: dict = {
         "power_consumption_watts":    "0.01",      # Numeric(10, 2)
         "estimated_lifespan_hours":   "0.01",      # Numeric(10, 2)
         "current_hours":              "0.01",      # Numeric(10, 2)
-        "nozzle_price":               "0.01",      # Numeric(10, 2)
-        "nozzle_lifespan_hours":      "0.01",      # Numeric(10, 2)
-        "buildplate_price":           "0.01",      # Numeric(10, 2)
-        "buildplate_lifespan_hours":  "0.01",      # Numeric(10, 2)
-        "other_maintenance_per_hour": "0.000001",  # Numeric(10, 6)
+        # NOTA: nozzle_*, buildplate_*, other_maintenance_per_hour fueron
+        # removidos en la migración l6m7n8o9p0q1 (mayo 2026). Si se importa
+        # una base SQLite vieja con esos campos, simplemente se ignorarán.
     },
     "app_settings": {
         "electricity_rate":       "0.000001",  # Numeric(10, 6)
@@ -88,7 +86,8 @@ NUMERIC_COLS: dict = {
         "material_cost":              "0.01",    # Numeric(12, 2)
         "electricity_cost":           "0.01",    # Numeric(12, 2)
         "depreciation_cost":          "0.01",    # Numeric(12, 2)
-        "maintenance_cost":           "0.01",    # Numeric(12, 2)
+        # NOTA: maintenance_cost removido en l6m7n8o9p0q1; si existe en
+        # la base SQLite vieja se ignora silenciosamente.
         "labor_cost":                 "0.01",    # Numeric(12, 2)
         "failure_cost":               "0.01",    # Numeric(12, 2)
         "subtotal":                   "0.01",    # Numeric(12, 2)
