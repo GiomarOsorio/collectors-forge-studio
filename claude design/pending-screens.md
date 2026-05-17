@@ -305,6 +305,70 @@ Por favor, en cada `.jsx` que diseñes:
 2. Si una pantalla es naturalmente 3-col en QHD, mostrá esa variante en el HTML preview.
 3. Si los breakpoints requieren un nuevo primitive (ej. un `Drawer estático`), agregalo a `components.jsx` y avisanos.
 
+## 0.10 Monedas — USD vs COP
+
+**Importante**: el proyecto maneja **dos monedas** según el contexto. Esto NO estaba documentado y Giomar lo señaló:
+
+| Categoría | Moneda | Por qué |
+|---|---|---|
+| **Filamentos** | **USD** | La calculadora histórica usa USD/kg (proveedores extranjeros). Mantener consistencia. |
+| Insumos, Herramientas, Consumibles | COP | Compras locales en Colombia. |
+| Cotizaciones cliente, Purchase Orders | COP | Pesos colombianos. |
+| Tarifa eléctrica EPM | COP/Wh | Local. |
+
+### Formatters disponibles en `inventoryAdapter.js`
+
+```js
+fmtUSD(25.5)     // → "$25.50"   (en-US, 2 decimales)
+fmtCOP(120000)   // → "$ 120.000" (es-CO, sin decimales si >1000)
+fmtKg(g), fmtG(g), fmtPct(n)
+```
+
+### Labels visuales
+
+- Forms filamento: `"Precio costo por kg (USD)"`, `"Precio de venta por kg (USD)"`
+- Forms insumos/etc: `"Costo unitario (COP)"`, `"Precio de venta (COP)"`
+- KPIs / cards / tabla: usar el formatter correspondiente, NO hard-codear símbolos
+
+Cuando diseñes pantallas que muestren precios, **indica explícitamente la moneda** debajo del valor (ej. `$25.00 USD`) o como `unit` del KPI.
+
+## 0.11 Campo `sale_price` disponible para todas las categorías
+
+Migración Alembic `k5l6m7n8o9p0` agregó `sale_price NUMERIC(12, 2) NULLABLE` a `inventory_items`. Aplica a TODAS las categorías:
+
+- Filamento: USD/kg (precio sugerido para cotizaciones)
+- Insumo / Herramienta / Consumible: COP/unidad (precio cobrable al cliente)
+
+Schemas Pydantic (`InventoryItemCreate`, `Update`, `Response`) ya lo incluyen como `Optional[Decimal]`.
+
+Cuando diseñes forms de creación/edición de ítems, **agregá `sale_price` junto al `unit_cost`** (o `price_per_kg` para filamentos). Patrón ya en uso en `FilamentFormDrawer` + `ItemFormDrawer`.
+
+## 0.12 Form helpers a module-level (anti-pattern)
+
+**IMPORTANTE para forms**: NUNCA definir sub-componentes de helper (FieldRow, SectionTitle, InputGroup, etc.) DENTRO de la función de un form drawer. React los re-crea en cada render → desmonta/remonta los inputs → el foco salta al primer `autoFocus`.
+
+```jsx
+// ❌ MAL
+function MyFormDrawer({ open }) {
+  const [form, setForm] = useState({...});
+  const FieldRow = ({ label, children }) => (...);  // ← re-creado cada render
+  return <FieldRow>...</FieldRow>;
+}
+
+// ✅ BIEN
+function FieldRow({ label, children }) {  // ← module-level
+  return (...);
+}
+function MyFormDrawer({ open }) {
+  ...
+  return <FieldRow>...</FieldRow>;
+}
+```
+
+ESLint `react-hooks/static-components` captura este anti-pattern. Test REGRESIÓN-guard en `__tests__/formFieldFocus.test.jsx` documenta el bug.
+
+Cuando diseñés un form drawer nuevo, asegurate de que los helpers visuales estén a module-level y reusables (preferiblemente compartiendo `FormFieldRow`, `FormSectionTitle`, `FORM_INPUT_CLS` del módulo Inventory).
+
 ---
 
 # Pantallas pendientes
