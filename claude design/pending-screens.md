@@ -218,6 +218,93 @@ La página ACTIVA en la sidebar global muestra sus sub-items debajo del listado 
 
 Cuando agreges una nueva pantalla, registrarla en `frontend/src/config/sidebar.js` dentro del `items[]` del app correspondiente.
 
+## 0.9 Densidad por viewport — soporte QHD / 4K (PENDIENTE)
+
+**Importante**: el design actual está optimizado solo para viewports hasta **~1280 px** (laptop estándar). En pantallas más grandes (QHD 2560×1440 y 4K 3840×2160) hay mucho espacio vacío a los lados y la información se siente "perdida".
+
+Por favor, al diseñar las nuevas pantallas, incluí variantes/breakpoints específicos para estas resoluciones grandes.
+
+### Breakpoints sugeridos
+
+| Bucket | Ancho | Tailwind | Uso |
+|---|---|---|---|
+| Mobile | ≤1023 px | (default) | iPhone, Android, tablet portrait |
+| Laptop | 1024–1439 px | `lg:` | Layout actual default |
+| QHD    | 1440–2559 px | `2xl:` | Monitores 1440p / ultrawide cortos |
+| 4K     | ≥2560 px | `min-[2560px]:` | 27" 4K / TVs / 32" 4K |
+
+### Patrones esperados para QHD/4K
+
+**En general**:
+- Subir el `max-width` del contenedor principal: actualmente `max-w-7xl` (1280 px). Mover a `2xl:max-w-screen-2xl` (1536 px) y `min-[2560px]:max-w-[1920px]` o full-width con sidebar más ancha.
+- KPI strips de 4 tiles → **5–6 tiles** en QHD, **7–8** en 4K.
+- Grids de cards: `minmax(280px, 1fr)` actual → `2xl:minmax(320px, 1fr)` (cards más holgadas, más por fila).
+- Tipo: subir un step. `text-base` (14px) → `2xl:text-[15px]` en cuerpo. Headings `text-[22px]` → `2xl:text-[26px]`.
+
+**Layouts multi-column**:
+
+En QHD/4K es viable usar 3 columnas en pantallas que en laptop son single-column:
+
+- **Inventario filamentos**: agregar 3ra columna derecha con el DetailDrawer **estático y siempre visible** (en lugar de slide-in). El click del filamento en el grid solo cambia el contenido del drawer derecho, no lo abre.
+- **Cost / Calculadora**: 3 cols (parámetros · resultado · breakdown) — el design ya tiene este patrón en mobile-scroll, en QHD/4K usar 3-col directo.
+- **Slicer** (`live editor` paradigma): 3 cols del design (left rail recientes · canvas central · right rail settings) — natural en QHD/4K.
+- **Company branding**: 2 cols (paleta editor + preview PDF lado a lado) — actualmente 1-col.
+
+**Sidebar**:
+- Mantener `w-64` (256 px) hasta QHD.
+- En 4K: subir a `w-72` (288 px) o `w-80` (320 px) — más espacio horizontal disponible.
+
+**KPIs con más densidad**:
+- Mostrar más KPIs por defecto (no requiere scroll horizontal).
+- Sparklines más anchos (120 px → 180 px) para mejor lectura.
+
+### Patrón mínimo aceptable por screen
+
+Cada `.jsx` de design debe incluir (mínimo):
+
+```jsx
+const containerCls = "max-w-7xl mx-auto 2xl:max-w-screen-2xl min-[2560px]:max-w-[1920px]";
+
+// KPI strip con escalado
+<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5 min-[2560px]:grid-cols-6 gap-3">
+  {kpis.map(...)}
+</div>
+
+// Grid de cards
+<div className="grid gap-3" style={{
+  gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+  // o variante 2xl:
+  // gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+}}>
+```
+
+### Sticky drawer en QHD/4K (recomendado)
+
+En lugar del DetailDrawer slide-in (que tapa el contenido), en QHD/4K considerar:
+
+```jsx
+{isWideScreen ? (
+  // Drawer estático en la 3ra columna, no slide-in
+  <aside className="sticky top-0 w-[480px] h-screen overflow-y-auto border-l">
+    <DetailDrawerBody f={selected} />
+  </aside>
+) : (
+  // Comportamiento actual (slide-in derecho)
+  <DetailDrawer open={!!selected} onClose={...}>
+    ...
+  </DetailDrawer>
+)}
+```
+
+Hook auxiliar: agregar `useIsWideScreen()` en `hooks/useMediaQuery.js` con threshold `(min-width: 1440px)`.
+
+### Bottom line
+
+Por favor, en cada `.jsx` que diseñes:
+1. Documentá explícitamente cómo escala el layout en `2xl:` (QHD) y `min-[2560px]:` (4K).
+2. Si una pantalla es naturalmente 3-col en QHD, mostrá esa variante en el HTML preview.
+3. Si los breakpoints requieren un nuevo primitive (ej. un `Drawer estático`), agregalo a `components.jsx` y avisanos.
+
 ---
 
 # Pantallas pendientes
