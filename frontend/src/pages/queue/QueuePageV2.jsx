@@ -21,13 +21,20 @@ import {
   Pause,
   Play,
   Plus,
-  Printer,
   Search,
   Trash2,
   XCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Button, Card, DetailDrawer, KPI, MobileSheet } from '../../components/ui';
+import {
+  Button,
+  Card,
+  DetailDrawer,
+  EmptyState,
+  KPI,
+  MobileSheet,
+  StatusPill,
+} from '../../components/ui';
 import MobileAppHeader from '../../components/MobileAppHeader';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -46,12 +53,21 @@ const TABS = [
   { id: 'historial', label: 'Historial',   icon: Clock },
 ];
 
+/**
+ * Mapea el status del queue item a metadata `StatusPill` (label + tone + icon).
+ *
+ * Tonos:
+ *   - `printing`  → en impresión (azul)
+ *   - `done`      → completado (verde)
+ *   - `danger`    → cancelado (rojo)
+ *   - `pending`   → en espera (gris)
+ */
 function statusBadge(status) {
   const s = (status || '').toLowerCase();
-  if (s === 'printing') return { label: 'Imprimiendo', color: '#FBBF24', icon: Play };
-  if (s === 'done')     return { label: 'Listo',       color: '#34D399', icon: CheckCircle2 };
-  if (s === 'cancelled')return { label: 'Cancelado',   color: '#F87171', icon: XCircle };
-  return { label: 'Pendiente', color: '#94A0AE', icon: Pause };
+  if (s === 'printing')  return { label: 'Imprimiendo', tone: 'printing', icon: Play };
+  if (s === 'done')      return { label: 'Listo',       tone: 'done',     icon: CheckCircle2 };
+  if (s === 'cancelled') return { label: 'Cancelado',   tone: 'danger',   icon: XCircle };
+  return { label: 'Pendiente', tone: 'pending', icon: Pause };
 }
 
 const fmtDate = (iso) => {
@@ -69,7 +85,6 @@ const fmtDate = (iso) => {
 
 function QueueCard({ item, onClick, onAction, busy }) {
   const badge = statusBadge(item.status);
-  const Badge = badge.icon;
   const q = item.quote || {};
   return (
     <Card as="div" interactive className="p-4 flex flex-col gap-3" onClick={() => onClick(item)}>
@@ -86,17 +101,9 @@ function QueueCard({ item, onClick, onAction, busy }) {
         </span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
-            <span
-              className="mono inline-flex items-center gap-1 text-[9.5px] px-1.5 py-px rounded-sm tracking-wider"
-              style={{
-                background: `${badge.color}1A`,
-                border: `1px solid ${badge.color}40`,
-                color: badge.color,
-              }}
-            >
-              <Badge size={9} />
-              {badge.label.toUpperCase()}
-            </span>
+            <StatusPill tone={badge.tone} icon={badge.icon}>
+              {badge.label}
+            </StatusPill>
             {q.printer_name && (
               <span className="mono text-[9.5px] text-gunmetal">· {q.printer_name}</span>
             )}
@@ -165,7 +172,6 @@ function QueueCard({ item, onClick, onAction, busy }) {
 
 function QueueRow({ item, onClick }) {
   const badge = statusBadge(item.status);
-  const Badge = badge.icon;
   const q = item.quote || {};
   return (
     <button
@@ -185,17 +191,9 @@ function QueueRow({ item, onClick }) {
       </span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5">
-          <span
-            className="mono inline-flex items-center gap-0.5 text-[9.5px] px-1 py-px rounded-sm"
-            style={{
-              background: `${badge.color}1A`,
-              border: `1px solid ${badge.color}40`,
-              color: badge.color,
-            }}
-          >
-            <Badge size={9} />
-            {badge.label.toUpperCase()}
-          </span>
+          <StatusPill tone={badge.tone} icon={badge.icon}>
+            {badge.label}
+          </StatusPill>
         </div>
         <p className="text-sm font-semibold text-tech-white truncate">
           {q.piece_name || item.notes || `Item #${item.id}`}
@@ -212,29 +210,21 @@ function QueueRow({ item, onClick }) {
 
 // ─── Drawer body ────────────────────────────────────────────────────────────
 
-function QueueDrawerBody({ item, onAction, onDelete, onClose }) {
+/**
+ * Cuerpo del drawer (info read-only). El header (con eyebrow `COLA · POSICIÓN
+ * #N`) lo aporta `DetailDrawer` v2; las acciones viven en `QueueDrawerFooter`.
+ */
+function QueueDrawerBody({ item }) {
   if (!item) return null;
   const badge = statusBadge(item.status);
-  const Badge = badge.icon;
   const q = item.quote || {};
   return (
-    <div className="p-5 flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <div>
         <div className="flex items-center gap-1.5 mb-1.5">
-          <span
-            className="mono inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm tracking-wider"
-            style={{
-              background: `${badge.color}1A`,
-              border: `1px solid ${badge.color}40`,
-              color: badge.color,
-            }}
-          >
-            <Badge size={11} />
-            {badge.label.toUpperCase()}
-          </span>
-          <span className="mono text-[10px] text-gunmetal">
-            posición #{item.position ?? '—'}
-          </span>
+          <StatusPill tone={badge.tone} icon={badge.icon} size="lg">
+            {badge.label}
+          </StatusPill>
         </div>
         <h2 className="text-lg font-semibold text-tech-white truncate">
           {q.piece_name || item.notes || `Item #${item.id}`}
@@ -280,40 +270,64 @@ function QueueDrawerBody({ item, onAction, onDelete, onClose }) {
           <p className="text-sm text-steel whitespace-pre-wrap mt-1">{item.notes}</p>
         </Card>
       )}
+    </div>
+  );
+}
 
-      <div className="flex flex-wrap gap-2 pt-2 border-t border-[var(--color-border-soft)]">
-        {item.status === 'pending' && (
-          <Button variant="ghost" icon={Play} onClick={() => onAction(item, 'printing')}>
-            Iniciar
-          </Button>
-        )}
-        {(item.status === 'pending' || item.status === 'printing') && (
-          <>
-            <Button variant="primary" icon={CheckCircle2} onClick={() => onAction(item, 'done')} className="flex-1">
-              Marcar listo
-            </Button>
-            <Button
-              variant="ghost"
-              icon={XCircle}
-              onClick={() => onAction(item, 'cancelled')}
-              className="text-rose-400 hover:text-rose-300"
-            >
-              Cancelar
-            </Button>
-          </>
-        )}
+/**
+ * Footer del drawer: acciones primarias (Iniciar / Marcar listo / Cancelar)
+ * + eliminar. Se renderiza en el slot `footer` del `DetailDrawer` v2 (desktop)
+ * o inline sticky dentro del `MobileSheet` (mobile).
+ */
+function QueueDrawerFooter({ item, onAction, onDelete, onClose, busy }) {
+  if (!item) return null;
+  const isActive = item.status === 'pending' || item.status === 'printing';
+  return (
+    <>
+      {item.status === 'pending' && (
         <Button
           variant="ghost"
-          icon={Trash2}
-          onClick={async () => {
-            const ok = await onDelete(item);
-            if (ok) onClose();
-          }}
+          icon={Play}
+          onClick={() => onAction(item, 'printing')}
+          disabled={busy}
+          className="text-amber-300 hover:text-amber-200"
+        >
+          Iniciar
+        </Button>
+      )}
+      {isActive && (
+        <Button
+          variant="primary"
+          icon={CheckCircle2}
+          onClick={() => onAction(item, 'done')}
+          disabled={busy}
+          className="flex-1 justify-center"
+        >
+          Marcar listo
+        </Button>
+      )}
+      {isActive && (
+        <Button
+          variant="ghost"
+          icon={XCircle}
+          onClick={() => onAction(item, 'cancelled')}
+          disabled={busy}
           className="text-rose-400 hover:text-rose-300"
-          aria-label="Eliminar item"
-        />
-      </div>
-    </div>
+        >
+          Cancelar
+        </Button>
+      )}
+      <Button
+        variant="ghost"
+        icon={Trash2}
+        onClick={async () => {
+          const ok = await onDelete(item);
+          if (ok) onClose();
+        }}
+        className="text-rose-400 hover:text-rose-300"
+        aria-label="Eliminar item"
+      />
+    </>
   );
 }
 
@@ -543,6 +557,19 @@ export default function QueuePageV2() {
         </div>
         {loading ? (
           <p className="px-4 py-12 text-center text-gunmetal text-sm">Cargando cola…</p>
+        ) : (tab === 'activa' ? filteredActive : filteredHistory).length === 0 ? (
+          <div className="mt-3 pb-28">
+            <EmptyState
+              icon={tab === 'activa' ? ListOrdered : Clock}
+              accent={ACCENT}
+              title={tab === 'activa' ? 'Cola vacía' : 'Sin historial'}
+              hint={
+                tab === 'activa'
+                  ? 'Agrega una cotización a la cola para empezar.'
+                  : 'Cuando termines o canceles un job aparecerá aquí.'
+              }
+            />
+          </div>
         ) : (
           <ul className="mt-3 pb-28">
             {(tab === 'activa' ? filteredActive : filteredHistory).map((it) => (
@@ -550,11 +577,6 @@ export default function QueuePageV2() {
                 <QueueRow item={it} onClick={setSelected} />
               </li>
             ))}
-            {(tab === 'activa' ? filteredActive : filteredHistory).length === 0 && (
-              <li className="px-4 py-12 text-center text-gunmetal text-sm">
-                {tab === 'activa' ? 'Cola vacía' : 'Sin historial'}
-              </li>
-            )}
           </ul>
         )}
         <button
@@ -570,15 +592,29 @@ export default function QueuePageV2() {
         <MobileSheet
           open={!!selected}
           onClose={() => setSelected(null)}
-          title={selected ? `#${selected.position ?? '—'}` : ''}
+          title={
+            selected
+              ? selected.quote?.piece_name ||
+                selected.notes ||
+                `Item #${selected.id}`
+              : ''
+          }
           height="full"
         >
-          <QueueDrawerBody
-            item={selected}
-            onAction={handleAction}
-            onDelete={handleDelete}
-            onClose={() => setSelected(null)}
-          />
+          <div className="px-5 pt-4 pb-3">
+            <QueueDrawerBody item={selected} />
+          </div>
+          {selected && (
+            <div className="px-5 pt-3 pb-5 border-t border-[var(--color-border-soft)] flex flex-wrap gap-2 sticky bottom-0 bg-[var(--color-surf-sidebar)]">
+              <QueueDrawerFooter
+                item={selected}
+                onAction={handleAction}
+                onDelete={handleDelete}
+                onClose={() => setSelected(null)}
+                busy={busy}
+              />
+            </div>
+          )}
         </MobileSheet>
       </div>
     );
@@ -628,6 +664,24 @@ export default function QueuePageV2() {
 
       {loading ? (
         <p className="px-6 py-16 text-center text-gunmetal text-sm">Cargando cola…</p>
+      ) : (tab === 'activa' ? filteredActive : filteredHistory).length === 0 ? (
+        <EmptyState
+          icon={tab === 'activa' ? ListOrdered : Clock}
+          accent={ACCENT}
+          title={tab === 'activa' ? 'Cola vacía' : 'Sin historial'}
+          hint={
+            tab === 'activa'
+              ? 'Agrega una cotización a la cola para empezar a imprimir.'
+              : 'Cuando termines o canceles un job aparecerá en el historial.'
+          }
+          action={
+            tab === 'activa' ? (
+              <Link to="/cost/quotes" className="btn btn-primary btn-sm">
+                <Plus size={13} /> Agregar a cola
+              </Link>
+            ) : null
+          }
+        />
       ) : (
         <div
           className="px-6 pb-8 grid gap-3"
@@ -642,34 +696,34 @@ export default function QueuePageV2() {
               busy={busy}
             />
           ))}
-          {(tab === 'activa' ? filteredActive : filteredHistory).length === 0 && (
-            <div className="col-span-full px-6 py-16 flex flex-col items-center gap-3 text-center">
-              <Printer size={28} className="text-gunmetal-dim" />
-              <p className="text-sm font-semibold text-tech-white">
-                {tab === 'activa' ? 'Cola vacía' : 'Sin historial'}
-              </p>
-              {tab === 'activa' && (
-                <Link to="/cost/quotes" className="btn btn-primary btn-sm">
-                  <Plus size={13} /> Agregar a cola
-                </Link>
-              )}
-            </div>
-          )}
         </div>
       )}
 
       <DetailDrawer
         open={!!selected}
         onClose={() => setSelected(null)}
-        title={selected ? `Cola #${selected.position ?? '—'}` : ''}
+        eyebrow={selected ? `COLA · POSICIÓN #${selected.position ?? '—'}` : undefined}
+        title={
+          selected
+            ? selected.quote?.piece_name ||
+              selected.notes ||
+              `Item #${selected.id}`
+            : ''
+        }
         width={460}
+        footer={
+          selected && (
+            <QueueDrawerFooter
+              item={selected}
+              onAction={handleAction}
+              onDelete={handleDelete}
+              onClose={() => setSelected(null)}
+              busy={busy}
+            />
+          )
+        }
       >
-        <QueueDrawerBody
-          item={selected}
-          onAction={handleAction}
-          onDelete={handleDelete}
-          onClose={() => setSelected(null)}
-        />
+        <QueueDrawerBody item={selected} />
       </DetailDrawer>
 
       <footer className="mt-auto px-6 py-2.5 border-t border-[var(--color-border-soft)] bg-[var(--color-surf-sidebar)] flex flex-wrap items-center gap-4 text-[11px] text-gunmetal">
