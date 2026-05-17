@@ -1,25 +1,35 @@
 """
-Router del Vault de modelos .3mf para Collector's Forge Studio.
+Router del Vault de modelos `.3mf` / `.gcode.3mf` para Collector's Forge Studio.
 
-Gestiona la subida, descarga y administración de archivos .3mf almacenados
-en MinIO. Todos los endpoints requieren autenticación JWT. Las operaciones
-de escritura (upload, edit, delete) requieren role='admin'.
+Gestiona la subida, descarga y administración de archivos almacenados
+en MinIO. Cada `ModelFile` puede tener hasta dos slots: `source_file`
+(`.3mf` editable) y `print_file` (`.gcode.3mf` laminado, con G-code listo
+para impresión). Al menos uno tiene que estar presente.
+
+Todos los endpoints requieren autenticación JWT. Las operaciones de
+escritura (upload, edit, delete, replace) requieren `role='admin'`.
 
 Endpoints:
-    GET    /api/vault/               — Listar archivos (paginado, búsqueda)
-    GET    /api/vault/stats          — Estadísticas de uso del almacenamiento
-    POST   /api/vault/fetch-metadata — Pre-leer metadata desde URL externa
-    POST   /api/vault/upload         — Subir archivo .3mf con metadata (admin)
-    GET    /api/vault/{id}/download  — URL pre-firmada de descarga
-    PUT    /api/vault/{id}           — Editar metadata (admin)
-    DELETE /api/vault/{id}           — Eliminar archivo y objeto MinIO (admin)
+    GET    /api/vault/                       — Listar archivos (paginado, búsqueda)
+    GET    /api/vault/stats                  — Estadísticas de uso del almacenamiento
+    POST   /api/vault/fetch-metadata         — Pre-leer metadata desde URL externa
+    POST   /api/vault/upload                 — Subir source_file y/o print_file con metadata (admin)
+    GET    /api/vault/{id}/download/source   — Descargar el .3mf editable
+    GET    /api/vault/{id}/download/print    — Descargar el .gcode.3mf laminado
+    PUT    /api/vault/{id}                   — Editar metadata (admin)
+    POST   /api/vault/{id}/replace/source    — Reemplazar el .3mf editable (admin)
+    POST   /api/vault/{id}/replace/print     — Reemplazar el .gcode.3mf laminado (admin)
+    DELETE /api/vault/{id}                   — Eliminar archivo y objeto(s) MinIO (admin)
 """
 
 import json
 import logging
+import tempfile
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional
+from decimal import Decimal
+from pathlib import Path
+from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
@@ -34,12 +44,12 @@ from app.schemas.vault import (
     ModelFileListResponse,
     ModelFileResponse,
     ModelFileUpdate,
-    VaultDownloadResponse,
     VaultMetadataRequest,
     VaultMetadataResponse,
     VaultStatsResponse,
 )
 from app.services.auth import get_admin_user, get_current_user
+from app.services.slicer_parser import parse_3mf_file
 from app.services.thumbnail_extractor import (
     delete_thumbnail,
     extract_plate_png,
@@ -52,22 +62,21 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/vault", tags=["vault"])
 
-# Límite de upload: 1 GB (protección DoS a nivel de aplicación)
+# Límite de upload por archivo: 1 GB (DoS-protección a nivel de app).
 MAX_VAULT_UPLOAD_BYTES = 1024 * 1024 * 1024
 
 
-async def _get_model_file(db: AsyncSession, file_id: int) -> ModelFile:
-    """
-    Obtiene un ModelFile por ID.
+def _ext_ok(filename: str, allowed_suffixes: tuple) -> bool:
+    """True si el filename termina en alguno de los suffixes (case-insensitive)."""
+    if not filename:
+        return False
+    lower = filename.lower()
+    return any(lower.endswith(s) for s in allowed_suffixes)
 
-    Raises:
-        HTTPException 404: Si no existe.
-    """
-    result = await db.execute(
-        select(ModelFile).where(
-            ModelFile.id == file_id,
-        )
-    )
+
+async def _get_model_file(db: AsyncSession, file_id: int) -> ModelFile:
+    """Obtiene un ModelFile por ID; lanza 404 si no existe."""
+    result = await db.execute(select(ModelFile).where(ModelFile.id == file_id))
     model = result.scalar_one_or_none()
     if not model:
         raise HTTPException(
@@ -78,9 +87,15 @@ async def _get_model_file(db: AsyncSession, file_id: int) -> ModelFile:
 
 
 async def _get_used_bytes(db: AsyncSession) -> int:
-    """Calcula el espacio usado (bytes) sumando file_size de todos los archivos."""
+    """
+    Calcula el espacio usado (bytes) sumando source_file_size + print_file_size
+    de todos los archivos, ignorando NULLs.
+    """
     result = await db.execute(
-        select(func.coalesce(func.sum(ModelFile.file_size), 0))
+        select(
+            func.coalesce(func.sum(ModelFile.source_file_size), 0)
+            + func.coalesce(func.sum(ModelFile.print_file_size), 0)
+        )
     )
     return result.scalar() or 0
 
@@ -90,8 +105,15 @@ def _to_response(model: ModelFile, username: Optional[str]) -> ModelFileResponse
         id=model.id,
         uploaded_by=model.uploaded_by,
         uploaded_by_username=username,
-        file_name=model.file_name,
-        file_size=model.file_size,
+        source_file_name=model.source_file_name,
+        source_file_size=model.source_file_size,
+        print_file_name=model.print_file_name,
+        print_file_size=model.print_file_size,
+        sliced_weight_g=model.sliced_weight_g,
+        sliced_time_seconds=model.sliced_time_seconds,
+        sliced_printer_model=model.sliced_printer_model,
+        sliced_filament_type=model.sliced_filament_type,
+        is_print_ready=model.is_print_ready,
         name=model.name,
         description=model.description,
         thumbnail_url=model.thumbnail_url,
@@ -106,25 +128,67 @@ def _to_response(model: ModelFile, username: Optional[str]) -> ModelFileResponse
     )
 
 
+def _parse_sliced_from_print_file(content: bytes) -> dict:
+    """
+    Parsea el header del `.gcode.3mf` (escribe a tmpfile porque
+    `parse_3mf_file` consume un path). Devuelve un dict con las claves
+    pre-procesadas para llenar columnas `sliced_*`.
+
+    Si el parser no encuentra datos (modelo sin G-code laminado válido),
+    retorna un dict con todos los valores en None — el upload no falla.
+    """
+    out = {
+        "sliced_weight_g": None,
+        "sliced_time_seconds": None,
+        "sliced_printer_model": None,
+        "sliced_filament_type": None,
+    }
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".3mf", delete=False) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+        try:
+            result = parse_3mf_file(tmp_path)
+            if result is None:
+                return out
+            if result.filament_weight_g is not None:
+                out["sliced_weight_g"] = Decimal(str(result.filament_weight_g))
+            out["sliced_time_seconds"] = result.print_time_seconds
+            out["sliced_filament_type"] = result.filament_type
+            # printer_model: parse_3mf_file todavía no lo expone; queda None hasta
+            # que el parser lo agregue. Es opcional para el flujo de cola.
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+    except (OSError, ValueError) as exc:
+        logger.warning("No se pudo parsear sliced metadata del .gcode.3mf: %s", exc)
+    return out
+
+
 @router.get("/", response_model=ModelFileListResponse)
 async def list_vault_files(
     q: Optional[str] = Query(default=None, description="Buscar por nombre"),
+    print_ready_only: bool = Query(
+        default=False,
+        description="Si True, solo retorna modelos con print_file presente",
+    ),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Lista los archivos del Vault de la empresa, con paginación y búsqueda opcional.
+    Lista los archivos del Vault con paginación, búsqueda y filtro
+    `print_ready_only` (usado por el picker de Queue para listar solo
+    modelos con `.gcode.3mf` disponibles).
     """
     base_q = select(ModelFile)
 
     if q:
         base_q = base_q.where(ModelFile.name.ilike(f"%{q}%"))
+    if print_ready_only:
+        base_q = base_q.where(ModelFile.print_file_key.is_not(None))
 
-    count_result = await db.execute(
-        select(func.count()).select_from(base_q.subquery())
-    )
+    count_result = await db.execute(select(func.count()).select_from(base_q.subquery()))
     total = count_result.scalar() or 0
 
     offset = (page - 1) * page_size
@@ -133,7 +197,6 @@ async def list_vault_files(
     )
     models = items_result.scalars().all()
 
-    # Obtener usernames de los uploaders
     uploader_ids = {m.uploaded_by for m in models if m.uploaded_by is not None}
     usernames: dict = {}
     if uploader_ids:
@@ -155,7 +218,7 @@ async def get_vault_stats(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Retorna el uso y cuota de almacenamiento para la empresa del usuario."""
+    """Retorna el uso y cuota de almacenamiento."""
     used = await _get_used_bytes(db)
     quota = settings.VAULT_QUOTA_GB * 1024 * 1024 * 1024
     percent = round(used / quota * 100, 2) if quota > 0 else 0.0
@@ -167,37 +230,62 @@ async def fetch_vault_metadata(
     body: VaultMetadataRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Extrae metadata de un modelo desde su URL pública (MakerWorld, Printables, OG).
-    Requiere autenticación pero no requiere ser admin.
-    """
+    """Extrae metadata de un modelo desde su URL pública (MakerWorld, etc.)."""
     data = await fetch_metadata(body.url)
     return VaultMetadataResponse(**{k: v for k, v in data.items() if k != "source_url"})
 
 
 @router.post("/upload", response_model=ModelFileResponse, status_code=status.HTTP_201_CREATED)
 async def upload_vault_file(
-    file: UploadFile = File(...),
     metadata: str = Form(..., description="JSON con ModelFileCreate"),
+    source_file: Optional[UploadFile] = File(
+        default=None, description="`.3mf` editable (opcional si se sube print_file)"
+    ),
+    print_file: Optional[UploadFile] = File(
+        default=None, description="`.gcode.3mf` laminado (opcional si se sube source_file)"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_admin_user),
 ):
     """
-    Sube un archivo .3mf al Vault con sus metadatos.
+    Sube uno o ambos archivos al Vault con metadata compartida.
 
-    El campo 'metadata' debe ser un JSON string con los campos de ModelFileCreate.
+    Reglas:
+      - Al menos uno de `source_file` o `print_file` es requerido.
+      - `source_file` debe terminar en `.3mf` (NO `.gcode.3mf`).
+      - `print_file` debe terminar en `.gcode.3mf`.
+      - Cada archivo individual ≤ 1 GB.
+      - La suma de los archivos no debe superar la cuota del Vault.
+      - Si se sube `print_file`, se parsea su header y se popula `sliced_*`.
+      - Thumbnail se extrae del `print_file` primero, fallback al `source_file`.
+
     Solo admins pueden subir archivos.
-
-    Verifica la cuota antes de subir.
     """
-    # Validar extensión
-    if not file.filename or not file.filename.lower().endswith(".3mf"):
+    if source_file is None and print_file is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Solo se permiten archivos .3mf",
+            detail="Debes subir al menos un archivo (source_file o print_file)",
         )
 
-    # Parsear metadata
+    # Validar extensiones. .gcode.3mf debe matchear antes que .3mf — orden importa.
+    if source_file is not None:
+        if not source_file.filename or _ext_ok(source_file.filename, (".gcode.3mf",)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="`source_file` debe ser un .3mf editable (no .gcode.3mf)",
+            )
+        if not _ext_ok(source_file.filename, (".3mf",)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="`source_file` debe terminar en .3mf",
+            )
+    if print_file is not None and not _ext_ok(print_file.filename or "", (".gcode.3mf",)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="`print_file` debe terminar en .gcode.3mf",
+        )
+
+    # Parsear metadata.
     try:
         meta_dict = json.loads(metadata)
     except (json.JSONDecodeError, ValueError) as exc:
@@ -205,48 +293,66 @@ async def upload_vault_file(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"El campo 'metadata' no es JSON válido: {exc}",
         )
-
-    name = meta_dict.get("name", "").strip()
+    name = (meta_dict.get("name") or "").strip()
     if not name:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="El campo 'name' es requerido",
         )
 
-    # Leer archivo completo en memoria y validar tamaño
-    content = await file.read()
-    file_size = len(content)
+    # Leer ambos archivos en memoria y validar tamaños individuales.
+    source_bytes = await source_file.read() if source_file else None
+    print_bytes = await print_file.read() if print_file else None
+    source_size = len(source_bytes) if source_bytes is not None else 0
+    print_size = len(print_bytes) if print_bytes is not None else 0
 
-    if file_size > MAX_VAULT_UPLOAD_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="El archivo supera el límite de 1 GB",
-        )
+    for label, size in (("source_file", source_size), ("print_file", print_size)):
+        if size > MAX_VAULT_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"`{label}` supera el límite de 1 GB",
+            )
 
-    # Verificar cuota
+    # Verificar cuota total (source + print).
     used = await _get_used_bytes(db)
     quota = settings.VAULT_QUOTA_GB * 1024 * 1024 * 1024
-    if used + file_size > quota:
+    if used + source_size + print_size > quota:
         raise HTTPException(
             status_code=status.HTTP_507_INSUFFICIENT_STORAGE,
             detail=f"Sin espacio disponible. Cuota: {settings.VAULT_QUOTA_GB} GB",
         )
 
-    # Generar clave única en MinIO
-    file_uuid = str(uuid.uuid4())
-    safe_name = file.filename.replace(" ", "_")
-    file_key = f"{file_uuid}-{safe_name}"
+    # Subir a MinIO con claves únicas por slot.
+    source_key = source_name = None
+    print_key = print_name = None
+    if source_file is not None:
+        source_key = f"{uuid.uuid4()}-{source_file.filename.replace(' ', '_')}"
+        source_name = source_file.filename
+        await upload_file(source_key, source_bytes, content_type="model/3mf")
+    if print_file is not None:
+        print_key = f"{uuid.uuid4()}-{print_file.filename.replace(' ', '_')}"
+        print_name = print_file.filename
+        await upload_file(print_key, print_bytes, content_type="model/3mf")
 
-    # Subir a MinIO
-    await upload_file(file_key, content, content_type="model/3mf")
+    # Parsear sliced_* del print_file (si se subió).
+    sliced = (
+        _parse_sliced_from_print_file(print_bytes) if print_bytes is not None else {}
+    )
 
-    # Guardar en base de datos
+    # Guardar en BD.
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     model = ModelFile(
         uploaded_by=current_user.id,
-        file_key=file_key,
-        file_name=file.filename,
-        file_size=file_size,
+        source_file_key=source_key,
+        source_file_name=source_name,
+        source_file_size=source_size if source_file else None,
+        print_file_key=print_key,
+        print_file_name=print_name,
+        print_file_size=print_size if print_file else None,
+        sliced_weight_g=sliced.get("sliced_weight_g"),
+        sliced_time_seconds=sliced.get("sliced_time_seconds"),
+        sliced_printer_model=sliced.get("sliced_printer_model"),
+        sliced_filament_type=sliced.get("sliced_filament_type"),
         name=name,
         description=meta_dict.get("description"),
         thumbnail_url=meta_dict.get("thumbnail_url"),
@@ -262,9 +368,13 @@ async def upload_vault_file(
     await db.commit()
     await db.refresh(model)
 
-    # Extraer plate render PNG embebido en el .3mf (OrcaSlicer/BambuStudio).
-    # Si el ZIP no trae thumbnail (modelo sin slicing), seguimos sin él.
-    png = extract_plate_png(content)
+    # Extraer plate-render del print_file primero (más rico en thumbnails);
+    # si no, intentar source_file. Si ninguno trae, seguimos sin thumbnail.
+    png = None
+    if print_bytes is not None:
+        png = extract_plate_png(print_bytes)
+    if png is None and source_bytes is not None:
+        png = extract_plate_png(source_bytes)
     if png:
         try:
             model.local_thumbnail_path = save_thumbnail(model.id, png)
@@ -276,23 +386,49 @@ async def upload_vault_file(
     return _to_response(model, current_user.username)
 
 
-@router.get("/{file_id}/download")
-async def download_vault_file(
+@router.get("/{file_id}/download/source")
+async def download_source_file(
     file_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Descarga el archivo desde MinIO a través del backend (proxy).
-
-    MinIO permanece en la red interna; el cliente solo interactúa con el backend autenticado.
-    """
+    """Descarga el `.3mf` editable. 404 si el modelo no lo tiene."""
     model = await _get_model_file(db, file_id)
-    data = await download_file(model.file_key)
+    if not model.source_file_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Este modelo no tiene .3mf editable",
+        )
+    data = await download_file(model.source_file_key)
     return Response(
         content=data,
         media_type="application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{model.file_name}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{model.source_file_name}"',
+        },
+    )
+
+
+@router.get("/{file_id}/download/print")
+async def download_print_file(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Descarga el `.gcode.3mf` laminado. 404 si el modelo no lo tiene."""
+    model = await _get_model_file(db, file_id)
+    if not model.print_file_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Este modelo no tiene .gcode.3mf laminado",
+        )
+    data = await download_file(model.print_file_key)
+    return Response(
+        content=data,
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{model.print_file_name}"',
+        },
     )
 
 
@@ -314,7 +450,6 @@ async def update_vault_file(
     await db.commit()
     await db.refresh(model)
 
-    # Obtener username del uploader
     username = None
     if model.uploaded_by:
         u_result = await db.execute(
@@ -325,84 +460,128 @@ async def update_vault_file(
     return _to_response(model, username)
 
 
-@router.post("/{file_id}/replace", response_model=ModelFileResponse)
-async def replace_vault_file(
-    file_id: int,
-    file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_admin_user),
-):
+async def _replace_slot(
+    db: AsyncSession,
+    model: ModelFile,
+    file: UploadFile,
+    slot: str,  # 'source' | 'print'
+    current_user: User,
+) -> ModelFile:
     """
-    Reemplaza el archivo .3mf de un modelo existente conservando sus metadatos.
-
-    Sube el nuevo archivo a MinIO con una clave fresca, actualiza la DB y
-    elimina el archivo anterior. Solo admins.
+    Reemplaza el archivo del slot indicado conservando metadatos.
+    Llamado desde los dos endpoints específicos /replace/source y /replace/print.
     """
-    if not file.filename or not file.filename.lower().endswith(".3mf"):
+    expected_suffix = ".3mf" if slot == "source" else ".gcode.3mf"
+    if not file.filename or not _ext_ok(file.filename, (expected_suffix,)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Solo se permiten archivos .3mf",
+            detail=f"El archivo del slot `{slot}` debe terminar en {expected_suffix}",
         )
 
-    model = await _get_model_file(db, file_id)
+    # Para source extra validar que no sea .gcode.3mf (que también termina en .3mf).
+    if slot == "source" and _ext_ok(file.filename, (".gcode.3mf",)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="`source_file` debe ser .3mf editable, no .gcode.3mf",
+        )
 
     content = await file.read()
-    file_size = len(content)
-
-    if file_size > MAX_VAULT_UPLOAD_BYTES:
+    new_size = len(content)
+    if new_size > MAX_VAULT_UPLOAD_BYTES:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail="El archivo supera el límite de 1 GB",
         )
 
-    # Verificar cuota descontando el tamaño del archivo actual
+    # Verificar cuota descontando el tamaño del archivo actual del mismo slot.
     used = await _get_used_bytes(db)
     quota = settings.VAULT_QUOTA_GB * 1024 * 1024 * 1024
-    if used - model.file_size + file_size > quota:
+    current_slot_size = (
+        model.source_file_size if slot == "source" else model.print_file_size
+    ) or 0
+    if used - current_slot_size + new_size > quota:
         raise HTTPException(
             status_code=status.HTTP_507_INSUFFICIENT_STORAGE,
             detail=f"Sin espacio disponible. Cuota: {settings.VAULT_QUOTA_GB} GB",
         )
 
-    # Subir nuevo archivo con clave única
-    old_key = model.file_key
-    file_uuid = str(uuid.uuid4())
-    safe_name = file.filename.replace(" ", "_")
-    new_key = f"{file_uuid}-{safe_name}"
-
+    # Subir nuevo archivo con clave fresca; conservar el viejo para borrarlo
+    # solo después de confirmar la BD.
+    old_key = model.source_file_key if slot == "source" else model.print_file_key
+    new_key = f"{uuid.uuid4()}-{file.filename.replace(' ', '_')}"
     await upload_file(new_key, content, content_type="model/3mf")
 
-    # Actualizar DB antes de borrar el archivo viejo
-    model.file_key = new_key
-    model.file_name = file.filename
-    model.file_size = file_size
+    if slot == "source":
+        model.source_file_key = new_key
+        model.source_file_name = file.filename
+        model.source_file_size = new_size
+    else:
+        model.print_file_key = new_key
+        model.print_file_name = file.filename
+        model.print_file_size = new_size
+        # Re-parsear sliced_* del nuevo print_file.
+        sliced = _parse_sliced_from_print_file(content)
+        model.sliced_weight_g = sliced.get("sliced_weight_g")
+        model.sliced_time_seconds = sliced.get("sliced_time_seconds")
+        model.sliced_printer_model = sliced.get("sliced_printer_model")
+        model.sliced_filament_type = sliced.get("sliced_filament_type")
+
     model.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
-    # Re-extraer plate render del nuevo .3mf — invalida el anterior aunque falle.
+    # Re-extraer thumbnail si este slot puede aportar uno mejor.
     png = extract_plate_png(content)
-    delete_thumbnail(model.id)
     if png:
+        delete_thumbnail(model.id)
         try:
             model.local_thumbnail_path = save_thumbnail(model.id, png)
         except OSError as exc:
             logger.warning("No se pudo guardar thumbnail local de %s: %s", model.id, exc)
             model.local_thumbnail_path = None
-    else:
-        model.local_thumbnail_path = None
 
     await db.commit()
     await db.refresh(model)
 
-    # Eliminar archivo anterior (después de confirmar la DB)
-    await delete_file(old_key)
+    if old_key:
+        await delete_file(old_key)
 
+    return model
+
+
+@router.post("/{file_id}/replace/source", response_model=ModelFileResponse)
+async def replace_source_file(
+    file_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """Reemplaza el `.3mf` editable conservando metadatos. Solo admins."""
+    model = await _get_model_file(db, file_id)
+    model = await _replace_slot(db, model, file, "source", current_user)
     username = None
     if model.uploaded_by:
         u_result = await db.execute(
             select(User.username).where(User.id == model.uploaded_by)
         )
         username = u_result.scalar_one_or_none()
+    return _to_response(model, username)
 
+
+@router.post("/{file_id}/replace/print", response_model=ModelFileResponse)
+async def replace_print_file(
+    file_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """Reemplaza el `.gcode.3mf` laminado conservando metadatos. Solo admins."""
+    model = await _get_model_file(db, file_id)
+    model = await _replace_slot(db, model, file, "print", current_user)
+    username = None
+    if model.uploaded_by:
+        u_result = await db.execute(
+            select(User.username).where(User.id == model.uploaded_by)
+        )
+        username = u_result.scalar_one_or_none()
     return _to_response(model, username)
 
 
@@ -413,13 +592,15 @@ async def delete_vault_file(
     current_user: User = Depends(get_admin_user),
 ):
     """
-    Elimina el archivo del Vault: borra el objeto en MinIO y el registro en DB.
-    Solo admins.
+    Elimina el archivo del Vault: borra ambos objetos en MinIO (si existen)
+    y el registro en BD. Solo admins.
     """
     model = await _get_model_file(db, file_id)
 
-    # Borrar de MinIO primero (si falla no borramos la DB)
-    await delete_file(model.file_key)
+    if model.source_file_key:
+        await delete_file(model.source_file_key)
+    if model.print_file_key:
+        await delete_file(model.print_file_key)
 
     await db.delete(model)
     await db.commit()

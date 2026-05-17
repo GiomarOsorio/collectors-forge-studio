@@ -1,16 +1,38 @@
 """
 Modelo ORM para la tabla de archivos del Vault.
 
-Representa un archivo .3mf almacenado en MinIO junto con sus metadatos
-de display (nombre, descripción, fuente, tags). Cada archivo pertenece
-a una empresa (multi-tenant) y solo los usuarios de esa empresa pueden
-acceder a él.
+Cada `ModelFile` puede tener hasta DOS archivos asociados en MinIO:
+
+- **source_file**: el `.3mf` editable (proyecto OrcaSlicer/BambuStudio).
+  Útil para iterar el modelo más tarde.
+- **print_file**: el `.gcode.3mf` laminado (paquete con G-code listo para
+  imprimir). Es lo que el picker de Queue selecciona para meter a la cola
+  con `weight_g` / `time_h` / `filament_type` ya resueltos.
+
+Al menos uno de los dos debe estar presente (CHECK constraint). Si solo se
+sube uno, se considera "source-only" o "print-only". Subir ambos es el
+flujo ideal: edición + impresión cubiertas.
+
+Cuando se sube un `.gcode.3mf` (slot print), el header del G-code se parsea
+automáticamente y popula `sliced_weight_g`, `sliced_time_seconds`,
+`sliced_printer_model` y `sliced_filament_type` — Queue los usa para
+crear el `PrintQueueItem` sin pedirle nada al usuario.
 """
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import String, Text, BigInteger, DateTime, ForeignKey, Integer
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -19,24 +41,29 @@ from app.database import Base
 
 class ModelFile(Base):
     """
-    Archivo .3mf almacenado en MinIO con metadatos de display.
+    Archivo(s) del Vault con metadatos de display.
 
     Atributos:
         id:              PK autoincremental.
-        company_id:      UUID de la empresa propietaria (multi-tenant).
-        uploaded_by:     ID del usuario que subió el archivo (nullable al borrar usuario).
-        file_key:        Clave del objeto en MinIO: "{company_id}/{uuid}-{filename}.3mf".
-        file_name:       Nombre original del archivo tal como fue subido.
-        file_size:       Tamaño en bytes del archivo almacenado.
+        uploaded_by:     ID del usuario que subió (nullable al borrar usuario).
+        source_file_key: Clave MinIO del `.3mf` editable. Nullable.
+        source_file_name: Nombre original del `.3mf` editable.
+        source_file_size: Tamaño en bytes del `.3mf` editable.
+        print_file_key:  Clave MinIO del `.gcode.3mf` laminado. Nullable.
+        print_file_name: Nombre original del `.gcode.3mf` laminado.
+        print_file_size: Tamaño en bytes del `.gcode.3mf` laminado.
+        sliced_weight_g:      Peso (g) extraído del header del .gcode.3mf.
+        sliced_time_seconds:  Tiempo de impresión (s) extraído del header.
+        sliced_printer_model: Modelo de impresora (ej. "Bambu Lab P2S").
+        sliced_filament_type: Tipo de filamento (ej. "PLA").
         name:            Nombre de display editable por el usuario.
         description:     Descripción libre del modelo (opcional).
-        thumbnail_url:   URL externa de miniatura (MakerWorld/Printables), no se descarga.
-        local_thumbnail_path: Ruta interna al PNG de plate render extraído del .3mf
-                              (sirve `/static/thumbnails/{id}.png`). Tiene prioridad sobre
-                              thumbnail_url al renderizar en frontend.
-        tags:            Array JSONB de etiquetas de texto libre.
-        source_url:      URL de origen del modelo (MakerWorld, Printables, etc.).
-        source_platform: Plataforma de origen ('makerworld'|'printables'|'thingiverse'|'otro').
+        thumbnail_url:   URL externa de miniatura (MakerWorld/Printables).
+        local_thumbnail_path: PNG plate-render extraído de cualquiera de
+                              los dos `.3mf`. Se sirve desde `/static`.
+        tags:            Array JSONB de etiquetas.
+        source_url:      URL de origen del modelo.
+        source_platform: Plataforma de origen.
         creator_name:    Nombre del creador del modelo original.
         creator_url:     URL del perfil del creador.
         created_at:      Timestamp UTC de creación.
@@ -44,14 +71,36 @@ class ModelFile(Base):
     """
 
     __tablename__ = "model_files"
+    __table_args__ = (
+        # Al menos un archivo (source o print) tiene que estar presente.
+        CheckConstraint(
+            "source_file_key IS NOT NULL OR print_file_key IS NOT NULL",
+            name="ck_model_files_at_least_one_file",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     uploaded_by: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    file_key: Mapped[str] = mapped_column(String(500), nullable=False)
-    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    file_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
+
+    # ── Source (.3mf editable) ──────────────────────────────────────────────
+    source_file_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    source_file_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    source_file_size: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+
+    # ── Print (.gcode.3mf laminado) ─────────────────────────────────────────
+    print_file_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    print_file_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    print_file_size: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+
+    # ── Metadatos pre-parseados del .gcode.3mf (slot print) ────────────────
+    sliced_weight_g: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
+    sliced_time_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    sliced_printer_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    sliced_filament_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+
+    # ── Display / metadata ──────────────────────────────────────────────────
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     thumbnail_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
@@ -61,6 +110,7 @@ class ModelFile(Base):
     source_platform: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     creator_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     creator_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
@@ -70,3 +120,15 @@ class ModelFile(Base):
         default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
         onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
+
+    # ── Helpers ─────────────────────────────────────────────────────────────
+
+    @property
+    def is_print_ready(self) -> bool:
+        """True si el modelo tiene un `.gcode.3mf` listo para meter a cola."""
+        return self.print_file_key is not None
+
+    @property
+    def total_size_bytes(self) -> int:
+        """Suma source + print (cualquiera puede ser None) — usado por la cuota."""
+        return (self.source_file_size or 0) + (self.print_file_size or 0)

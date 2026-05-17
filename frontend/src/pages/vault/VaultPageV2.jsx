@@ -17,9 +17,11 @@ import {
   Archive,
   ChevronRight,
   Download,
+  FileBox,
   HardDrive,
   Pencil,
   Plus,
+  Printer,
   Search,
   Trash2,
   Upload,
@@ -33,6 +35,7 @@ import {
   EmptyState,
   KPI,
   MobileSheet,
+  StatusPill,
 } from '../../components/ui';
 import MobileAppHeader from '../../components/MobileAppHeader';
 import { useIsMobile } from '../../hooks/useMediaQuery';
@@ -40,7 +43,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useConfirm } from '../../components/ConfirmDialog';
 import {
   deleteVaultFile,
-  downloadVaultFile,
+  downloadVaultPrint,
+  downloadVaultSource,
   getVaultFiles,
   getVaultStats,
 } from '../../services/api';
@@ -62,6 +66,22 @@ const fmtDate = (iso) => {
   } catch {
     return '—';
   }
+};
+
+/**
+ * Suma source + print en bytes (cualquiera puede ser null). Coincide con
+ * `ModelFile.total_size_bytes` del backend; lo necesitamos en frontend
+ * para mostrar el tamaño total del modelo en card/row/drawer.
+ */
+const totalSizeBytes = (f) =>
+  (f?.source_file_size || 0) + (f?.print_file_size || 0);
+
+const fmtTime = (seconds) => {
+  if (!seconds || !Number.isFinite(Number(seconds))) return null;
+  const total = Math.round(Number(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
 };
 
 // ─── Card / row ─────────────────────────────────────────────────────────────
@@ -90,11 +110,22 @@ function VaultCard({ file, onClick }) {
         </div>
       </div>
       <div className="p-3 flex flex-col flex-1 gap-1">
+        <div className="flex items-center gap-1.5 mb-0.5">
+          {file.is_print_ready ? (
+            <StatusPill tone="done" icon={Printer}>
+              Listo para imprimir
+            </StatusPill>
+          ) : (
+            <StatusPill tone="neutral" icon={FileBox}>
+              Solo editable
+            </StatusPill>
+          )}
+        </div>
         <p className="text-sm font-semibold text-tech-white truncate" title={file.name}>
           {file.name}
         </p>
         <p className="mono text-[10.5px] text-gunmetal truncate">
-          {fmtBytes(file.file_size)} · {fmtDate(file.created_at)}
+          {fmtBytes(totalSizeBytes(file))} · {fmtDate(file.created_at)}
         </p>
         {Array.isArray(file.tags) && file.tags.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1">
@@ -135,9 +166,16 @@ function VaultRow({ file, onClick }) {
         )}
       </div>
       <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 mb-0.5">
+          {file.is_print_ready ? (
+            <StatusPill tone="done" icon={Printer}>Listo</StatusPill>
+          ) : (
+            <StatusPill tone="neutral" icon={FileBox}>Editable</StatusPill>
+          )}
+        </div>
         <p className="text-sm font-semibold text-tech-white truncate">{file.name}</p>
         <p className="mono text-[10px] text-gunmetal mt-0.5">
-          {fmtBytes(file.file_size)} · {fmtDate(file.created_at)}
+          {fmtBytes(totalSizeBytes(file))} · {fmtDate(file.created_at)}
         </p>
       </div>
       <ChevronRight size={14} className="text-gunmetal-dim shrink-0" />
@@ -149,11 +187,13 @@ function VaultRow({ file, onClick }) {
 
 /**
  * Cuerpo del drawer (read-only). Header (eyebrow + title) lo aporta
- * `DetailDrawer` v2; las acciones viven en `VaultDrawerFooter`.
+ * `DetailDrawer` v2; las acciones viven en `VaultDrawerFooter`. Muestra
+ * los dos slots (source / print) por separado + metadatos sliced si los hay.
  */
 function VaultDrawerBody({ file }) {
   if (!file) return null;
   const thumb = getThumbnail(file);
+  const sliceTime = fmtTime(file.sliced_time_seconds);
   return (
     <div className="flex flex-col gap-4">
       <div
@@ -165,21 +205,92 @@ function VaultDrawerBody({ file }) {
           <Archive size={50} style={{ color: `${ACCENT}55` }} />
         )}
       </div>
-      <p className="mono text-[11.5px] text-gunmetal truncate">{file.file_name}</p>
+
+      {/* Slots de archivos */}
+      <div className="flex flex-col gap-2">
+        <span className="lbl-eyebrow text-[9px]">Archivos</span>
+        <Card className="p-3 flex items-center gap-3">
+          <FileBox
+            size={18}
+            style={{
+              color: file.source_file_name ? ACCENT : 'var(--color-gunmetal-dim)',
+            }}
+          />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-tech-white truncate">
+              {file.source_file_name || 'Sin .3mf editable'}
+            </p>
+            <p className="mono text-[10.5px] text-gunmetal mt-0.5">
+              {file.source_file_size != null
+                ? `${fmtBytes(file.source_file_size)} · editable`
+                : 'No subido'}
+            </p>
+          </div>
+        </Card>
+        <Card className="p-3 flex items-center gap-3">
+          <Printer
+            size={18}
+            style={{
+              color: file.print_file_name ? '#34D399' : 'var(--color-gunmetal-dim)',
+            }}
+          />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-tech-white truncate">
+              {file.print_file_name || 'Sin .gcode.3mf laminado'}
+            </p>
+            <p className="mono text-[10.5px] text-gunmetal mt-0.5">
+              {file.print_file_size != null
+                ? `${fmtBytes(file.print_file_size)} · listo para imprimir`
+                : 'Lamina en Slicer y vuelve a subir'}
+            </p>
+          </div>
+        </Card>
+      </div>
+
+      {/* Metadatos sliced del .gcode.3mf */}
+      {(file.sliced_weight_g != null || sliceTime || file.sliced_filament_type) && (
+        <div>
+          <span className="lbl-eyebrow text-[9px]">Datos del laminado</span>
+          <div className="grid grid-cols-3 gap-2 mt-2">
+            <Card className="p-2.5">
+              <span className="lbl-eyebrow text-[9px]">Peso</span>
+              <p className="mono text-sm text-tech-white mt-0.5">
+                {file.sliced_weight_g != null
+                  ? `${Number(file.sliced_weight_g).toFixed(0)} g`
+                  : '—'}
+              </p>
+            </Card>
+            <Card className="p-2.5">
+              <span className="lbl-eyebrow text-[9px]">Tiempo</span>
+              <p className="mono text-sm text-tech-white mt-0.5">{sliceTime || '—'}</p>
+            </Card>
+            <Card className="p-2.5">
+              <span className="lbl-eyebrow text-[9px]">Material</span>
+              <p className="mono text-sm text-tech-white mt-0.5">
+                {file.sliced_filament_type || '—'}
+              </p>
+            </Card>
+          </div>
+        </div>
+      )}
+
       {file.description && (
         <Card className="p-3">
           <span className="lbl-eyebrow text-[9px]">Descripción</span>
           <p className="text-sm text-steel mt-1 whitespace-pre-wrap">{file.description}</p>
         </Card>
       )}
+
       <div className="grid grid-cols-2 gap-2">
-        <Card className="p-3">
-          <span className="lbl-eyebrow text-[9px]">Tamaño</span>
-          <p className="mono text-sm text-tech-white mt-0.5">{fmtBytes(file.file_size)}</p>
-        </Card>
         <Card className="p-3">
           <span className="lbl-eyebrow text-[9px]">Subido</span>
           <p className="mono text-sm text-tech-white mt-0.5">{fmtDate(file.created_at)}</p>
+        </Card>
+        <Card className="p-3">
+          <span className="lbl-eyebrow text-[9px]">Tamaño total</span>
+          <p className="mono text-sm text-tech-white mt-0.5">
+            {fmtBytes(totalSizeBytes(file))}
+          </p>
         </Card>
         {file.creator_name && (
           <Card className="p-3 col-span-2">
@@ -218,26 +329,48 @@ function VaultDrawerBody({ file }) {
 }
 
 /**
- * Footer del drawer: Descargar (todos) + Editar / Eliminar (solo admin).
- * Se renderiza en el slot `footer` del `DetailDrawer` (desktop) o inline
- * sticky dentro del `MobileSheet` (mobile).
+ * Footer del drawer: Descargar print/source (lo que esté disponible) +
+ * Editar / Eliminar (solo admin). Si solo hay un slot, el botón único
+ * descarga ese. Si están los dos, se muestran lado a lado.
  */
-function VaultDrawerFooter({ file, isAdmin, onDownload, onDelete, onClose }) {
+function VaultDrawerFooter({
+  file,
+  isAdmin,
+  onDownloadSource,
+  onDownloadPrint,
+  onDelete,
+  onClose,
+}) {
   if (!file) return null;
   return (
     <>
-      <Button
-        variant="primary"
-        size="sm"
-        icon={Download}
-        onClick={() => onDownload(file)}
-        className="flex-1 justify-center"
-      >
-        Descargar
-      </Button>
+      {file.is_print_ready && (
+        <Button
+          variant="primary"
+          size="sm"
+          icon={Download}
+          onClick={() => onDownloadPrint(file)}
+          className="flex-1 justify-center"
+          title=".gcode.3mf laminado — listo para impresora"
+        >
+          Descargar laminado
+        </Button>
+      )}
+      {file.source_file_name && (
+        <Button
+          variant={file.is_print_ready ? 'ghost' : 'primary'}
+          size="sm"
+          icon={Download}
+          onClick={() => onDownloadSource(file)}
+          className={file.is_print_ready ? '' : 'flex-1 justify-center'}
+          title=".3mf editable — para abrir en OrcaSlicer/BambuStudio"
+        >
+          {file.is_print_ready ? 'Editable' : 'Descargar editable'}
+        </Button>
+      )}
       {isAdmin && (
         <Link
-          to={`/vault/upload?replace=${file.id}`}
+          to={`/vault/upload/v2?replace=${file.id}`}
           className="btn btn-ghost btn-sm"
           aria-label="Editar"
         >
@@ -309,13 +442,19 @@ export default function VaultPageV2() {
     );
   }, [files, query]);
 
-  const handleDownload = async (f) => {
+  /**
+   * Descarga uno de los slots (source o print) del modelo y dispara la
+   * descarga en el browser con el filename correcto del backend.
+   */
+  const _downloadSlot = async (f, slot) => {
     try {
-      const res = await downloadVaultFile(f.id);
+      const fn = slot === 'print' ? downloadVaultPrint : downloadVaultSource;
+      const filename = slot === 'print' ? f.print_file_name : f.source_file_name;
+      const res = await fn(f.id);
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.download = f.file_name;
+      link.download = filename || `vault-${f.id}.3mf`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -324,6 +463,8 @@ export default function VaultPageV2() {
       toast.error('No se pudo descargar');
     }
   };
+  const handleDownloadSource = (f) => _downloadSlot(f, 'source');
+  const handleDownloadPrint = (f) => _downloadSlot(f, 'print');
 
   const handleDelete = async (f) => {
     const ok = await confirm(`¿Eliminar "${f.name}"?`, 'Eliminar');
@@ -427,7 +568,7 @@ export default function VaultPageV2() {
                 isAdmin && files.length === 0 ? (
                   <button
                     type="button"
-                    onClick={() => navigate('/vault/upload')}
+                    onClick={() => navigate('/vault/upload/v2')}
                     className="btn btn-primary btn-sm"
                   >
                     <Upload size={13} /> Subir primer modelo
@@ -448,7 +589,7 @@ export default function VaultPageV2() {
         {isAdmin && (
           <button
             type="button"
-            onClick={() => navigate('/vault/upload')}
+            onClick={() => navigate('/vault/upload/v2')}
             className="fixed bottom-20 right-4 z-40 inline-flex items-center gap-2 pl-4 pr-5 py-3.5 rounded-full font-semibold text-sm shadow-2xl active:scale-95 transition-transform"
             style={{ background: ACCENT, color: '#FFF', boxShadow: `0 8px 24px ${ACCENT}55` }}
             aria-label="Subir modelo"
@@ -471,7 +612,8 @@ export default function VaultPageV2() {
               <VaultDrawerFooter
                 file={selected}
                 isAdmin={isAdmin}
-                onDownload={handleDownload}
+                onDownloadSource={handleDownloadSource}
+                onDownloadPrint={handleDownloadPrint}
                 onDelete={handleDelete}
                 onClose={() => setSelected(null)}
               />
@@ -500,7 +642,7 @@ export default function VaultPageV2() {
           </span>
         </div>
         {isAdmin && (
-          <Link to="/vault/upload" className="btn btn-primary btn-sm">
+          <Link to="/vault/upload/v2" className="btn btn-primary btn-sm">
             <Upload size={13} /> Subir modelo
           </Link>
         )}
@@ -543,7 +685,7 @@ export default function VaultPageV2() {
           }
           action={
             isAdmin && files.length === 0 ? (
-              <Link to="/vault/upload" className="btn btn-primary btn-sm">
+              <Link to="/vault/upload/v2" className="btn btn-primary btn-sm">
                 <Upload size={13} /> Subir primer modelo
               </Link>
             ) : null
@@ -571,7 +713,8 @@ export default function VaultPageV2() {
             <VaultDrawerFooter
               file={selected}
               isAdmin={isAdmin}
-              onDownload={handleDownload}
+              onDownloadSource={handleDownloadSource}
+              onDownloadPrint={handleDownloadPrint}
               onDelete={handleDelete}
               onClose={() => setSelected(null)}
             />

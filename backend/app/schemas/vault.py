@@ -1,22 +1,29 @@
 """
-Schemas Pydantic para el Vault de modelos .3mf.
+Schemas Pydantic para el Vault de modelos .3mf / .gcode.3mf.
 
-Define los modelos de validación y serialización para crear, actualizar
-y retornar archivos del Vault, así como la respuesta de estadísticas de
-almacenamiento y la pre-lectura de metadata desde URLs externas.
+`ModelFile` ahora soporta dos slots de archivo (source + print). El
+response expone ambos por separado más los metadatos pre-parseados
+del header del G-code laminado.
 """
 
 from datetime import datetime
-from typing import List, Optional
+from decimal import Decimal
+from typing import Annotated, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PlainSerializer
+
+DecimalAsFloat = Annotated[
+    Decimal,
+    PlainSerializer(float, return_type=float, when_used="json"),
+]
 
 
 class ModelFileCreate(BaseModel):
     """
-    Metadatos enviados junto al archivo al hacer upload.
+    Metadatos enviados junto al/los archivo(s) al hacer upload.
 
-    El archivo mismo viaja como UploadFile multipart; este schema
+    El/los archivo(s) viaja(n) como UploadFile multipart en los campos
+    `source_file` y/o `print_file` (al menos uno requerido). Este schema
     corresponde al campo Form 'metadata' serializado como JSON.
     """
     name: str = Field(min_length=1, max_length=200)
@@ -42,12 +49,29 @@ class ModelFileUpdate(BaseModel):
 
 
 class ModelFileResponse(BaseModel):
-    """Respuesta completa de un archivo del Vault."""
+    """Respuesta completa de un archivo del Vault con ambos slots."""
     id: int
     uploaded_by: Optional[int]
     uploaded_by_username: Optional[str]
-    file_name: str
-    file_size: int
+
+    # Source (.3mf editable)
+    source_file_name: Optional[str]
+    source_file_size: Optional[int]
+
+    # Print (.gcode.3mf laminado)
+    print_file_name: Optional[str]
+    print_file_size: Optional[int]
+
+    # Sliced metadata (auto-parseado del print_file)
+    sliced_weight_g: Optional[DecimalAsFloat] = None
+    sliced_time_seconds: Optional[int] = None
+    sliced_printer_model: Optional[str] = None
+    sliced_filament_type: Optional[str] = None
+
+    # Derivado
+    is_print_ready: bool
+
+    # Display / metadata
     name: str
     description: Optional[str]
     thumbnail_url: Optional[str]
@@ -76,13 +100,6 @@ class VaultStatsResponse(BaseModel):
     used_bytes: int
     quota_bytes: int
     percent: float
-
-
-class VaultDownloadResponse(BaseModel):
-    """URL pre-firmada para descarga directa desde MinIO."""
-    url: str
-    file_name: str
-    expires_in: int  # segundos
 
 
 class VaultMetadataRequest(BaseModel):

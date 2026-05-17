@@ -100,7 +100,11 @@ async def _backfill_vault_thumbnails() -> None:
             ok = 0
             for model in models:
                 try:
-                    zip_bytes = await download_file(model.file_key)
+                    # Probar print_file primero (más rico en thumbnails), luego source.
+                    key = model.print_file_key or model.source_file_key
+                    if not key:
+                        continue
+                    zip_bytes = await download_file(key)
                     png = extract_plate_png(zip_bytes)
                     if not png:
                         continue
