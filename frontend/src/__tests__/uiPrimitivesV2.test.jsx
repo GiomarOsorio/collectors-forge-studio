@@ -323,41 +323,45 @@ describe('DetailDrawer v2 API', () => {
   // open=false porque translate-x-full no se aplicaba consistentemente.
   // El fix: `if (!open) return null` al inicio del componente.
 
+  // Nota: DetailDrawer renderea en un portal a document.body (para evadir
+  // bugs de position:fixed dentro de parents con transform). Por eso los
+  // queries van contra `document.body`, no contra `container`.
+
   it('REGRESIÓN: con open=false NO renderiza ningún elemento de drawer', () => {
-    const { container } = render(
+    render(
       <DetailDrawer open={false} onClose={() => {}} title="X" footer={<button>Save</button>}>
         body content que no se debe ver
       </DetailDrawer>,
     );
-    expect(container.querySelector('aside')).toBeNull();
-    expect(container.querySelector('footer')).toBeNull();
-    expect(container.querySelector('[role="dialog"]')).toBeNull();
-    expect(container).not.toHaveTextContent('body content');
-    expect(container).not.toHaveTextContent('Save');
+    expect(document.body.querySelector('aside')).toBeNull();
+    expect(document.body.querySelector('footer')).toBeNull();
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.body).not.toHaveTextContent('body content');
+    expect(document.body).not.toHaveTextContent('Save');
   });
 
   it('REGRESIÓN: re-abrir muestra de nuevo, re-cerrar oculta', () => {
-    const { rerender, container } = render(
+    const { rerender } = render(
       <DetailDrawer open={true} onClose={() => {}} title="abierto">
         contenido
       </DetailDrawer>,
     );
-    expect(container.querySelector('aside')).not.toBeNull();
-    expect(container).toHaveTextContent('contenido');
+    expect(document.body.querySelector('aside')).not.toBeNull();
+    expect(document.body).toHaveTextContent('contenido');
     rerender(
       <DetailDrawer open={false} onClose={() => {}} title="abierto">
         contenido
       </DetailDrawer>,
     );
-    expect(container.querySelector('aside')).toBeNull();
-    expect(container).not.toHaveTextContent('contenido');
+    expect(document.body.querySelector('aside')).toBeNull();
+    expect(document.body).not.toHaveTextContent('contenido');
     rerender(
       <DetailDrawer open={true} onClose={() => {}} title="abierto">
         contenido
       </DetailDrawer>,
     );
-    expect(container.querySelector('aside')).not.toBeNull();
-    expect(container).toHaveTextContent('contenido');
+    expect(document.body.querySelector('aside')).not.toBeNull();
+    expect(document.body).toHaveTextContent('contenido');
   });
 
   it('REGRESIÓN: footer del drawer es visible cuando open=true', () => {
@@ -382,19 +386,51 @@ describe('DetailDrawer v2 API', () => {
     expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeInTheDocument();
   });
 
-  it('REGRESIÓN: aside usa display:grid con gridTemplateRows correcto', () => {
-    // CSS Grid es lo que garantiza que el footer queda visible
-    // independiente del alto del body. Si alguien regresa a flex,
-    // este test falla.
-    const { container } = render(
+  it('REGRESIÓN: footer está pinned al bottom del aside (position:absolute)', () => {
+    render(
       <DetailDrawer open={true} onClose={() => {}} title="X" footer={<span>F</span>}>
         body
       </DetailDrawer>,
     );
-    const aside = container.querySelector('aside');
-    expect(aside).not.toBeNull();
-    expect(aside.style.display).toBe('grid');
-    expect(aside.style.gridTemplateRows).toBe('auto 1fr auto');
+    const footerEl = document.body.querySelector('footer');
+    expect(footerEl).not.toBeNull();
+    expect(footerEl.style.position).toBe('absolute');
+    expect(footerEl.style.bottom).toBe('0px');
+  });
+
+  it('REGRESIÓN: body del drawer está absolute con bottom=FOOTER (con footer) o 0 (sin footer)', () => {
+    const { rerender } = render(
+      <DetailDrawer open={true} onClose={() => {}} title="X" footer={<span>F</span>}>
+        body
+      </DetailDrawer>,
+    );
+    const bodyDiv = document.body.querySelector('aside > div');
+    expect(bodyDiv).not.toBeNull();
+    expect(bodyDiv.style.position).toBe('absolute');
+    expect(bodyDiv.style.bottom).toBe('64px'); // FOOTER_HEIGHT
+    expect(bodyDiv.style.overflowY).toBe('auto');
+
+    rerender(
+      <DetailDrawer open={true} onClose={() => {}} title="X">
+        body sin footer
+      </DetailDrawer>,
+    );
+    const bodyDivNoFooter = document.body.querySelector('aside > div');
+    expect(bodyDivNoFooter.style.bottom).toBe('0px'); // sin footer
+  });
+
+  it('REGRESIÓN: DetailDrawer renderea en portal a document.body', () => {
+    // El portal asegura que el position:fixed del aside funciona
+    // correctamente sin importar si algún parent tiene transform.
+    const { container } = render(
+      <DetailDrawer open={true} onClose={() => {}} title="X">
+        body
+      </DetailDrawer>,
+    );
+    // El container donde React montó NO contiene el aside (está en body)
+    expect(container.querySelector('aside')).toBeNull();
+    // Pero document.body sí
+    expect(document.body.querySelector('aside')).not.toBeNull();
   });
 });
 
@@ -403,13 +439,13 @@ describe('DetailDrawer v2 API', () => {
 describe('MobileSheet REGRESIÓN-GUARD', () => {
   it('open=false NO renderiza el sheet', async () => {
     const { MobileSheet } = await import('../components/ui');
-    const { container } = render(
+    render(
       <MobileSheet open={false} onClose={() => {}} title="X">
         no se debe ver
       </MobileSheet>,
     );
-    expect(container.querySelector('[role="dialog"]')).toBeNull();
-    expect(container).not.toHaveTextContent('no se debe ver');
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.body).not.toHaveTextContent('no se debe ver');
   });
 
   it('open=true renderiza el sheet + onEdit icon button cuando se provee', async () => {
