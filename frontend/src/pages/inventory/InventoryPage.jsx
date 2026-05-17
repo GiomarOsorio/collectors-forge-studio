@@ -63,9 +63,11 @@ import MobileAppHeader from '../../components/MobileAppHeader';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import {
   createInventoryItem,
+  createPurchaseOrder,
   getInventoryItems,
   getPurchaseOrders,
   updateInventoryItem,
+  updatePurchaseOrder,
 } from '../../services/api';
 import { MATERIALS, MATERIAL_ORDER } from '../../config/materials';
 import {
@@ -502,7 +504,7 @@ function FilamentTable({ items, onRowClick }) {
 
 // ─── Drawer body ─────────────────────────────────────────────────────────────
 
-function FilamentDrawerBody({ f, onReassign }) {
+function FilamentDrawerBody({ f, onReassign, onAddToPurchase }) {
   if (!f) return null;
   const level = stockLevel(f);
   const p = fillPercent(f);
@@ -601,12 +603,13 @@ function FilamentDrawerBody({ f, onReassign }) {
 
       {/* Acciones inline (1:1 design Claude — antes del Historial, no en footer) */}
       <div className="flex gap-2">
-        <Link
-          to="/inventory/purchases?new=1"
+        <button
+          type="button"
+          onClick={() => onAddToPurchase?.(f)}
           className="btn btn-primary btn-sm flex-1 justify-center"
         >
           <ShoppingCart size={13} /> Agregar a compras
-        </Link>
+        </button>
         <button
           type="button"
           onClick={() => onReassign?.(f)}
@@ -1083,9 +1086,7 @@ function PurchaseDrawerBody({ po }) {
         </Card>
       )}
 
-      <Link to="/inventory/purchases" className="btn btn-primary btn-sm self-start">
-        Editar en vista clásica
-      </Link>
+      {/* "Editar en vista clásica" eliminado — usar Pencil del drawer header */}
     </div>
   );
 }
@@ -2224,6 +2225,395 @@ function ItemFormDrawer({ open, onClose, category, mode = 'create', initial, onS
   );
 }
 
+// ─── Purchase Order Form Drawer (Compras) ────────────────────────────────
+
+const PO_STATUS_OPTIONS = [
+  { value: 'pendiente',   label: 'Pendiente',  tone: 'warn'     },
+  { value: 'en_transito', label: 'En tránsito', tone: 'printing' },
+  { value: 'llegado',     label: 'Llegado',    tone: 'done'     },
+  { value: 'cancelado',   label: 'Cancelado',  tone: 'danger'   },
+];
+
+function emptyPOForm() {
+  return {
+    supplier: '',
+    carrier: '',
+    tracking_number: '',
+    estimated_arrival: '',
+    status: 'pendiente',
+    notes: '',
+    items: [
+      // 1 línea vacía por defecto
+      { name: '', quantity: 1, unit_cost: '', inventory_item_id: null, notes: '' },
+    ],
+  };
+}
+
+function poToForm(raw) {
+  return {
+    supplier: raw?.supplier || raw?.supplier_name || raw?.vendor || '',
+    carrier: raw?.carrier || raw?.tracking_carrier || '',
+    tracking_number: raw?.tracking_number || '',
+    estimated_arrival: raw?.estimated_arrival
+      ? String(raw.estimated_arrival).split('T')[0]
+      : '',
+    status: raw?.status || 'pendiente',
+    notes: raw?.notes || '',
+    items: Array.isArray(raw?.items) && raw.items.length > 0
+      ? raw.items.map((it) => ({
+          name: it.name || '',
+          quantity: Number(it.quantity) || 1,
+          unit_cost: it.unit_cost != null ? Number(it.unit_cost) : '',
+          inventory_item_id: it.inventory_item_id ?? null,
+          notes: it.notes || '',
+        }))
+      : [{ name: '', quantity: 1, unit_cost: '', inventory_item_id: null, notes: '' }],
+  };
+}
+
+/**
+ * Drawer para crear/editar Purchase Orders. Sustituye al wizard externo
+ * `/inventory/purchases`. Soporta line items editables (agregar/quitar
+ * rows, link opcional a inventory item, subtotal auto-calc).
+ *
+ * @param {Object} props
+ * @param {boolean}              props.open
+ * @param {() => void}           props.onClose
+ * @param {'create'|'edit'}      [props.mode='create']
+ * @param {Object}               [props.initial]
+ * @param {(po: Object) => void} [props.onSaved]
+ * @param {Array}                [props.inventoryItems]  // pool para link opcional
+ * @param {boolean}              props.isMobile
+ */
+function PurchaseOrderFormDrawer({ open, onClose, mode = 'create', initial, onSaved, inventoryItems = [], isMobile }) {
+  const [form, setForm] = useState(emptyPOForm());
+  const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    // En modo `edit` siempre usa initial. En modo `create` también acepta
+    // un `initial` (prefill) — útil para abrir el form desde "Agregar a
+    // compras" del drawer del filamento con la línea ya pre-cargada.
+    setForm(initial ? poToForm(initial) : emptyPOForm());
+    setErrors({});
+  }, [open, mode, initial]);
+
+  if (!open) return null;
+
+  const update = (k, v) => setForm((cur) => ({ ...cur, [k]: v }));
+
+  const updateItem = (idx, k, v) => {
+    setForm((cur) => {
+      const next = [...cur.items];
+      next[idx] = { ...next[idx], [k]: v };
+      return { ...cur, items: next };
+    });
+  };
+
+  const addItem = () => {
+    setForm((cur) => ({
+      ...cur,
+      items: [...cur.items, { name: '', quantity: 1, unit_cost: '', inventory_item_id: null, notes: '' }],
+    }));
+  };
+
+  const removeItem = (idx) => {
+    setForm((cur) => {
+      if (cur.items.length <= 1) return cur; // mínimo 1
+      return { ...cur, items: cur.items.filter((_, i) => i !== idx) };
+    });
+  };
+
+  const linkInventoryItem = (idx, inventoryItemId) => {
+    const item = inventoryItems.find((i) => i.id === Number(inventoryItemId));
+    setForm((cur) => {
+      const next = [...cur.items];
+      next[idx] = {
+        ...next[idx],
+        inventory_item_id: inventoryItemId ? Number(inventoryItemId) : null,
+        ...(item && {
+          name: item.name,
+          unit_cost: item.unit_cost ? Number(item.unit_cost) : '',
+        }),
+      };
+      return { ...cur, items: next };
+    });
+  };
+
+  const total = form.items.reduce(
+    (s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_cost) || 0),
+    0,
+  );
+
+  const validate = () => {
+    const next = {};
+    if (!form.supplier.trim()) next.supplier = 'Requerido';
+    if (form.items.length === 0) next.items = 'Mínimo 1 ítem';
+    form.items.forEach((it, i) => {
+      if (!it.name.trim()) next[`item_${i}_name`] = 'Requerido';
+      const q = Number(it.quantity);
+      if (!q || q < 1) next[`item_${i}_qty`] = '≥ 1';
+    });
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  };
+
+  const submit = async () => {
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      const payload = {
+        supplier: form.supplier.trim(),
+        carrier: form.carrier.trim() || null,
+        tracking_number: form.tracking_number.trim() || null,
+        estimated_arrival: form.estimated_arrival || null,
+        notes: form.notes.trim() || null,
+        items: form.items.map((it) => ({
+          name: it.name.trim(),
+          quantity: Number(it.quantity),
+          unit_cost: it.unit_cost !== '' ? Number(it.unit_cost) : 0,
+          inventory_item_id: it.inventory_item_id || null,
+          notes: it.notes?.trim() || null,
+        })),
+      };
+      // Status solo en update (Create siempre arranca en 'pendiente' backend)
+      if (mode === 'edit') payload.status = form.status;
+
+      const res = mode === 'edit'
+        ? await updatePurchaseOrder(initial.id, payload)
+        : await createPurchaseOrder(payload);
+      toast.success(
+        mode === 'edit'
+          ? `Orden de ${payload.supplier} actualizada`
+          : `Orden de ${payload.supplier} creada`,
+      );
+      onSaved?.(res.data);
+      onClose?.();
+    } catch (err) {
+      const msg = err?.response?.data?.detail || 'No se pudo guardar la orden';
+      toast.error(typeof msg === 'string' ? msg : 'Error al guardar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const body = (
+    <div className="flex flex-col gap-3">
+      <p className="text-[12px] text-gunmetal">
+        Los campos marcados con <span className="text-rose-400">*</span> son obligatorios. La orden empieza en estado <span className="text-amber-400">Pendiente</span>; al marcar como <span className="text-emerald-300">Llegado</span> se descuenta del stock cualquier ítem vinculado a inventario.
+      </p>
+
+      <FormSectionTitle>Proveedor</FormSectionTitle>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <FormFieldRow label="Proveedor" required error={errors.supplier}>
+          <input
+            value={form.supplier}
+            onChange={(e) => update('supplier', e.target.value)}
+            placeholder="ej. 3D Hardware Colombia"
+            className={FORM_INPUT_CLS}
+            autoFocus
+          />
+        </FormFieldRow>
+        {mode === 'edit' && (
+          <FormFieldRow label="Estado">
+            <select
+              value={form.status}
+              onChange={(e) => update('status', e.target.value)}
+              className={FORM_INPUT_CLS}
+            >
+              {PO_STATUS_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </FormFieldRow>
+        )}
+      </div>
+
+      <FormSectionTitle>Envío</FormSectionTitle>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <FormFieldRow label="Transportista (carrier)">
+          <input
+            value={form.carrier}
+            onChange={(e) => update('carrier', e.target.value)}
+            placeholder="ej. Servientrega, Coordinadora"
+            className={FORM_INPUT_CLS}
+          />
+        </FormFieldRow>
+        <FormFieldRow label="Número de tracking">
+          <input
+            value={form.tracking_number}
+            onChange={(e) => update('tracking_number', e.target.value)}
+            placeholder="ej. 1234567890"
+            className={`${FORM_INPUT_CLS} mono`}
+          />
+        </FormFieldRow>
+        <FormFieldRow label="Fecha estimada de llegada">
+          <input
+            type="date"
+            value={form.estimated_arrival}
+            onChange={(e) => update('estimated_arrival', e.target.value)}
+            className={`${FORM_INPUT_CLS} mono`}
+          />
+        </FormFieldRow>
+      </div>
+
+      <FormSectionTitle>Ítems del pedido</FormSectionTitle>
+      <div className="flex flex-col gap-2">
+        {form.items.map((it, idx) => (
+          <div
+            key={idx}
+            className="rounded-md border border-[var(--color-border)] p-3 flex flex-col gap-2 bg-[var(--color-surf-card-2)]"
+          >
+            <div className="flex items-center gap-2">
+              <span className="mono text-[10px] text-gunmetal tracking-wider">#{idx + 1}</span>
+              <span className="flex-1" />
+              <span className="mono text-xs text-tech-white">
+                {fmtCOP((Number(it.quantity) || 0) * (Number(it.unit_cost) || 0))}
+              </span>
+              {form.items.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeItem(idx)}
+                  className="text-rose-400 hover:text-rose-300 p-1"
+                  aria-label="Eliminar línea"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+            <FormFieldRow label="Item del inventario (opcional)">
+              <select
+                value={it.inventory_item_id || ''}
+                onChange={(e) => linkInventoryItem(idx, e.target.value)}
+                className={FORM_INPUT_CLS}
+              >
+                <option value="">— Sin vincular —</option>
+                {inventoryItems.map((inv) => (
+                  <option key={inv.id} value={inv.id}>
+                    [{inv.category}] {inv.name}
+                  </option>
+                ))}
+              </select>
+            </FormFieldRow>
+            <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr] gap-2">
+              <FormFieldRow label="Nombre" required error={errors[`item_${idx}_name`]}>
+                <input
+                  value={it.name}
+                  onChange={(e) => updateItem(idx, 'name', e.target.value)}
+                  placeholder="ej. Filamento PLA 1kg Negro"
+                  className={FORM_INPUT_CLS}
+                />
+              </FormFieldRow>
+              <FormFieldRow label="Cantidad" required error={errors[`item_${idx}_qty`]}>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={it.quantity}
+                  onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
+                  className={`${FORM_INPUT_CLS} mono`}
+                />
+              </FormFieldRow>
+              <FormFieldRow label="Costo unit (COP)">
+                <input
+                  type="number"
+                  min="0"
+                  step="100"
+                  value={it.unit_cost}
+                  onChange={(e) => updateItem(idx, 'unit_cost', e.target.value)}
+                  placeholder="ej. 80000"
+                  className={`${FORM_INPUT_CLS} mono`}
+                />
+              </FormFieldRow>
+            </div>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={addItem}
+          className="btn btn-sm self-start"
+        >
+          <Plus size={13} /> Agregar línea
+        </button>
+        <div className="flex items-baseline justify-between pt-2 border-t border-dashed border-[var(--color-border-soft)]">
+          <span className="lbl-eyebrow">Total estimado</span>
+          <span className="mono text-base font-semibold text-tech-white">
+            {fmtCOP(total)} <span className="text-gunmetal text-[11px]">COP</span>
+          </span>
+        </div>
+      </div>
+
+      <FormSectionTitle>Notas</FormSectionTitle>
+      <FormFieldRow label="Observaciones">
+        <textarea
+          rows={3}
+          value={form.notes}
+          onChange={(e) => update('notes', e.target.value)}
+          placeholder="Términos de pago, urgencia, comentarios…"
+          className={`${FORM_INPUT_CLS} resize-y`}
+        />
+      </FormFieldRow>
+    </div>
+  );
+
+  const footerSlot = (
+    <>
+      <button
+        type="button"
+        onClick={onClose}
+        className="btn btn-sm flex-1 justify-center"
+        disabled={saving}
+      >
+        Cancelar
+      </button>
+      <button
+        type="button"
+        onClick={submit}
+        disabled={saving}
+        className="btn btn-primary btn-sm flex-1 justify-center disabled:opacity-50"
+      >
+        {saving
+          ? 'Guardando…'
+          : mode === 'edit'
+            ? (<><Pencil size={13} /> Guardar cambios</>)
+            : (<><Plus size={13} /> Crear orden</>)}
+      </button>
+    </>
+  );
+
+  const title = mode === 'edit'
+    ? `PO-${String(initial?.id || '').padStart(4, '0')}`
+    : 'Nueva orden de compra';
+  const eyebrow = mode === 'edit'
+    ? `Editando · ${initial?.supplier || 'orden'}`
+    : 'Inventario · nueva PO';
+
+  if (isMobile) {
+    return (
+      <MobileSheet open={open} onClose={onClose} title={title} height="full">
+        <div className="px-5 pt-4 pb-2">{body}</div>
+        <div className="px-5 pt-3 pb-5 border-t border-[var(--color-border-soft)] flex gap-2 sticky bottom-0 bg-[var(--color-surf-sidebar)]">
+          {footerSlot}
+        </div>
+      </MobileSheet>
+    );
+  }
+
+  return (
+    <DetailDrawer
+      open={open}
+      onClose={onClose}
+      title={title}
+      eyebrow={eyebrow}
+      width={620}
+      footer={footerSlot}
+    >
+      {body}
+    </DetailDrawer>
+  );
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 /**
@@ -2249,6 +2639,10 @@ export default function InventoryPage() {
   const [itemFormCategory, setItemFormCategory] = useState(null); // null | 'Insumo' | 'Herramienta' | 'Consumible'
   const [itemFormMode, setItemFormMode] = useState('create');     // 'create' | 'edit'
   const [editingItemRaw, setEditingItemRaw] = useState(null);     // raw backend item
+  // Purchase Order form drawer (compras)
+  const [poFormOpen, setPoFormOpen] = useState(false);
+  const [poFormMode, setPoFormMode] = useState('create');
+  const [editingPoRaw, setEditingPoRaw] = useState(null);
   // Drawer/sheet state — un slot por tipo para no mezclar bodies.
   const [selected, setSelected] = useState(null);            // filamento
   const [selectedItem, setSelectedItem] = useState(null);    // insumo / herramienta / consumible
@@ -2640,7 +3034,9 @@ export default function InventoryPage() {
         <MobileFAB
           onClick={() => {
             if (tab === 'compras') {
-              navigate('/inventory/purchases');
+              setPoFormMode('create');
+              setEditingPoRaw(null);
+              setPoFormOpen(true);
               return;
             }
             if (tab === 'filamentos') {
@@ -2684,6 +3080,23 @@ export default function InventoryPage() {
           <FilamentDrawerBody
             f={selected}
             onReassign={() => toast('Reasignar batch llega pronto.')}
+            onAddToPurchase={(filament) => {
+              // Pre-fill PO form con el filamento como línea, vinculado
+              const raw = filamentsRawById[filament.id];
+              setEditingPoRaw({
+                supplier: raw?.supplier_name || raw?.filament_brand || '',
+                items: [{
+                  name: raw?.name || filament.colorName,
+                  quantity: 1,
+                  unit_cost: raw?.price_per_kg || '',
+                  inventory_item_id: filament.id,
+                }],
+              });
+              setPoFormMode('create');
+              setPoFormOpen(true);
+              setSelected(null);
+              setTab('compras');
+            }}
           />
         </MobileSheet>
         <MobileSheet
@@ -2709,6 +3122,16 @@ export default function InventoryPage() {
           onClose={() => setSelectedPurchase(null)}
           title={selectedPurchase ? `PO-${String(selectedPurchase.id).padStart(4, '0')}` : ''}
           height="full"
+          onEdit={
+            selectedPurchase
+              ? () => {
+                  setEditingPoRaw(selectedPurchase);
+                  setPoFormMode('edit');
+                  setPoFormOpen(true);
+                  setSelectedPurchase(null);
+                }
+              : undefined
+          }
         >
           <PurchaseDrawerBody po={selectedPurchase} />
         </MobileSheet>
@@ -2759,6 +3182,30 @@ export default function InventoryPage() {
             else if (item?.category === 'Consumible') upsert(consumables, setConsumables);
           }}
         />
+
+        <PurchaseOrderFormDrawer
+          open={poFormOpen}
+          onClose={() => {
+            setPoFormOpen(false);
+            setEditingPoRaw(null);
+          }}
+          mode={poFormMode}
+          initial={editingPoRaw}
+          isMobile={isMobile}
+          inventoryItems={[
+            ...filaments.map((f) => filamentsRawById[f.id]).filter(Boolean),
+            ...supplies, ...tools, ...consumables,
+          ]}
+          onSaved={(po) => {
+            setPurchases((cur) => {
+              const idx = cur.findIndex((p) => p.id === po.id);
+              if (idx === -1) return [po, ...cur];
+              const next = [...cur];
+              next[idx] = po;
+              return next;
+            });
+          }}
+        />
       </div>
     );
   }
@@ -2805,7 +3252,9 @@ export default function InventoryPage() {
                 return;
               }
               if (tab === 'compras') {
-                navigate('/inventory/purchases');
+                setPoFormMode('create');
+                setEditingPoRaw(null);
+                setPoFormOpen(true);
                 return;
               }
               const catMap = {
@@ -2922,9 +3371,17 @@ export default function InventoryPage() {
               }
               action={
                 purchases.length === 0 ? (
-                  <Link to="/inventory/purchases" className="btn btn-primary btn-sm">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPoFormMode('create');
+                      setEditingPoRaw(null);
+                      setPoFormOpen(true);
+                    }}
+                    className="btn btn-primary btn-sm"
+                  >
                     <Plus size={13} /> Crear pedido
-                  </Link>
+                  </button>
                 ) : null
               }
             />
@@ -3072,6 +3529,22 @@ export default function InventoryPage() {
         <FilamentDrawerBody
           f={selected}
           onReassign={() => toast('Reasignar batch llega pronto.')}
+          onAddToPurchase={(filament) => {
+            const raw = filamentsRawById[filament.id];
+            setEditingPoRaw({
+              supplier: raw?.supplier_name || raw?.filament_brand || '',
+              items: [{
+                name: raw?.name || filament.colorName,
+                quantity: 1,
+                unit_cost: raw?.price_per_kg || '',
+                inventory_item_id: filament.id,
+              }],
+            });
+            setPoFormMode('create');
+            setPoFormOpen(true);
+            setSelected(null);
+            setTab('compras');
+          }}
         />
       </DetailDrawer>
       <DetailDrawer
@@ -3097,6 +3570,16 @@ export default function InventoryPage() {
         onClose={() => setSelectedPurchase(null)}
         title={selectedPurchase ? `PO-${String(selectedPurchase.id).padStart(4, '0')}` : ''}
         width={460}
+        onEdit={
+          selectedPurchase
+            ? () => {
+                setEditingPoRaw(selectedPurchase);
+                setPoFormMode('edit');
+                setPoFormOpen(true);
+                setSelectedPurchase(null);
+              }
+            : undefined
+        }
       >
         <PurchaseDrawerBody po={selectedPurchase} />
       </DetailDrawer>
@@ -3146,6 +3629,30 @@ export default function InventoryPage() {
           if (item?.category === 'Insumo') upsert(supplies, setSupplies);
           else if (item?.category === 'Herramienta') upsert(tools, setTools);
           else if (item?.category === 'Consumible') upsert(consumables, setConsumables);
+        }}
+      />
+
+      <PurchaseOrderFormDrawer
+        open={poFormOpen}
+        onClose={() => {
+          setPoFormOpen(false);
+          setEditingPoRaw(null);
+        }}
+        mode={poFormMode}
+        initial={editingPoRaw}
+        isMobile={isMobile}
+        inventoryItems={[
+          ...filaments.map((f) => filamentsRawById[f.id]).filter(Boolean),
+          ...supplies, ...tools, ...consumables,
+        ]}
+        onSaved={(po) => {
+          setPurchases((cur) => {
+            const idx = cur.findIndex((p) => p.id === po.id);
+            if (idx === -1) return [po, ...cur];
+            const next = [...cur];
+            next[idx] = po;
+            return next;
+          });
         }}
       />
 
