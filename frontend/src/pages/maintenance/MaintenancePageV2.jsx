@@ -19,6 +19,7 @@ import {
   ChevronRight,
   ClipboardList,
   Clock,
+  ExternalLink,
   LayoutDashboard,
   Plus,
   Printer,
@@ -27,7 +28,14 @@ import {
   X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Button, Card, DetailDrawer, KPI, MobileSheet } from '../../components/ui';
+import {
+  Card,
+  DetailDrawer,
+  EmptyState,
+  KPI,
+  MobileSheet,
+  StatusPill,
+} from '../../components/ui';
 import MobileAppHeader from '../../components/MobileAppHeader';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { getMaintenanceLogs, getMaintenanceSummary } from '../../services/api';
@@ -66,6 +74,22 @@ const LEVEL_DOT = {
   unknown:  { color: '#5A6573', label: '⚪' },
 };
 
+/**
+ * Mapea un level a metadata `StatusPill` (label + tone + icon).
+ *
+ * Tonos:
+ *   - `danger`  → vencido / sobrepasó intervalo
+ *   - `warn`    → pronto / ≥85% intervalo
+ *   - `done`    → ok / dentro del intervalo
+ *   - `neutral` → sin registro previo
+ */
+function levelBadge(level) {
+  if (level === 'critical') return { label: 'Crítico', tone: 'danger', icon: AlertTriangle };
+  if (level === 'warning')  return { label: 'Pronto',  tone: 'warn',   icon: Clock };
+  if (level === 'ok')       return { label: 'OK',      tone: 'done',   icon: CheckCircle2 };
+  return { label: 'Sin reg.', tone: 'neutral', icon: undefined };
+}
+
 const fmtDate = (iso) => {
   if (!iso) return '—';
   try {
@@ -98,6 +122,7 @@ function PrinterCard({ entry, onClick }) {
 
   const overallLevel = critical > 0 ? 'critical' : warning > 0 ? 'warning' : 'ok';
   const overallColor = LEVEL_DOT[overallLevel].color;
+  const overallBadge = levelBadge(overallLevel);
 
   return (
     <Card
@@ -119,18 +144,9 @@ function PrinterCard({ entry, onClick }) {
         </span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
-            <span
-              className="mono inline-flex items-center gap-1 text-[9.5px] px-1.5 py-px rounded-sm tracking-wider"
-              style={{
-                background: `${overallColor}1A`,
-                border: `1px solid ${overallColor}40`,
-                color: overallColor,
-              }}
-            >
-              {overallLevel === 'critical' && <AlertTriangle size={9} />}
-              {overallLevel === 'ok' && <CheckCircle2 size={9} />}
-              {overallLevel === 'critical' ? 'CRÍTICO' : overallLevel === 'warning' ? 'PRONTO' : 'OK'}
-            </span>
+            <StatusPill tone={overallBadge.tone} icon={overallBadge.icon}>
+              {overallBadge.label}
+            </StatusPill>
           </div>
           <p className="text-sm font-semibold text-tech-white truncate">
             {printer.name || `Impresora #${printer.id}`}
@@ -216,16 +232,20 @@ function LogRow({ log, onClick }) {
 
 // ─── Drawer body ────────────────────────────────────────────────────────────
 
-function PrinterDrawerBody({ entry, onClose }) {
+/**
+ * Cuerpo del drawer de impresora (read-only). Header (eyebrow + title) lo
+ * aporta `DetailDrawer` v2; el CTA "Registrar mantenimiento" va al slot
+ * `footer` (ver `PrinterDrawerFooter`).
+ */
+function PrinterDrawerBody({ entry }) {
   if (!entry) return null;
   const printer = entry.printer || {};
   const lastPerType = entry.last_per_type || {};
   return (
-    <div className="p-5 flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <div>
-        <h2 className="text-lg font-semibold text-tech-white">{printer.name}</h2>
-        <p className="mono text-[11.5px] text-gunmetal mt-0.5">
-          {printer.model || '—'} · {Number(printer.current_hours || 0).toFixed(0)}h
+        <p className="mono text-[11.5px] text-gunmetal">
+          {printer.model || '—'} · {Number(printer.current_hours || 0).toFixed(0)}h impresión acumulada
         </p>
       </div>
 
@@ -235,16 +255,18 @@ function PrinterDrawerBody({ entry, onClose }) {
           {MAINTENANCE_TYPES.map((t) => {
             const last = lastPerType[t.value];
             const lvl = last ? maintLevel(t.value, last.hours_since) : 'unknown';
-            const dot = LEVEL_DOT[lvl];
+            const badge = levelBadge(lvl);
             return (
               <li
                 key={t.value}
                 className="flex items-center gap-3 px-3 py-2 rounded-md bg-[var(--color-surf-card)] border border-[var(--color-border-soft)]"
               >
-                <span style={{ color: dot.color }} className="text-base">
-                  {dot.label}
-                </span>
                 <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <StatusPill tone={badge.tone} icon={badge.icon}>
+                      {badge.label}
+                    </StatusPill>
+                  </div>
                   <p className="text-sm text-tech-white truncate">{t.label}</p>
                   <p className="mono text-[10.5px] text-gunmetal">
                     {last
@@ -260,23 +282,39 @@ function PrinterDrawerBody({ entry, onClose }) {
           })}
         </ul>
       </div>
-
-      <Link to={`/maintenance/logs?printer=${printer.id || ''}`} className="btn btn-primary btn-sm self-start">
-        <Plus size={13} /> Registrar mantenimiento
-      </Link>
     </div>
   );
 }
 
+/**
+ * Footer del drawer de impresora: CTA único "Registrar mantenimiento"
+ * prefilled con `printer_id`.
+ */
+function PrinterDrawerFooter({ entry }) {
+  if (!entry) return null;
+  const printer = entry.printer || {};
+  return (
+    <Link
+      to={`/maintenance/logs?printer=${printer.id || ''}`}
+      className="btn btn-primary btn-sm flex-1 justify-center"
+    >
+      <Plus size={13} /> Registrar mantenimiento
+    </Link>
+  );
+}
+
+/**
+ * Cuerpo del drawer de log (read-only). Header lo aporta `DetailDrawer` v2;
+ * CTA externo "Wiki BambuLab" va al footer si el tipo tiene `wiki_url`.
+ */
 function LogDrawerBody({ log }) {
   if (!log) return null;
   const tipo = TYPE_BY_VALUE[log.maintenance_type] || { label: log.maintenance_type || '—' };
   const items = Array.isArray(log.items) ? log.items : [];
   return (
-    <div className="p-5 flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <div>
-        <h2 className="text-lg font-semibold text-tech-white">{tipo.label}</h2>
-        <p className="mono text-[11.5px] text-gunmetal mt-0.5">
+        <p className="mono text-[11.5px] text-gunmetal">
           {fmtDate(log.performed_at)} · {Number(log.hours_at_maintenance || 0).toFixed(0)}h
           {log.printer_name ? ` · ${log.printer_name}` : ''}
         </p>
@@ -309,12 +347,27 @@ function LogDrawerBody({ log }) {
           </ul>
         </div>
       )}
-      {tipo.wiki_url && (
-        <a href={tipo.wiki_url} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm self-start">
-          Ver wiki BambuLab
-        </a>
-      )}
     </div>
+  );
+}
+
+/**
+ * Footer del drawer de log. Si el tipo de mantenimiento tiene `wiki_url`,
+ * abre la página correspondiente del wiki BambuLab en nueva pestaña.
+ */
+function LogDrawerFooter({ log }) {
+  if (!log) return null;
+  const tipo = TYPE_BY_VALUE[log.maintenance_type];
+  if (!tipo?.wiki_url) return null;
+  return (
+    <a
+      href={tipo.wiki_url}
+      target="_blank"
+      rel="noreferrer"
+      className="btn btn-ghost btn-sm flex-1 justify-center"
+    >
+      <ExternalLink size={13} /> Ver wiki BambuLab
+    </a>
   );
 }
 
@@ -496,14 +549,25 @@ export default function MaintenancePageV2() {
         {tab === 'dashboard' ? (
           loading ? (
             <p className="px-4 py-12 text-center text-gunmetal text-sm">Cargando…</p>
+          ) : summary.length === 0 ? (
+            <div className="mt-3 pb-28">
+              <EmptyState
+                icon={Printer}
+                accent={ACCENT}
+                title="Sin impresoras registradas"
+                hint="Configura una impresora primero para llevar el control de su mantenimiento."
+                action={
+                  <Link to="/maintenance/printers" className="btn btn-primary btn-sm">
+                    <Plus size={13} /> Configurar impresoras
+                  </Link>
+                }
+              />
+            </div>
           ) : (
             <div className="px-4 mt-3 pb-28 flex flex-col gap-2">
               {summary.map((entry) => (
                 <PrinterCard key={entry.printer.id} entry={entry} onClick={setSelectedPrinter} />
               ))}
-              {summary.length === 0 && (
-                <p className="px-4 py-12 text-center text-gunmetal text-sm">Sin impresoras registradas</p>
-              )}
             </div>
           )
         ) : (
@@ -519,16 +583,28 @@ export default function MaintenancePageV2() {
                 />
               </div>
             </div>
-            <ul className="mt-3 pb-28">
-              {filteredLogs.map((l) => (
-                <li key={l.id}>
-                  <LogRow log={l} onClick={setSelectedLog} />
-                </li>
-              ))}
-              {filteredLogs.length === 0 && (
-                <li className="px-4 py-12 text-center text-gunmetal text-sm">Sin registros</li>
-              )}
-            </ul>
+            {filteredLogs.length === 0 ? (
+              <div className="mt-3 pb-28">
+                <EmptyState
+                  icon={ClipboardList}
+                  accent={ACCENT}
+                  title={logs.length === 0 ? 'Sin registros aún' : 'Sin resultados'}
+                  hint={
+                    logs.length === 0
+                      ? 'Cuando registres un mantenimiento aparecerá en este historial.'
+                      : 'Cambia el filtro o limpia la búsqueda.'
+                  }
+                />
+              </div>
+            ) : (
+              <ul className="mt-3 pb-28">
+                {filteredLogs.map((l) => (
+                  <li key={l.id}>
+                    <LogRow log={l} onClick={setSelectedLog} />
+                  </li>
+                ))}
+              </ul>
+            )}
           </>
         )}
         <button
@@ -541,11 +617,41 @@ export default function MaintenancePageV2() {
           <Plus size={16} strokeWidth={2.5} />
           Registrar
         </button>
-        <MobileSheet open={!!selectedPrinter} onClose={() => setSelectedPrinter(null)} title={selectedPrinter?.printer?.name || ''} height="full">
-          <PrinterDrawerBody entry={selectedPrinter} onClose={() => setSelectedPrinter(null)} />
+        <MobileSheet
+          open={!!selectedPrinter}
+          onClose={() => setSelectedPrinter(null)}
+          title={selectedPrinter?.printer?.name || ''}
+          height="full"
+        >
+          <div className="px-5 pt-4 pb-3">
+            <PrinterDrawerBody entry={selectedPrinter} />
+          </div>
+          {selectedPrinter && (
+            <div className="px-5 pt-3 pb-5 border-t border-[var(--color-border-soft)] flex flex-wrap gap-2 sticky bottom-0 bg-[var(--color-surf-sidebar)]">
+              <PrinterDrawerFooter entry={selectedPrinter} />
+            </div>
+          )}
         </MobileSheet>
-        <MobileSheet open={!!selectedLog} onClose={() => setSelectedLog(null)} title="Log" height="full">
-          <LogDrawerBody log={selectedLog} />
+        <MobileSheet
+          open={!!selectedLog}
+          onClose={() => setSelectedLog(null)}
+          title={
+            selectedLog
+              ? TYPE_BY_VALUE[selectedLog.maintenance_type]?.label ||
+                selectedLog.maintenance_type ||
+                'Log'
+              : ''
+          }
+          height="full"
+        >
+          <div className="px-5 pt-4 pb-3">
+            <LogDrawerBody log={selectedLog} />
+          </div>
+          {selectedLog && TYPE_BY_VALUE[selectedLog.maintenance_type]?.wiki_url && (
+            <div className="px-5 pt-3 pb-5 border-t border-[var(--color-border-soft)] flex flex-wrap gap-2 sticky bottom-0 bg-[var(--color-surf-sidebar)]">
+              <LogDrawerFooter log={selectedLog} />
+            </div>
+          )}
         </MobileSheet>
       </div>
     );
@@ -583,13 +689,17 @@ export default function MaintenancePageV2() {
         loading ? (
           <p className="px-6 py-16 text-center text-gunmetal text-sm">Cargando dashboard…</p>
         ) : summary.length === 0 ? (
-          <div className="px-6 py-16 flex flex-col items-center gap-3 text-center">
-            <Printer size={28} className="text-gunmetal-dim" />
-            <p className="text-sm font-semibold text-tech-white">Sin impresoras registradas</p>
-            <Link to="/maintenance/printers" className="btn btn-primary btn-sm">
-              Configurar impresoras
-            </Link>
-          </div>
+          <EmptyState
+            icon={Printer}
+            accent={ACCENT}
+            title="Sin impresoras registradas"
+            hint="Configura una impresora primero para llevar el control de su mantenimiento."
+            action={
+              <Link to="/maintenance/printers" className="btn btn-primary btn-sm">
+                <Plus size={13} /> Configurar impresoras
+              </Link>
+            }
+          />
         ) : (
           <div
             className="px-6 pt-4 pb-8 grid gap-3"
@@ -624,17 +734,32 @@ export default function MaintenancePageV2() {
           </div>
           {loading ? (
             <p className="px-6 py-16 text-center text-gunmetal text-sm">Cargando logs…</p>
+          ) : filteredLogs.length === 0 ? (
+            <EmptyState
+              icon={ClipboardList}
+              accent={ACCENT}
+              title={logs.length === 0 ? 'Sin registros aún' : 'Sin resultados'}
+              hint={
+                logs.length === 0
+                  ? 'Cuando registres un mantenimiento aparecerá en este historial.'
+                  : 'Cambia el filtro o limpia la búsqueda.'
+              }
+              action={
+                logs.length === 0 ? (
+                  <Link to="/maintenance/logs" className="btn btn-primary btn-sm">
+                    <Plus size={13} /> Registrar primer mantenimiento
+                  </Link>
+                ) : null
+              }
+            />
           ) : (
-            <div className="px-6 pb-8 border border-[var(--color-border)] rounded-xl mx-6 overflow-hidden bg-[var(--color-surf-card)]">
+            <div className="pb-8 border border-[var(--color-border)] rounded-xl mx-6 overflow-hidden bg-[var(--color-surf-card)]">
               <ul>
                 {filteredLogs.map((l) => (
                   <li key={l.id}>
                     <LogRow log={l} onClick={setSelectedLog} />
                   </li>
                 ))}
-                {filteredLogs.length === 0 && (
-                  <li className="px-4 py-12 text-center text-gunmetal text-sm">Sin registros</li>
-                )}
               </ul>
             </div>
           )}
@@ -644,17 +769,37 @@ export default function MaintenancePageV2() {
       <DetailDrawer
         open={!!selectedPrinter}
         onClose={() => setSelectedPrinter(null)}
+        eyebrow={
+          selectedPrinter
+            ? `IMPRESORA · ${Number(selectedPrinter.printer?.current_hours || 0).toFixed(0)}H`
+            : undefined
+        }
         title={selectedPrinter?.printer?.name || ''}
         width={460}
+        footer={
+          selectedPrinter && <PrinterDrawerFooter entry={selectedPrinter} />
+        }
       >
-        <PrinterDrawerBody entry={selectedPrinter} onClose={() => setSelectedPrinter(null)} />
+        <PrinterDrawerBody entry={selectedPrinter} />
       </DetailDrawer>
 
       <DetailDrawer
         open={!!selectedLog}
         onClose={() => setSelectedLog(null)}
-        title="Log de mantenimiento"
+        eyebrow={selectedLog ? `LOG · ${fmtDate(selectedLog.performed_at)}` : undefined}
+        title={
+          selectedLog
+            ? TYPE_BY_VALUE[selectedLog.maintenance_type]?.label ||
+              selectedLog.maintenance_type ||
+              'Log de mantenimiento'
+            : ''
+        }
         width={460}
+        footer={
+          selectedLog && TYPE_BY_VALUE[selectedLog.maintenance_type]?.wiki_url ? (
+            <LogDrawerFooter log={selectedLog} />
+          ) : null
+        }
       >
         <LogDrawerBody log={selectedLog} />
       </DetailDrawer>
