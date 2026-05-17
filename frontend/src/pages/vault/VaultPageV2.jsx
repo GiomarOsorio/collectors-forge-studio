@@ -1,8 +1,12 @@
 /**
- * @file Página rediseñada del Vault (Claude Design port — Día 8).
+ * @file Página rediseñada del Vault (Claude Design v2).
  *
  * Galería de modelos `.3mf` con thumbnails locales (extraídos del ZIP en Fase 4)
  * con prioridad sobre `thumbnail_url` externo.
+ *
+ * Pendiente Fase 5 (PRs siguientes): soporte de `.gcode.3mf` además de `.3mf`
+ * editable + picker drawer "Agregar a cola desde Vault" — ver
+ * `claude design/pending-screens.md` §20 + §20.1.
  *
  * @module pages/vault/VaultPageV2
  */
@@ -22,7 +26,14 @@ import {
   X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Button, Card, DetailDrawer, KPI, MobileSheet } from '../../components/ui';
+import {
+  Button,
+  Card,
+  DetailDrawer,
+  EmptyState,
+  KPI,
+  MobileSheet,
+} from '../../components/ui';
 import MobileAppHeader from '../../components/MobileAppHeader';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../context/AuthContext';
@@ -136,11 +147,15 @@ function VaultRow({ file, onClick }) {
 
 // ─── Drawer body ────────────────────────────────────────────────────────────
 
-function VaultDrawerBody({ file, isAdmin, onDownload, onDelete, onClose }) {
+/**
+ * Cuerpo del drawer (read-only). Header (eyebrow + title) lo aporta
+ * `DetailDrawer` v2; las acciones viven en `VaultDrawerFooter`.
+ */
+function VaultDrawerBody({ file }) {
   if (!file) return null;
   const thumb = getThumbnail(file);
   return (
-    <div className="p-5 flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <div
         className="h-48 rounded-lg overflow-hidden bg-[var(--color-surf-sidebar)] flex items-center justify-center border border-[var(--color-border)]"
       >
@@ -150,10 +165,7 @@ function VaultDrawerBody({ file, isAdmin, onDownload, onDelete, onClose }) {
           <Archive size={50} style={{ color: `${ACCENT}55` }} />
         )}
       </div>
-      <div>
-        <h2 className="text-lg font-semibold text-tech-white truncate">{file.name}</h2>
-        <p className="mono text-[11.5px] text-gunmetal mt-0.5 truncate">{file.file_name}</p>
-      </div>
+      <p className="mono text-[11.5px] text-gunmetal truncate">{file.file_name}</p>
       {file.description && (
         <Card className="p-3">
           <span className="lbl-eyebrow text-[9px]">Descripción</span>
@@ -201,29 +213,51 @@ function VaultDrawerBody({ file, isAdmin, onDownload, onDelete, onClose }) {
           </div>
         </div>
       )}
-      <div className="flex flex-wrap gap-2 pt-2 border-t border-[var(--color-border-soft)]">
-        <Button variant="primary" icon={Download} onClick={() => onDownload(file)} className="flex-1">
-          Descargar .3mf
-        </Button>
-        {isAdmin && (
-          <>
-            <Link to={`/vault/upload?replace=${file.id}`} className="btn btn-ghost btn-sm">
-              <Pencil size={13} /> Editar
-            </Link>
-            <Button
-              variant="ghost"
-              icon={Trash2}
-              onClick={async () => {
-                const ok = await onDelete(file);
-                if (ok) onClose();
-              }}
-              className="text-rose-400 hover:text-rose-300"
-              aria-label="Eliminar"
-            />
-          </>
-        )}
-      </div>
     </div>
+  );
+}
+
+/**
+ * Footer del drawer: Descargar (todos) + Editar / Eliminar (solo admin).
+ * Se renderiza en el slot `footer` del `DetailDrawer` (desktop) o inline
+ * sticky dentro del `MobileSheet` (mobile).
+ */
+function VaultDrawerFooter({ file, isAdmin, onDownload, onDelete, onClose }) {
+  if (!file) return null;
+  return (
+    <>
+      <Button
+        variant="primary"
+        size="sm"
+        icon={Download}
+        onClick={() => onDownload(file)}
+        className="flex-1 justify-center"
+      >
+        Descargar
+      </Button>
+      {isAdmin && (
+        <Link
+          to={`/vault/upload?replace=${file.id}`}
+          className="btn btn-ghost btn-sm"
+          aria-label="Editar"
+        >
+          <Pencil size={13} /> Editar
+        </Link>
+      )}
+      {isAdmin && (
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={Trash2}
+          onClick={async () => {
+            const ok = await onDelete(file);
+            if (ok) onClose();
+          }}
+          className="text-rose-400 hover:text-rose-300"
+          aria-label="Eliminar"
+        />
+      )}
+    </>
   );
 }
 
@@ -378,6 +412,30 @@ export default function VaultPageV2() {
         </div>
         {loading ? (
           <p className="px-4 py-12 text-center text-gunmetal text-sm">Cargando Vault…</p>
+        ) : filtered.length === 0 ? (
+          <div className="mt-3 pb-28">
+            <EmptyState
+              icon={Archive}
+              accent={ACCENT}
+              title={files.length === 0 ? 'Vault vacío' : 'Sin resultados'}
+              hint={
+                files.length === 0
+                  ? 'Sube tu primer .3mf para tener tus modelos organizados aquí.'
+                  : 'Cambia el filtro o limpia la búsqueda.'
+              }
+              action={
+                isAdmin && files.length === 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/vault/upload')}
+                    className="btn btn-primary btn-sm"
+                  >
+                    <Upload size={13} /> Subir primer modelo
+                  </button>
+                ) : null
+              }
+            />
+          </div>
         ) : (
           <ul className="mt-3 pb-28">
             {filtered.map((f) => (
@@ -385,11 +443,6 @@ export default function VaultPageV2() {
                 <VaultRow file={f} onClick={setSelected} />
               </li>
             ))}
-            {filtered.length === 0 && (
-              <li className="px-4 py-12 text-center text-gunmetal text-sm">
-                {files.length === 0 ? 'Vault vacío' : 'Sin resultados'}
-              </li>
-            )}
           </ul>
         )}
         {isAdmin && (
@@ -404,14 +457,26 @@ export default function VaultPageV2() {
             Subir
           </button>
         )}
-        <MobileSheet open={!!selected} onClose={() => setSelected(null)} title={selected?.name} height="full">
-          <VaultDrawerBody
-            file={selected}
-            isAdmin={isAdmin}
-            onDownload={handleDownload}
-            onDelete={handleDelete}
-            onClose={() => setSelected(null)}
-          />
+        <MobileSheet
+          open={!!selected}
+          onClose={() => setSelected(null)}
+          title={selected?.name || ''}
+          height="full"
+        >
+          <div className="px-5 pt-4 pb-3">
+            <VaultDrawerBody file={selected} />
+          </div>
+          {selected && (
+            <div className="px-5 pt-3 pb-5 border-t border-[var(--color-border-soft)] flex flex-wrap gap-2 sticky bottom-0 bg-[var(--color-surf-sidebar)]">
+              <VaultDrawerFooter
+                file={selected}
+                isAdmin={isAdmin}
+                onDownload={handleDownload}
+                onDelete={handleDelete}
+                onClose={() => setSelected(null)}
+              />
+            </div>
+          )}
         </MobileSheet>
       </div>
     );
@@ -467,17 +532,23 @@ export default function VaultPageV2() {
       {loading ? (
         <p className="px-6 py-16 text-center text-gunmetal text-sm">Cargando Vault…</p>
       ) : filtered.length === 0 ? (
-        <div className="px-6 py-16 flex flex-col items-center gap-3 text-center">
-          <Archive size={28} className="text-gunmetal-dim" />
-          <p className="text-sm font-semibold text-tech-white">
-            {files.length === 0 ? 'Vault vacío' : 'Sin resultados'}
-          </p>
-          {isAdmin && files.length === 0 && (
-            <Link to="/vault/upload" className="btn btn-primary btn-sm">
-              <Upload size={13} /> Subir primer modelo
-            </Link>
-          )}
-        </div>
+        <EmptyState
+          icon={Archive}
+          accent={ACCENT}
+          title={files.length === 0 ? 'Vault vacío' : 'Sin resultados'}
+          hint={
+            files.length === 0
+              ? 'Sube tu primer .3mf para tener tus modelos organizados aquí.'
+              : 'Cambia el filtro o limpia la búsqueda.'
+          }
+          action={
+            isAdmin && files.length === 0 ? (
+              <Link to="/vault/upload" className="btn btn-primary btn-sm">
+                <Upload size={13} /> Subir primer modelo
+              </Link>
+            ) : null
+          }
+        />
       ) : (
         <div
           className="px-6 pb-8 grid gap-3"
@@ -492,16 +563,22 @@ export default function VaultPageV2() {
       <DetailDrawer
         open={!!selected}
         onClose={() => setSelected(null)}
-        title={selected?.name}
+        eyebrow={selected ? `MODELO · ${fmtBytes(selected.file_size)}` : undefined}
+        title={selected?.name || ''}
         width={500}
+        footer={
+          selected && (
+            <VaultDrawerFooter
+              file={selected}
+              isAdmin={isAdmin}
+              onDownload={handleDownload}
+              onDelete={handleDelete}
+              onClose={() => setSelected(null)}
+            />
+          )
+        }
       >
-        <VaultDrawerBody
-          file={selected}
-          isAdmin={isAdmin}
-          onDownload={handleDownload}
-          onDelete={handleDelete}
-          onClose={() => setSelected(null)}
-        />
+        <VaultDrawerBody file={selected} />
       </DetailDrawer>
 
       <footer className="mt-auto px-6 py-2.5 border-t border-[var(--color-border-soft)] bg-[var(--color-surf-sidebar)] flex flex-wrap items-center gap-4 text-[11px] text-gunmetal">
