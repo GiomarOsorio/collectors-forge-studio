@@ -393,11 +393,6 @@ async def create_default_data():
                 power_consumption_watts=180.0,
                 estimated_lifespan_hours=5000.0,
                 current_hours=0.0,
-                nozzle_price=8.0,
-                nozzle_lifespan_hours=500.0,
-                buildplate_price=35.0,
-                buildplate_lifespan_hours=2000.0,
-                other_maintenance_per_hour=0.01,
                 notes="Impresora principal - BambuLab P2S Combo con AMS 2 Pro",
             )
             db.add(default_printer)

@@ -389,7 +389,6 @@ export default function CalculatorPageV2() {
               { label: 'Material', val: result.material_cost, icon: Layers },
               { label: 'Electricidad', val: result.electricity_cost, icon: Zap },
               { label: 'Depreciación', val: result.depreciation_cost, icon: Cpu },
-              { label: 'Mantenimiento', val: result.maintenance_cost, icon: Cpu },
               { label: 'Mano de obra', val: result.labor_cost, icon: Clock },
               { label: 'Falla esperada', val: result.failure_cost, icon: AlertTriangle },
             ].map((row) => {

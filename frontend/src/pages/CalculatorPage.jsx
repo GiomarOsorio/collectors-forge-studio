@@ -942,7 +942,6 @@ export default function CalculatorPage() {
                 <CostRow label="Material" value={result.material_cost} />
                 <CostRow label="Electricidad" value={result.electricity_cost} />
                 <CostRow label="Depreciación equipo" value={result.depreciation_cost} />
-                <CostRow label="Mantenimiento" value={result.maintenance_cost} />
                 <CostRow label="Mano de obra" value={result.labor_cost} />
                 <CostRow label="Absorción de fallos" value={result.failure_cost} />
                 {result.consumables_wear_cost > 0 && (

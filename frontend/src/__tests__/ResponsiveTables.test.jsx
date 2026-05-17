@@ -38,7 +38,6 @@ vi.mock('../services/api', () => ({
         material_cost: 2.0,
         electricity_cost: 0.5,
         depreciation_cost: 0.3,
-        maintenance_cost: 0.2,
         labor_cost: 1.0,
         failure_cost: 0.2,
         subtotal: 4.2,

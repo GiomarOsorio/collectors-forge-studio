@@ -122,7 +122,6 @@ export default function HistoryPage() {
               <Row label="Material" value={selected.material_cost} />
               <Row label="Electricidad" value={selected.electricity_cost} />
               <Row label="Depreciación" value={selected.depreciation_cost} />
-              <Row label="Mantenimiento" value={selected.maintenance_cost} />
               <Row label="Mano de obra" value={selected.labor_cost} />
               <Row label="Absorción fallos" value={selected.failure_cost} />
               <hr className="tf-hr" />

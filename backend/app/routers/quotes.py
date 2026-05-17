@@ -147,11 +147,6 @@ async def calculate_quote_manual(
         power_consumption_watts=data.power_consumption_watts,
         purchase_price=data.purchase_price,
         estimated_lifespan_hours=data.estimated_lifespan_hours,
-        nozzle_price=data.nozzle_price,
-        nozzle_lifespan_hours=data.nozzle_lifespan_hours,
-        buildplate_price=data.buildplate_price,
-        buildplate_lifespan_hours=data.buildplate_lifespan_hours,
-        other_maintenance_per_hour=data.other_maintenance_per_hour,
     )
     fake_settings = _FakeSettings(
         base_settings=app_settings,
@@ -239,7 +234,6 @@ async def create_quote(
         material_cost=breakdown.material_cost,
         electricity_cost=breakdown.electricity_cost,
         depreciation_cost=breakdown.depreciation_cost,
-        maintenance_cost=breakdown.maintenance_cost,
         labor_cost=breakdown.labor_cost,
         failure_cost=breakdown.failure_cost,
         subtotal=breakdown.subtotal,

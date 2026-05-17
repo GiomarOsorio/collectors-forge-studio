@@ -174,39 +174,11 @@ class TestDepreciationCost:
 # TestMaintenanceCost
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestMaintenanceCost:
-    """Mantenimiento: (boquilla/vida_boquilla + placa/vida_placa + otros) × horas."""
-
-    def test_maintenance_nozzle_buildplate_2h(self, filament, printer, app_settings):
-        """
-        Boquilla: $5  / 500h  = $0.010/h
-        Placa:    $20 / 2000h = $0.010/h
-        Total:                  $0.020/h × 2h = $0.04
-        """
-        result = calculate_cost(
-            filament, printer, app_settings,
-            weight_grams=Decimal("0"),
-            print_time_hours=Decimal("2"),
-            preparation_time_hours=Decimal("0"),
-            post_processing_time_hours=Decimal("0"),
-            quantity=1,
-        )
-        assert result.maintenance_cost == Decimal("0.04")
-
-    def test_maintenance_con_otros_costos(self, filament, printer, app_settings):
-        """
-        Con $0.05/h adicionales: ($0.01 + $0.01 + $0.05) × 2h = $0.14.
-        """
-        printer.other_maintenance_per_hour = Decimal("0.05")
-        result = calculate_cost(
-            filament, printer, app_settings,
-            weight_grams=Decimal("0"),
-            print_time_hours=Decimal("2"),
-            preparation_time_hours=Decimal("0"),
-            post_processing_time_hours=Decimal("0"),
-            quantity=1,
-        )
-        assert result.maintenance_cost == Decimal("0.14")
+# NOTA: la clase TestMaintenanceCost fue removida en la migración
+# l6m7n8o9p0q1 — el costo de mantenimiento ya no se calcula desde
+# Printer (boquilla/placa/otros). Se rastrea en la app Mantenimiento
+# (logs con descuento de inventario) y los Consumibles cubren el
+# desgaste prospectivo via `consumables_wear_cost`.
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -395,37 +367,9 @@ class TestGuardDivisionPorCero:
         assert result.depreciation_cost == Decimal("0.00")
         assert result.total_price >= Decimal("0")
 
-    def test_nozzle_lifespan_cero_solo_placa_contribuye(self, filament, printer, app_settings):
-        """
-        Si nozzle_lifespan = 0, se ignora ese componente.
-        Sólo buildplate contribuye: $20/2000h × 2h = $0.02
-        """
-        printer.nozzle_lifespan_hours = Decimal("0")
-        result = calculate_cost(
-            filament, printer, app_settings,
-            weight_grams=Decimal("0"),
-            print_time_hours=Decimal("2"),
-            preparation_time_hours=Decimal("0"),
-            post_processing_time_hours=Decimal("0"),
-            quantity=1,
-        )
-        assert result.maintenance_cost == Decimal("0.02")
-
-    def test_buildplate_lifespan_cero_solo_boquilla_contribuye(self, filament, printer, app_settings):
-        """
-        Si buildplate_lifespan = 0, se ignora ese componente.
-        Sólo nozzle contribuye: $5/500h × 2h = $0.02
-        """
-        printer.buildplate_lifespan_hours = Decimal("0")
-        result = calculate_cost(
-            filament, printer, app_settings,
-            weight_grams=Decimal("0"),
-            print_time_hours=Decimal("2"),
-            preparation_time_hours=Decimal("0"),
-            post_processing_time_hours=Decimal("0"),
-            quantity=1,
-        )
-        assert result.maintenance_cost == Decimal("0.02")
+    # NOTA: los tests test_nozzle_lifespan_cero / test_buildplate_lifespan_cero
+    # fueron removidos en la migración l6m7n8o9p0q1 — esos campos ya no
+    # existen en Printer. Ver `TestMaintenanceCost` arriba.
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -517,8 +461,8 @@ class TestMarginAndTotal:
     def test_total_per_unit_con_3_piezas(self, filament, printer, app_settings):
         """
         Con quantity=3:
-        total_price = $7.46 (ver TestCalculoCompleto)
-        total_per_unit = 7.46 / 3 = $2.4866... → ROUND_HALF_UP → $2.49
+        total_price = $7.41 (ver TestCalculoCompleto, post-drop de mantto)
+        total_per_unit = 7.41 / 3 = $2.4700... → ROUND_HALF_UP → $2.47
         """
         result = calculate_cost(
             filament, printer, app_settings,
@@ -529,7 +473,7 @@ class TestMarginAndTotal:
             quantity=3,
         )
         assert result.quantity == 3
-        assert result.total_per_unit == Decimal("2.49")
+        assert result.total_per_unit == Decimal("2.47")
         assert result.total_price > result.total_per_unit
 
 
@@ -780,17 +724,18 @@ class TestCalculoCompleto:
 
     def test_pieza_tipica_100g_2h(self, filament, printer, app_settings):
         """
-        Pieza típica con todos los componentes:
+        Pieza típica con todos los componentes (sin mantenimiento — el costo
+        de mantto se rastrea ahora en la app Mantenimiento y los Consumibles
+        cubren el desgaste via consumables_wear_cost):
             material:      100g × $0.025/g         = $2.500
             electricidad:  350W × 2h / 1000 × $0.15= $0.105 → $0.11
             depreciación:  $800 / 5000h × 2h       = $0.320
-            mantenimiento: ($0.01+$0.01)/h × 2h    = $0.040
             labor:         0.5h × $5/h             = $2.500
-            base_cost      = $5.465
-            fallos 5%:     $5.465 × 0.05           = $0.27325 → $0.27
-            subtotal_raw   = $5.73825 → $5.74
-            margen 30%:    $5.73825 × 0.3          = $1.72148 → $1.72
-            total_raw      = $7.45973  → $7.46
+            base_cost      = $5.425
+            fallos 5%:     $5.425 × 0.05           = $0.27125 → $0.27
+            subtotal_raw   = $5.69625 → $5.70
+            margen 30%:    $5.69625 × 0.3          = $1.70888 → $1.71
+            total_raw      = $7.40513  → $7.41
         """
         result = calculate_cost(
             filament, printer, app_settings,
@@ -800,14 +745,19 @@ class TestCalculoCompleto:
             post_processing_time_hours=Decimal("0"),
             quantity=1,
         )
+        # base = material + electricity + depreciation + labor
+        #      = 2.50 + 0.11 + 0.32 + 2.50 = 5.43
+        # failure (5%) = 5.43 × 0.05 = 0.2715 → 0.27
+        # subtotal = 5.43 + 0.27 = 5.70
+        # margin (30%) = 5.70 × 0.30 = 1.71
+        # total = 5.70 + 1.71 = 7.41
         assert result.material_cost == Decimal("2.50")
         assert result.electricity_cost == Decimal("0.11")
         assert result.depreciation_cost == Decimal("0.32")
-        assert result.maintenance_cost == Decimal("0.04")
         assert result.labor_cost == Decimal("2.50")
         assert result.failure_cost == Decimal("0.27")
-        assert result.total_price == Decimal("7.46")
-        assert result.total_per_unit == Decimal("7.46")
+        assert result.total_price == Decimal("7.41")
+        assert result.total_per_unit == Decimal("7.41")
 
     def test_resultado_siempre_positivo(self, filament, printer, app_settings):
         """El total nunca debe ser negativo."""
@@ -868,7 +818,6 @@ class TestCalculoCompleto:
         )
         assert con_cambios.electricity_cost == sin_cambios.electricity_cost
         assert con_cambios.depreciation_cost == sin_cambios.depreciation_cost
-        assert con_cambios.maintenance_cost == sin_cambios.maintenance_cost
         assert con_cambios.labor_cost == Decimal("0.00")
 
     def test_color_changes_cero_no_modifica_resultado(self, filament, printer, app_settings):
@@ -893,7 +842,7 @@ class TestCalculoCompleto:
         assert con.total_price == sin.total_price
 
     def test_incrementar_tiempo_incrementa_costos_operativos(self, filament, printer, app_settings):
-        """A mayor tiempo, mayores costos eléctrico, depreciación y mantenimiento."""
+        """A mayor tiempo, mayores costos eléctrico y depreciación."""
         r1h = calculate_cost(
             filament, printer, app_settings,
             weight_grams=Decimal("0"),
@@ -912,4 +861,3 @@ class TestCalculoCompleto:
         )
         assert r5h.electricity_cost > r1h.electricity_cost
         assert r5h.depreciation_cost > r1h.depreciation_cost
-        assert r5h.maintenance_cost > r1h.maintenance_cost
