@@ -1553,24 +1553,49 @@ NO recomendado en mobile — pero mínimo:
 
 ---
 
-## 20. Vault — Upload .3mf — `/vault/upload` (VaultUploadPage)
+## 20. Vault — Upload `.3mf` / `.gcode.3mf` — `/vault/upload` (VaultUploadPage)
 
-**Propósito**: Subir un archivo `.3mf` al Vault con metadata. Solo admin.
+**Propósito**: Subir un archivo de modelo al Vault con metadata. Acepta tanto el
+proyecto editable (`.3mf`) como el **paquete laminado** (`.gcode.3mf` —
+contiene G-code listo para impresora). Solo admin.
+
 **Acceso**: **admin**.
 **Endpoints**: `uploadVaultFile(file, metadata)`.
+
+### Por qué `.gcode.3mf` también
+
+Hoy el Vault solo guarda el `.3mf` (proyecto OrcaSlicer/BambuStudio editable),
+pero a la hora de **mandar a la cola** lo que necesitamos imprimir es el
+`.gcode.3mf` (paquete laminado con tiempo / peso / temperaturas resueltas).
+Para que el flujo "Agregar a cola" (sección 20.1) pueda pre-llenar `weight_g`
++ `time_h` + `filament_type` sin re-lanzar el slicer, el Vault tiene que
+permitir asociar **ambos archivos** al mismo `ModelFile`:
+
+- `source_file`: `.3mf` editable (opcional, para iterar el modelo más tarde).
+- `print_file`: `.gcode.3mf` laminado (lo que efectivamente se envía a la cola).
+
+Si solo se sube `.gcode.3mf`, ese archivo cubre ambos slots (sigue siendo un
+ZIP `.3mf` válido). Si solo se sube `.3mf` editable, "Agregar a cola" queda
+deshabilitado con tooltip "lamina primero en Slicer y vuelve a subir".
 
 ### Modelo `ModelFile`
 
 | Campo | Tipo | Required | Notas |
 |---|---|---|---|
 | name | string | * | display |
-| file (binario) | .3mf | * | min 1KB, max 50MB |
+| source_file (binario) | `.3mf` |  | proyecto editable, min 1KB |
+| print_file (binario) | `.gcode.3mf` |  | paquete laminado, min 1KB |
+| primary_file_kind | enum | * | `source` \| `print` — al menos uno presente |
+| size_bytes | int | * | tamaño del file principal, max 50MB total |
 | description | text |  |  |
 | creator_name | string |  | quien diseñó el modelo |
 | source_url | string |  | link al original (MakerWorld, etc.) |
 | source_platform | enum |  | MakerWorld, Printables, Thingiverse, Propio |
 | tags | array<string> |  |  |
 | filament_recommendation | string |  | ej. "PLA Negro" |
+| sliced_weight_g | decimal |  | leído del `.gcode.3mf` si está presente |
+| sliced_time_seconds | int |  | idem |
+| sliced_printer_model | string |  | idem (ej. "Bambu Lab P2S") |
 
 ### Layout (single, mobile + desktop similar)
 
@@ -1625,10 +1650,77 @@ Mismo flujo pero stack vertical, sin max-width.
 ### Notas
 
 - DropZone primitive con accent #F43F5E (vault rose)
-- Extracción de thumbnail del ZIP `.3mf` ya está en backend (`thumbnail_extractor.py`) — mostrar preview si la respuesta lo trae
+- **Dos dropzones lado a lado** (o un solo dropzone con sub-tabs "Editable / Laminado") — admin sube cualquiera de los dos o ambos
+- Validar extensión: `.3mf` para el slot editable, `.gcode.3mf` para el slot laminado. Backend rechaza si no coincide.
+- Extracción de thumbnail del ZIP `.3mf` ya está en backend (`thumbnail_extractor.py`) — mostrar preview si la respuesta lo trae. Funciona igual para `.gcode.3mf` (mismo formato ZIP).
+- **Parseo automático del `.gcode.3mf`**: extraer `weight_g`, `time_seconds`, `printer_model`, `filament_type` del header del G-code. Pre-llenar campos en el form para que el admin solo confirme.
 - Tags: chips editables, autocomplete desde tags existentes
-- Validación: file ext `.3mf` only, size ≤ 50MB
+- Validación: size ≤ 50MB por archivo
 - Solo admin → si user no es admin, redirect a /vault con toast
+
+---
+
+## 20.1 Vault — Selector inline para "Agregar a cola" (PENDIENTE — Fase 5)
+
+**Propósito**: Hoy el botón "Agregar a cola" del header de `/queue/v2`
+navega a `/cost/quotes` (historial de cotizaciones internas). Eso es un
+**stub temporal** — el flujo natural debería ser elegir un modelo del Vault
+que ya tenga `.gcode.3mf` y meterlo a la cola directamente.
+
+**Acceso**: usuario.
+**Endpoints nuevos**:
+- `getVaultPrintReady()` → lista solo `ModelFile` que tengan `print_file` (`.gcode.3mf`).
+- `addToQueueFromVault(model_id, { printer_id, quantity, notes })` → crea `PrintQueueItem` con `weight_g` / `time_seconds` / `filament_type` ya resueltos del Vault.
+
+### UX desktop — modal/drawer picker
+
+```
+[Click "Agregar a cola" en QueuePageV2 header]
+  ↓
+┌──── DRAWER PICKER (DetailDrawer width 520) ─────┐
+│ EYEBROW: COLA · NUEVO ITEM                       │
+│ TITLE:   Elegir modelo del Vault                 │
+│                                                  │
+│ [SearchField: nombre, tag, creator]              │
+│ [Filter chips: Printables / MakerWorld / Propio] │
+│                                                  │
+│ [Lista vertical de VaultPickerRow]               │
+│   ┌──────────────────────────────────────────┐  │
+│   │ [thumb 64×64] Soporte celular MagSafe    │  │
+│   │              45g · 1.2h · PLA Black      │  │
+│   │              StatusPill done "LAMINADO"  │  │
+│   └──────────────────────────────────────────┘  │
+│   ...                                            │
+│                                                  │
+│ [Si seleccionó modelo:]                          │
+│   ─── Configuración del item ───                 │
+│   - Impresora * (select)                         │
+│   - Cantidad (default 1)                         │
+│   - Notas (textarea)                             │
+│                                                  │
+│ FOOTER:                                          │
+│   [Cancelar]  [Agregar a cola]                   │
+└──────────────────────────────────────────────────┘
+```
+
+### UX mobile
+
+Mismo flujo pero en `MobileSheet height="full"` — search arriba, lista
+scroll, footer sticky con CTA.
+
+### Estados
+
+- **Empty**: si no hay modelos `.gcode.3mf` en Vault → `EmptyState` "Sube primero un .gcode.3mf al Vault" con CTA `→ /vault/upload`.
+- **Loading**: skeleton de 3 rows.
+- **Selected**: la row queda con borde teal; el panel de configuración aparece bajo la lista.
+- **Submit**: toast "Agregado a cola en posición #N", drawer se cierra, queue refresca.
+
+### Notas
+
+- Esto **reemplaza** la nav actual `Link to="/cost/quotes"` en `QueuePageV2.jsx` (header desktop + FAB mobile + EmptyState CTA).
+- Mantener un atajo secundario "¿necesitas cotizar primero? → /cost/quotes" en el footer del picker para no romper el flujo de quien quiere cotizar antes de imprimir.
+- Backend: `PrintQueueItem` necesita columnas adicionales `vault_model_id` (FK nullable a `ModelFile`) y `print_file_snapshot_path` (path al `.gcode.3mf` congelado al momento de agregar — para que cambios futuros en Vault no rompan el item ya encolado).
+- Migración Alembic: `*_queue_vault_link.py` agrega esas dos columnas + index.
 
 ---
 
@@ -1740,7 +1832,8 @@ Secciones:
 | 17 | Company — Branding | admin | M | media |
 | 18 | Company — Templates | admin | S | media |
 | 19 | Company — Editor template | admin | L | baja (3-col code editor complejo) |
-| 20 | Vault — Upload | admin | S | media |
+| 20 | Vault — Upload (`.3mf` + `.gcode.3mf`) | admin | M | media |
+| 20.1 | Vault — Picker "Agregar a cola" | usuario | M | **alta** (bloquea UX Queue) |
 | 21 | Settings — Empresa | admin | — | **decidir si se elimina o se mantiene** |
 | 22 | Settings — Usuarios | admin | S | media |
 
