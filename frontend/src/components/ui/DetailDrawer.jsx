@@ -39,14 +39,19 @@ export default function DetailDrawer({ open, onClose, title, eyebrow, footer, on
     };
   }, [open, onClose]);
 
+  // Guard temprano: si está cerrado, NO renderizamos NADA en el DOM.
+  // Esto previene la "regresión del menú lateral vacío" (drawer/aside
+  // visible cuando debería estar oculto por translate-x-full). Sacrifica
+  // la slide-in animation a cambio de garantía absoluta de que el
+  // drawer no se ve cuando open=false.
+  if (!open) return null;
+
   return (
     <>
       {/* Backdrop */}
       <div
         onClick={onClose}
-        className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-200 ${
-          open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-        }`}
+        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
         aria-hidden="true"
       />
       {/* Panel — grid layout para garantizar que header/body/footer
@@ -55,9 +60,7 @@ export default function DetailDrawer({ open, onClose, title, eyebrow, footer, on
       <aside
         role="dialog"
         aria-modal="true"
-        className={`fixed top-0 right-0 bottom-0 z-50 bg-[var(--color-surf-card)] border-l border-[var(--color-border)] shadow-2xl transition-transform duration-300 ease-out ${
-          open ? 'translate-x-0' : 'translate-x-full'
-        }`}
+        className="fixed top-0 right-0 bottom-0 z-50 bg-[var(--color-surf-card)] border-l border-[var(--color-border)] shadow-2xl"
         style={{
           width: '100%',
           maxWidth: width,
