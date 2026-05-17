@@ -317,4 +317,112 @@ describe('DetailDrawer v2 API', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalled();
   });
+
+  // ─── REGRESIÓN-GUARD: open=false NO debe renderizar NADA ──────────────
+  // Bug histórico: drawer/aside quedaba visible en pantalla cuando
+  // open=false porque translate-x-full no se aplicaba consistentemente.
+  // El fix: `if (!open) return null` al inicio del componente.
+
+  it('REGRESIÓN: con open=false NO renderiza ningún elemento de drawer', () => {
+    const { container } = render(
+      <DetailDrawer open={false} onClose={() => {}} title="X" footer={<button>Save</button>}>
+        body content que no se debe ver
+      </DetailDrawer>,
+    );
+    expect(container.querySelector('aside')).toBeNull();
+    expect(container.querySelector('footer')).toBeNull();
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(container).not.toHaveTextContent('body content');
+    expect(container).not.toHaveTextContent('Save');
+  });
+
+  it('REGRESIÓN: re-abrir muestra de nuevo, re-cerrar oculta', () => {
+    const { rerender, container } = render(
+      <DetailDrawer open={true} onClose={() => {}} title="abierto">
+        contenido
+      </DetailDrawer>,
+    );
+    expect(container.querySelector('aside')).not.toBeNull();
+    expect(container).toHaveTextContent('contenido');
+    rerender(
+      <DetailDrawer open={false} onClose={() => {}} title="abierto">
+        contenido
+      </DetailDrawer>,
+    );
+    expect(container.querySelector('aside')).toBeNull();
+    expect(container).not.toHaveTextContent('contenido');
+    rerender(
+      <DetailDrawer open={true} onClose={() => {}} title="abierto">
+        contenido
+      </DetailDrawer>,
+    );
+    expect(container.querySelector('aside')).not.toBeNull();
+    expect(container).toHaveTextContent('contenido');
+  });
+
+  it('REGRESIÓN: footer del drawer es visible cuando open=true', () => {
+    // Bug histórico: el footer con Cancelar/Guardar no se veía en desktop
+    // por bug de flex layout. CSS Grid fix garantiza visibilidad.
+    render(
+      <DetailDrawer
+        open={true}
+        onClose={() => {}}
+        title="Edit"
+        footer={
+          <>
+            <button>Cancelar</button>
+            <button>Guardar cambios</button>
+          </>
+        }
+      >
+        body
+      </DetailDrawer>,
+    );
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeInTheDocument();
+  });
+
+  it('REGRESIÓN: aside usa display:grid con gridTemplateRows correcto', () => {
+    // CSS Grid es lo que garantiza que el footer queda visible
+    // independiente del alto del body. Si alguien regresa a flex,
+    // este test falla.
+    const { container } = render(
+      <DetailDrawer open={true} onClose={() => {}} title="X" footer={<span>F</span>}>
+        body
+      </DetailDrawer>,
+    );
+    const aside = container.querySelector('aside');
+    expect(aside).not.toBeNull();
+    expect(aside.style.display).toBe('grid');
+    expect(aside.style.gridTemplateRows).toBe('auto 1fr auto');
+  });
+});
+
+// ─── MobileSheet REGRESIÓN-GUARD ────────────────────────────────────────
+
+describe('MobileSheet REGRESIÓN-GUARD', () => {
+  it('open=false NO renderiza el sheet', async () => {
+    const { MobileSheet } = await import('../components/ui');
+    const { container } = render(
+      <MobileSheet open={false} onClose={() => {}} title="X">
+        no se debe ver
+      </MobileSheet>,
+    );
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(container).not.toHaveTextContent('no se debe ver');
+  });
+
+  it('open=true renderiza el sheet + onEdit icon button cuando se provee', async () => {
+    const { MobileSheet } = await import('../components/ui');
+    const onEdit = vi.fn();
+    render(
+      <MobileSheet open={true} onClose={() => {}} title="X" onEdit={onEdit}>
+        contenido
+      </MobileSheet>,
+    );
+    expect(screen.getByText('contenido')).toBeInTheDocument();
+    const editBtn = screen.getByRole('button', { name: 'Editar' });
+    editBtn.click();
+    expect(onEdit).toHaveBeenCalled();
+  });
 });
