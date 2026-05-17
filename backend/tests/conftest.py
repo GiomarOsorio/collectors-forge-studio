@@ -40,8 +40,6 @@ def printer():
 
     Costos por hora (calculados externamente para referencia):
         Depreciación:  $800 / 5000h = $0.16/h
-        Boquilla:      $5   / 500h  = $0.01/h
-        Placa:         $20  / 2000h = $0.01/h
         Electricidad:  350W / 1000  × tarifa
     """
     p = MagicMock()
@@ -49,11 +47,6 @@ def printer():
     p.purchase_price = Decimal("800")
     p.estimated_lifespan_hours = Decimal("5000")
     p.power_consumption_watts = Decimal("350")
-    p.nozzle_price = Decimal("5")
-    p.nozzle_lifespan_hours = Decimal("500")
-    p.buildplate_price = Decimal("20")
-    p.buildplate_lifespan_hours = Decimal("2000")
-    p.other_maintenance_per_hour = Decimal("0")
     return p
 
 

@@ -62,10 +62,13 @@ class Quote(Base):
     quantity: Mapped[int] = mapped_column(Integer, server_default=text("1"))
 
     # Desglose de costos calculados — Numeric(12,4)
+    # NOTA: `maintenance_cost` fue removido en 2026-05 (migración l6m7n8o9p0q1).
+    # El costo de mantenimiento ahora vive en la app Mantenimiento (logs con
+    # descuento de inventario) y los Consumibles del inventario cubren el
+    # desgaste prospectivo. Tenerlo acá era duplicación.
     material_cost: Mapped[Decimal] = mapped_column(Numeric(12, 4))
     electricity_cost: Mapped[Decimal] = mapped_column(Numeric(12, 4))
     depreciation_cost: Mapped[Decimal] = mapped_column(Numeric(12, 4))
-    maintenance_cost: Mapped[Decimal] = mapped_column(Numeric(12, 4))
     labor_cost: Mapped[Decimal] = mapped_column(Numeric(12, 4))
     failure_cost: Mapped[Decimal] = mapped_column(Numeric(12, 4))
     subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 4))

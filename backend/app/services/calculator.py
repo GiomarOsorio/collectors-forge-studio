@@ -155,30 +155,18 @@ def calculate_cost(
     )
     depreciation_cost: Decimal = depreciation_per_hour * effective_print_hours
 
-    # ── 4. Mantenimiento ─────────────────────────────────────────────────────
-    nozzle_lifespan: Decimal = _d(printer.nozzle_lifespan_hours)
-    nozzle_cost_per_hour: Decimal = (
-        _d(printer.nozzle_price) / nozzle_lifespan
-        if nozzle_lifespan > _D0
-        else _D0
-    )
-    buildplate_lifespan: Decimal = _d(printer.buildplate_lifespan_hours)
-    buildplate_cost_per_hour: Decimal = (
-        _d(printer.buildplate_price) / buildplate_lifespan
-        if buildplate_lifespan > _D0
-        else _D0
-    )
-    maintenance_per_hour: Decimal = (
-        nozzle_cost_per_hour + buildplate_cost_per_hour + _d(printer.other_maintenance_per_hour)
-    )
-    maintenance_cost: Decimal = maintenance_per_hour * effective_print_hours
+    # NOTA: hasta 2026-05 hubo una sección 4 "Mantenimiento" que sumaba
+    # boquilla + placa + otros del modelo Printer. Se removió: ese costo
+    # se rastrea ahora en la app Mantenimiento (logs con descuento de
+    # inventario) y los Consumibles del inventario cubren el desgaste
+    # prospectivo vía consumables_wear_cost. Tenerlo acá era duplicación.
 
-    # ── 5. Mano de obra ──────────────────────────────────────────────────────
+    # ── 4. Mano de obra ──────────────────────────────────────────────────────
     total_labor_hours: Decimal = preparation_time_hours + post_processing_time_hours
     labor_cost: Decimal = total_labor_hours * _d(app_settings.labor_cost_per_hour)
 
     base_cost: Decimal = (
-        material_cost + electricity_cost + depreciation_cost + maintenance_cost + labor_cost
+        material_cost + electricity_cost + depreciation_cost + labor_cost
     )
 
     # ── 6. Factor de fallos ──────────────────────────────────────────────────
@@ -252,7 +240,6 @@ def calculate_cost(
         material_cost=material_cost.quantize(_2, rounding=ROUND_HALF_UP),
         electricity_cost=electricity_cost.quantize(_2, rounding=ROUND_HALF_UP),
         depreciation_cost=depreciation_cost.quantize(_2, rounding=ROUND_HALF_UP),
-        maintenance_cost=maintenance_cost.quantize(_2, rounding=ROUND_HALF_UP),
         labor_cost=labor_cost.quantize(_2, rounding=ROUND_HALF_UP),
         failure_cost=failure_cost.quantize(_2, rounding=ROUND_HALF_UP),
         subtotal=subtotal_with_supplies.quantize(_2, rounding=ROUND_HALF_UP),

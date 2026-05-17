@@ -3,6 +3,10 @@ Esquemas Pydantic para la gestión de impresoras 3D.
 
 Todos los campos financieros y de tiempo usan Decimal internamente y se
 serializan a float en JSON via PlainSerializer.
+
+Los campos de mantenimiento (boquilla, placa, otros) fueron removidos: el
+costo de mantenimiento se rastrea en la app Mantenimiento (logs con
+descuento de inventario) y no se duplica en el cálculo de cotizaciones.
 """
 
 from datetime import datetime
@@ -28,11 +32,6 @@ class PrinterCreate(BaseModel):
         power_consumption_watts: Consumo eléctrico promedio en vatios (>= 0).
         estimated_lifespan_hours: Vida útil estimada en horas (> 0).
         current_hours: Horas de uso acumuladas al registrar (>= 0).
-        nozzle_price: Precio de reemplazo de la boquilla en USD (>= 0).
-        nozzle_lifespan_hours: Vida útil de la boquilla en horas (> 0).
-        buildplate_price: Precio de reemplazo de la placa en USD (>= 0).
-        buildplate_lifespan_hours: Vida útil de la placa en horas (> 0).
-        other_maintenance_per_hour: Otros costos de mantenimiento por hora (>= 0).
         notes: Notas opcionales sobre la impresora.
     """
 
@@ -42,11 +41,6 @@ class PrinterCreate(BaseModel):
     power_consumption_watts: Decimal = Field(ge=0)
     estimated_lifespan_hours: Decimal = Field(gt=0)
     current_hours: Decimal = Field(default=Decimal("0"), ge=0)
-    nozzle_price: Decimal = Field(default=Decimal("0"), ge=0)
-    nozzle_lifespan_hours: Decimal = Field(default=Decimal("500"), gt=0)
-    buildplate_price: Decimal = Field(default=Decimal("0"), ge=0)
-    buildplate_lifespan_hours: Decimal = Field(default=Decimal("2000"), gt=0)
-    other_maintenance_per_hour: Decimal = Field(default=Decimal("0"), ge=0)
     notes: Optional[str] = None
 
 
@@ -63,11 +57,6 @@ class PrinterUpdate(BaseModel):
         power_consumption_watts: Nuevo consumo en vatios (opcional, >= 0).
         estimated_lifespan_hours: Nueva vida útil en horas (opcional, > 0).
         current_hours: Nuevas horas acumuladas (opcional, >= 0).
-        nozzle_price: Nuevo precio de boquilla (opcional, >= 0).
-        nozzle_lifespan_hours: Nueva vida útil de boquilla (opcional, > 0).
-        buildplate_price: Nuevo precio de placa (opcional, >= 0).
-        buildplate_lifespan_hours: Nueva vida útil de placa (opcional, > 0).
-        other_maintenance_per_hour: Otros costos por hora (opcional, >= 0).
         notes: Nuevas notas (opcional).
     """
 
@@ -77,11 +66,6 @@ class PrinterUpdate(BaseModel):
     power_consumption_watts: Optional[Decimal] = Field(default=None, ge=0)
     estimated_lifespan_hours: Optional[Decimal] = Field(default=None, gt=0)
     current_hours: Optional[Decimal] = Field(default=None, ge=0)
-    nozzle_price: Optional[Decimal] = Field(default=None, ge=0)
-    nozzle_lifespan_hours: Optional[Decimal] = Field(default=None, gt=0)
-    buildplate_price: Optional[Decimal] = Field(default=None, ge=0)
-    buildplate_lifespan_hours: Optional[Decimal] = Field(default=None, gt=0)
-    other_maintenance_per_hour: Optional[Decimal] = Field(default=None, ge=0)
     notes: Optional[str] = None
 
 
@@ -99,11 +83,6 @@ class PrinterResponse(BaseModel):
         power_consumption_watts: Consumo eléctrico en vatios.
         estimated_lifespan_hours: Vida útil estimada en horas.
         current_hours: Horas de uso acumuladas.
-        nozzle_price: Precio de la boquilla en USD.
-        nozzle_lifespan_hours: Vida útil de la boquilla en horas.
-        buildplate_price: Precio de la placa en USD.
-        buildplate_lifespan_hours: Vida útil de la placa en horas.
-        other_maintenance_per_hour: Otros costos de mantenimiento por hora.
         notes: Notas adicionales (puede ser None).
         created_at: Timestamp UTC de creación.
         updated_at: Timestamp UTC de la última modificación.
@@ -116,11 +95,6 @@ class PrinterResponse(BaseModel):
     power_consumption_watts: DecimalAsFloat
     estimated_lifespan_hours: DecimalAsFloat
     current_hours: DecimalAsFloat
-    nozzle_price: DecimalAsFloat
-    nozzle_lifespan_hours: DecimalAsFloat
-    buildplate_price: DecimalAsFloat
-    buildplate_lifespan_hours: DecimalAsFloat
-    other_maintenance_per_hour: DecimalAsFloat
     notes: Optional[str]
     created_at: datetime
     updated_at: datetime
