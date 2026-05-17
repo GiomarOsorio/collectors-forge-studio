@@ -87,9 +87,6 @@ const InventoryImportExportPage= lazy(() => import('./pages/inventory/InventoryI
 const SlicerUploadPage         = lazy(() => import('./pages/slicer/SlicerUploadPage'));
 const SlicerHistoryPage        = lazy(() => import('./pages/slicer/SlicerHistoryPage'));
 const SlicerJobDetailPage      = lazy(() => import('./pages/slicer/SlicerJobDetailPage'));
-const MaintenanceDashboardPage = lazy(() => import('./pages/maintenance/MaintenanceDashboardPage'));
-const MaintenanceLogsPage      = lazy(() => import('./pages/maintenance/MaintenanceLogsPage'));
-const MaintenancePrintersPage  = lazy(() => import('./pages/maintenance/MaintenancePrintersPage'));
 const QueuePage                = lazy(() => import('./pages/queue/QueuePage'));
 const QueueHistoryPage         = lazy(() => import('./pages/queue/QueueHistoryPage'));
 const CompanyProfilePage       = lazy(() => import('./pages/company/CompanyProfilePage'));
@@ -205,13 +202,15 @@ function AppRoutes() {
           <Route path="jobs/:id" element={<SlicerJobDetailPage />} />
         </Route>
 
-        {/* Mantenimiento */}
+        {/* Mantenimiento — V2 reemplaza por completo Dashboard/Logs/Printers V1
+            (el CRUD vive ahora dentro del MaintenancePageV2 vía LogFormDrawer
+            + edición inline de current_hours en el drawer de impresora). */}
         <Route path="/maintenance">
           <Route index element={<Navigate to="/maintenance/v2" replace />} />
           <Route path="v2" element={<MaintenancePageV2 />} />
-          <Route path="dashboard" element={<MaintenanceDashboardPage />} />
-          <Route path="logs" element={<MaintenanceLogsPage />} />
-          <Route path="printers" element={<MaintenancePrintersPage />} />
+          <Route path="dashboard" element={<Navigate to="/maintenance/v2" replace />} />
+          <Route path="logs" element={<Navigate to="/maintenance/v2" replace />} />
+          <Route path="printers" element={<Navigate to="/maintenance/v2" replace />} />
         </Route>
 
         {/* Queue */}
