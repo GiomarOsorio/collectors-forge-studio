@@ -461,8 +461,8 @@ class TestMarginAndTotal:
     def test_total_per_unit_con_3_piezas(self, filament, printer, app_settings):
         """
         Con quantity=3:
-        total_price = $7.46 (ver TestCalculoCompleto)
-        total_per_unit = 7.46 / 3 = $2.4866... → ROUND_HALF_UP → $2.49
+        total_price = $7.41 (ver TestCalculoCompleto, post-drop de mantto)
+        total_per_unit = 7.41 / 3 = $2.4700... → ROUND_HALF_UP → $2.47
         """
         result = calculate_cost(
             filament, printer, app_settings,
@@ -473,7 +473,7 @@ class TestMarginAndTotal:
             quantity=3,
         )
         assert result.quantity == 3
-        assert result.total_per_unit == Decimal("2.49")
+        assert result.total_per_unit == Decimal("2.47")
         assert result.total_price > result.total_per_unit
 
 
@@ -724,17 +724,18 @@ class TestCalculoCompleto:
 
     def test_pieza_tipica_100g_2h(self, filament, printer, app_settings):
         """
-        Pieza típica con todos los componentes:
+        Pieza típica con todos los componentes (sin mantenimiento — el costo
+        de mantto se rastrea ahora en la app Mantenimiento y los Consumibles
+        cubren el desgaste via consumables_wear_cost):
             material:      100g × $0.025/g         = $2.500
             electricidad:  350W × 2h / 1000 × $0.15= $0.105 → $0.11
             depreciación:  $800 / 5000h × 2h       = $0.320
-            mantenimiento: ($0.01+$0.01)/h × 2h    = $0.040
             labor:         0.5h × $5/h             = $2.500
-            base_cost      = $5.465
-            fallos 5%:     $5.465 × 0.05           = $0.27325 → $0.27
-            subtotal_raw   = $5.73825 → $5.74
-            margen 30%:    $5.73825 × 0.3          = $1.72148 → $1.72
-            total_raw      = $7.45973  → $7.46
+            base_cost      = $5.425
+            fallos 5%:     $5.425 × 0.05           = $0.27125 → $0.27
+            subtotal_raw   = $5.69625 → $5.70
+            margen 30%:    $5.69625 × 0.3          = $1.70888 → $1.71
+            total_raw      = $7.40513  → $7.41
         """
         result = calculate_cost(
             filament, printer, app_settings,
