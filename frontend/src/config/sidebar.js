@@ -15,14 +15,12 @@ import {
   Calculator,
   Clock,
   Cpu,
-  FileCode,
   FileEdit,
   FileText,
   Layers,
   LayoutDashboard,
   ListOrdered,
   Package,
-  Palette,
   Printer,
   Settings,
   ShoppingCart,
@@ -137,11 +135,11 @@ export const SIDEBAR_APPS = [
     color: '#6366F1',
     activeClass: 'bg-indigo-500/15 text-indigo-400',
     adminOnly: true,
+    // V1 Profile/Branding/Templates reemplazadas por drawers dentro de
+    // /company/v2. El editor de templates queda como ruta dedicada,
+    // accesible vía botón "Editar" del TemplatesDrawer.
     items: [
-      { to: '/company/v2',        icon: Building2, label: 'Resumen', end: true },
-      { to: '/company/profile',   icon: Building2, label: 'Perfil' },
-      { to: '/company/branding',  icon: Palette,   label: 'Marca & Colores' },
-      { to: '/company/templates', icon: FileCode,  label: 'Templates PDF' },
+      { to: '/company/v2', icon: Building2, label: 'Resumen', end: true },
     ],
   },
 ];
