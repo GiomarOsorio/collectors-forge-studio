@@ -82,7 +82,6 @@ class QuoteCostBreakdown(BaseModel):
     material_cost: DecimalAsFloat
     electricity_cost: DecimalAsFloat
     depreciation_cost: DecimalAsFloat
-    maintenance_cost: DecimalAsFloat
     labor_cost: DecimalAsFloat
     failure_cost: DecimalAsFloat
     subtotal: DecimalAsFloat
@@ -131,7 +130,6 @@ class QuoteResponse(BaseModel):
     material_cost: DecimalAsFloat
     electricity_cost: DecimalAsFloat
     depreciation_cost: DecimalAsFloat
-    maintenance_cost: DecimalAsFloat
     labor_cost: DecimalAsFloat
     failure_cost: DecimalAsFloat
     subtotal: DecimalAsFloat
@@ -203,11 +201,6 @@ class QuoteManualRequest(BaseModel):
         power_consumption_watts:    Consumo promedio en vatios durante impresión.
         purchase_price:             Precio de compra de la impresora en USD.
         estimated_lifespan_hours:   Vida útil estimada en horas de impresión.
-        nozzle_price:               Costo de reemplazo de boquilla en USD.
-        nozzle_lifespan_hours:      Vida útil de la boquilla en horas.
-        buildplate_price:           Costo de reemplazo de placa de construcción en USD.
-        buildplate_lifespan_hours:  Vida útil de la placa en horas.
-        other_maintenance_per_hour: Otros costos de mantenimiento por hora en USD.
 
     Atributos de impresión:
         weight_grams:               Gramos totales de filamento consumidos.
@@ -235,11 +228,6 @@ class QuoteManualRequest(BaseModel):
     power_consumption_watts: Decimal = Field(gt=0)
     purchase_price: Decimal = Field(ge=0)
     estimated_lifespan_hours: Decimal = Field(gt=0)
-    nozzle_price: Decimal = Field(default=Decimal("0"), ge=0)
-    nozzle_lifespan_hours: Decimal = Field(default=Decimal("500"), gt=0)
-    buildplate_price: Decimal = Field(default=Decimal("0"), ge=0)
-    buildplate_lifespan_hours: Decimal = Field(default=Decimal("2000"), gt=0)
-    other_maintenance_per_hour: Decimal = Field(default=Decimal("0"), ge=0)
 
     # Parámetros de impresión
     weight_grams: Decimal = Field(gt=0)

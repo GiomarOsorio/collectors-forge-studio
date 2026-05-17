@@ -200,11 +200,6 @@ export const getPrinter = (id) => api.get(`/printers/${id}`);
  * @param {number} data.power_consumption_watts - Consumo electrico en watts
  * @param {number} data.estimated_lifespan_hours - Vida util estimada en horas
  * @param {number} data.current_hours - Horas de uso actual
- * @param {number} data.nozzle_price - Precio de la boquilla
- * @param {number} data.nozzle_lifespan_hours - Vida util de la boquilla en horas
- * @param {number} data.buildplate_price - Precio de la placa de construccion
- * @param {number} data.buildplate_lifespan_hours - Vida util de la placa en horas
- * @param {number} data.other_maintenance_per_hour - Otros costos de mantenimiento por hora
  * @param {string|null} data.notes - Notas adicionales opcionales
  * @returns {Promise<import('axios').AxiosResponse>} Respuesta con la impresora creada
  */
