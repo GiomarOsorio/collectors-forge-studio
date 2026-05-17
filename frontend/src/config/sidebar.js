@@ -13,7 +13,6 @@ import {
   ArrowLeftRight,
   Building2,
   Calculator,
-  ClipboardList,
   Clock,
   Cpu,
   FileCode,
@@ -101,10 +100,11 @@ export const SIDEBAR_APPS = [
     color: '#8B5CF6',
     activeClass: 'bg-violet-500/15 text-violet-400',
     badgeKey: 'overdueMaintenance',
+    // V1 dashboard/logs/printers reemplazado por completo por /maintenance/v2:
+    // historial + CRUD logs + edición inline de horas viven todos dentro de
+    // MaintenancePageV2 (tabs + drawers). Sin items secundarios.
     items: [
-      { to: '/maintenance/v2',       icon: LayoutDashboard, label: 'Dashboard', end: true },
-      { to: '/maintenance/logs',     icon: ClipboardList,   label: 'Historial logs' },
-      { to: '/maintenance/printers', icon: Printer,         label: 'Impresoras' },
+      { to: '/maintenance/v2', icon: LayoutDashboard, label: 'Dashboard', end: true },
     ],
   },
   {
