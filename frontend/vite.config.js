@@ -1,6 +1,10 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 /**
  * Plugin que añade data-cfasync="false" a todos los <script> del index.html.
@@ -21,6 +25,20 @@ function cfAsyncFalse() {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), cfAsyncFalse()],
+  resolve: {
+    // Alias EXPLÍCITO a los entry points de @dnd-kit/* dentro de
+    // node_modules. Sin esto, vite/rollup en alpine (node:20) falla
+    // intermitentemente con "Rollup failed to resolve" pese a que
+    // npm ls + node require.resolve lo encuentran (bug ya verificado
+    // en logs de deploy). El alias bypassa toda la magia de resolución
+    // de package.json `module`/`exports` fields.
+    alias: {
+      '@dnd-kit/core': path.resolve(__dirname, 'node_modules/@dnd-kit/core/dist/index.js'),
+      '@dnd-kit/sortable': path.resolve(__dirname, 'node_modules/@dnd-kit/sortable/dist/index.js'),
+      '@dnd-kit/utilities': path.resolve(__dirname, 'node_modules/@dnd-kit/utilities/dist/index.js'),
+      '@dnd-kit/accessibility': path.resolve(__dirname, 'node_modules/@dnd-kit/accessibility/dist/index.js'),
+    },
+  },
   server: {
     proxy: {
       '/api': 'http://localhost:8000',
