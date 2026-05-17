@@ -36,21 +36,24 @@ export default function MobileSheet({ open, onClose, title, height = 'full', onE
     };
   }, [open, onClose]);
 
+  // Guard temprano: si está cerrado, NO renderizamos NADA. Misma estrategia
+  // que DetailDrawer — previene la regresión del sheet visible cuando
+  // debería estar oculto por translate-y-full.
+  if (!open) return null;
+
   return (
     <>
       <div
         onClick={onClose}
-        className={`fixed inset-0 z-40 bg-black/60 transition-opacity duration-300 ${
-          open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-        }`}
+        className="fixed inset-0 z-40 bg-black/60"
         aria-hidden="true"
       />
       <div
         role="dialog"
         aria-modal="true"
-        className={`fixed left-0 right-0 bottom-0 z-50 bg-[var(--color-surf-sidebar)] border-t border-[var(--color-border-soft)] rounded-t-2xl shadow-2xl flex flex-col transition-transform duration-300 ease-out ${
-          open ? 'translate-y-0' : 'translate-y-full'
-        } ${height === 'half' ? 'max-h-[60vh]' : 'max-h-[92vh]'}`}
+        className={`fixed left-0 right-0 bottom-0 z-50 bg-[var(--color-surf-sidebar)] border-t border-[var(--color-border-soft)] rounded-t-2xl shadow-2xl flex flex-col ${
+          height === 'half' ? 'max-h-[60vh]' : 'max-h-[92vh]'
+        }`}
       >
         {/* Drag handle */}
         <div className="flex items-center justify-center pt-2 pb-1 shrink-0">
