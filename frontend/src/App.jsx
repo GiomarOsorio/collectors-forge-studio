@@ -93,8 +93,7 @@ const CompanyProfilePage       = lazy(() => import('./pages/company/CompanyProfi
 const CompanyBrandingPage      = lazy(() => import('./pages/company/CompanyBrandingPage'));
 const CompanyTemplatesPage     = lazy(() => import('./pages/company/CompanyTemplatesPage'));
 const CompanyTemplateEditorPage= lazy(() => import('./pages/company/CompanyTemplateEditorPage'));
-const VaultPage                = lazy(() => import('./pages/vault/VaultPage'));
-const VaultUploadPage          = lazy(() => import('./pages/vault/VaultUploadPage'));
+const VaultUploadPageV2        = lazy(() => import('./pages/vault/VaultUploadPageV2'));
 
 /**
  * Componente guardia de ruta privada.
@@ -235,12 +234,14 @@ function AppRoutes() {
           <Route path="templates/:id" element={<CompanyTemplateEditorPage />} />
         </Route>
 
-        {/* Vault */}
+        {/* Vault — V1 (galería + upload) reemplazada por V2. Las rutas
+            legacy redirigen a v2 para preservar bookmarks viejos. */}
         <Route path="/vault">
           <Route index element={<VaultPageV2 />} />
           <Route path="v2" element={<VaultPageV2 />} />
-          <Route path="legacy" element={<VaultPage />} />
-          <Route path="upload" element={<VaultUploadPage />} />
+          <Route path="legacy" element={<Navigate to="/vault" replace />} />
+          <Route path="upload" element={<Navigate to="/vault/upload/v2" replace />} />
+          <Route path="upload/v2" element={<VaultUploadPageV2 />} />
         </Route>
       </Route>
     </Routes>
