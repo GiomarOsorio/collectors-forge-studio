@@ -89,9 +89,6 @@ const SlicerHistoryPage        = lazy(() => import('./pages/slicer/SlicerHistory
 const SlicerJobDetailPage      = lazy(() => import('./pages/slicer/SlicerJobDetailPage'));
 const QueuePage                = lazy(() => import('./pages/queue/QueuePage'));
 const QueueHistoryPage         = lazy(() => import('./pages/queue/QueueHistoryPage'));
-const CompanyProfilePage       = lazy(() => import('./pages/company/CompanyProfilePage'));
-const CompanyBrandingPage      = lazy(() => import('./pages/company/CompanyBrandingPage'));
-const CompanyTemplatesPage     = lazy(() => import('./pages/company/CompanyTemplatesPage'));
 const CompanyTemplateEditorPage= lazy(() => import('./pages/company/CompanyTemplateEditorPage'));
 const VaultUploadPageV2        = lazy(() => import('./pages/vault/VaultUploadPageV2'));
 
@@ -220,16 +217,18 @@ function AppRoutes() {
           <Route path="history" element={<QueueHistoryPage />} />
         </Route>
 
-        {/* Compañía (solo admin) */}
+        {/* Compañía (solo admin) — Profile/Branding/Templates list reemplazadas
+            por CompanyPageV2 (drawers integrados). El editor de templates
+            sigue como ruta dedicada por su tamaño (textarea HTML grande). */}
         <Route
           path="/company"
           element={<AdminRoute><Outlet /></AdminRoute>}
         >
           <Route index element={<Navigate to="/company/v2" replace />} />
           <Route path="v2" element={<CompanyPageV2 />} />
-          <Route path="profile"       element={<CompanyProfilePage />} />
-          <Route path="branding"      element={<CompanyBrandingPage />} />
-          <Route path="templates"     element={<CompanyTemplatesPage />} />
+          <Route path="profile"       element={<Navigate to="/company/v2" replace />} />
+          <Route path="branding"      element={<Navigate to="/company/v2" replace />} />
+          <Route path="templates"     element={<Navigate to="/company/v2" replace />} />
           <Route path="templates/new" element={<CompanyTemplateEditorPage />} />
           <Route path="templates/:id" element={<CompanyTemplateEditorPage />} />
         </Route>
