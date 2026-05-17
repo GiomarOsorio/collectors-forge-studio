@@ -22,6 +22,7 @@
  */
 
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Pencil, X } from 'lucide-react';
 
 const HEADER_HEIGHT = 64; // px — header con eyebrow + title + acciones
@@ -58,7 +59,12 @@ export default function DetailDrawer({ open, onClose, title, eyebrow, footer, on
   // regresión del "menú lateral vacío" reportada por Giomar.
   if (!open) return null;
 
-  return (
+  // Renderizamos en un PORTAL al document.body para sacarnos de cualquier
+  // parent que pueda tener `transform`/`filter`/`perspective` — esos
+  // crean un nuevo containing block que rompe `position: fixed` (el
+  // fixed se vuelve relativo al parent, no al viewport). Bug clásico
+  // que explica por qué el footer "apenas se ve" en ciertos layouts.
+  const drawer = (
     <>
       {/* Backdrop */}
       <div
@@ -177,4 +183,6 @@ export default function DetailDrawer({ open, onClose, title, eyebrow, footer, on
       </aside>
     </>
   );
+
+  return createPortal(drawer, document.body);
 }
