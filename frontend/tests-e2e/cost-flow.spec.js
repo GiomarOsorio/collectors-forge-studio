@@ -36,14 +36,20 @@ test.describe('Cost — flujos críticos', () => {
     }
   });
 
-  test('calculator/v2 pre-rellena weight_grams y print_time_hours desde slicer', async ({ page }) => {
+  test('calculator pre-rellena weight_grams y print_time desde slicer', async ({ page }) => {
+    // /cost/calculator/v2 fue borrada en Fase 9 chunk B (V2 era incompleta);
+    // el redirect a /cost/calculator preserva el query string vía
+    // RedirectPreservingSearch. La calculadora V1 normaliza weight a 2
+    // decimales (step=0.01) y convierte print_time_hours → minutos.
     await page.goto('/cost/calculator/v2?weight_grams=245&print_time_hours=3.5');
     await page.waitForLoadState('networkidle');
 
     const weightInput = page.locator('input[name="weight_grams"]');
-    await expect(weightInput).toHaveValue('245');
-    const timeInput = page.locator('input[name="print_time_hours"]');
-    await expect(timeInput).toHaveValue('3.5');
+    await expect(weightInput).toHaveValue('245.00');
+
+    // V1 expone el tiempo de impresión en minutos (3.5h × 60 = 210min).
+    const minutesInput = page.locator('input[name="print_time_minutes"]');
+    await expect(minutesInput).toHaveValue('210');
   });
 
   // SKIP: el toast (react-hot-toast) usa portal fuera del árbol — getByText
