@@ -210,33 +210,32 @@ def _make_styles(suffix: str = "", c: Optional[dict] = None) -> dict:
     }
 
 
-def _build_header(st: dict, company: Optional["Company"] = None) -> list:
+def _build_header(
+    st: dict,
+    company: Optional["Company"] = None,
+    logo_bytes: Optional[bytes] = None,
+) -> list:
     """
     Construye el encabezado del PDF: logo (izq.) + empresa (der.) + línea bronce.
 
     Args:
-        st:      Diccionario de estilos generado por _make_styles().
-        company: Instancia ORM de Company (opcional).
+        st:         Diccionario de estilos generado por _make_styles().
+        company:    Instancia ORM de Company (opcional).
+        logo_bytes: Binario PNG/JPG del logo (pre-descargado de MinIO).
+                    Si es None, cae al logo bundled `LOGO_PATH` o muestra texto.
 
     Returns:
         Lista de elementos ReportLab (tabla + separador + spacer).
     """
-    logo_path: Optional[Path] = None
-    if company and company.logo_url:
-        candidate = Path("/app") / company.logo_url.lstrip("/")
-        if candidate.exists():
-            logo_path = candidate
-    if logo_path is None and LOGO_PATH.exists():
-        logo_path = LOGO_PATH
-
     # Dimensiones respetando aspect ratio del PNG (344×386 ≈ 0.891 ancho/alto)
     _LOGO_H = 1.2 * inch
     _LOGO_W = _LOGO_H * (344 / 386)
-    logo_cell = (
-        Image(str(logo_path), width=_LOGO_W, height=_LOGO_H)
-        if logo_path
-        else Paragraph("<b>Collector's Forge</b>", st["base"]["Normal"])
-    )
+    if logo_bytes:
+        logo_cell = Image(io.BytesIO(logo_bytes), width=_LOGO_W, height=_LOGO_H)
+    elif LOGO_PATH.exists():
+        logo_cell = Image(str(LOGO_PATH), width=_LOGO_W, height=_LOGO_H)
+    else:
+        logo_cell = Paragraph("<b>Collector's Forge</b>", st["base"]["Normal"])
 
     company_name = (company.name if company and company.name else "Collector's Forge Studio")
     company_addr = (company.address if company and company.address else "Medellín, Colombia")
@@ -384,7 +383,11 @@ def _build_footer(notes: Optional[str], st: dict, company: Optional["Company"] =
     return elems
 
 
-def generate_quote_pdf(quote: Quote, company: Optional["Company"] = None) -> bytes:
+def generate_quote_pdf(
+    quote: Quote,
+    company: Optional["Company"] = None,
+    logo_bytes: Optional[bytes] = None,
+) -> bytes:
     """
     Genera el PDF de una cotización TFC-XXXX con diseño de marca The Collector's Forge.
 
@@ -408,7 +411,7 @@ def generate_quote_pdf(quote: Quote, company: Optional["Company"] = None) -> byt
     elements: list = []
 
     # ── 1. HEADER ─────────────────────────────────────────────────────────────
-    elements += _build_header(st, company)
+    elements += _build_header(st, company, logo_bytes)
 
     # ── 2. BLOQUE CLIENTE (opcional) ──────────────────────────────────────────
     if quote.client_name:
@@ -489,6 +492,7 @@ def generate_client_quote_pdf(
     client_quote: ClientQuote,
     company: Optional["Company"] = None,
     usd_rate: float = 1.0,
+    logo_bytes: Optional[bytes] = None,
 ) -> bytes:
     """
     Genera el PDF de una cotización de cliente multi-producto COT-XXXX.
@@ -512,7 +516,7 @@ def generate_client_quote_pdf(
     elements: list = []
 
     # ── 1. HEADER ─────────────────────────────────────────────────────────────
-    elements += _build_header(st, company)
+    elements += _build_header(st, company, logo_bytes)
 
     # ── 2. BLOQUE CLIENTE ─────────────────────────────────────────────────────
     elements += _build_client_block(client_quote.client_name, client_quote.description, st)
