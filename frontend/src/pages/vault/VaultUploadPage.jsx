@@ -19,13 +19,14 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useOutletContext } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   CheckCircle2,
   FileBox,
   Link as LinkIcon,
   Printer,
+  Save,
   Trash2,
   Upload,
 } from 'lucide-react';
@@ -39,7 +40,14 @@ import {
 import MobileAppHeader from '../../components/MobileAppHeader';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../context/AuthContext';
-import { fetchVaultMetadata, uploadVaultFile } from '../../services/api';
+import {
+  fetchVaultMetadata,
+  getVaultFile,
+  replaceVaultPrint,
+  replaceVaultSource,
+  updateVaultFile,
+  uploadVaultFile,
+} from '../../services/api';
 
 const ACCENT = '#F43F5E';
 const ACCENT_PRINT = '#34D399';
@@ -120,6 +128,16 @@ export default function VaultUploadPage() {
   const isMobile = useIsMobile();
   const { openSidebar } = useOutletContext() || {};
 
+  // Modo edición: el path trae `?replace=<id>` apuntando al ModelFile a editar.
+  // El form se pre-llena con la metadata existente; los DropZones quedan
+  // opcionales y reemplazan el slot correspondiente si traen un archivo.
+  const [searchParams] = useSearchParams();
+  const replaceParam = searchParams.get('replace');
+  const replaceId = replaceParam ? Number(replaceParam) : null;
+  const isEditMode = !!replaceId;
+  const [existing, setExisting] = useState(null); // ModelFile original en edit-mode
+  const [loadingExisting, setLoadingExisting] = useState(isEditMode);
+
   // Redirigir si no es admin (mismo flujo que la V1).
   useEffect(() => {
     if (user && user.role !== 'admin') {
@@ -141,17 +159,53 @@ export default function VaultUploadPage() {
     tags: '',
   });
 
-  const [sourceFile, setSourceFile] = useState(null); // .3mf editable
-  const [printFile, setPrintFile] = useState(null);   // .gcode.3mf laminado
+  const [sourceFile, setSourceFile] = useState(null); // .3mf editable nuevo (reemplaza)
+  const [printFile, setPrintFile] = useState(null);   // .gcode.3mf laminado nuevo (reemplaza)
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [done, setDone] = useState(false);
   const lastUpload = useRef(null);
 
+  // En edit-mode, cargar el modelo existente y pre-llenar el formulario.
+  useEffect(() => {
+    if (!isEditMode) return;
+    let cancelled = false;
+    setLoadingExisting(true);
+    getVaultFile(replaceId)
+      .then((res) => {
+        if (cancelled) return;
+        const m = res.data;
+        setExisting(m);
+        setForm({
+          name: m.name ?? '',
+          description: m.description ?? '',
+          thumbnail_url: m.thumbnail_url ?? '',
+          source_url: m.source_url ?? '',
+          source_platform: m.source_platform ?? '',
+          creator_name: m.creator_name ?? '',
+          creator_url: m.creator_url ?? '',
+          tags: Array.isArray(m.tags) ? m.tags.join(', ') : '',
+        });
+      })
+      .catch(() => {
+        toast.error('No se pudo cargar el modelo a editar');
+        navigate('/vault', { replace: true });
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingExisting(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isEditMode, replaceId, navigate]);
+
+  // En upload-mode hace falta nombre + al menos un archivo; en edit-mode
+  // basta con que haya nombre (los archivos quedan como están si no se
+  // suben de nuevo).
   const canSubmit =
     !uploading &&
     !!form.name.trim() &&
-    (sourceFile != null || printFile != null);
+    (isEditMode || sourceFile != null || printFile != null);
 
   const handleFetchMeta = async () => {
     if (!urlInput.trim()) return;
@@ -238,23 +292,50 @@ export default function VaultUploadPage() {
       tags:            tagsArr,
     };
 
-    const formData = new FormData();
-    formData.append('metadata', JSON.stringify(metadata));
-    if (sourceFile) formData.append('source_file', sourceFile);
-    if (printFile) formData.append('print_file', printFile);
-
     setUploading(true);
     setProgress(0);
 
     try {
-      const res = await uploadVaultFile(formData, (evt) => {
-        if (evt.total) setProgress(Math.round((evt.loaded / evt.total) * 100));
-      });
-      lastUpload.current = res.data;
-      setDone(true);
-      toast.success('Modelo subido correctamente');
+      if (isEditMode) {
+        // 1) Actualizar metadata.
+        const res = await updateVaultFile(replaceId, metadata);
+        let latest = res.data;
+
+        // 2) Si el admin subió archivos nuevos, reemplazar los slots.
+        //    Cada reemplazo regresa el ModelFile actualizado; nos quedamos
+        //    con el último para el view de éxito.
+        if (sourceFile) {
+          const r = await replaceVaultSource(replaceId, sourceFile, (evt) => {
+            if (evt.total) setProgress(Math.round((evt.loaded / evt.total) * 100));
+          });
+          latest = r.data;
+        }
+        if (printFile) {
+          const r = await replaceVaultPrint(replaceId, printFile, (evt) => {
+            if (evt.total) setProgress(Math.round((evt.loaded / evt.total) * 100));
+          });
+          latest = r.data;
+        }
+
+        lastUpload.current = latest;
+        setDone(true);
+        toast.success('Modelo actualizado');
+      } else {
+        // Upload-mode: subir source + print + metadata en una sola request.
+        const formData = new FormData();
+        formData.append('metadata', JSON.stringify(metadata));
+        if (sourceFile) formData.append('source_file', sourceFile);
+        if (printFile) formData.append('print_file', printFile);
+
+        const res = await uploadVaultFile(formData, (evt) => {
+          if (evt.total) setProgress(Math.round((evt.loaded / evt.total) * 100));
+        });
+        lastUpload.current = res.data;
+        setDone(true);
+        toast.success('Modelo subido correctamente');
+      }
     } catch (err) {
-      const msg = err.response?.data?.detail ?? 'Error al subir el modelo';
+      const msg = err.response?.data?.detail ?? 'Error al guardar el modelo';
       toast.error(msg);
     } finally {
       setUploading(false);
@@ -262,10 +343,25 @@ export default function VaultUploadPage() {
   };
 
   const resetForm = () => {
-    setForm({
-      name: '', description: '', thumbnail_url: '', source_url: '',
-      source_platform: '', creator_name: '', creator_url: '', tags: '',
-    });
+    if (isEditMode && existing) {
+      // En edit-mode "Limpiar" restaura los valores originales del modelo,
+      // no deja el form en blanco.
+      setForm({
+        name: existing.name ?? '',
+        description: existing.description ?? '',
+        thumbnail_url: existing.thumbnail_url ?? '',
+        source_url: existing.source_url ?? '',
+        source_platform: existing.source_platform ?? '',
+        creator_name: existing.creator_name ?? '',
+        creator_url: existing.creator_url ?? '',
+        tags: Array.isArray(existing.tags) ? existing.tags.join(', ') : '',
+      });
+    } else {
+      setForm({
+        name: '', description: '', thumbnail_url: '', source_url: '',
+        source_platform: '', creator_name: '', creator_url: '', tags: '',
+      });
+    }
     setSourceFile(null);
     setPrintFile(null);
     setUrlInput('');
@@ -282,9 +378,9 @@ export default function VaultUploadPage() {
         {isMobile && (
           <MobileAppHeader
             appName="Vault"
-            appIcon={Upload}
+            appIcon={isEditMode ? Save : Upload}
             appAccent={ACCENT}
-            title="Subido"
+            title={isEditMode ? 'Guardado' : 'Subido'}
             onMenu={() => openSidebar?.()}
           />
         )}
@@ -301,9 +397,11 @@ export default function VaultUploadPage() {
               <CheckCircle2 size={28} />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-tech-white">¡Modelo subido!</h2>
+              <h2 className="text-xl font-semibold text-tech-white">
+                {isEditMode ? '¡Modelo actualizado!' : '¡Modelo subido!'}
+              </h2>
               <p className="text-sm text-steel mt-1">
-                "{uploaded?.name}" está disponible en la galería.
+                "{uploaded?.name}" {isEditMode ? 'se actualizó en la galería.' : 'está disponible en la galería.'}
               </p>
             </div>
             {uploaded?.is_print_ready ? (
@@ -329,15 +427,35 @@ export default function VaultUploadPage() {
     );
   }
 
+  // ── Loading view (solo en edit-mode mientras fetcheamos el modelo) ───────
+  if (loadingExisting) {
+    return (
+      <div className="flex flex-col min-h-screen -m-4 md:-m-6 xl:-m-8">
+        {isMobile && (
+          <MobileAppHeader
+            appName="Vault"
+            appIcon={Save}
+            appAccent={ACCENT}
+            title="Cargando…"
+            onMenu={() => openSidebar?.()}
+          />
+        )}
+        <p className="flex-1 flex items-center justify-center text-gunmetal text-sm">
+          Cargando modelo…
+        </p>
+      </div>
+    );
+  }
+
   // ── Form view (compartido entre mobile + desktop con layout responsive) ──
   return (
     <div className="flex flex-col min-h-screen -m-4 md:-m-6 xl:-m-8">
       {isMobile ? (
         <MobileAppHeader
           appName="Vault"
-          appIcon={Upload}
+          appIcon={isEditMode ? Save : Upload}
           appAccent={ACCENT}
-          title="Subir modelo"
+          title={isEditMode ? `Editar · ${existing?.name ?? '#' + replaceId}` : 'Subir modelo'}
           onMenu={() => openSidebar?.()}
         />
       ) : (
@@ -347,11 +465,13 @@ export default function VaultUploadPage() {
               className="inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0"
               style={{ background: `${ACCENT}1F`, color: ACCENT, border: `1px solid ${ACCENT}40` }}
             >
-              <Upload size={13} />
+              {isEditMode ? <Save size={13} /> : <Upload size={13} />}
             </span>
             <Link to="/vault" className="text-sm text-gunmetal hover:text-tech-white">Vault</Link>
             <span className="text-gunmetal-dim shrink-0">›</span>
-            <span className="text-sm font-semibold text-tech-white whitespace-nowrap">Subir modelo</span>
+            <span className="text-sm font-semibold text-tech-white whitespace-nowrap">
+              {isEditMode ? `Editar · ${existing?.name ?? '#' + replaceId}` : 'Subir modelo'}
+            </span>
           </div>
           <Link to="/vault" className="btn btn-ghost btn-sm">
             <ArrowLeft size={13} /> Volver al Vault
@@ -361,7 +481,9 @@ export default function VaultUploadPage() {
 
       <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
         <div className="max-w-3xl mx-auto flex flex-col gap-5">
-          {/* Step 1: opcional URL → metadata */}
+          {/* Step 1: opcional URL → metadata. En edit-mode lo ocultamos
+              porque solo aplica para sembrar un modelo nuevo. */}
+          {!isEditMode && (
           <Card className="p-4 flex flex-col gap-3">
             <div className="flex items-center gap-2">
               <span
@@ -392,18 +514,57 @@ export default function VaultUploadPage() {
               </Button>
             </div>
           </Card>
+          )}
 
           {/* Step 2: archivos (dos slots) */}
           <div>
-            <FormSectionTitle>Archivos del modelo</FormSectionTitle>
+            <FormSectionTitle>
+              {isEditMode ? 'Archivos del modelo (opcional reemplazo)' : 'Archivos del modelo'}
+            </FormSectionTitle>
             <p className="text-[11.5px] text-gunmetal mb-3">
-              Al menos uno requerido. Subir el laminado permite mandar el modelo a la cola con peso/tiempo ya resueltos.
+              {isEditMode
+                ? 'Suelta un archivo solo si quieres reemplazar ese slot. Los slots vacíos conservan el binario actual.'
+                : 'Al menos uno requerido. Subir el laminado permite mandar el modelo a la cola con peso/tiempo ya resueltos.'}
             </p>
+            {isEditMode && existing && (
+              <div className="mb-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                {existing.source_file_name && (
+                  <Card className="p-3 flex items-center gap-2.5" style={{ borderColor: `${ACCENT}33` }}>
+                    <span
+                      className="inline-flex items-center justify-center w-7 h-7 rounded-md shrink-0"
+                      style={{ background: `${ACCENT}1A`, color: ACCENT, border: `1px solid ${ACCENT}40` }}
+                    >
+                      <FileBox size={14} />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <span className="lbl-eyebrow text-[9px]">Actual · editable</span>
+                      <p className="text-xs text-tech-white truncate mt-0.5">{existing.source_file_name}</p>
+                      <p className="mono text-[10.5px] text-gunmetal mt-0.5">{fmtBytes(existing.source_file_size)}</p>
+                    </div>
+                  </Card>
+                )}
+                {existing.print_file_name && (
+                  <Card className="p-3 flex items-center gap-2.5" style={{ borderColor: `${ACCENT_PRINT}33` }}>
+                    <span
+                      className="inline-flex items-center justify-center w-7 h-7 rounded-md shrink-0"
+                      style={{ background: `${ACCENT_PRINT}1A`, color: ACCENT_PRINT, border: `1px solid ${ACCENT_PRINT}40` }}
+                    >
+                      <Printer size={14} />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <span className="lbl-eyebrow text-[9px]">Actual · laminado</span>
+                      <p className="text-xs text-tech-white truncate mt-0.5">{existing.print_file_name}</p>
+                      <p className="mono text-[10.5px] text-gunmetal mt-0.5">{fmtBytes(existing.print_file_size)}</p>
+                    </div>
+                  </Card>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {sourceFile ? (
                 <FilePreviewCard
                   file={sourceFile}
-                  label="Editable · .3mf"
+                  label={isEditMode ? 'Reemplazar editable · .3mf' : 'Editable · .3mf'}
                   accent={ACCENT}
                   icon={FileBox}
                   onClear={() => setSourceFile(null)}
@@ -413,7 +574,7 @@ export default function VaultUploadPage() {
                   accept=".3mf"
                   accent={ACCENT}
                   icon={FileBox}
-                  hint="Suelta el .3mf editable"
+                  hint={isEditMode ? 'Suelta para reemplazar el .3mf editable' : 'Suelta el .3mf editable'}
                   meta="OrcaSlicer / BambuStudio · proyecto editable"
                   cta="Examinar .3mf"
                   onFiles={handleSourceFiles}
@@ -422,7 +583,7 @@ export default function VaultUploadPage() {
               {printFile ? (
                 <FilePreviewCard
                   file={printFile}
-                  label="Laminado · .gcode.3mf"
+                  label={isEditMode ? 'Reemplazar laminado · .gcode.3mf' : 'Laminado · .gcode.3mf'}
                   accent={ACCENT_PRINT}
                   icon={Printer}
                   onClear={() => setPrintFile(null)}
@@ -432,7 +593,7 @@ export default function VaultUploadPage() {
                   accept=".gcode.3mf"
                   accent={ACCENT_PRINT}
                   icon={Printer}
-                  hint="Suelta el .gcode.3mf laminado"
+                  hint={isEditMode ? 'Suelta para reemplazar el .gcode.3mf' : 'Suelta el .gcode.3mf laminado'}
                   meta="paquete con G-code · listo para imprimir"
                   cta="Examinar .gcode.3mf"
                   onFiles={handlePrintFiles}
@@ -519,7 +680,7 @@ export default function VaultUploadPage() {
           {uploading && (
             <Card className="p-4 flex flex-col gap-2">
               <div className="flex items-center justify-between text-xs text-gunmetal">
-                <span>Subiendo…</span>
+                <span>{isEditMode ? 'Guardando…' : 'Subiendo…'}</span>
                 <span className="mono">{progress}%</span>
               </div>
               <div className="h-2 bg-[var(--color-border-soft)] rounded-full overflow-hidden">
@@ -532,16 +693,18 @@ export default function VaultUploadPage() {
           )}
 
           <div className="flex flex-wrap gap-2 justify-end pb-6">
-            <Button variant="ghost" onClick={resetForm} disabled={uploading}>
-              Limpiar
+            <Button variant="ghost" onClick={resetForm} disabled={uploading || loadingExisting}>
+              {isEditMode ? 'Restaurar' : 'Limpiar'}
             </Button>
             <Button
               variant="primary"
-              icon={Upload}
+              icon={isEditMode ? Save : Upload}
               onClick={handleSubmit}
-              disabled={!canSubmit}
+              disabled={!canSubmit || loadingExisting}
             >
-              {uploading ? 'Subiendo…' : 'Subir al Vault'}
+              {uploading
+                ? (isEditMode ? 'Guardando…' : 'Subiendo…')
+                : (isEditMode ? 'Guardar cambios' : 'Subir al Vault')}
             </Button>
           </div>
         </div>

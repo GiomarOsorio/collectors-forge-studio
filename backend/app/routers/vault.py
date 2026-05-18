@@ -496,6 +496,23 @@ async def get_vault_thumbnail(
     )
 
 
+@router.get("/{file_id}", response_model=ModelFileResponse)
+async def get_vault_file(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Obtiene un solo `ModelFile` por ID. Usado por el editor del Vault."""
+    model = await _get_model_file(db, file_id)
+    username = None
+    if model.uploaded_by:
+        u_result = await db.execute(
+            select(User.username).where(User.id == model.uploaded_by)
+        )
+        username = u_result.scalar_one_or_none()
+    return _to_response(model, username)
+
+
 @router.put("/{file_id}", response_model=ModelFileResponse)
 async def update_vault_file(
     file_id: int,

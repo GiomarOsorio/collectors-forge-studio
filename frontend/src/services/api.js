@@ -777,6 +777,13 @@ export const downloadVaultPrint = (id) =>
   api.get(`/vault/${id}/download/print`, { responseType: 'blob' });
 
 /**
+ * Obtiene un solo archivo del Vault por ID. Usado por el editor para
+ * pre-llenar el formulario cuando el path incluye `?replace=<id>`.
+ * @param {number} id
+ */
+export const getVaultFile = (id) => api.get(`/vault/${id}`);
+
+/**
  * Actualiza los metadatos de un archivo del Vault (solo admins).
  * @param {number} id - ID del archivo
  * @param {Object} data - Campos a actualizar
