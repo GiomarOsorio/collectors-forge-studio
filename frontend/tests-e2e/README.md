@@ -35,7 +35,7 @@ con un diff PNG adjunto al reporte HTML.
 
 ## Estructura
 
-- `visual.spec.js` — pixel-match de las 8 pantallas v2 en desktop + mobile (16 snapshots).
+- `visual.spec.js` — pixel-match de las 8 pantallas principales en desktop + mobile (16 snapshots).
 - `auth.spec.js` — flujo de bypass dev login.
 - `inventory-mobile.spec.js` — fidelidad del shell mobile (hero + tabs + bottom nav + FAB, sin search).
 - `helpers/auth.js` — `loginAsDev()` para que cada test arranque autenticado.

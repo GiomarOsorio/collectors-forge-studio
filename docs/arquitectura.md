@@ -212,59 +212,60 @@ collectors-forge-studio/
 │   │   │   └── DirtyStateContext.jsx # Rastreo de forms sin guardar
 │   │   │
 │   │   ├── components/
-│   │   │   ├── StudioLayout.jsx      # Layout pantalla inicio
-│   │   │   ├── CostLayout.jsx        # Layout app Cost
-│   │   │   ├── InventoryLayout.jsx   # Layout app Archive
-│   │   │   ├── SlicerLayout.jsx      # Layout app Slicer
-│   │   │   ├── MaintenanceLayout.jsx # Layout app Mantenimiento
-│   │   │   ├── QueueLayout.jsx       # Layout app Queue
-│   │   │   ├── CompanyLayout.jsx     # Layout app Compañía
-│   │   │   ├── SettingsLayout.jsx    # Layout configuración de cuenta
-│   │   │   ├── AppSwitcherDrawer.jsx # Cajón para cambiar entre apps
+│   │   │   ├── AppLayout.jsx         # Shell global (mobile: drawer; desktop: sidebar + main)
+│   │   │   ├── StudioSidebar.jsx     # Sidebar unificada con todas las apps
+│   │   │   ├── MobileAppHeader.jsx   # Header mobile compartido (hamburger + título + search)
+│   │   │   ├── MobileBottomNav.jsx   # Bottom nav fija en mobile
+│   │   │   ├── Dashboard.jsx         # Widgets del StudioHomePage
+│   │   │   ├── Breadcrumb.jsx        # Migas en headers desktop
+│   │   │   ├── EmptyState.jsx        # Empty state legacy (el primitive vive en components/ui/)
 │   │   │   ├── ConfirmDialog.jsx     # Modal de confirmación global
-│   │   │   ├── Layout.jsx            # Layout legacy (deprecado)
-│   │   │   └── ModelViewer3D.jsx     # Visor 3D de modelos STL
+│   │   │   ├── HoverCard.jsx         # Hover cards reutilizables
+│   │   │   ├── SkeletonLoader.jsx    # Skeletons compartidos
+│   │   │   ├── ModelViewer3D.jsx     # Visor 3D de modelos STL
+│   │   │   ├── slicer/               # Componentes específicos del Slicer
+│   │   │   ├── widgets/              # Widgets del dashboard (LowStock, etc.)
+│   │   │   └── ui/                   # Primitives compartidos (Button, Card, KPI,
+│   │   │                              # StatusPill, DetailDrawer, MobileSheet, EmptyState,
+│   │   │                              # DropZone, ProgressBar, SearchField, ToolbarRow,
+│   │   │                              # Chip, Input, Sparkline, Swatch, etc.)
 │   │   │
 │   │   ├── config/
-│   │   │   ├── apps.js               # Definición de las 6 apps (id, nombre, ruta, color)
+│   │   │   ├── apps.js               # Definición de las apps (id, nombre, ruta, color)
+│   │   │   ├── sidebar.js            # Sidebar config (apps + items secundarios)
+│   │   │   ├── materials.js          # Tipos de filamento (PLA/PETG/ABS/...)
 │   │   │   └── maintenance.js        # 12 tipos de mantenimiento BambuLab P2S
 │   │   │
 │   │   ├── pages/
 │   │   │   ├── Login.jsx
+│   │   │   ├── AuthSuccess.jsx       # Callback OIDC
 │   │   │   ├── StudioHomePage.jsx    # Panel de apps (estilo Okta)
-│   │   │   ├── CalculatorPage.jsx    # Calculadora de costos
+│   │   │   ├── CalculatorPage.jsx    # Calculadora de costos (multi-filamento, insumos extra)
 │   │   │   ├── ManualQuotePage.jsx   # Cotización manual multi-producto
-│   │   │   ├── QuotesPage.jsx        # Historial cotizaciones cliente
-│   │   │   ├── PrintersPage.jsx
-│   │   │   ├── HistoryPage.jsx       # Historial cotizaciones de costo
-│   │   │   ├── SettingsPage.jsx
+│   │   │   ├── PrintersPage.jsx      # Gestión de impresoras
+│   │   │   ├── HistoryPage.jsx       # Historial de cotizaciones internas
+│   │   │   ├── CostSettingsPage.jsx  # Tarifa eléctrica & ajustes calc
 │   │   │   ├── company/
-│   │   │   │   ├── CompanyProfilePage.jsx
-│   │   │   │   ├── CompanyBrandingPage.jsx  # Paleta JSONB + términos
-│   │   │   │   ├── CompanyTemplatesPage.jsx # Lista de templates Liquid
-│   │   │   │   └── CompanyTemplateEditorPage.jsx # Editor + validar + preview
+│   │   │   │   ├── CompanyPage.jsx              # Dashboard con drawers integrados
+│   │   │   │   └── CompanyTemplateEditorPage.jsx # Editor Liquid + validar + preview
 │   │   │   ├── inventory/
-│   │   │   │   ├── InventoryStockPage.jsx   # Stock unificado paginado
-│   │   │   │   ├── InventoryFilamentsPage.jsx
-│   │   │   │   ├── InventorySuppliesPage.jsx
-│   │   │   │   ├── InventoryToolsPage.jsx
-│   │   │   │   ├── InventoryPrintsPage.jsx  # Impresiones con fotos
-│   │   │   │   ├── InventoryPurchasesPage.jsx
-│   │   │   │   └── InventoryImportExportPage.jsx
+│   │   │   │   ├── InventoryPage.jsx            # Tabs internos (Filamentos/Insumos/Herr/Cons/Compras)
+│   │   │   │   ├── InventoryPrintsPage.jsx      # Impresiones con fotos
+│   │   │   │   ├── InventoryPurchasesPage.jsx   # Tabla de pedidos
+│   │   │   │   └── InventoryImportExportPage.jsx # Bulk CSV import/export
+│   │   │   ├── cost/
+│   │   │   │   └── CostPage.jsx                 # Dashboard (Cotizaciones / Historial / Calc)
 │   │   │   ├── maintenance/
-│   │   │   │   ├── MaintenanceDashboardPage.jsx
-│   │   │   │   ├── MaintenanceLogsPage.jsx
-│   │   │   │   └── MaintenancePrintersPage.jsx
+│   │   │   │   └── MaintenancePage.jsx          # Dashboard + Historial + CRUD logs vía drawers
 │   │   │   ├── queue/
-│   │   │   │   ├── QueuePage.jsx
-│   │   │   │   └── QueueHistoryPage.jsx
+│   │   │   │   └── QueuePage.jsx                # Tabs Activa / Historial + VaultPicker
 │   │   │   ├── settings/
-│   │   │   │   ├── CuentaPage.jsx
-│   │   │   │   ├── EmpresaPage.jsx
-│   │   │   │   └── UsuariosPage.jsx
-│   │   │   └── slicer/
-│   │   │       ├── SlicerUploadPage.jsx
-│   │   │       └── SlicerHistoryPage.jsx
+│   │   │   │   └── SettingsPage.jsx             # Cuenta + Usuarios (admin) vía drawers
+│   │   │   ├── slicer/
+│   │   │   │   └── SlicerPage.jsx               # Tabs Subir / Historial + drawer detalle
+│   │   │   └── vault/
+│   │   │       ├── VaultPage.jsx                # Galería .3mf / .gcode.3mf
+│   │   │       └── VaultUploadPage.jsx          # Dual upload (admin)
 │   │   │
 │   │   ├── services/
 │   │   │   └── api.js                # Axios + interceptors + todas las funciones API
