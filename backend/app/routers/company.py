@@ -179,13 +179,15 @@ async def upload_company_logo(
 @router.get("/logo")
 async def get_company_logo(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
     """
     Streamea el binario del logo desde MinIO con caché HTTP de 24h.
 
-    El frontend cachea el response y usa el `?v=<updated_at>` del
-    `logo_url` para invalidar la caché cuando se sube un logo nuevo.
+    Endpoint **público** (sin JWT) porque los `<img>` tags del browser
+    no pueden enviar el header `Authorization`. El binario es de marca
+    pública (logo de la empresa). El cache-buster `?v=<updated_at>`
+    invalida la caché cuando se sube un logo nuevo.
+
     Si la empresa no tiene logo, retorna 404.
     """
     company = await _get_company(db, DEFAULT_COMPANY_ID)

@@ -444,15 +444,17 @@ async def download_print_file(
 async def get_vault_thumbnail(
     file_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
     """
     Sirve el PNG plate-render extraído del `.3mf` / `.gcode.3mf`.
 
+    Endpoint **público** (sin JWT) porque los `<img>` tags del browser no
+    pueden enviar el header `Authorization`. El binario no es sensible
+    (es un render del modelo, equivalente a un avatar). El cache-buster
+    `?v=<updated_at>` del frontend invalida la caché tras un reemplazo.
+
     Descarga el objeto desde MinIO (key `thumbnails/{file_id}.png`) y lo
-    streamea con `Cache-Control: public, max-age=86400` — el frontend
-    cachea por 24h y usa el `?v=<updated_at>` del response para
-    invalidar cuando el modelo se reemplaza.
+    streamea con `Cache-Control: public, max-age=86400`.
 
     Si el modelo no tiene `thumbnail_key` o el objeto ya no está en
     MinIO, retorna 404 — el frontend cae al `thumbnail_url` externo
