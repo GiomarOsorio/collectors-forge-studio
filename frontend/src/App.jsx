@@ -64,16 +64,16 @@ const ManualQuotePage          = lazy(() => import('./pages/ManualQuotePage'));
 const QuotesPage               = lazy(() => import('./pages/QuotesPage'));
 const PrintersPage             = lazy(() => import('./pages/PrintersPage'));
 const HistoryPage              = lazy(() => import('./pages/HistoryPage'));
-const SettingsPage             = lazy(() => import('./pages/SettingsPage'));
-const SettingsPageV2           = lazy(() => import('./pages/settings/SettingsPageV2'));
+const CostSettingsPage         = lazy(() => import('./pages/CostSettingsPage'));
+const SettingsPage             = lazy(() => import('./pages/settings/SettingsPage'));
 const InventoryStockPage       = lazy(() => import('./pages/inventory/InventoryStockPage'));
 const InventoryPage            = lazy(() => import('./pages/inventory/InventoryPage'));
 const CostPage                 = lazy(() => import('./pages/cost/CostPage'));
 const SlicerPage               = lazy(() => import('./pages/slicer/SlicerPage'));
 const QueuePageV2              = lazy(() => import('./pages/queue/QueuePageV2'));
-const MaintenancePageV2        = lazy(() => import('./pages/maintenance/MaintenancePageV2'));
-const VaultPageV2              = lazy(() => import('./pages/vault/VaultPageV2'));
-const CompanyPageV2            = lazy(() => import('./pages/company/CompanyPageV2'));
+const MaintenancePage        = lazy(() => import('./pages/maintenance/MaintenancePage'));
+const VaultPage              = lazy(() => import('./pages/vault/VaultPage'));
+const CompanyPage            = lazy(() => import('./pages/company/CompanyPage'));
 const CalculatorPageV2         = lazy(() => import('./pages/cost/CalculatorPageV2'));
 const InventoryPurchasesPage   = lazy(() => import('./pages/inventory/InventoryPurchasesPage'));
 const InventoryFilamentsPage   = lazy(() => import('./pages/inventory/InventoryFilamentsPage'));
@@ -88,7 +88,7 @@ const SlicerJobDetailPage      = lazy(() => import('./pages/slicer/SlicerJobDeta
 const QueuePage                = lazy(() => import('./pages/queue/QueuePage'));
 const QueueHistoryPage         = lazy(() => import('./pages/queue/QueueHistoryPage'));
 const CompanyTemplateEditorPage= lazy(() => import('./pages/company/CompanyTemplateEditorPage'));
-const VaultUploadPageV2        = lazy(() => import('./pages/vault/VaultUploadPageV2'));
+const VaultUploadPage        = lazy(() => import('./pages/vault/VaultUploadPage'));
 
 /**
  * Componente guardia de ruta privada.
@@ -176,15 +176,15 @@ function AppRoutes() {
           <Route path="manual" element={<ManualQuotePage />} />
           <Route path="printers" element={<PrintersPage />} />
           <Route path="history" element={<HistoryPage />} />
-          <Route path="settings" element={<SettingsPage />} />
+          <Route path="settings" element={<CostSettingsPage />} />
         </Route>
 
         {/* Settings — V1 (Cuenta / Empresa / Usuarios) reemplazadas por
-            SettingsPageV2 con drawers integrados. /settings/company
+            SettingsPage con drawers integrados. /settings/company
             redirige a /company/v2 (Fase 6 ya tenía el ProfileFormDrawer). */}
         <Route path="/settings">
           <Route index element={<Navigate to="/settings/v2" replace />} />
-          <Route path="v2" element={<SettingsPageV2 />} />
+          <Route path="v2" element={<SettingsPage />} />
           <Route path="account" element={<Navigate to="/settings/v2" replace />} />
           <Route path="users"   element={<Navigate to="/settings/v2" replace />} />
           <Route path="company" element={<Navigate to="/company/v2" replace />} />
@@ -200,11 +200,11 @@ function AppRoutes() {
         </Route>
 
         {/* Mantenimiento — V2 reemplaza por completo Dashboard/Logs/Printers V1
-            (el CRUD vive ahora dentro del MaintenancePageV2 vía LogFormDrawer
+            (el CRUD vive ahora dentro del MaintenancePage vía LogFormDrawer
             + edición inline de current_hours en el drawer de impresora). */}
         <Route path="/maintenance">
           <Route index element={<Navigate to="/maintenance/v2" replace />} />
-          <Route path="v2" element={<MaintenancePageV2 />} />
+          <Route path="v2" element={<MaintenancePage />} />
           <Route path="dashboard" element={<Navigate to="/maintenance/v2" replace />} />
           <Route path="logs" element={<Navigate to="/maintenance/v2" replace />} />
           <Route path="printers" element={<Navigate to="/maintenance/v2" replace />} />
@@ -219,14 +219,14 @@ function AppRoutes() {
         </Route>
 
         {/* Compañía (solo admin) — Profile/Branding/Templates list reemplazadas
-            por CompanyPageV2 (drawers integrados). El editor de templates
+            por CompanyPage (drawers integrados). El editor de templates
             sigue como ruta dedicada por su tamaño (textarea HTML grande). */}
         <Route
           path="/company"
           element={<AdminRoute><Outlet /></AdminRoute>}
         >
           <Route index element={<Navigate to="/company/v2" replace />} />
-          <Route path="v2" element={<CompanyPageV2 />} />
+          <Route path="v2" element={<CompanyPage />} />
           <Route path="profile"       element={<Navigate to="/company/v2" replace />} />
           <Route path="branding"      element={<Navigate to="/company/v2" replace />} />
           <Route path="templates"     element={<Navigate to="/company/v2" replace />} />
@@ -237,11 +237,11 @@ function AppRoutes() {
         {/* Vault — V1 (galería + upload) reemplazada por V2. Las rutas
             legacy redirigen a v2 para preservar bookmarks viejos. */}
         <Route path="/vault">
-          <Route index element={<VaultPageV2 />} />
-          <Route path="v2" element={<VaultPageV2 />} />
+          <Route index element={<VaultPage />} />
+          <Route path="v2" element={<VaultPage />} />
           <Route path="legacy" element={<Navigate to="/vault" replace />} />
           <Route path="upload" element={<Navigate to="/vault/upload/v2" replace />} />
-          <Route path="upload/v2" element={<VaultUploadPageV2 />} />
+          <Route path="upload/v2" element={<VaultUploadPage />} />
         </Route>
       </Route>
     </Routes>

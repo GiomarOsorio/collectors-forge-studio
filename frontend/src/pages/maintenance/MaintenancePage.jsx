@@ -16,7 +16,7 @@
  * Lee summary `/api/maintenance/summary/`, logs `/api/maintenance/logs/`,
  * `/printers/` y `/inventory/items/`.
  *
- * @module pages/maintenance/MaintenancePageV2
+ * @module pages/maintenance/MaintenancePage
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -929,7 +929,7 @@ function LogFormDrawer({
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
-export default function MaintenancePageV2() {
+export default function MaintenancePage() {
   const isMobile = useIsMobile();
   const confirm = useConfirm();
   const { openSidebar } = useOutletContext() || {};

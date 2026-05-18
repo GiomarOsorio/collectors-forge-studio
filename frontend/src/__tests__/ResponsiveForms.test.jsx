@@ -3,7 +3,7 @@
 // archivo. Flag per CLAUDE.md: "tests usan MagicMock — bugs reales NO detectados".
 
 /**
- * @file Tests de responsividad de formularios — CalculatorPage, PrintersPage, SettingsPage.
+ * @file Tests de responsividad de formularios — CalculatorPage, PrintersPage, CostSettingsPage.
  *
  * Verifica que los grids de formularios usen grid-cols-1 sm:grid-cols-2
  * y que los inputs de cantidad tengan w-full sm:w-20 para verse bien en mobile.
@@ -137,13 +137,13 @@ describe.skip('PrintersPage — Modal responsive', () => {
   });
 });
 
-// ── SettingsPage ──────────────────────────────────────────────────────────────
+// ── CostSettingsPage (Cost › Tarifa & ajustes) ──────────────────────────────
 
-import SettingsPage from '../pages/SettingsPage';
+import CostSettingsPage from '../pages/CostSettingsPage';
 
-describe.skip('SettingsPage — Grids de formulario responsive', () => {
+describe.skip('CostSettingsPage — Grids de formulario responsive', () => {
   it('la sección Producción usa grid-cols-1 sm:grid-cols-2', async () => {
-    renderWithRouter(SettingsPage);
+    renderWithRouter(CostSettingsPage);
     await screen.findByText('Producción');
     const grids = document.querySelectorAll('.grid.grid-cols-1');
     const responsiveGrids = Array.from(grids).filter((g) =>
@@ -153,7 +153,7 @@ describe.skip('SettingsPage — Grids de formulario responsive', () => {
   });
 
   it('la sección Precios usa grid-cols-1 sm:grid-cols-2', async () => {
-    renderWithRouter(SettingsPage);
+    renderWithRouter(CostSettingsPage);
     await screen.findByText('Precios');
     const preciosSection = screen.getByText('Precios').closest('div');
     const grid = preciosSection.querySelector('.grid.grid-cols-1');

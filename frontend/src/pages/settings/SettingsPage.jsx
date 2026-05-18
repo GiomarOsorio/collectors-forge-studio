@@ -9,7 +9,7 @@
  * El editor inline de usuarios usa expand/collapse dentro del mismo
  * `UsersDrawer` (sin abrir un segundo drawer encima — UX más simple).
  *
- * @module pages/settings/SettingsPageV2
+ * @module pages/settings/SettingsPage
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -479,7 +479,7 @@ function UsersDrawer({ open, users, currentUserId, onClose, onChanged, isMobile 
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
-export default function SettingsPageV2() {
+export default function SettingsPage() {
   const isMobile = useIsMobile();
   const { openSidebar } = useOutletContext() || {};
   const { user } = useAuth();
