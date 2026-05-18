@@ -13,8 +13,6 @@
 import { MATERIALS_BY_ID } from '../config/materials';
 
 const DEFAULT_SPOOL_GRAMS = 1000;
-const LOW_PCT = 20;
-const CRITICAL_PCT = 10;
 
 /**
  * Convierte un `InventoryItemResponse` (Filamento) a la forma que consumen
@@ -61,15 +59,26 @@ export function fillPercent(f) {
 }
 
 /**
- * Clasifica el nivel de stock en `ok` | `low` | `critical`.
+ * Clasifica el nivel de stock comparando `remaining` con el `minQuantity`
+ * configurado por el usuario.
  *
- * @param {{ remaining: number, total: number }} f
- * @returns {'ok'|'low'|'critical'}
+ * Reglas:
+ *   - Si `minQuantity > 0` y `remaining < minQuantity` → `'critical'`.
+ *   - En cualquier otro caso → `'ok'`.
+ *
+ * El umbral porcentual viejo (10%/20% del total) fue removido en 2026-05:
+ * cada item ahora controla su propio umbral via el campo `min_quantity`
+ * (editable desde el form del inventario). Items sin `min_quantity`
+ * configurado nunca se marcan como críticos.
+ *
+ * @param {{ remaining: number, minQuantity?: number }} f
+ * @returns {'ok'|'critical'}
  */
 export function stockLevel(f) {
-  const p = fillPercent(f);
-  if (p <= CRITICAL_PCT) return 'critical';
-  if (p <= LOW_PCT) return 'low';
+  if (!f) return 'ok';
+  const min = Number(f.minQuantity) || 0;
+  const remaining = Number(f.remaining) || 0;
+  if (min > 0 && remaining < min) return 'critical';
   return 'ok';
 }
 

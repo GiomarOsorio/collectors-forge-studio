@@ -154,35 +154,48 @@ describe('fillPercent', () => {
 });
 
 describe('stockLevel', () => {
-  it('critical cuando ≤ 10%', () => {
-    expect(stockLevel({ remaining: 100, total: 1000 })).toBe('critical');
-    expect(stockLevel({ remaining: 50, total: 1000 })).toBe('critical');
-    expect(stockLevel({ remaining: 0, total: 1000 })).toBe('critical');
+  it('critical cuando remaining < minQuantity (con min > 0)', () => {
+    expect(stockLevel({ remaining: 99, minQuantity: 100 })).toBe('critical');
+    expect(stockLevel({ remaining: 0, minQuantity: 100 })).toBe('critical');
+    expect(stockLevel({ remaining: 49.9, minQuantity: 50 })).toBe('critical');
   });
 
-  it('low cuando 10% < pct ≤ 20%', () => {
-    expect(stockLevel({ remaining: 150, total: 1000 })).toBe('low');
-    expect(stockLevel({ remaining: 200, total: 1000 })).toBe('low');
+  it('ok cuando remaining >= minQuantity', () => {
+    expect(stockLevel({ remaining: 100, minQuantity: 100 })).toBe('ok');
+    expect(stockLevel({ remaining: 500, minQuantity: 100 })).toBe('ok');
+    expect(stockLevel({ remaining: 1000, minQuantity: 200 })).toBe('ok');
   });
 
-  it('ok cuando > 20%', () => {
-    expect(stockLevel({ remaining: 300, total: 1000 })).toBe('ok');
-    expect(stockLevel({ remaining: 1000, total: 1000 })).toBe('ok');
+  it('ok cuando no hay minQuantity configurado (0 / null / undefined)', () => {
+    // Sin umbral configurado, el item nunca es crítico (estado opt-in).
+    expect(stockLevel({ remaining: 0, minQuantity: 0 })).toBe('ok');
+    expect(stockLevel({ remaining: 0, minQuantity: null })).toBe('ok');
+    expect(stockLevel({ remaining: 0 })).toBe('ok');
+  });
+
+  it('ok para input nulo (defensive default)', () => {
+    expect(stockLevel(null)).toBe('ok');
+    expect(stockLevel(undefined)).toBe('ok');
   });
 });
 
 describe('computeFilamentStats', () => {
   const filaments = [
-    { remaining: 100, total: 1000, costPerKg: 92000 }, // critical
-    { remaining: 150, total: 1000, costPerKg: 92000 }, // low
-    { remaining: 800, total: 1000, costPerKg: 110000 }, // ok
+    // critical: remaining < minQuantity
+    { remaining: 100, total: 1000, minQuantity: 200, costPerKg: 92000 },
+    // critical: remaining < minQuantity
+    { remaining: 150, total: 1000, minQuantity: 200, costPerKg: 92000 },
+    // ok: remaining >= minQuantity
+    { remaining: 800, total: 1000, minQuantity: 200, costPerKg: 110000 },
   ];
 
-  it('cuenta correctamente low y critical', () => {
+  it('cuenta correctamente low y critical (low == critical bajo la nueva lógica)', () => {
     const stats = computeFilamentStats(filaments);
     expect(stats.spoolCount).toBe(3);
-    expect(stats.lowCount).toBe(2); // critical + low
-    expect(stats.criticalCount).toBe(1);
+    // Bajo el nuevo umbral basado en min_quantity, 'low' y 'critical' son
+    // el mismo conjunto (los que están por debajo del mínimo).
+    expect(stats.lowCount).toBe(2);
+    expect(stats.criticalCount).toBe(2);
   });
 
   it('suma totalGrams', () => {
@@ -210,18 +223,18 @@ describe('computeFilamentStats', () => {
 describe('groupFilaments', () => {
   const materialOrder = ['PLA', 'PETG', 'TPU'];
   const filaments = [
-    { id: 1, material: 'PLA', remaining: 100, total: 1000 }, // critical
-    { id: 2, material: 'PETG', remaining: 800, total: 1000 }, // ok
-    { id: 3, material: 'PLA', remaining: 200, total: 1000 }, // low
-    { id: 4, material: 'TPU', remaining: 50, total: 1000 }, // critical
+    { id: 1, material: 'PLA',  remaining: 100, total: 1000, minQuantity: 200 }, // critical
+    { id: 2, material: 'PETG', remaining: 800, total: 1000, minQuantity: 200 }, // ok
+    { id: 3, material: 'PLA',  remaining: 50,  total: 1000, minQuantity: 200 }, // critical
+    { id: 4, material: 'TPU',  remaining: 800, total: 1000, minQuantity: 200 }, // ok
   ];
 
-  it('arma grupo "Stock bajo" al inicio si hay críticos/low', () => {
+  it('arma grupo "Stock bajo" al inicio con los críticos (remaining < min)', () => {
     const groups = groupFilaments(filaments, materialOrder);
     expect(groups[0].key).toBe('low');
     expect(groups[0].label).toBe('Stock bajo');
     expect(groups[0].warn).toBe(true);
-    expect(groups[0].items.map((f) => f.id).sort()).toEqual([1, 3, 4]);
+    expect(groups[0].items.map((f) => f.id).sort()).toEqual([1, 3]);
   });
 
   it('agrupa después por material en el orden dado', () => {
@@ -230,10 +243,10 @@ describe('groupFilaments', () => {
     expect(materialKeys).toEqual(['PLA', 'PETG', 'TPU']);
   });
 
-  it('omite grupo "Stock bajo" si todos están ok', () => {
+  it('omite grupo "Stock bajo" si todos están sobre el mínimo', () => {
     const allOk = [
-      { id: 1, material: 'PLA', remaining: 900, total: 1000 },
-      { id: 2, material: 'PETG', remaining: 800, total: 1000 },
+      { id: 1, material: 'PLA',  remaining: 900, total: 1000, minQuantity: 200 },
+      { id: 2, material: 'PETG', remaining: 800, total: 1000, minQuantity: 200 },
     ];
     const groups = groupFilaments(allOk, materialOrder);
     expect(groups.find((g) => g.warn)).toBeUndefined();
@@ -241,10 +254,18 @@ describe('groupFilaments', () => {
 
   it('omite grupos sin items', () => {
     const groups = groupFilaments(
-      [{ id: 1, material: 'PLA', remaining: 900, total: 1000 }],
+      [{ id: 1, material: 'PLA', remaining: 900, total: 1000, minQuantity: 200 }],
       materialOrder,
     );
     expect(groups.find((g) => g.key === 'PETG')).toBeUndefined();
+  });
+
+  it('items sin minQuantity no entran a "Stock bajo" aunque remaining sea bajo', () => {
+    const noMin = [
+      { id: 1, material: 'PLA', remaining: 10, total: 1000, minQuantity: 0 },
+    ];
+    const groups = groupFilaments(noMin, materialOrder);
+    expect(groups.find((g) => g.warn)).toBeUndefined();
   });
 });
 
