@@ -101,6 +101,14 @@ async def _get_used_bytes(db: AsyncSession) -> int:
 
 
 def _to_response(model: ModelFile, username: Optional[str]) -> ModelFileResponse:
+    # Si el modelo tiene un thumbnail en MinIO, exponemos al frontend la
+    # URL del endpoint proxy que lo sirve (con `updated_at` como
+    # cache-buster). Si no tiene, queda None y el frontend cae al
+    # `thumbnail_url` externo (MakerWorld) o al placeholder.
+    local_thumbnail_url: Optional[str] = None
+    if model.thumbnail_key:
+        ts = int(model.updated_at.timestamp()) if model.updated_at else 0
+        local_thumbnail_url = f"/api/vault/{model.id}/thumbnail?v={ts}"
     return ModelFileResponse(
         id=model.id,
         uploaded_by=model.uploaded_by,
@@ -117,7 +125,7 @@ def _to_response(model: ModelFile, username: Optional[str]) -> ModelFileResponse
         name=model.name,
         description=model.description,
         thumbnail_url=model.thumbnail_url,
-        local_thumbnail_path=model.local_thumbnail_path,
+        local_thumbnail_url=local_thumbnail_url,
         tags=model.tags or [],
         source_url=model.source_url,
         source_platform=model.source_platform,
@@ -377,11 +385,11 @@ async def upload_vault_file(
         png = extract_plate_png(source_bytes)
     if png:
         try:
-            model.local_thumbnail_path = save_thumbnail(model.id, png)
+            model.thumbnail_key = await save_thumbnail(model.id, png)
             await db.commit()
             await db.refresh(model)
-        except OSError as exc:
-            logger.warning("No se pudo guardar thumbnail local de %s: %s", model.id, exc)
+        except Exception as exc:
+            logger.warning("No se pudo guardar thumbnail de %s: %s", model.id, exc)
 
     return _to_response(model, current_user.username)
 
@@ -429,6 +437,45 @@ async def download_print_file(
         headers={
             "Content-Disposition": f'attachment; filename="{model.print_file_name}"',
         },
+    )
+
+
+@router.get("/{file_id}/thumbnail")
+async def get_vault_thumbnail(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Sirve el PNG plate-render extraído del `.3mf` / `.gcode.3mf`.
+
+    Descarga el objeto desde MinIO (key `thumbnails/{file_id}.png`) y lo
+    streamea con `Cache-Control: public, max-age=86400` — el frontend
+    cachea por 24h y usa el `?v=<updated_at>` del response para
+    invalidar cuando el modelo se reemplaza.
+
+    Si el modelo no tiene `thumbnail_key` o el objeto ya no está en
+    MinIO, retorna 404 — el frontend cae al `thumbnail_url` externo
+    (MakerWorld) o al placeholder.
+    """
+    model = await _get_model_file(db, file_id)
+    if not model.thumbnail_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Este modelo no tiene plate-render extraído",
+        )
+    try:
+        data = await download_file(model.thumbnail_key)
+    except Exception as exc:
+        logger.warning("No se pudo descargar thumbnail %s: %s", model.thumbnail_key, exc)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Thumbnail no disponible en almacenamiento",
+        ) from exc
+    return Response(
+        content=data,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
     )
 
 
@@ -531,12 +578,12 @@ async def _replace_slot(
     # Re-extraer thumbnail si este slot puede aportar uno mejor.
     png = extract_plate_png(content)
     if png:
-        delete_thumbnail(model.id)
+        await delete_thumbnail(model.id)
         try:
-            model.local_thumbnail_path = save_thumbnail(model.id, png)
-        except OSError as exc:
-            logger.warning("No se pudo guardar thumbnail local de %s: %s", model.id, exc)
-            model.local_thumbnail_path = None
+            model.thumbnail_key = await save_thumbnail(model.id, png)
+        except Exception as exc:
+            logger.warning("No se pudo guardar thumbnail de %s: %s", model.id, exc)
+            model.thumbnail_key = None
 
     await db.commit()
     await db.refresh(model)
@@ -604,4 +651,4 @@ async def delete_vault_file(
 
     await db.delete(model)
     await db.commit()
-    delete_thumbnail(model.id)
+    await delete_thumbnail(model.id)

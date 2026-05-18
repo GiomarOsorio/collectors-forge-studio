@@ -16,13 +16,11 @@ import logging
 import time
 import uuid
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from slowapi import _rate_limit_exceeded_handler
@@ -75,13 +73,15 @@ async def _backfill_vault_thumbnails() -> None:
     """
     Backfill idempotente de thumbnails de plate render del Vault.
 
-    Recorre los `model_files` con `local_thumbnail_path IS NULL`, descarga el
-    `.3mf` de MinIO y extrae el PNG embebido por OrcaSlicer/BambuStudio. Los
-    fallos por archivo se loggean y no detienen el resto (puede ser un .3mf
-    sin slicing, sin PNG embebido, o un objeto corrupto en MinIO).
+    Recorre los `model_files` con `thumbnail_key IS NULL`, descarga el
+    `.3mf` / `.gcode.3mf` de MinIO y extrae el PNG embebido por
+    OrcaSlicer/BambuStudio. El PNG se sube a MinIO bajo
+    `thumbnails/{id}.png` y se persiste la key en la columna. Los fallos
+    por archivo se loggean y no detienen el resto (puede ser un .3mf sin
+    slicing, sin PNG embebido, o un objeto corrupto en MinIO).
 
-    Corre una sola vez al arrancar dentro del `lifespan`. Es no-op si todos los
-    modelos ya tienen su thumbnail local.
+    Corre una sola vez al arrancar dentro del `lifespan`. Es no-op si
+    todos los modelos ya tienen `thumbnail_key`.
     """
     # Import diferido para evitar dependencia circular con app.models en tests.
     from app.models.model_file import ModelFile
@@ -89,7 +89,7 @@ async def _backfill_vault_thumbnails() -> None:
     try:
         async with async_session() as db:
             result = await db.execute(
-                select(ModelFile).where(ModelFile.local_thumbnail_path.is_(None))
+                select(ModelFile).where(ModelFile.thumbnail_key.is_(None))
             )
             models = result.scalars().all()
 
@@ -108,7 +108,7 @@ async def _backfill_vault_thumbnails() -> None:
                     png = extract_plate_png(zip_bytes)
                     if not png:
                         continue
-                    model.local_thumbnail_path = save_thumbnail(model.id, png)
+                    model.thumbnail_key = await save_thumbnail(model.id, png)
                     await db.commit()
                     await db.refresh(model)
                     ok += 1
@@ -157,9 +157,6 @@ async def lifespan(app: FastAPI):
     Yields:
         Control al servidor para empezar a atender solicitudes.
     """
-    # Crear directorios estáticos necesarios
-    Path("/app/static/companies").mkdir(parents=True, exist_ok=True)
-    Path("/app/static/thumbnails").mkdir(parents=True, exist_ok=True)
     await create_default_data()
     # Inicializar bucket MinIO del Vault (no-fatal si MinIO no está disponible)
     await ensure_bucket()
@@ -272,8 +269,10 @@ app.include_router(queue_router)
 app.include_router(inventory_categories_router)
 app.include_router(vault_router)
 
-# Archivos estáticos: imágenes de ítems de impresión y otros recursos subidos
-app.mount("/static", StaticFiles(directory="/app/static", check_dir=False), name="static")
+# NOTA: el mount de `/static` fue removido. Thumbnails de Vault, logos de
+# empresa e imágenes de impresiones ahora viven en MinIO y se sirven vía
+# endpoints proxy dedicados (`GET /api/vault/{id}/thumbnail`,
+# `GET /api/company/logo`, `GET /api/inventory/prints/{id}/image`).
 
 
 @app.get("/api/health")

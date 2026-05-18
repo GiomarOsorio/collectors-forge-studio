@@ -25,21 +25,13 @@ class PrintedItemCreate(BaseModel):
     """
     Datos para crear un nuevo ítem de impresión en el inventario.
 
-    Atributos:
-        name:        Nombre del producto impreso (requerido, max 200 caracteres).
-        category:    Categoría del producto (opcional). Ej: "Llaveros", "Figuras".
-        description: Descripción detallada del producto (opcional).
-        image_url:   URL relativa de la imagen de referencia (opcional).
-        quantity:    Cantidad disponible en stock (default 0).
-        unit_price:  Precio de venta unitario (opcional).
-        material:    Material utilizado en la impresión (opcional). Ej: PLA, PETG.
-        color:       Color del filamento utilizado (opcional).
+    La imagen no se envía en este payload: se sube luego vía
+    `POST /api/inventory/prints/{id}/image` (formato multipart).
     """
 
     name: str = Field(min_length=1, max_length=200)
     category: Optional[str] = Field(default=None, max_length=100)
     description: Optional[str] = None
-    image_url: Optional[str] = Field(default=None, max_length=500)
     quantity: int = Field(default=0, ge=0)
     unit_price: Optional[Decimal] = Field(default=None, ge=0)
     material: Optional[str] = Field(default=None, max_length=100)
@@ -48,25 +40,15 @@ class PrintedItemCreate(BaseModel):
 
 class PrintedItemUpdate(BaseModel):
     """
-    Datos opcionales para actualizar un ítem de impresión (PUT parcial).
+    Datos opcionales para actualizar un ítem (PUT parcial).
 
-    Todos los campos son opcionales. Solo se actualizan los que se envíen.
-
-    Atributos:
-        name:        Nuevo nombre del producto.
-        category:    Nueva categoría.
-        description: Nueva descripción.
-        image_url:   Nueva URL de imagen.
-        quantity:    Nueva cantidad en stock.
-        unit_price:  Nuevo precio de venta unitario.
-        material:    Nuevo material utilizado.
-        color:       Nuevo color del filamento.
+    La imagen se gestiona vía endpoints separados:
+    `POST /api/inventory/prints/{id}/image` (subir / reemplazar).
     """
 
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     category: Optional[str] = Field(default=None, max_length=100)
     description: Optional[str] = None
-    image_url: Optional[str] = Field(default=None, max_length=500)
     quantity: Optional[int] = Field(default=None, ge=0)
     unit_price: Optional[Decimal] = Field(default=None, ge=0)
     material: Optional[str] = Field(default=None, max_length=100)
@@ -77,19 +59,9 @@ class PrintedItemResponse(BaseModel):
     """
     Datos completos de un ítem de impresión (respuesta de la API).
 
-    Atributos:
-        id:          Identificador único del ítem.
-        company_id:  UUID de la empresa propietaria.
-        name:        Nombre del producto impreso.
-        category:    Categoría del producto.
-        description: Descripción detallada.
-        image_url:   URL relativa de la imagen de referencia.
-        quantity:    Cantidad disponible en stock.
-        unit_price:  Precio de venta unitario.
-        material:    Material utilizado en la impresión.
-        color:       Color del filamento utilizado.
-        created_at:  Fecha y hora de creación del registro.
-        updated_at:  Fecha y hora de la última actualización.
+    `image_url` apunta al endpoint proxy
+    (`/api/inventory/prints/{id}/image?v=<updated_at>`) que streamea el
+    binario desde MinIO; vacío si el ítem no tiene imagen cargada.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -98,7 +70,7 @@ class PrintedItemResponse(BaseModel):
     name: str
     category: Optional[str]
     description: Optional[str]
-    image_url: Optional[str]
+    image_url: Optional[str] = None
     quantity: int
     unit_price: Optional[DecimalAsFloat]
     material: Optional[str]
@@ -133,10 +105,10 @@ class PrintedItemSellRequest(BaseModel):
 
 class PrintedItemImageResponse(BaseModel):
     """
-    Respuesta tras subir la imagen de un ítem de impresión.
+    Respuesta tras subir la imagen de un ítem.
 
-    Atributos:
-        image_url: URL relativa de la imagen guardada en el servidor.
+    `image_url` apunta al endpoint proxy del binario en MinIO
+    (`/api/inventory/prints/{id}/image?v=<updated_at>`).
     """
 
     image_url: str
