@@ -77,55 +77,9 @@ const renderWithRouter = (Component) =>
     </MemoryRouter>
   );
 
-// ── FilamentsPage ─────────────────────────────────────────────────────────────
-
-import FilamentsPage from '../pages/FilamentsPage';
-
-describe.skip('FilamentsPage — Tabla responsive', () => {
-  it('el wrapper de la tabla tiene overflow-x-auto', async () => {
-    renderWithRouter(FilamentsPage);
-    // Esperamos que cargue la tabla
-    await screen.findByText('Bambu');
-    const table = document.querySelector('table');
-    const wrapper = table.parentElement;
-    expect(wrapper).toHaveClass('overflow-x-auto');
-  });
-
-  it('la tabla tiene min-w-[500px] para forzar scroll horizontal', async () => {
-    renderWithRouter(FilamentsPage);
-    await screen.findByText('Bambu');
-    const table = document.querySelector('table');
-    expect(table.className).toContain('min-w-[500px]');
-  });
-
-  it('el modal tiene p-4 en el overlay para no pegarse al borde en mobile', async () => {
-    renderWithRouter(FilamentsPage);
-    await screen.findByText('Bambu');
-    // Abre el modal
-    fireEvent.click(screen.getByRole('button', { name: /agregar/i }));
-    // El overlay (div con inset-0) debe tener p-4
-    const overlay = document.querySelector('.fixed.inset-0');
-    expect(overlay).toHaveClass('p-4');
-  });
-
-  it('el contenedor del modal tiene max-h-[90vh] y overflow-y-auto', async () => {
-    renderWithRouter(FilamentsPage);
-    await screen.findByText('Bambu');
-    fireEvent.click(screen.getByRole('button', { name: /agregar/i }));
-    // El div blanco del modal (bg-white rounded-xl)
-    const modalContent = document.querySelector('.bg-white.rounded-xl');
-    expect(modalContent.className).toContain('max-h-[90vh]');
-    expect(modalContent).toHaveClass('overflow-y-auto');
-  });
-
-  it('el formulario del modal usa grid-cols-1 sm:grid-cols-2', async () => {
-    renderWithRouter(FilamentsPage);
-    await screen.findByText('Bambu');
-    fireEvent.click(screen.getByRole('button', { name: /agregar/i }));
-    const grid = document.querySelector('.grid.grid-cols-1');
-    expect(grid.className).toContain('sm:grid-cols-2');
-  });
-});
+// NOTA: las suites `FilamentsPage` y `SuppliesPage` (Fase 9) se eliminaron
+// porque esos archivos V1 huérfanos fueron borrados en chunk B. Su
+// reemplazo v2 (InventoryPage con tabs internos) tiene sus propios tests.
 
 // ── HistoryPage ───────────────────────────────────────────────────────────────
 
@@ -182,53 +136,5 @@ describe.skip('HistoryPage — Tabla y modal responsive', () => {
   });
 });
 
-// ── SuppliesPage ──────────────────────────────────────────────────────────────
-
-import SuppliesPage from '../pages/SuppliesPage';
-
-describe.skip('SuppliesPage — Tabla y modal responsive', () => {
-  it('el wrapper de la tabla tiene overflow-x-auto', async () => {
-    renderWithRouter(SuppliesPage);
-    await screen.findByText('Argolla 25mm');
-    const table = document.querySelector('table');
-    expect(table.parentElement).toHaveClass('overflow-x-auto');
-  });
-
-  it('la tabla tiene min-w-[550px]', async () => {
-    renderWithRouter(SuppliesPage);
-    await screen.findByText('Argolla 25mm');
-    const table = document.querySelector('table');
-    expect(table.className).toContain('min-w-[550px]');
-  });
-
-  it('el modal tiene p-4 en el overlay', async () => {
-    renderWithRouter(SuppliesPage);
-    await screen.findByText('Argolla 25mm');
-    fireEvent.click(screen.getByRole('button', { name: /nuevo insumo/i }));
-    const overlay = document.querySelector('.fixed.inset-0');
-    expect(overlay).toHaveClass('p-4');
-  });
-
-  it('el modal tiene max-h-[90vh] y overflow-y-auto', async () => {
-    renderWithRouter(SuppliesPage);
-    await screen.findByText('Argolla 25mm');
-    fireEvent.click(screen.getByRole('button', { name: /nuevo insumo/i }));
-    // Buscamos dentro del overlay fixed para no confundir con el wrapper de tabla
-    const overlay = document.querySelector('.fixed.inset-0');
-    const modalContent = overlay.querySelector('.bg-white.rounded-xl');
-    expect(modalContent.className).toContain('max-h-[90vh]');
-    expect(modalContent).toHaveClass('overflow-y-auto');
-  });
-
-  it('el grid del formulario de pack usa grid-cols-1 sm:grid-cols-2', async () => {
-    renderWithRouter(SuppliesPage);
-    await screen.findByText('Argolla 25mm');
-    fireEvent.click(screen.getByRole('button', { name: /nuevo insumo/i }));
-    // El grid con los inputs de pack_qty y pack_price
-    const grids = document.querySelectorAll('.grid.grid-cols-1');
-    const responsiveGrid = Array.from(grids).find((g) =>
-      g.className.includes('sm:grid-cols-2')
-    );
-    expect(responsiveGrid).toBeInTheDocument();
-  });
-});
+// NOTA: la suite `SuppliesPage` (Fase 9) se eliminó — archivo V1 huérfano
+// borrado en chunk B.
