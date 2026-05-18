@@ -33,7 +33,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
-from sqlalchemy import func, select
+from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -174,7 +174,10 @@ def _parse_sliced_from_print_file(content: bytes) -> dict:
 
 @router.get("/", response_model=ModelFileListResponse)
 async def list_vault_files(
-    q: Optional[str] = Query(default=None, description="Buscar por nombre"),
+    q: Optional[str] = Query(
+        default=None,
+        description="Buscar por nombre, descripción o tag (ilike, substring).",
+    ),
     print_ready_only: bool = Query(
         default=False,
         description="Si True, solo retorna modelos con print_file presente",
@@ -192,7 +195,19 @@ async def list_vault_files(
     base_q = select(ModelFile)
 
     if q:
-        base_q = base_q.where(ModelFile.name.ilike(f"%{q}%"))
+        # Búsqueda substring case-insensitive sobre name + description + tags.
+        # `tags` es JSONB; el cast a String genera la representación textual
+        # `["tag1","tag2"]` sobre la que aplicamos ilike — acepta falsos
+        # positivos por substring (ej. "ta" matchea "[\"tag\"]") pero es
+        # suficiente para Vault de uso personal.
+        pat = f"%{q}%"
+        base_q = base_q.where(
+            or_(
+                ModelFile.name.ilike(pat),
+                ModelFile.description.ilike(pat),
+                cast(ModelFile.tags, String).ilike(pat),
+            )
+        )
     if print_ready_only:
         base_q = base_q.where(ModelFile.print_file_key.is_not(None))
 

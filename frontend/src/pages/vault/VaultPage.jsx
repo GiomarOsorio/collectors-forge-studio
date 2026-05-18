@@ -9,7 +9,7 @@
  * @module pages/vault/VaultPage
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   Archive,
@@ -403,17 +403,43 @@ export default function VaultPage() {
   const confirm = useConfirm();
 
   const [query, setQuery] = useState('');
+  // Búsqueda debounceada: el input alimenta `query`; tras 300ms inactivos
+  // se copia a `debouncedQuery` y se dispara el refetch del backend.
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(24);
+  const [total, setTotal] = useState(0);
   const [files, setFiles] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
 
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  // Reset a página 1 cada vez que cambia el query efectivo.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedQuery, pageSize]);
+
   const load = async () => {
     setLoading(true);
-    const [f, s] = await Promise.allSettled([getVaultFiles({ params: { page_size: 100 } }), getVaultStats()]);
+    const params = { page, page_size: pageSize };
+    if (debouncedQuery) params.q = debouncedQuery;
+    const [f, s] = await Promise.allSettled([
+      getVaultFiles({ params }),
+      getVaultStats(),
+    ]);
     if (f.status === 'fulfilled') {
       const data = f.value.data;
-      setFiles(Array.isArray(data) ? data : data?.items || []);
+      const items = Array.isArray(data) ? data : data?.items || [];
+      // El backend ya ordena por created_at desc; no re-ordenamos.
+      setFiles(items);
+      setTotal(typeof data?.total === 'number' ? data.total : items.length);
     }
     if (s.status === 'fulfilled') setStats(s.value.data);
     setLoading(false);
@@ -424,21 +450,8 @@ export default function VaultPage() {
       toast.error('No se pudo cargar el Vault');
       setLoading(false);
     });
-  }, []);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const sorted = [...files].sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-    );
-    if (!q) return sorted;
-    return sorted.filter(
-      (f) =>
-        f.name.toLowerCase().includes(q) ||
-        (f.description || '').toLowerCase().includes(q) ||
-        (Array.isArray(f.tags) ? f.tags.join(' ') : '').toLowerCase().includes(q),
-    );
-  }, [files, query]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize, debouncedQuery]);
 
   /**
    * Descarga uno de los slots (source o print) del modelo y dispara la
@@ -470,7 +483,13 @@ export default function VaultPage() {
     try {
       await deleteVaultFile(f.id);
       toast.success('Archivo eliminado');
-      setFiles((cur) => cur.filter((x) => x.id !== f.id));
+      // Si el item borrado era el único de la última página, retrocedemos
+      // automáticamente para no quedar en una página vacía.
+      if (files.length === 1 && page > 1) {
+        setPage((p) => p - 1);
+      } else {
+        await load();
+      }
       return true;
     } catch {
       toast.error('No se pudo eliminar');
@@ -485,7 +504,7 @@ export default function VaultPage() {
   const KPIs = (
     <div className="flex flex-wrap gap-3 px-6 pt-4 pb-2">
       <div className="flex-1 min-w-[180px] flex">
-        <KPI label="Modelos" value={files.length} unit="docs" sub="en biblioteca" accent={ACCENT} icon={Archive} />
+        <KPI label="Modelos" value={total} unit="docs" sub="en biblioteca" accent={ACCENT} icon={Archive} />
       </div>
       <div className="flex-1 min-w-[180px] flex">
         <KPI label="Almacenado" value={fmtBytes(usedBytes)} sub={`de ${fmtBytes(quotaBytes)}`} accent="#3B82F6" icon={HardDrive} />
@@ -498,7 +517,7 @@ export default function VaultPage() {
           label="Con plate render"
           value={files.filter((f) => f.local_thumbnail_url).length}
           unit="docs"
-          sub="thumbnails locales"
+          sub="en esta página"
           accent="#94A0AE"
         />
       </div>
@@ -519,7 +538,7 @@ export default function VaultPage() {
           <Card className="p-4 flex flex-col gap-3 industrial-grid">
             <div className="flex items-baseline justify-between">
               <span className="lbl-eyebrow">Vault</span>
-              <span className="mono text-[10px] text-gunmetal">{files.length} modelos</span>
+              <span className="mono text-[10px] text-gunmetal">{total} modelos</span>
             </div>
             <div className="flex items-baseline gap-2">
               <span className="mono text-3xl font-semibold text-tech-white tracking-tight">
@@ -551,19 +570,19 @@ export default function VaultPage() {
         </div>
         {loading ? (
           <p className="px-4 py-12 text-center text-gunmetal text-sm">Cargando Vault…</p>
-        ) : filtered.length === 0 ? (
+        ) : files.length === 0 ? (
           <div className="mt-3 pb-28">
             <EmptyState
               icon={Archive}
               accent={ACCENT}
-              title={files.length === 0 ? 'Vault vacío' : 'Sin resultados'}
+              title={total === 0 && !debouncedQuery ? 'Vault vacío' : 'Sin resultados'}
               hint={
-                files.length === 0
+                total === 0 && !debouncedQuery
                   ? 'Sube tu primer .3mf para tener tus modelos organizados aquí.'
                   : 'Cambia el filtro o limpia la búsqueda.'
               }
               action={
-                isAdmin && files.length === 0 ? (
+                isAdmin && total === 0 && !debouncedQuery ? (
                   <button
                     type="button"
                     onClick={() => navigate('/vault/upload')}
@@ -576,13 +595,43 @@ export default function VaultPage() {
             />
           </div>
         ) : (
-          <ul className="mt-3 pb-28">
-            {filtered.map((f) => (
-              <li key={f.id}>
-                <VaultRow file={f} onClick={setSelected} />
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className="mt-3">
+              {files.map((f) => (
+                <li key={f.id}>
+                  <VaultRow file={f} onClick={setSelected} />
+                </li>
+              ))}
+            </ul>
+            {totalPages > 1 && (
+              <nav
+                className="px-4 pt-3 pb-28 flex items-center gap-2 text-[12px]"
+                aria-label="Paginación de modelos"
+              >
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="btn btn-ghost btn-sm disabled:opacity-30"
+                  aria-label="Página anterior"
+                >
+                  ‹
+                </button>
+                <span className="mono text-gunmetal flex-1 text-center">
+                  Página {page} de {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="btn btn-ghost btn-sm disabled:opacity-30"
+                  aria-label="Página siguiente"
+                >
+                  ›
+                </button>
+              </nav>
+            )}
+          </>
         )}
         {isAdmin && (
           <button
@@ -636,7 +685,7 @@ export default function VaultPage() {
           <span className="text-gunmetal-dim shrink-0">›</span>
           <span className="text-sm font-semibold text-tech-white whitespace-nowrap">Galería</span>
           <span className="mono text-[10px] px-1.5 py-0.5 rounded-sm bg-white/5 border border-[var(--color-border)] text-steel ml-1">
-            {files.length} modelos
+            {total} modelos
           </span>
         </div>
         {isAdmin && (
@@ -665,24 +714,26 @@ export default function VaultPage() {
         </div>
         <span className="flex-1" />
         <span className="mono text-[11px] text-gunmetal">
-          {filtered.length} de {files.length} modelos
+          {total === 0
+            ? 'Sin modelos'
+            : `${total} modelo${total === 1 ? '' : 's'} · página ${page} de ${totalPages}`}
         </span>
       </div>
 
       {loading ? (
         <p className="px-6 py-16 text-center text-gunmetal text-sm">Cargando Vault…</p>
-      ) : filtered.length === 0 ? (
+      ) : files.length === 0 ? (
         <EmptyState
           icon={Archive}
           accent={ACCENT}
-          title={files.length === 0 ? 'Vault vacío' : 'Sin resultados'}
+          title={total === 0 && !debouncedQuery ? 'Vault vacío' : 'Sin resultados'}
           hint={
-            files.length === 0
+            total === 0 && !debouncedQuery
               ? 'Sube tu primer .3mf para tener tus modelos organizados aquí.'
               : 'Cambia el filtro o limpia la búsqueda.'
           }
           action={
-            isAdmin && files.length === 0 ? (
+            isAdmin && total === 0 && !debouncedQuery ? (
               <Link to="/vault/upload" className="btn btn-primary btn-sm">
                 <Upload size={13} /> Subir primer modelo
               </Link>
@@ -690,14 +741,82 @@ export default function VaultPage() {
           }
         />
       ) : (
-        <div
-          className="px-6 pb-8 grid gap-3"
-          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}
-        >
-          {filtered.map((f) => (
-            <VaultCard key={f.id} file={f} onClick={setSelected} />
-          ))}
-        </div>
+        <>
+          <div
+            className="px-6 pb-4 grid gap-3"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}
+          >
+            {files.map((f) => (
+              <VaultCard key={f.id} file={f} onClick={setSelected} />
+            ))}
+          </div>
+          {totalPages > 1 && (
+            <nav
+              className="px-6 pb-8 flex flex-wrap items-center gap-3 text-[12px]"
+              aria-label="Paginación de modelos"
+            >
+              <span className="mono text-gunmetal">
+                Página {page} de {totalPages}
+              </span>
+              <span className="mono text-gunmetal-dim">·</span>
+              <span className="mono text-gunmetal">
+                Mostrando {(page - 1) * pageSize + 1}–{(page - 1) * pageSize + files.length} de {total}
+              </span>
+              <span className="flex-1" />
+              <label className="flex items-center gap-2 text-gunmetal">
+                <span className="mono text-[10px]">Por página:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  className="bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2 py-1 text-tech-white text-[12px]"
+                >
+                  <option value={12}>12</option>
+                  <option value={24}>24</option>
+                  <option value={48}>48</option>
+                  <option value={96}>96</option>
+                </select>
+              </label>
+              <div className="inline-flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setPage(1)}
+                  disabled={page === 1}
+                  className="btn btn-ghost btn-sm disabled:opacity-30"
+                  aria-label="Primera página"
+                >
+                  ‹‹
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="btn btn-ghost btn-sm disabled:opacity-30"
+                  aria-label="Página anterior"
+                >
+                  ‹ Anterior
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="btn btn-ghost btn-sm disabled:opacity-30"
+                  aria-label="Página siguiente"
+                >
+                  Siguiente ›
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage(totalPages)}
+                  disabled={page === totalPages}
+                  className="btn btn-ghost btn-sm disabled:opacity-30"
+                  aria-label="Última página"
+                >
+                  ››
+                </button>
+              </div>
+            </nav>
+          )}
+        </>
       )}
 
       <DetailDrawer
@@ -728,7 +847,7 @@ export default function VaultPage() {
           <span className="mono">CONECTADO</span>
         </span>
         <span className="w-px h-3 bg-[var(--color-border)]" />
-        <span className="mono">{files.length} modelos</span>
+        <span className="mono">{total} modelos</span>
         <span className="mono">{fmtBytes(usedBytes)} de {fmtBytes(quotaBytes)} ({percent.toFixed(1)}%)</span>
         <span className="flex-1" />
         <span className="mono">es-CO</span>
