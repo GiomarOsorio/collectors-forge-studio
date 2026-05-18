@@ -286,12 +286,13 @@ async def upload_printed_item_image(
 async def get_printed_item_image(
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
     """
     Streamea el binario de la imagen desde MinIO con caché HTTP de 24h.
 
-    El frontend cachea el response; el cache-buster (`?v=<updated_at>`)
+    Endpoint **público** (sin JWT) porque los `<img>` tags del browser
+    no pueden enviar el header `Authorization`. La imagen es una foto
+    del producto, no info sensible. El cache-buster (`?v=<updated_at>`)
     invalida la caché cuando se sube una imagen nueva.
     """
     item = await _get_company_printed_item(db, item_id)
