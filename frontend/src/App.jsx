@@ -10,45 +10,39 @@
  *     /         → Collector's Forge Studio (lanzador de apps)
  *     /cost/*   → Aplicación Cost (calculadora de costos de impresión 3D)
  *
- * Estructura de rutas:
- * - /login                    → Página de inicio de sesión (pública)
- * - /                         → Collector's Forge Studio Home (protegida)
- * - /cost/calculator          → Calculadora de costos (protegida)
- * - /cost/quotes              → Historial de cotizaciones de cliente (protegida)
- * - /cost/manual              → Nueva cotización de cliente (protegida)
- * - /cost/printers            → Gestión de impresoras (protegida)
- * - /cost/history             → Historial de costos de impresión (protegida)
- * - /cost/settings            → Configuración de la aplicación (protegida)
- * - /settings/account         → Configuración de cuenta (protegida)
- * - /settings/company         → Perfil de empresa (protegida)
- * - /settings/users           → Gestión de usuarios (protegida)
- * - /inventory/filaments      → Filamentos del inventario (protegida)
- * - /inventory/supplies       → Insumos y accesorios del inventario (protegida)
- * - /inventory/tools          → Herramientas y suplementos del inventario (protegida)
- * - /inventory/consumables    → Consumibles de la impresora (protegida)
- * - /inventory/stock          → Todo el stock del inventario (protegida)
- * - /inventory/purchases      → Pedidos de compra (protegida)
- * - /inventory/prints         → Inventario de impresiones 3D (protegida)
- * - /inventory/io             → Importar / Exportar inventario (protegida)
- * - /slicer/upload            → Subir modelo STL / .gcode / .3mf o URL MakerWorld (protegida)
- * - /slicer/history           → Historial de trabajos de laminado (protegida)
- * - /maintenance/dashboard    → Estado general de mantenimiento (protegida)
- * - /maintenance/logs         → Historial de registros de mantenimiento (protegida)
- * - /maintenance/printers     → Gestión de impresoras de mantenimiento (protegida)
- * - /queue/                   → Cola de impresión activa (protegida)
- * - /queue/history            → Historial de trabajos completados/cancelados (protegida)
- * - /company/profile          → Perfil de empresa (protegida)
- * - /company/branding         → Marca y colores PDF (protegida)
- * - /company/templates        → Lista de templates Liquid (protegida)
- * - /company/templates/new    → Crear template (protegida)
- * - /company/templates/:id    → Editar template (protegida)
- * - /vault                    → Galería de modelos .3mf (protegida)
- * - /vault/upload             → Subir modelo .3mf (protegida, solo admins)
+ * Estructura de rutas (rutas canónicas; las versiones legacy redirigen):
+ *
+ * Públicas:
+ * - /login                       → Página de inicio de sesión
+ * - /auth/success                → Callback OIDC
+ *
+ * Protegidas:
+ * - /                            → Studio Home (lanzador de apps)
+ * - /inventory/v2                → Inventario (tabs internos: Filamentos /
+ *                                  Insumos / Herr / Consumibles / Compras)
+ * - /inventory/purchases         → Pedidos de compra (tabla)
+ * - /inventory/prints            → Disponible para venta
+ * - /inventory/io                → Importar / Exportar CSV
+ * - /cost/v2                     → Cost dashboard (tabs Cotizaciones / Historial)
+ * - /cost/calculator             → Calculadora de costos
+ * - /cost/manual                 → Nueva cotización manual
+ * - /cost/printers               → Gestión de impresoras
+ * - /cost/history                → Historial de cotizaciones internas
+ * - /cost/settings               → Tarifa eléctrica & ajustes
+ * - /settings/v2                 → Settings (Cuenta + Usuarios admin)
+ * - /slicer/v2                   → Slicer (Upload / Historial / detalle vía drawer)
+ * - /maintenance/v2              → Mantenimiento (Dashboard + Historial + CRUD)
+ * - /queue/v2                    → Cola (Activa + Historial)
+ * - /vault                       → Vault de modelos (.3mf / .gcode.3mf)
+ * - /vault/upload/v2             → Subir modelo (admin)
+ * - /company/v2                  → Compañía (admin — Perfil / Marca / Templates)
+ * - /company/templates/new       → Crear template Liquid (admin)
+ * - /company/templates/:id       → Editar template Liquid (admin)
  *
  * @module App
  */
 
-import { BrowserRouter, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { lazy, Suspense, useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -61,34 +55,22 @@ import AuthSuccess from './pages/AuthSuccess';
 const StudioHomePage           = lazy(() => import('./pages/StudioHomePage'));
 const CalculatorPage           = lazy(() => import('./pages/CalculatorPage'));
 const ManualQuotePage          = lazy(() => import('./pages/ManualQuotePage'));
-const QuotesPage               = lazy(() => import('./pages/QuotesPage'));
 const PrintersPage             = lazy(() => import('./pages/PrintersPage'));
 const HistoryPage              = lazy(() => import('./pages/HistoryPage'));
 const CostSettingsPage         = lazy(() => import('./pages/CostSettingsPage'));
 const SettingsPage             = lazy(() => import('./pages/settings/SettingsPage'));
-const InventoryStockPage       = lazy(() => import('./pages/inventory/InventoryStockPage'));
 const InventoryPage            = lazy(() => import('./pages/inventory/InventoryPage'));
 const CostPage                 = lazy(() => import('./pages/cost/CostPage'));
 const SlicerPage               = lazy(() => import('./pages/slicer/SlicerPage'));
-const QueuePageV2              = lazy(() => import('./pages/queue/QueuePageV2'));
-const MaintenancePage        = lazy(() => import('./pages/maintenance/MaintenancePage'));
-const VaultPage              = lazy(() => import('./pages/vault/VaultPage'));
-const CompanyPage            = lazy(() => import('./pages/company/CompanyPage'));
-const CalculatorPageV2         = lazy(() => import('./pages/cost/CalculatorPageV2'));
-const InventoryPurchasesPage   = lazy(() => import('./pages/inventory/InventoryPurchasesPage'));
-const InventoryFilamentsPage   = lazy(() => import('./pages/inventory/InventoryFilamentsPage'));
-const InventorySuppliesPage    = lazy(() => import('./pages/inventory/InventorySuppliesPage'));
-const InventoryToolsPage       = lazy(() => import('./pages/inventory/InventoryToolsPage'));
-const InventoryPrintsPage      = lazy(() => import('./pages/inventory/InventoryPrintsPage'));
-const InventoryConsumablesPage  = lazy(() => import('./pages/inventory/InventoryConsumablesPage'));
-const InventoryImportExportPage= lazy(() => import('./pages/inventory/InventoryImportExportPage'));
-const SlicerUploadPage         = lazy(() => import('./pages/slicer/SlicerUploadPage'));
-const SlicerHistoryPage        = lazy(() => import('./pages/slicer/SlicerHistoryPage'));
-const SlicerJobDetailPage      = lazy(() => import('./pages/slicer/SlicerJobDetailPage'));
 const QueuePage                = lazy(() => import('./pages/queue/QueuePage'));
-const QueueHistoryPage         = lazy(() => import('./pages/queue/QueueHistoryPage'));
+const MaintenancePage          = lazy(() => import('./pages/maintenance/MaintenancePage'));
+const VaultPage                = lazy(() => import('./pages/vault/VaultPage'));
+const VaultUploadPage          = lazy(() => import('./pages/vault/VaultUploadPage'));
+const CompanyPage              = lazy(() => import('./pages/company/CompanyPage'));
 const CompanyTemplateEditorPage= lazy(() => import('./pages/company/CompanyTemplateEditorPage'));
-const VaultUploadPage        = lazy(() => import('./pages/vault/VaultUploadPage'));
+const InventoryPurchasesPage   = lazy(() => import('./pages/inventory/InventoryPurchasesPage'));
+const InventoryPrintsPage      = lazy(() => import('./pages/inventory/InventoryPrintsPage'));
+const InventoryImportExportPage= lazy(() => import('./pages/inventory/InventoryImportExportPage'));
 
 /**
  * Componente guardia de ruta privada.
@@ -117,6 +99,21 @@ function AdminRoute({ children }) {
   if (loading) return <div className="flex items-center justify-center h-screen" style={{ color: '#4B4F55' }}>Cargando...</div>;
   if (!user) return <Navigate to="/login" />;
   return user.role === 'admin' ? children : <Navigate to="/" />;
+}
+
+/**
+ * Redirect que preserva los query params del request original.
+ *
+ * Diferente de `<Navigate to="/x" replace />`: ese descarta el `?foo=bar`
+ * de la URL al redirigir. Cuando la ruta destino consume search params
+ * (ej. `/cost/calculator?weight_grams=245`), necesitamos conservarlos
+ * o el flujo se rompe silenciosamente.
+ *
+ * @param {{ to: string }} props - Path destino sin query.
+ */
+function RedirectPreservingSearch({ to }) {
+  const { search } = useLocation();
+  return <Navigate to={{ pathname: to, search }} replace />;
 }
 
 /**
@@ -152,27 +149,32 @@ function AppRoutes() {
         {/* Home: dashboard de Collector's Forge Studio */}
         <Route path="/" element={<StudioHomePage />} />
 
-        {/* Inventario */}
+        {/* Inventario — los 5 tabs viejos (filaments/supplies/tools/
+            consumables/stock) se absorbieron en los tabs internos de
+            InventoryPage v2. Mantenemos redirects para bookmarks. */}
         <Route path="/inventory">
           <Route index element={<Navigate to="/inventory/v2" replace />} />
           <Route path="v2" element={<InventoryPage />} />
-          <Route path="filaments" element={<InventoryFilamentsPage />} />
-          <Route path="supplies" element={<InventorySuppliesPage />} />
-          <Route path="tools" element={<InventoryToolsPage />} />
-          <Route path="consumables" element={<InventoryConsumablesPage />} />
-          <Route path="stock" element={<InventoryStockPage />} />
+          <Route path="filaments"   element={<RedirectPreservingSearch to="/inventory/v2" />} />
+          <Route path="supplies"    element={<RedirectPreservingSearch to="/inventory/v2" />} />
+          <Route path="tools"       element={<RedirectPreservingSearch to="/inventory/v2" />} />
+          <Route path="consumables" element={<RedirectPreservingSearch to="/inventory/v2" />} />
+          <Route path="stock"       element={<RedirectPreservingSearch to="/inventory/v2" />} />
           <Route path="purchases" element={<InventoryPurchasesPage />} />
-          <Route path="prints" element={<InventoryPrintsPage />} />
-          <Route path="io" element={<InventoryImportExportPage />} />
+          <Route path="prints"    element={<InventoryPrintsPage />} />
+          <Route path="io"        element={<InventoryImportExportPage />} />
         </Route>
 
-        {/* Cost */}
+        {/* Cost — QuotesPage V1 absorbida por CostPage V2 (tab Cotizaciones).
+            CalculatorPageV2 era incompleto y se borró; queda solo la V1
+            funcional en /cost/calculator. Redirect /cost/calculator/v2 → V1
+            mientras se hace el visual refresh completo en un PR futuro. */}
         <Route path="/cost">
           <Route index element={<Navigate to="/cost/v2" replace />} />
           <Route path="v2" element={<CostPage />} />
-          <Route path="calculator/v2" element={<CalculatorPageV2 />} />
+          <Route path="calculator/v2" element={<RedirectPreservingSearch to="/cost/calculator" />} />
           <Route path="calculator" element={<CalculatorPage />} />
-          <Route path="quotes" element={<QuotesPage />} />
+          <Route path="quotes" element={<RedirectPreservingSearch to="/cost/v2" />} />
           <Route path="manual" element={<ManualQuotePage />} />
           <Route path="printers" element={<PrintersPage />} />
           <Route path="history" element={<HistoryPage />} />
@@ -190,13 +192,14 @@ function AppRoutes() {
           <Route path="company" element={<Navigate to="/company/v2" replace />} />
         </Route>
 
-        {/* Slicer */}
+        {/* Slicer — Upload/History/JobDetail absorbidos por tabs+drawer
+            de SlicerPage v2. Redirects para bookmarks viejos. */}
         <Route path="/slicer">
           <Route index element={<Navigate to="/slicer/v2" replace />} />
           <Route path="v2" element={<SlicerPage />} />
-          <Route path="upload" element={<SlicerUploadPage />} />
-          <Route path="history" element={<SlicerHistoryPage />} />
-          <Route path="jobs/:id" element={<SlicerJobDetailPage />} />
+          <Route path="upload"   element={<RedirectPreservingSearch to="/slicer/v2" />} />
+          <Route path="history"  element={<RedirectPreservingSearch to="/slicer/v2" />} />
+          <Route path="jobs/:id" element={<RedirectPreservingSearch to="/slicer/v2" />} />
         </Route>
 
         {/* Mantenimiento — V2 reemplaza por completo Dashboard/Logs/Printers V1
@@ -210,12 +213,13 @@ function AppRoutes() {
           <Route path="printers" element={<Navigate to="/maintenance/v2" replace />} />
         </Route>
 
-        {/* Queue */}
+        {/* Queue — V1 (QueuePage + QueueHistoryPage) absorbidas por tabs
+            internos de la v2 (Activa / Historial). Redirects para bookmarks. */}
         <Route path="/queue">
           <Route index element={<Navigate to="/queue/v2" replace />} />
-          <Route path="v2" element={<QueuePageV2 />} />
-          <Route path="legacy" element={<QueuePage />} />
-          <Route path="history" element={<QueueHistoryPage />} />
+          <Route path="v2" element={<QueuePage />} />
+          <Route path="legacy"  element={<RedirectPreservingSearch to="/queue/v2" />} />
+          <Route path="history" element={<RedirectPreservingSearch to="/queue/v2" />} />
         </Route>
 
         {/* Compañía (solo admin) — Profile/Branding/Templates list reemplazadas
