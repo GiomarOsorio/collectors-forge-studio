@@ -4,7 +4,7 @@
 
 **Fecha**: 2026-05-13
 **Autor**: Giomar + Claude
-**Estado**: propuesta — aprobada con ajustes (2026-05-13)
+**Estado**: ✅ **EJECUTADO** — propuesta aprobada con ajustes (2026-05-13) y completada en mayo 2026. Las "Fases" referenciadas abajo son las de esta propuesta original, no las fases del plan de port a Claude Design v2 (que vivió en `status.md` hasta su limpieza post-implementación). El plan v2 también está completo: hoy la app no tiene cicatriz V1/V2, las rutas son canónicas (`/inventory`, `/cost`, `/queue`, etc.) y las pages V1 ya no existen.
 
 ## Decisiones tomadas
 
