@@ -515,15 +515,26 @@ crontab -e
 0 2 * * * mkdir -p ~/backups && podman exec cfs-postgres pg_dump -U collectorsforge -Fc collectorsforge > ~/backups/collectorsforge-$(date +\%Y\%m\%d).dump 2>> ~/backups/backup.log
 ```
 
-### Copiar archivos estáticos (logos, imágenes)
+### Backup de los binarios en MinIO
+
+Los binarios de la app (thumbnails del Vault, logos de empresa,
+imágenes de PrintedItem, archivos `.3mf` del Vault) viven en MinIO
+(bucket `cfs-models`), no en `/app/static`. Para backup completo de
+los objetos hay que sincronizar el bucket entero — preferiblemente con
+`mc mirror` desde turtleStorage:
 
 ```bash
-# Backup de imágenes
-podman cp cfs-backend:/app/static ~/backups/static-$(date +%Y%m%d)
-
-# Restaurar
-podman cp ~/backups/static-20260228/. cfs-backend:/app/static/
+# En turtleStorage (donde corre MinIO)
+mc alias set cfs-local http://localhost:9000 $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
+mc mirror cfs-local/cfs-models ~/backups/cfs-models-$(date +%Y%m%d)/
 ```
+
+> **Nota:** El refactor a MinIO eliminó el volumen `/app/static`. Si
+> migras desde una versión muy vieja del repo, los binarios que estaban
+> en `/app/static` ya no se restauran al disco — hay que re-subir el
+> logo (`/company`) y las imágenes de printed_items (`/inventory`)
+> desde la UI. Los thumbnails del Vault se re-extraen automáticamente
+> por el backfill al arrancar el backend.
 
 ---
 
@@ -570,8 +581,8 @@ podman exec cfs-postgres \
   pg_dump -U collectorsforge -Fc collectorsforge \
   > ~/migration-backup/collectorsforge.dump
 
-# 2. Backup de archivos estáticos
-podman cp cfs-backend:/app/static ~/migration-backup/static
+# 2. Backup de los binarios en MinIO (corre en turtleStorage, no en este host)
+ssh turtleStorage "mc mirror cfs-local/cfs-models ~/migration-backup/cfs-models/"
 
 # 3. Copiar variables de entorno
 cp ~/CollectorsForgeENV ~/migration-backup/CollectorsForgeENV
@@ -619,8 +630,8 @@ cat ~/migration-backup/collectorsforge.dump | \
 cd ~/collectors-forge-studio
 ./deploy.sh
 
-# 6. Restaurar archivos estáticos
-podman cp ~/migration-backup/static/. cfs-backend:/app/static/
+# 6. Restaurar los objetos de MinIO en el bucket destino
+ssh turtleStorage-destino "mc mirror ~/migration-backup/cfs-models/ cfs-local/cfs-models/"
 ```
 
 ---
