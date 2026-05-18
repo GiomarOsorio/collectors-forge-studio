@@ -6,6 +6,28 @@ Calcula costos de impresión con precisión Decimal (material, electricidad, dep
 
 ---
 
+## Sobre este proyecto
+
+Este es un **proyecto personal** que armé para mi propio negocio de
+impresión 3D. La gran mayoría del código fue escrita con asistencia de
+IA — específicamente con [Claude Code](https://claude.com/claude-code),
+el CLI de Anthropic, que actuó como par programmer durante todo el
+desarrollo.
+
+No pretende competir ni reemplazar a proyectos serios y consolidados
+del ecosistema (PrintFarm, Mainsail, OctoPrint, Klipper, etc.). Es una
+herramienta hecha a mi medida, pensada para el flujo de trabajo de un
+estudio pequeño con BambuLab P2S y un negocio en su etapa inicial.
+
+Si algo de lo que ves aquí te resulta útil, **siéntete libre de hacer
+un fork** y modificarlo para tus necesidades, agregarle funciones,
+adaptarlo a otra impresora o lo que se te ocurra. La licencia AGPL-3.0
+pide que las modificaciones que ofrezcas como servicio se publiquen
+bajo la misma licencia, pero más allá de eso, el código está aquí para
+que lo uses.
+
+---
+
 ## Aplicaciones
 
 | App | Ruta | Color | Descripción |
