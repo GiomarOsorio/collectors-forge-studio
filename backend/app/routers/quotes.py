@@ -12,9 +12,12 @@ Endpoints disponibles bajo el prefijo /api/quotes:
 """
 
 import asyncio
+import logging
 import re
 from decimal import Decimal
 from typing import List, Optional
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
@@ -34,6 +37,7 @@ from app.services.auth import get_current_user, get_operator_user
 from app.services.calculator import calculate_cost
 from app.services.pdf_generator import generate_quote_pdf
 from app.services.exchange_rate import get_usd_to_cop
+from app.services.vault_storage import download_file
 
 router = APIRouter(prefix="/api/quotes", tags=["quotes"])
 
@@ -368,7 +372,14 @@ async def download_quote_pdf(
     company_result = await db.execute(select(Company).where(Company.id == _uuid.UUID("00000000-0000-0000-0000-000000000001")))
     company = company_result.scalar_one_or_none()
 
-    pdf_bytes = await asyncio.to_thread(generate_quote_pdf, quote, company)
+    logo_bytes = None
+    if company and company.logo_key:
+        try:
+            logo_bytes = await download_file(company.logo_key)
+        except Exception as exc:
+            logger.warning("No se pudo descargar logo %s para PDF: %s", company.logo_key, exc)
+
+    pdf_bytes = await asyncio.to_thread(generate_quote_pdf, quote, company, logo_bytes)
     safe_name = re.sub(r"[^\w\-]", "_", quote.piece_name)
     filename = f"cotizacion_{safe_name}_{quote.id}.pdf"
 

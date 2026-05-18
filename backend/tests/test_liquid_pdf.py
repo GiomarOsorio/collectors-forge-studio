@@ -82,7 +82,7 @@ def _make_company(**overrides):
     c.phone = "+57 300 000 0000"
     c.contact_email = "hola@empresa.com"
     c.nit = "900.000.000-0"
-    c.logo_url = None
+    c.logo_key = None
     c.pdf_palette = None
     c.pdf_terms = None
     for k, v in overrides.items():

@@ -37,12 +37,11 @@ class TestPrintedItemCreate:
         assert item.color      is None
 
     def test_todos_los_campos(self):
-        """Todos los campos se guardan correctamente."""
+        """Todos los campos (excepto imagen) se guardan correctamente."""
         item = PrintedItemCreate(
             name="Figura BambuLab",
             category="Figuras",
             description="Figura de prueba impresa en PLA",
-            image_url="/static/prints/figura.jpg",
             quantity=5,
             unit_price=Decimal("12.50"),
             material="PLA",
@@ -94,11 +93,6 @@ class TestPrintedItemCreate:
         """category de más de 100 caracteres debe fallar."""
         with pytest.raises(ValidationError):
             PrintedItemCreate(name="Pieza", category="C" * 101)
-
-    def test_image_url_max_500_chars(self):
-        """image_url de más de 500 caracteres debe fallar."""
-        with pytest.raises(ValidationError):
-            PrintedItemCreate(name="Pieza", image_url="/" + "x" * 500)
 
     def test_material_max_100_chars(self):
         """material de más de 100 caracteres debe fallar."""
@@ -191,9 +185,9 @@ class TestPrintedItemImageResponse:
     """PrintedItemImageResponse almacena la URL de la imagen."""
 
     def test_image_url_almacenada(self):
-        """image_url se guarda correctamente."""
-        resp = PrintedItemImageResponse(image_url="/static/prints/abc123.jpg")
-        assert resp.image_url == "/static/prints/abc123.jpg"
+        """image_url (URL del proxy MinIO) se guarda correctamente."""
+        resp = PrintedItemImageResponse(image_url="/api/inventory/prints/7/image?v=1700000000")
+        assert resp.image_url == "/api/inventory/prints/7/image?v=1700000000"
 
     def test_image_url_requerida(self):
         """image_url es obligatoria."""

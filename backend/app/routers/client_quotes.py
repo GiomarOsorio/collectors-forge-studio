@@ -38,6 +38,7 @@ from app.limiter import limiter
 from app.services.auth import get_current_user, get_operator_user
 from app.services.exchange_rate import get_usd_to_cop
 from app.services.pdf_generator import generate_client_quote_pdf
+from app.services.vault_storage import download_file
 
 router = APIRouter(prefix="/api/client-quotes", tags=["client-quotes"])
 
@@ -227,6 +228,14 @@ async def download_client_quote_pdf(
     # obtener la tasa actual como respaldo.
     usd_rate = float(cq.usd_to_cop_rate) if cq.usd_to_cop_rate else await get_usd_to_cop()
 
+    # Pre-descargar el logo de MinIO (best-effort) para incrustarlo en el PDF.
+    logo_bytes = None
+    if company and company.logo_key:
+        try:
+            logo_bytes = await download_file(company.logo_key)
+        except Exception as exc:
+            logger.warning("No se pudo descargar logo %s para PDF: %s", company.logo_key, exc)
+
     # Buscar template activo (Liquid + WeasyPrint) si existe
     tpl_result = await db.execute(
         select(CompanyTemplate).where(
@@ -240,7 +249,7 @@ async def download_client_quote_pdf(
         try:
             from app.services.liquid_pdf import render_client_quote_pdf
             pdf_bytes = await asyncio.to_thread(
-                render_client_quote_pdf, active_tpl.content, cq, company, usd_rate
+                render_client_quote_pdf, active_tpl.content, cq, company, usd_rate, logo_bytes
             )
         except Exception as exc:
             # Fallback a ReportLab si WeasyPrint no está disponible o falla.
@@ -251,9 +260,13 @@ async def download_client_quote_pdf(
                 exc,
                 exc_info=True,
             )
-            pdf_bytes = await asyncio.to_thread(generate_client_quote_pdf, cq, company, usd_rate)
+            pdf_bytes = await asyncio.to_thread(
+                generate_client_quote_pdf, cq, company, usd_rate, logo_bytes
+            )
     else:
-        pdf_bytes = await asyncio.to_thread(generate_client_quote_pdf, cq, company, usd_rate)
+        pdf_bytes = await asyncio.to_thread(
+            generate_client_quote_pdf, cq, company, usd_rate, logo_bytes
+        )
 
     safe_client = re.sub(r"[^\w\-]", "_", cq.client_name)
     filename = f"cotizacion_COT-{cq.id:04d}_{safe_client}.pdf"

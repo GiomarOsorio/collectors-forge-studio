@@ -39,7 +39,9 @@ class Company(Base):
     phone: Mapped[str] = mapped_column(String(50), nullable=True)
     contact_email: Mapped[str] = mapped_column(String(100), nullable=True)
     nit: Mapped[str] = mapped_column(String(50), nullable=True)
-    logo_url: Mapped[str] = mapped_column(String(500), nullable=True)
+    # Key del logo en MinIO (formato `companies/{uuid}.png`). El response
+    # del API expone `logo_url` apuntando al proxy `GET /api/company/logo`.
+    logo_key: Mapped[str] = mapped_column(String(500), nullable=True)
     # Paleta de colores dinámica para PDF: [{name: str, hex: str}, ...]
     # Accesible en templates Liquid como {{ palette.nombre }}
     pdf_palette: Mapped[list] = mapped_column(JSONB, nullable=True)

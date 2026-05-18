@@ -496,7 +496,7 @@ export default function VaultPage() {
       <div className="flex-1 min-w-[180px] flex">
         <KPI
           label="Con plate render"
-          value={files.filter((f) => f.local_thumbnail_path).length}
+          value={files.filter((f) => f.local_thumbnail_url).length}
           unit="docs"
           sub="thumbnails locales"
           accent="#94A0AE"

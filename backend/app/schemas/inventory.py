@@ -260,7 +260,7 @@ class InventoryItemExport(BaseModel):
 
 class PrintedItemExport(BaseModel):
     """
-    Datos de un ítem de impresión para exportar (sin id, company_id, image_url ni timestamps).
+    Datos de un ítem de impresión para exportar (sin id, image_key ni timestamps).
     """
     name: str
     category: Optional[str] = None
