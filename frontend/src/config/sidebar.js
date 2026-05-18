@@ -2,8 +2,8 @@
  * @file Configuración central de la sidebar unificada de Collector's Forge Studio.
  *
  * Define las apps que aparecen en la sidebar, su ícono, color, items internos
- * y la clase de tailwind para el item activo. Reemplaza los 8 layouts por app
- * con una estructura única consultada desde StudioSidebar.
+ * y la clase de tailwind para el item activo. Una estructura única consultada
+ * desde StudioSidebar.
  *
  * @module config/sidebar
  */
@@ -58,11 +58,11 @@ export const SIDEBAR_APPS = [
     color: '#2DD4BF',
     activeClass: 'bg-forge-teal/15 text-forge-teal',
     items: [
-      { to: '/cost/v2',            icon: FileText,   label: 'Cotizaciones', end: true },
-      { to: '/cost/calculator/v2', icon: Calculator, label: 'Calcular pieza' },
-      { to: '/cost/manual',        icon: FileEdit,   label: 'Nueva cotización' },
-      { to: '/cost/printers',      icon: Printer,    label: 'Impresoras' },
-      { to: '/cost/settings',      icon: Settings,   label: 'Tarifa & ajustes' },
+      { to: '/cost',             icon: FileText,   label: 'Cotizaciones', end: true },
+      { to: '/cost/calculator',  icon: Calculator, label: 'Calcular pieza' },
+      { to: '/cost/manual',      icon: FileEdit,   label: 'Nueva cotización' },
+      { to: '/cost/printers',    icon: Printer,    label: 'Impresoras' },
+      { to: '/cost/settings',    icon: Settings,   label: 'Tarifa & ajustes' },
     ],
   },
   {
@@ -73,7 +73,7 @@ export const SIDEBAR_APPS = [
     activeClass: 'bg-blue-500/15 text-blue-400',
     badgeKey: 'lowStock',
     items: [
-      { to: '/inventory/v2',        icon: Layers,         label: 'Resumen', end: true },
+      { to: '/inventory',           icon: Layers,         label: 'Resumen', end: true },
       { to: '/inventory/purchases', icon: ShoppingCart,   label: 'Pedidos' },
       { to: '/inventory/prints',    icon: Printer,        label: 'Disponible para venta' },
       { to: '/inventory/io',        icon: ArrowLeftRight, label: 'Importar / Exportar' },
@@ -86,7 +86,7 @@ export const SIDEBAR_APPS = [
     color: '#F59E0B',
     activeClass: 'bg-amber-400/15 text-amber-400',
     items: [
-      { to: '/slicer/v2', icon: Layers, label: 'Slicer', end: true },
+      { to: '/slicer', icon: Layers, label: 'Slicer', end: true },
     ],
   },
   {
@@ -96,11 +96,8 @@ export const SIDEBAR_APPS = [
     color: '#8B5CF6',
     activeClass: 'bg-violet-500/15 text-violet-400',
     badgeKey: 'overdueMaintenance',
-    // V1 dashboard/logs/printers reemplazado por completo por /maintenance/v2:
-    // historial + CRUD logs + edición inline de horas viven todos dentro de
-    // MaintenancePage (tabs + drawers). Sin items secundarios.
     items: [
-      { to: '/maintenance/v2', icon: LayoutDashboard, label: 'Dashboard', end: true },
+      { to: '/maintenance', icon: LayoutDashboard, label: 'Dashboard', end: true },
     ],
   },
   {
@@ -111,8 +108,7 @@ export const SIDEBAR_APPS = [
     activeClass: 'bg-teal-500/15 text-teal-400',
     badgeKey: 'pendingQueue',
     items: [
-      { to: '/queue/v2',      icon: ListOrdered, label: 'Cola activa', end: true },
-      { to: '/queue/history', icon: Clock,       label: 'Historial' },
+      { to: '/queue', icon: ListOrdered, label: 'Cola', end: true },
     ],
   },
   {
@@ -133,11 +129,8 @@ export const SIDEBAR_APPS = [
     color: '#6366F1',
     activeClass: 'bg-indigo-500/15 text-indigo-400',
     adminOnly: true,
-    // V1 Profile/Branding/Templates reemplazadas por drawers dentro de
-    // /company/v2. El editor de templates queda como ruta dedicada,
-    // accesible vía botón "Editar" del TemplatesDrawer.
     items: [
-      { to: '/company/v2', icon: Building2, label: 'Resumen', end: true },
+      { to: '/company', icon: Building2, label: 'Resumen', end: true },
     ],
   },
 ];
@@ -154,11 +147,8 @@ export const SETTINGS_APP = {
   icon: Settings,
   color: '#2DD4BF',
   activeClass: 'bg-forge-teal/15 text-forge-teal',
-  // V1 Cuenta/Empresa/Usuarios reemplazadas por drawers dentro de
-  // /settings/v2. Empresa redirige a /company/v2 (ya tenía el form de
-  // perfil migrado en Fase 6).
   items: [
-    { to: '/settings/v2', icon: Settings, label: 'Configuración', end: true },
+    { to: '/settings', icon: Settings, label: 'Configuración', end: true },
   ],
 };
 

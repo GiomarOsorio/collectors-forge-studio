@@ -1,17 +1,17 @@
 /**
- * @file Página rediseñada de Compañía (Claude Design v2).
+ * @file Página de la app Compañía (solo admin).
  *
- * Reemplaza por completo la V1 de:
- *   - `/company/profile`  → `ProfileFormDrawer` integrado
- *   - `/company/branding` → `BrandingFormDrawer` integrado
- *   - `/company/templates` → `TemplatesDrawer` integrado (lista + acciones)
+ * Dashboard con drawers integrados:
+ *   - `ProfileFormDrawer` — nombre, slogan, logo, NIT, contacto
+ *   - `BrandingFormDrawer` — paleta de colores PDF + términos de pago
+ *   - `TemplatesDrawer` — lista de templates Liquid (set default, preview,
+ *     editar, eliminar)
  *
- * El editor de templates Liquid sigue siendo una ruta dedicada
+ * El editor de templates Liquid es una ruta dedicada
  * (`/company/templates/new` y `/company/templates/:id`) por su tamaño
- * (textarea HTML grande + preview + validate). Migrarlo a v2 se hará en
- * un PR aparte (chunk B futuro).
+ * (textarea HTML grande + preview + validate).
  *
- * Solo admin. Los no-admins redirigen a `/` desde la AdminRoute.
+ * Los no-admins redirigen a `/` desde la AdminRoute.
  *
  * @module pages/company/CompanyPage
  */

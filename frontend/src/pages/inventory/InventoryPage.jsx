@@ -1,13 +1,11 @@
 /**
- * @file Página de inventario rediseñada (Claude Design port — Día 2).
+ * @file Página de la app Inventario.
  *
- * Reemplaza la antigua `InventoryStockPage` con un layout de pestañas:
- *  Filamentos · Insumos · Herramientas · Consumibles · Compras
+ * Layout de pestañas: Filamentos · Insumos · Herramientas · Consumibles · Compras.
  *
  * La pestaña Filamentos tiene el tratamiento completo (KPIs, toolbar con
  * search + chips de material + sort + toggle grid/table, grupos por stock
- * bajo y por material, drawer de detalle). Las otras pestañas muestran un
- * placeholder mientras se portan en días siguientes.
+ * bajo y por material, drawer de detalle con form de edición).
  *
  * Usa primitives de `components/ui/` (Card, Chip, KPI, Sparkline, Swatch,
  * DetailDrawer, Button) y el adapter `utils/inventoryAdapter.js`.

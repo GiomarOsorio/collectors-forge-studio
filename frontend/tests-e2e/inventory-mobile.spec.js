@@ -16,7 +16,7 @@ test.describe('Inventory mobile — Claude Design fidelity', () => {
   test.beforeEach(async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'mobile-iphone12', 'Solo proyecto mobile');
     await loginAsDev(page);
-    await page.goto('/inventory/v2');
+    await page.goto('/inventory');
     await page.waitForLoadState('networkidle');
   });
 
@@ -66,7 +66,7 @@ test.describe('Inventory mobile — Claude Design fidelity', () => {
 
   test('cambio entre apps via bottom nav', async ({ page }) => {
     await page.getByRole('navigation', { name: /navegación principal/i }).getByText('Cola').click();
-    await page.waitForURL('**/queue/v2');
-    expect(page.url()).toContain('/queue/v2');
+    await page.waitForURL('**/queue');
+    expect(page.url()).toContain('/queue');
   });
 });

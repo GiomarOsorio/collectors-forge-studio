@@ -32,7 +32,7 @@ test.describe('Auth — login + bypass dev', () => {
   });
 
   test('ruta privada sin token redirige a /login', async ({ page }) => {
-    await page.goto('/inventory/v2');
+    await page.goto('/inventory');
     await page.waitForURL((url) => url.pathname === '/login', { timeout: 10_000 });
     await expect(page.getByRole('button', { name: /bypass dev/i })).toBeVisible();
   });
