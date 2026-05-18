@@ -65,9 +65,7 @@ const QuotesPage               = lazy(() => import('./pages/QuotesPage'));
 const PrintersPage             = lazy(() => import('./pages/PrintersPage'));
 const HistoryPage              = lazy(() => import('./pages/HistoryPage'));
 const SettingsPage             = lazy(() => import('./pages/SettingsPage'));
-const CuentaPage               = lazy(() => import('./pages/settings/CuentaPage'));
-const EmpresaPage              = lazy(() => import('./pages/settings/EmpresaPage'));
-const UsuariosPage             = lazy(() => import('./pages/settings/UsuariosPage'));
+const SettingsPageV2           = lazy(() => import('./pages/settings/SettingsPageV2'));
 const InventoryStockPage       = lazy(() => import('./pages/inventory/InventoryStockPage'));
 const InventoryPage            = lazy(() => import('./pages/inventory/InventoryPage'));
 const CostPage                 = lazy(() => import('./pages/cost/CostPage'));
@@ -181,12 +179,15 @@ function AppRoutes() {
           <Route path="settings" element={<SettingsPage />} />
         </Route>
 
-        {/* Settings */}
+        {/* Settings — V1 (Cuenta / Empresa / Usuarios) reemplazadas por
+            SettingsPageV2 con drawers integrados. /settings/company
+            redirige a /company/v2 (Fase 6 ya tenía el ProfileFormDrawer). */}
         <Route path="/settings">
-          <Route index element={<Navigate to="/settings/account" replace />} />
-          <Route path="account" element={<CuentaPage />} />
-          <Route path="company" element={<AdminRoute><EmpresaPage /></AdminRoute>} />
-          <Route path="users" element={<AdminRoute><UsuariosPage /></AdminRoute>} />
+          <Route index element={<Navigate to="/settings/v2" replace />} />
+          <Route path="v2" element={<SettingsPageV2 />} />
+          <Route path="account" element={<Navigate to="/settings/v2" replace />} />
+          <Route path="users"   element={<Navigate to="/settings/v2" replace />} />
+          <Route path="company" element={<Navigate to="/company/v2" replace />} />
         </Route>
 
         {/* Slicer */}

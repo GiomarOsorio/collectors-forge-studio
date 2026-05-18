@@ -25,8 +25,6 @@ import {
   Settings,
   ShoppingCart,
   Upload,
-  User,
-  Users,
   Wrench,
 } from 'lucide-react';
 
@@ -156,10 +154,11 @@ export const SETTINGS_APP = {
   icon: Settings,
   color: '#2DD4BF',
   activeClass: 'bg-forge-teal/15 text-forge-teal',
+  // V1 Cuenta/Empresa/Usuarios reemplazadas por drawers dentro de
+  // /settings/v2. Empresa redirige a /company/v2 (ya tenía el form de
+  // perfil migrado en Fase 6).
   items: [
-    { to: '/settings/account', icon: User,      label: 'Cuenta' },
-    { to: '/settings/company', icon: Building2, label: 'Empresa',  adminOnly: true },
-    { to: '/settings/users',   icon: Users,     label: 'Usuarios', adminOnly: true },
+    { to: '/settings/v2', icon: Settings, label: 'Configuración', end: true },
   ],
 };
 
