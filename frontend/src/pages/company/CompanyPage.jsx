@@ -13,7 +13,7 @@
  *
  * Solo admin. Los no-admins redirigen a `/` desde la AdminRoute.
  *
- * @module pages/company/CompanyPageV2
+ * @module pages/company/CompanyPage
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -677,7 +677,7 @@ function TemplatesDrawer({ open, templates, onClose, onChanged, isMobile }) {
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
-export default function CompanyPageV2() {
+export default function CompanyPage() {
   const isMobile = useIsMobile();
   const { openSidebar } = useOutletContext() || {};
   const { user } = useAuth();
