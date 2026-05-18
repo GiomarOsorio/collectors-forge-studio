@@ -58,7 +58,14 @@ Las migraciones están en `backend/alembic/versions/`. Se aplican con `alembic u
 | `c5d6e7f8a9b0` | `c5d6e7f8a9b0_merge_three_heads.py` | Merge de tres heads: `model_files`, `printed_items`, `usd_rate` |
 | `c6d7e8f9a0b1` | `c6d7e8f9a0b1_add_plates_data.py` | Campo `plates_data` JSONB en `slicing_jobs` para multi-placa |
 | `g1h2i3j4k5l6` | `g1h2i3j4k5l6_add_oidc_support.py` | Agrega `oidc_sub` (unique, indexed, nullable) y hace `hashed_password` nullable en `users` para soporte OIDC/JIT provisioning |
-| `h2i3j4k5l6m7` | `h2i3j4k5l6m7_remove_multitenant_add_roles.py` | **Head actual** — Elimina `company_id` de 17 tablas operativas. Reemplaza `is_admin` por `role` (`admin`/`operator`/`viewer`) en `users`. `companies` se mantiene como singleton |
+| `h2i3j4k5l6m7` | `h2i3j4k5l6m7_remove_multitenant_add_roles.py` | Elimina `company_id` de 17 tablas operativas. Reemplaza `is_admin` por `role` (`admin`/`operator`/`viewer`) en `users`. `companies` se mantiene como singleton |
+| `i3j4k5l6m7n8` | `i3j4k5l6m7n8_add_local_thumbnail_path.py` | Columna `local_thumbnail_path` en `model_files` (luego renombrada a `thumbnail_key`) |
+| `j4k5l6m7n8o9` | `j4k5l6m7n8o9_add_filament_design_fields.py` | Campos de diseño en filamentos |
+| `k5l6m7n8o9p0` | `k5l6m7n8o9p0_add_sale_price.py` | Campo `sale_price` en `inventory_items` |
+| `l6m7n8o9p0q1` | `l6m7n8o9p0q1_drop_printer_maintenance_fields.py` | Limpia campos de mantenimiento embebidos en `printers` |
+| `m7n8o9p0q1r2` | `m7n8o9p0q1r2_vault_dual_files.py` | Slots dual `source_file` + `print_file` en `model_files` |
+| `n8o9p0q1r2s3` | `n8o9p0q1r2s3_queue_vault_link.py` | FK `model_file_id` en `print_queue` |
+| `o9p0q1r2s3t4` | `o9p0q1r2s3t4_rename_storage_columns_to_minio_keys.py` | **Head actual** — Renombra `local_thumbnail_path → thumbnail_key`, `logo_url → logo_key`, `image_url → image_key` (los binarios ahora viven en MinIO, no en `/app/static`). NULLea filas existentes |
 
 **Aplicar todas las migraciones:**
 ```bash
@@ -89,7 +96,7 @@ podman exec cfs-postgres \
 | `phone` | VARCHAR(50) | Teléfono |
 | `email` | VARCHAR(200) | Correo electrónico |
 | `nit` | VARCHAR(50) | NIT o número fiscal |
-| `logo_url` | VARCHAR(500) | Ruta relativa al logo (`/static/companies/{id}/logo.ext`) |
+| `logo_key` | VARCHAR(500) | Key MinIO del logo (`companies/{uuid}.{ext}`). El API expone `logo_url` apuntando al proxy `GET /api/company/logo` |
 | `pdf_terms` | TEXT | Términos de pago para el pie de cotización |
 | `pdf_palette` | JSONB | Paleta de colores: `[{"name": "primary", "hex": "#1A1A1A"}, ...]` |
 | `created_at` | TIMESTAMP | Fecha de creación |
@@ -213,7 +220,7 @@ Stock unificado para filamentos, insumos, herramientas y cualquier material.
 | `description` | TEXT | — |
 | `unit_price` | NUMERIC(10,2) | Precio de venta |
 | `quantity` | INTEGER | Stock disponible |
-| `image_url` | VARCHAR(500) | Ruta a la imagen (`/static/prints/{id}.ext`) |
+| `image_key` | VARCHAR(500) | Key MinIO de la imagen (`prints/{uuid}.{ext}`). El API expone `image_url` apuntando al proxy `GET /api/inventory/prints/{id}/image` |
 | `notes` | TEXT | — |
 | `created_at` | TIMESTAMP | — |
 
@@ -327,18 +334,28 @@ Singleton — solo hay una fila (se consulta con `LIMIT 1`).
 
 ### `model_files`
 
-Archivos `.3mf` almacenados en MinIO (Vault de modelos).
+Archivos `.3mf` / `.gcode.3mf` almacenados en MinIO (Vault de modelos).
+Cada fila puede tener dos slots: `source_file` (`.3mf` editable) y
+`print_file` (`.gcode.3mf` laminado). Al menos uno debe estar presente.
 
 | Columna | Tipo | Descripción |
 |---|---|---|
 | `id` | INTEGER PK | — |
 | `uploaded_by` | INTEGER FK → users SET NULL | Usuario que subió el archivo (nullable) |
-| `file_key` | VARCHAR(500) | Clave del objeto en MinIO: `{uuid}-{filename}.3mf` |
-| `file_name` | VARCHAR(255) | Nombre original del archivo |
-| `file_size` | BIGINT | Tamaño en bytes |
+| `source_file_key` | VARCHAR(500) | Key MinIO del `.3mf` editable (nullable) |
+| `source_file_name` | VARCHAR(255) | Nombre original del `.3mf` editable |
+| `source_file_size` | BIGINT | Tamaño en bytes del `.3mf` editable |
+| `print_file_key` | VARCHAR(500) | Key MinIO del `.gcode.3mf` laminado (nullable) |
+| `print_file_name` | VARCHAR(255) | Nombre original del `.gcode.3mf` |
+| `print_file_size` | BIGINT | Tamaño en bytes del `.gcode.3mf` |
+| `sliced_weight_g` | NUMERIC(10,2) | Gramos de filamento (parseado del `.gcode.3mf`) |
+| `sliced_time_seconds` | INTEGER | Tiempo de impresión en segundos |
+| `sliced_printer_model` | VARCHAR(100) | Modelo de impresora declarado en el slice |
+| `sliced_filament_type` | VARCHAR(50) | Tipo de filamento (PLA/PETG/etc.) |
 | `name` | VARCHAR(200) | Nombre de display editable |
 | `description` | TEXT | — |
 | `thumbnail_url` | VARCHAR(1000) | URL externa de miniatura (MakerWorld/Printables) |
+| `thumbnail_key` | VARCHAR(500) | Key MinIO del PNG plate-render extraído del `.3mf` (`thumbnails/{id}.png`). El API expone `local_thumbnail_url` apuntando al proxy `GET /api/vault/{id}/thumbnail` |
 | `tags` | JSONB | Array de etiquetas de texto libre |
 | `source_url` | VARCHAR(1000) | URL de origen del modelo |
 | `source_platform` | VARCHAR(50) | `makerworld` \| `printables` \| `thingiverse` \| `otro` |

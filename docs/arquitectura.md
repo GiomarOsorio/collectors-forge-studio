@@ -31,7 +31,7 @@ Collector's Forge Studio es una plataforma multi-aplicación para gestión de un
                     │   cfs-frontend   │
                     │   :80 (3000)     │
                     └────────┬────────┘
-                    /api/*   │   /static/*
+                          /api/*
               ───────────────┼─────────────────
                              │
               ┌──────────────▼─────────────────┐
@@ -77,14 +77,18 @@ Cada "app" es una sección de la SPA React con su propio layout y rutas:
 
 | App | Color | Ruta base | Descripción |
 |-----|-------|-----------|-------------|
-| Cost | `#3FAF4C` | `/cost/` | Calculadora de costos de impresión |
-| Archive | `#3B82F6` | `/inventory/` | Inventario y pedidos de compra |
+| Cost | `#2DD4BF` | `/cost/` | Calculadora de costos de impresión |
+| Inventario | `#3B82F6` | `/inventory/` | Inventario y pedidos de compra |
 | Slicer | `#F59E0B` | `/slicer/` | Laminado STL / extracción G-code |
 | Mantenimiento | `#8B5CF6` | `/maintenance/` | Registro de mantenimiento |
 | Queue | `#14B8A6` | `/queue/` | Cola de impresión |
+| Vault | `#F43F5E` | `/vault/` | Biblioteca de modelos `.3mf` / `.gcode.3mf` |
 | Compañía | `#6366F1` | `/company/` | Perfil, branding y templates PDF |
+| Settings | `#2DD4BF` | `/settings/` | Configuración global (electricidad, gastos fijos, etc.) |
 
-La pantalla de inicio (`/`) es el **Collector's Forge Studio**, que muestra todas las apps como un panel estilo Okta. El `AppSwitcherDrawer` permite navegar entre apps sin salir.
+La pantalla de inicio (`/`) es el **Collector's Forge Studio**, que muestra todas las apps como un panel estilo Okta. Los layouts viejos (`AppSwitcherDrawer`, `*Layout.jsx` por app) fueron eliminados en Fase 9 — todas las apps comparten `AppLayout.jsx` con el sidebar driven by `frontend/src/config/sidebar.js`.
+
+Las rutas legacy `/xxx/v2` siguen funcionando como redirects de cortesía vía `<RedirectPreservingSearch>` en `App.jsx` (preserva query params).
 
 ---
 
@@ -477,8 +481,17 @@ Todos los contenedores se comunican en la red `cfs` (bridge). Los nombres de con
 | Volumen | Montaje | Contenido |
 |---|---|---|
 | `cfs-pgdata` | `/var/lib/postgresql/data` | Datos PostgreSQL |
-| `cfs-data` | `/app/static` | Logos, imágenes de impresiones |
 | `cfs-slicer-jobs` | `/slicer_jobs` | Archivos STL/G-code temporales |
+
+> **Nota:** Los binarios de la app (thumbnails del Vault, logo de
+> empresa, imágenes de PrintedItem, archivos del Vault `.3mf`) **no se
+> guardan en un volumen local** — viven en **MinIO** (`turtleStorage:9000`,
+> bucket `cfs-models`) bajo prefijos dedicados (`thumbnails/`,
+> `companies/`, `prints/`, archivos del Vault). El backend es el único
+> proceso que toca MinIO; al frontend lo expone vía endpoints proxy
+> (`GET /api/vault/{id}/thumbnail`, `GET /api/company/logo`,
+> `GET /api/inventory/prints/{id}/image`) con `Cache-Control:
+> public, max-age=86400`.
 
 ---
 
