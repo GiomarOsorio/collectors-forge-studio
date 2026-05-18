@@ -98,7 +98,7 @@ Obtiene el perfil de la empresa del usuario autenticado.
   "phone": "+57 300 000 0000",
   "email": "contacto@empresa.com",
   "nit": "900.000.000-1",
-  "logo_url": "/static/companies/uuid/logo.png",
+  "logo_url": "/api/company/logo?v=1700000000",
   "pdf_terms": "• Pago del 50% al aprobar la cotización.\n• Saldo antes del envío.",
   "pdf_palette": [
     {"name": "background", "hex": "#1A1A1A"},
@@ -135,19 +135,28 @@ Actualiza el perfil de la empresa.
 ---
 
 ### `POST /company/logo`
-Sube el logo de la empresa.
+Sube el logo de la empresa. El binario se persiste en MinIO bajo la
+key `companies/{uuid}.{ext}`.
+
+**Auth:** requiere `role='admin'`.
 
 **Body** (`multipart/form-data`):
 ```
-file: <archivo imagen>
+file: <archivo imagen>   (PNG/JPEG/WebP/GIF, máx. 10 MB)
 ```
 
-**Response 200:**
-```json
-{
-  "logo_url": "/static/companies/uuid/logo.png"
-}
-```
+**Response 200:** `CompanyResponse` completo (mismo formato que
+`GET /company/`) con `logo_url` apuntando al endpoint proxy.
+
+---
+
+### `GET /company/logo`
+Streamea el binario del logo desde MinIO. **Endpoint público** (sin
+JWT) — los `<img>` tags del browser no envían el header `Authorization`.
+
+**Response 200:** binario PNG/JPEG/WebP/GIF con
+`Cache-Control: public, max-age=86400`. **404** si la empresa no tiene
+logo cargado.
 
 ---
 
@@ -643,9 +652,22 @@ Actualiza datos de una impresión.
 Elimina una impresión del catálogo.
 
 ### `POST /inventory/prints/{id}/image`
-Sube una foto de la impresión.
+Sube una foto de la impresión. El binario se persiste en MinIO bajo la
+key `prints/{uuid}.{ext}`. La imagen anterior (si la había) se borra
+best-effort.
 
-**Body** (`multipart/form-data`): `file: <imagen>`
+**Auth:** requiere `role='operator'` o superior.
+
+**Body** (`multipart/form-data`): `file: <PNG/JPEG/WebP/GIF, máx. 10 MB>`
+
+**Response 200:** `{"image_url": "/api/inventory/prints/{id}/image?v=..."}`
+
+### `GET /inventory/prints/{id}/image`
+Streamea el binario de la imagen desde MinIO. **Endpoint público** (sin
+JWT) — los `<img>` tags del browser no envían el header `Authorization`.
+
+**Response 200:** binario con `Cache-Control: public, max-age=86400`.
+**404** si el ítem no tiene imagen cargada.
 
 ### `POST /inventory/prints/{id}/sell`
 Registra una venta (decrementa el stock).
@@ -836,7 +858,8 @@ Almacenamiento de archivos `.3mf` en MinIO. Todas las operaciones de escritura r
 Lista archivos del Vault con paginación y búsqueda opcional.
 
 **Query params:**
-- `q` — buscar por nombre (opcional)
+- `q` — substring case-insensitive sobre `name + description + tags` (opcional)
+- `print_ready_only` — si `true`, solo retorna modelos con `print_file` presente (usado por el picker de la Cola)
 - `page` — página (default 1)
 - `page_size` — ítems por página (default 20, max 100)
 
@@ -848,11 +871,19 @@ Lista archivos del Vault con paginación y búsqueda opcional.
       "id": 1,
       "uploaded_by": 1,
       "uploaded_by_username": "giomar",
-      "file_name": "figura_darth_vader.3mf",
-      "file_size": 2456789,
+      "source_file_name": "figura_darth_vader.3mf",
+      "source_file_size": 2456789,
+      "print_file_name": "figura_darth_vader.gcode.3mf",
+      "print_file_size": 8754321,
+      "sliced_weight_g": 42.5,
+      "sliced_time_seconds": 12600,
+      "sliced_printer_model": "Bambu Lab P2S",
+      "sliced_filament_type": "PLA",
+      "is_print_ready": true,
       "name": "Darth Vader 15cm",
       "description": "Figura articulada con base",
       "thumbnail_url": "https://cdn.makerworld.com/...",
+      "local_thumbnail_url": "/api/vault/1/thumbnail?v=1700000000",
       "tags": ["star wars", "figura"],
       "source_url": "https://makerworld.com/models/12345",
       "source_platform": "makerworld",
@@ -867,6 +898,18 @@ Lista archivos del Vault con paginación y búsqueda opcional.
   "page_size": 20
 }
 ```
+
+---
+
+### `GET /vault/{id}/thumbnail`
+Streamea el PNG plate-render extraído del `.3mf` (key MinIO
+`thumbnails/{id}.png`). **Endpoint público** (sin JWT) — los `<img>`
+tags del browser no envían `Authorization`.
+
+**Response 200:** binario PNG con `Cache-Control: public, max-age=86400`.
+**404** si el modelo no tiene `thumbnail_key` o el objeto no está en
+MinIO — el frontend cae al `thumbnail_url` externo (MakerWorld) o al
+placeholder.
 
 ---
 
@@ -918,10 +961,16 @@ Límite: 1 GB. Verifica cuota antes de subir.
 
 ---
 
-### `GET /vault/{id}/download`
-Descarga el archivo `.3mf` a través del backend (MinIO permanece en red interna).
+### `GET /vault/{id}/download/source`
+Descarga el slot `source_file` (`.3mf` editable). 404 si el modelo no
+tiene ese slot.
 
-**Response:** `application/octet-stream` (binary)
+### `GET /vault/{id}/download/print`
+Descarga el slot `print_file` (`.gcode.3mf` laminado). 404 si el modelo
+no tiene ese slot.
+
+**Response:** `application/octet-stream` (el filename se infiere del
+header `Content-Disposition`).
 
 ---
 
@@ -939,10 +988,18 @@ Actualiza metadatos de un archivo (nombre, descripción, tags, etc.). No reempla
 
 ---
 
-### `POST /vault/{id}/replace` (admin)
-Reemplaza el archivo `.3mf` conservando los metadatos. Sube nuevo archivo, actualiza DB, borra el anterior de MinIO.
+### `POST /vault/{id}/replace/source` (admin)
+Reemplaza el slot `source_file` (`.3mf` editable) conservando los
+metadatos. Sube nuevo archivo, actualiza DB, borra el anterior de MinIO.
 
 **Body** (`multipart/form-data`): `file: nuevo_archivo.3mf`
+
+### `POST /vault/{id}/replace/print` (admin)
+Reemplaza el slot `print_file` (`.gcode.3mf`) y re-parsea los
+metadatos sliced (peso, tiempo, filamento, impresora). Re-extrae
+también el thumbnail plate-render.
+
+**Body** (`multipart/form-data`): `file: nuevo_archivo.gcode.3mf`
 
 ---
 
