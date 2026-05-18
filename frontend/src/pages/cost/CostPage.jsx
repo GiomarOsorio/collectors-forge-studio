@@ -1,14 +1,12 @@
 /**
- * @file Página rediseñada de la app Cost (Claude Design port — Día 4).
+ * @file Página de la app Cost (dashboard de cotizaciones).
  *
  * Tres pestañas:
  *  - Cotizaciones (cliente): cards con buscador y bottom-sheet/drawer de detalle.
  *  - Historial (impresiones calculadas): lista compacta.
- *  - Calculadora: tarjeta puente al editor existente en `/cost/calculator`.
+ *  - Calculadora: tarjeta puente al editor en `/cost/calculator`.
  *
- * Reusa primitives de `components/ui/` y el adapter `inventoryAdapter` para
- * formato monetario. Desktop y mobile comparten estado y se conmutan vía
- * `useIsMobile()`.
+ * Desktop y mobile comparten estado y se conmutan vía `useIsMobile()`.
  *
  * @module pages/cost/CostPage
  */

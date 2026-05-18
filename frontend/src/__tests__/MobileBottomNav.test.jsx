@@ -3,7 +3,7 @@
  *
  * Verifica que:
  *  - Renderiza los 5 ítems esperados (Costos / Inventario / Cola / Slicer / Mantto)
- *  - Cada ítem es un enlace navegable a `/<app>/v2`
+ *  - Cada ítem es un enlace navegable a `/<app>`
  *  - El ítem cuya ruta coincide con `location` recibe estilo active
  *  - El badge sale cuando `useBadges` retorna count > 0
  *  - La nav está oculta en ≥lg con `lg:hidden` (responsive)
@@ -21,7 +21,7 @@ vi.mock('../hooks/useBadges', () => ({
 
 import { useBadges } from '../hooks/useBadges';
 
-function renderNav(initialEntries = ['/inventory/v2']) {
+function renderNav(initialEntries = ['/inventory']) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
       <MobileBottomNav />
@@ -43,17 +43,17 @@ describe('MobileBottomNav — design fidelity', () => {
     expect(screen.getByText('Mantto')).toBeInTheDocument();
   });
 
-  it('cada ítem es un link a /<app>/v2', () => {
+  it('cada ítem es un link a /<app>', () => {
     renderNav();
-    expect(screen.getByText('Costos').closest('a')).toHaveAttribute('href', '/cost/v2');
-    expect(screen.getByText('Inventario').closest('a')).toHaveAttribute('href', '/inventory/v2');
-    expect(screen.getByText('Cola').closest('a')).toHaveAttribute('href', '/queue/v2');
-    expect(screen.getByText('Slicer').closest('a')).toHaveAttribute('href', '/slicer/v2');
-    expect(screen.getByText('Mantto').closest('a')).toHaveAttribute('href', '/maintenance/v2');
+    expect(screen.getByText('Costos').closest('a')).toHaveAttribute('href', '/cost');
+    expect(screen.getByText('Inventario').closest('a')).toHaveAttribute('href', '/inventory');
+    expect(screen.getByText('Cola').closest('a')).toHaveAttribute('href', '/queue');
+    expect(screen.getByText('Slicer').closest('a')).toHaveAttribute('href', '/slicer');
+    expect(screen.getByText('Mantto').closest('a')).toHaveAttribute('href', '/maintenance');
   });
 
   it('marca el ítem activo según la ruta actual (aria-current=page)', () => {
-    renderNav(['/inventory/v2']);
+    renderNav(['/inventory']);
     const inventoryLink = screen.getByText('Inventario').closest('a');
     expect(inventoryLink).toHaveAttribute('aria-current', 'page');
     const costLink = screen.getByText('Costos').closest('a');

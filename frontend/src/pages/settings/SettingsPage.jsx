@@ -1,13 +1,12 @@
 /**
- * @file Página rediseñada de Configuración (Claude Design v2 — NUEVA app v2).
+ * @file Página de la app Configuración (Settings).
  *
- * Reemplaza por completo las V1 de Settings:
- *   - `/settings/account` → `AccountFormDrawer` integrado
- *   - `/settings/users`   → `UsersDrawer` integrado (admin)
- *   - `/settings/company` → redirige a `/company/v2` (ya migrado en Fase 6)
+ * Dashboard con drawers integrados:
+ *   - `AccountFormDrawer` — username/email/contraseña
+ *   - `UsersDrawer` (solo admin) — lista de usuarios con edición inline
+ *     (expand/collapse de cada fila para rol + cambio de contraseña)
  *
- * El editor inline de usuarios usa expand/collapse dentro del mismo
- * `UsersDrawer` (sin abrir un segundo drawer encima — UX más simple).
+ * La card "Empresa" redirige a `/company` donde se edita el perfil.
  *
  * @module pages/settings/SettingsPage
  */
@@ -528,10 +527,10 @@ export default function SettingsPage() {
         icon: Building2,
         title: 'Empresa',
         desc: 'El perfil de la empresa ahora se edita en Compañía › Resumen.',
-        status: 'Ir a /company/v2',
+        status: 'Ir a /company',
         complete: true,
         onClick: () => {
-          window.location.assign('/company/v2');
+          window.location.assign('/company');
         },
         visible: isAdmin,
       },
