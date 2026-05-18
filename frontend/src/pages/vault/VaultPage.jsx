@@ -431,7 +431,7 @@ export default function VaultPage() {
     const params = { page, page_size: pageSize };
     if (debouncedQuery) params.q = debouncedQuery;
     const [f, s] = await Promise.allSettled([
-      getVaultFiles({ params }),
+      getVaultFiles(params),
       getVaultStats(),
     ]);
     if (f.status === 'fulfilled') {
