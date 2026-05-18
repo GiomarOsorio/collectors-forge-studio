@@ -98,7 +98,7 @@ export const SIDEBAR_APPS = [
     badgeKey: 'overdueMaintenance',
     // V1 dashboard/logs/printers reemplazado por completo por /maintenance/v2:
     // historial + CRUD logs + edición inline de horas viven todos dentro de
-    // MaintenancePageV2 (tabs + drawers). Sin items secundarios.
+    // MaintenancePage (tabs + drawers). Sin items secundarios.
     items: [
       { to: '/maintenance/v2', icon: LayoutDashboard, label: 'Dashboard', end: true },
     ],

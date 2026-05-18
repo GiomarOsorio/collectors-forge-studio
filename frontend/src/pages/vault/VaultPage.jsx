@@ -8,7 +8,7 @@
  * editable + picker drawer "Agregar a cola desde Vault" — ver
  * `claude design/pending-screens.md` §20 + §20.1.
  *
- * @module pages/vault/VaultPageV2
+ * @module pages/vault/VaultPage
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -396,7 +396,7 @@ function VaultDrawerFooter({
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
-export default function VaultPageV2() {
+export default function VaultPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { user } = useAuth();

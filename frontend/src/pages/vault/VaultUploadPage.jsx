@@ -17,7 +17,7 @@
  * Solo accesible para usuarios con role='admin'. Los no-admins son
  * redirigidos a /vault al montar el componente.
  *
- * @module pages/vault/VaultUploadPageV2
+ * @module pages/vault/VaultUploadPage
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -116,7 +116,7 @@ function FilePreviewCard({ file, label, accent, icon: Icon, onClear }) {
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
-export default function VaultUploadPageV2() {
+export default function VaultUploadPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
