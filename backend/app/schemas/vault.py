@@ -75,7 +75,10 @@ class ModelFileResponse(BaseModel):
     name: str
     description: Optional[str]
     thumbnail_url: Optional[str]
-    local_thumbnail_path: Optional[str] = None
+    # URL del endpoint proxy que sirve el PNG desde MinIO. Vacío si el
+    # modelo no tiene plate-render extraído. El frontend lo usa como
+    # `<img src>` directamente.
+    local_thumbnail_url: Optional[str] = None
     tags: List[str]
     source_url: Optional[str]
     source_platform: Optional[str]

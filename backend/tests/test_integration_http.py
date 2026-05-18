@@ -569,7 +569,7 @@ class TestCompanyIntegration:
         empresa_mock.phone = None
         empresa_mock.contact_email = None
         empresa_mock.nit = None
-        empresa_mock.logo_url = None
+        empresa_mock.logo_key = None
         empresa_mock.pdf_palette = None
         empresa_mock.pdf_terms = None
 

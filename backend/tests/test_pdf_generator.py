@@ -425,7 +425,7 @@ class TestColoresDinamicos:
         c.name = "Empresa Test"
         c.slogan = None
         c.address = "Medellín"
-        c.logo_url = None
+        c.logo_key = None
         c.pdf_palette = None
         c.pdf_terms = None
         for k, v in overrides.items():
@@ -565,7 +565,7 @@ class TestPdfTermsCustom:
         company.name = "Mi Empresa"
         company.slogan = None
         company.address = "Medellín"
-        company.logo_url = None
+        company.logo_key = None
         company.pdf_palette = None
         company.pdf_terms = "Pago 100% anticipado."
 
@@ -589,7 +589,7 @@ class TestPdfTermsCustom:
         company.name = "Mi Empresa"
         company.slogan = None
         company.address = "Medellín"
-        company.logo_url = None
+        company.logo_key = None
         company.pdf_palette = None
         company.pdf_terms = "Solo un término custom."
 
@@ -615,7 +615,7 @@ class TestPdfTermsCustom:
         company.name = "Mi Empresa"
         company.slogan = None
         company.address = "Medellín"
-        company.logo_url = None
+        company.logo_key = None
         company.pdf_palette = None
         company.pdf_terms = None
 
@@ -640,7 +640,7 @@ class TestPdfTermsCustom:
         company.name = "Mi Empresa"
         company.slogan = None
         company.address = "Medellín"
-        company.logo_url = None
+        company.logo_key = None
         company.pdf_palette = None
         company.pdf_terms = "Pago anticipado TFC."
 

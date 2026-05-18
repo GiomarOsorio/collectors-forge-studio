@@ -36,8 +36,9 @@ class PrintedItem(Base):
     category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    # Imagen de referencia (URL relativa al directorio estático)
-    image_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # Key de la imagen en MinIO (formato `prints/{uuid}.{ext}`). El response
+    # del API expone `image_url` apuntando al proxy `GET /api/inventory/prints/{id}/image`.
+    image_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     # Stock y precio de venta
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

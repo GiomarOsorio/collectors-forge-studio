@@ -168,7 +168,7 @@ async def export_inventory(
     Exporta todo el inventario de la empresa como un archivo JSON descargable.
 
     Incluye todos los ítems de stock y de impresiones de la empresa. Los campos
-    id, company_id, image_url y timestamps se excluyen del resultado.
+    id, image_key y timestamps se excluyen del resultado.
 
     Args:
         db:           Sesión de base de datos.

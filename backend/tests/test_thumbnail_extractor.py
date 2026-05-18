@@ -5,22 +5,21 @@ Cubre los 6 caminos del extractor: plate_number explícito, fallback
 plate_1.png, fallback thumbnail.png, fallback model_thumbnail.png, regex
 plate_N para placas no canónicas, y caso ZIP inválido / sin PNG.
 
-También verifica save_thumbnail + delete_thumbnail idempotentes con
-tmp_path para no depender de /app/static.
+También verifica save_thumbnail + delete_thumbnail contra MinIO mockeado
+(no hay disco involucrado tras el refactor a object storage).
 """
 
 import io
 import zipfile
-from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.services import thumbnail_extractor
 from app.services.thumbnail_extractor import (
     delete_thumbnail,
     extract_plate_png,
     save_thumbnail,
+    thumbnail_key,
 )
 
 
@@ -140,51 +139,62 @@ class TestExtractPlatePng:
         assert extract_plate_png(zip_bytes) is None
 
 
+# ─── thumbnail_key ──────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+class TestThumbnailKey:
+    def test_formato_canonico(self):
+        for mid in [1, 42, 9999, 100_000]:
+            assert thumbnail_key(mid) == f"thumbnails/{mid}.png"
+
+
 # ─── save_thumbnail ─────────────────────────────────────────────────────────
 
 
 @pytest.mark.unit
+@pytest.mark.asyncio
 class TestSaveThumbnail:
-    def test_crea_directorio_si_no_existe(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(thumbnail_extractor, "THUMBNAIL_DIR", tmp_path / "thumbnails")
-        url = save_thumbnail(42, PNG_FIXTURE_A)
-        assert (tmp_path / "thumbnails" / "42.png").exists()
-        assert (tmp_path / "thumbnails" / "42.png").read_bytes() == PNG_FIXTURE_A
-        assert url == "/static/thumbnails/42.png"
+    async def test_sube_a_minio_y_devuelve_key(self):
+        with patch(
+            "app.services.thumbnail_extractor.upload_file",
+            new=AsyncMock(),
+        ) as mock_upload:
+            key = await save_thumbnail(42, PNG_FIXTURE_A)
+            assert key == "thumbnails/42.png"
+            mock_upload.assert_awaited_once_with(
+                "thumbnails/42.png", PNG_FIXTURE_A, content_type="image/png"
+            )
 
-    def test_sobreescribe_si_ya_existia(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(thumbnail_extractor, "THUMBNAIL_DIR", tmp_path)
-        save_thumbnail(1, PNG_FIXTURE_A)
-        save_thumbnail(1, PNG_FIXTURE_B)
-        assert (tmp_path / "1.png").read_bytes() == PNG_FIXTURE_B
-
-    def test_url_format_consistente(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(thumbnail_extractor, "THUMBNAIL_DIR", tmp_path)
-        for mid in [1, 42, 9999, 100_000]:
-            url = save_thumbnail(mid, PNG_FIXTURE_A)
-            assert url == f"/static/thumbnails/{mid}.png"
+    async def test_key_consistente_por_id(self):
+        with patch(
+            "app.services.thumbnail_extractor.upload_file",
+            new=AsyncMock(),
+        ):
+            for mid in [1, 42, 9999, 100_000]:
+                key = await save_thumbnail(mid, PNG_FIXTURE_A)
+                assert key == f"thumbnails/{mid}.png"
 
 
 # ─── delete_thumbnail ───────────────────────────────────────────────────────
 
 
 @pytest.mark.unit
+@pytest.mark.asyncio
 class TestDeleteThumbnail:
-    def test_borra_archivo_existente(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(thumbnail_extractor, "THUMBNAIL_DIR", tmp_path)
-        save_thumbnail(7, PNG_FIXTURE_A)
-        assert (tmp_path / "7.png").exists()
-        delete_thumbnail(7)
-        assert not (tmp_path / "7.png").exists()
+    async def test_borra_objeto_en_minio(self):
+        with patch(
+            "app.services.thumbnail_extractor.delete_file",
+            new=AsyncMock(),
+        ) as mock_delete:
+            await delete_thumbnail(7)
+            mock_delete.assert_awaited_once_with("thumbnails/7.png")
 
-    def test_no_op_si_no_existe(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(thumbnail_extractor, "THUMBNAIL_DIR", tmp_path)
-        # No debe lanzar excepción aunque el archivo no exista
-        delete_thumbnail(999)
-
-    def test_silencia_oserror(self, tmp_path, monkeypatch):
-        """Si unlink falla por OSError (permisos, etc.) no se propaga."""
-        monkeypatch.setattr(thumbnail_extractor, "THUMBNAIL_DIR", tmp_path)
-        with patch.object(Path, "unlink", side_effect=OSError("permission denied")):
-            # Debe loggear el debug y retornar sin error
-            delete_thumbnail(123)
+    async def test_silencia_excepcion_del_backend(self):
+        """Si MinIO falla al borrar, no se propaga."""
+        with patch(
+            "app.services.thumbnail_extractor.delete_file",
+            new=AsyncMock(side_effect=Exception("connection refused")),
+        ):
+            # No debe lanzar
+            await delete_thumbnail(123)

@@ -328,28 +328,45 @@ def _build_palette(company) -> tuple:
     return palette_dict, palette_list
 
 
-def _resolve_logo_url(company) -> str:
+def _logo_data_uri(logo_bytes: Optional[bytes], company=None) -> str:
     """
-    Resuelve la URL del logo de la empresa como ruta de archivo absoluta para WeasyPrint.
+    Convierte el binario del logo de la empresa a un `data:` URI inline.
+
+    WeasyPrint embebe la imagen directamente en el HTML, evitando un fetch
+    HTTP/file durante el render. El caller debe pre-descargar el binario
+    desde MinIO (`download_file(company.logo_key)`) y pasarlo aquí.
 
     Args:
-        company: Instancia ORM de Company.
+        logo_bytes: Binario PNG/JPG/WEBP del logo, o None.
+        company:    Instancia ORM de Company; usado solo para inferir el
+                    media-type a partir de la extensión de la `logo_key`.
 
     Returns:
-        URI de archivo o cadena vacía si no hay logo.
+        URI tipo `data:image/png;base64,...` o cadena vacía si no hay logo.
     """
-    if not (company and company.logo_url):
+    if not logo_bytes:
         return ""
-    candidate = Path("/app") / company.logo_url.lstrip("/")
-    if candidate.exists():
-        return candidate.as_uri()
-    alt = _STATIC_DIR / company.logo_url.lstrip("/static/")
-    if alt.exists():
-        return alt.as_uri()
-    return ""
+    media_type = "image/png"
+    key = getattr(company, "logo_key", None) if company else None
+    if key:
+        ext = "." + key.rsplit(".", 1)[-1].lower() if "." in key else ".png"
+        media_type = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".webp": "image/webp",
+            ".gif": "image/gif",
+        }.get(ext, "image/png")
+    encoded = base64.b64encode(logo_bytes).decode("ascii")
+    return f"data:{media_type};base64,{encoded}"
 
 
-def _build_cot_context(client_quote, company, usd_rate: float) -> dict:
+def _build_cot_context(
+    client_quote,
+    company,
+    usd_rate: float,
+    logo_bytes: Optional[bytes] = None,
+) -> dict:
     """
     Construye el contexto Liquid para una cotización de cliente.
 
@@ -394,7 +411,7 @@ def _build_cot_context(client_quote, company, usd_rate: float) -> dict:
         "phone":   company.phone         if company else "",
         "email":   company.contact_email if company else "",
         "nit":     company.nit           if company else "",
-        "logo_url": _resolve_logo_url(company),
+        "logo_url": _logo_data_uri(logo_bytes, company),
     }
     pdf_terms = (company.pdf_terms if company else None) or ""
 
@@ -418,7 +435,7 @@ def _build_cot_context(client_quote, company, usd_rate: float) -> dict:
     }
 
 
-def _build_sample_context(company=None) -> dict:
+def _build_sample_context(company=None, logo_bytes: Optional[bytes] = None) -> dict:
     """
     Construye un contexto de muestra para validación y preview de templates.
 
@@ -440,7 +457,7 @@ def _build_sample_context(company=None) -> dict:
         "phone":   company.phone         if company else "+57 300 000 0000",
         "email":   company.contact_email if company else "hola@empresa.com",
         "nit":     company.nit           if company else "900.000.000-0",
-        "logo_url": _resolve_logo_url(company),
+        "logo_url": _logo_data_uri(logo_bytes, company),
     }
     pdf_terms = (company.pdf_terms if company else None) or ""
 
@@ -485,7 +502,13 @@ def _check_required_vars(content: str) -> list:
     ]
 
 
-def render_client_quote_pdf(template_content: str, client_quote, company, usd_rate: float) -> bytes:
+def render_client_quote_pdf(
+    template_content: str,
+    client_quote,
+    company,
+    usd_rate: float,
+    logo_bytes: Optional[bytes] = None,
+) -> bytes:
     """
     Renderiza un template Liquid y genera el PDF de una cotización de cliente.
 
@@ -494,6 +517,7 @@ def render_client_quote_pdf(template_content: str, client_quote, company, usd_ra
         client_quote:     Instancia ORM de ClientQuote.
         company:          Instancia ORM de Company (puede ser None).
         usd_rate:         Tasa USD→COP.
+        logo_bytes:       Binario del logo pre-descargado de MinIO (opcional).
 
     Returns:
         bytes: PDF generado por WeasyPrint.
@@ -508,13 +532,13 @@ def render_client_quote_pdf(template_content: str, client_quote, company, usd_ra
 
     env = LiquidEnvironment()
     tpl = env.from_string(template_content)
-    ctx = _build_cot_context(client_quote, company, usd_rate)
+    ctx = _build_cot_context(client_quote, company, usd_rate, logo_bytes)
     html = tpl.render(**ctx)
     base_url = f"file://{_STATIC_DIR}/"
     return WeasyprintHTML(string=html, base_url=base_url, url_fetcher=_safe_url_fetcher).write_pdf()
 
 
-def validate_template(content: str, company=None) -> dict:
+def validate_template(content: str, company=None, logo_bytes: Optional[bytes] = None) -> dict:
     """
     Valida un template Liquid: comprueba sintaxis y capacidad de renderizar a PDF.
 
@@ -523,8 +547,9 @@ def validate_template(content: str, company=None) -> dict:
     sin necesidad de guardar el template.
 
     Args:
-        content: Código Liquid HTML a validar.
-        company: Instancia ORM de Company (opcional, para contexto y paleta reales).
+        content:    Código Liquid HTML a validar.
+        company:    Instancia ORM de Company (opcional, para contexto y paleta reales).
+        logo_bytes: Binario del logo pre-descargado de MinIO (opcional).
 
     Returns:
         dict con las claves:
@@ -541,7 +566,7 @@ def validate_template(content: str, company=None) -> dict:
     try:
         env = LiquidEnvironment()
         tpl = env.from_string(content)
-        ctx = _build_sample_context(company)
+        ctx = _build_sample_context(company, logo_bytes)
         html = tpl.render(**ctx)
         base_url = f"file://{_STATIC_DIR}/"
         pdf_bytes = WeasyprintHTML(string=html, base_url=base_url, url_fetcher=_safe_url_fetcher).write_pdf()

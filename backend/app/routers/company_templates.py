@@ -17,9 +17,12 @@ Endpoints:
 """
 
 import asyncio
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import List
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
@@ -39,6 +42,7 @@ from app.schemas.company_template import (
 )
 from app.services.auth import get_admin_user, get_current_user
 from app.services.liquid_pdf import DEFAULT_COT_TEMPLATE, validate_template
+from app.services.vault_storage import download_file
 
 router = APIRouter(prefix="/api/company/templates", tags=["company-templates"])
 
@@ -277,9 +281,16 @@ async def validate_liquid_template(
     )
     company = company_result.scalar_one_or_none()
 
+    logo_bytes = None
+    if company and company.logo_key:
+        try:
+            logo_bytes = await download_file(company.logo_key)
+        except Exception as exc:
+            logger.warning("No se pudo descargar logo %s para validate: %s", company.logo_key, exc)
+
     try:
         result = await asyncio.wait_for(
-            asyncio.to_thread(validate_template, data.content, company),
+            asyncio.to_thread(validate_template, data.content, company, logo_bytes),
             timeout=30.0,
         )
     except asyncio.TimeoutError:
@@ -320,9 +331,16 @@ async def preview_template(
     )
     company = company_result.scalar_one_or_none()
 
+    logo_bytes = None
+    if company and company.logo_key:
+        try:
+            logo_bytes = await download_file(company.logo_key)
+        except Exception as exc:
+            logger.warning("No se pudo descargar logo %s para preview: %s", company.logo_key, exc)
+
     try:
         result = await asyncio.wait_for(
-            asyncio.to_thread(validate_template, tpl.content, company),
+            asyncio.to_thread(validate_template, tpl.content, company, logo_bytes),
             timeout=30.0,
         )
     except asyncio.TimeoutError:
