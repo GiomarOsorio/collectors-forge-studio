@@ -42,7 +42,7 @@
  * @module App
  */
 
-import { BrowserRouter, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { lazy, Suspense, useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -102,6 +102,21 @@ function AdminRoute({ children }) {
 }
 
 /**
+ * Redirect que preserva los query params del request original.
+ *
+ * Diferente de `<Navigate to="/x" replace />`: ese descarta el `?foo=bar`
+ * de la URL al redirigir. Cuando la ruta destino consume search params
+ * (ej. `/cost/calculator?weight_grams=245`), necesitamos conservarlos
+ * o el flujo se rompe silenciosamente.
+ *
+ * @param {{ to: string }} props - Path destino sin query.
+ */
+function RedirectPreservingSearch({ to }) {
+  const { search } = useLocation();
+  return <Navigate to={{ pathname: to, search }} replace />;
+}
+
+/**
  * Árbol de rutas de la aplicación.
  *
  * @returns {JSX.Element|null}
@@ -140,11 +155,11 @@ function AppRoutes() {
         <Route path="/inventory">
           <Route index element={<Navigate to="/inventory/v2" replace />} />
           <Route path="v2" element={<InventoryPage />} />
-          <Route path="filaments"   element={<Navigate to="/inventory/v2" replace />} />
-          <Route path="supplies"    element={<Navigate to="/inventory/v2" replace />} />
-          <Route path="tools"       element={<Navigate to="/inventory/v2" replace />} />
-          <Route path="consumables" element={<Navigate to="/inventory/v2" replace />} />
-          <Route path="stock"       element={<Navigate to="/inventory/v2" replace />} />
+          <Route path="filaments"   element={<RedirectPreservingSearch to="/inventory/v2" />} />
+          <Route path="supplies"    element={<RedirectPreservingSearch to="/inventory/v2" />} />
+          <Route path="tools"       element={<RedirectPreservingSearch to="/inventory/v2" />} />
+          <Route path="consumables" element={<RedirectPreservingSearch to="/inventory/v2" />} />
+          <Route path="stock"       element={<RedirectPreservingSearch to="/inventory/v2" />} />
           <Route path="purchases" element={<InventoryPurchasesPage />} />
           <Route path="prints"    element={<InventoryPrintsPage />} />
           <Route path="io"        element={<InventoryImportExportPage />} />
@@ -157,9 +172,9 @@ function AppRoutes() {
         <Route path="/cost">
           <Route index element={<Navigate to="/cost/v2" replace />} />
           <Route path="v2" element={<CostPage />} />
-          <Route path="calculator/v2" element={<Navigate to="/cost/calculator" replace />} />
+          <Route path="calculator/v2" element={<RedirectPreservingSearch to="/cost/calculator" />} />
           <Route path="calculator" element={<CalculatorPage />} />
-          <Route path="quotes" element={<Navigate to="/cost/v2" replace />} />
+          <Route path="quotes" element={<RedirectPreservingSearch to="/cost/v2" />} />
           <Route path="manual" element={<ManualQuotePage />} />
           <Route path="printers" element={<PrintersPage />} />
           <Route path="history" element={<HistoryPage />} />
@@ -182,9 +197,9 @@ function AppRoutes() {
         <Route path="/slicer">
           <Route index element={<Navigate to="/slicer/v2" replace />} />
           <Route path="v2" element={<SlicerPage />} />
-          <Route path="upload"   element={<Navigate to="/slicer/v2" replace />} />
-          <Route path="history"  element={<Navigate to="/slicer/v2" replace />} />
-          <Route path="jobs/:id" element={<Navigate to="/slicer/v2" replace />} />
+          <Route path="upload"   element={<RedirectPreservingSearch to="/slicer/v2" />} />
+          <Route path="history"  element={<RedirectPreservingSearch to="/slicer/v2" />} />
+          <Route path="jobs/:id" element={<RedirectPreservingSearch to="/slicer/v2" />} />
         </Route>
 
         {/* Mantenimiento — V2 reemplaza por completo Dashboard/Logs/Printers V1
@@ -203,8 +218,8 @@ function AppRoutes() {
         <Route path="/queue">
           <Route index element={<Navigate to="/queue/v2" replace />} />
           <Route path="v2" element={<QueuePage />} />
-          <Route path="legacy"  element={<Navigate to="/queue/v2" replace />} />
-          <Route path="history" element={<Navigate to="/queue/v2" replace />} />
+          <Route path="legacy"  element={<RedirectPreservingSearch to="/queue/v2" />} />
+          <Route path="history" element={<RedirectPreservingSearch to="/queue/v2" />} />
         </Route>
 
         {/* Compañía (solo admin) — Profile/Branding/Templates list reemplazadas
