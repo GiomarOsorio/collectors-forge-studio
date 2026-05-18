@@ -18,7 +18,7 @@ Gestión en la UI: **Compañía → Templates PDF**
 | `{{ company.phone }}` | string | Teléfono | `+57 300 000 0000` |
 | `{{ company.email }}` | string | Correo electrónico | `contacto@empresa.com` |
 | `{{ company.nit }}` | string | NIT o número fiscal | `900.000.000-1` |
-| `{{ company.logo_url }}` | string | URL absoluta del logo | `http://host/static/companies/uuid/logo.png` |
+| `{{ company.logo_url }}` | string | `data:` URI inline del logo (PNG/JPEG/WebP base64) o cadena vacía si la empresa no tiene logo cargado | `data:image/png;base64,iVBORw0KG...` |
 
 > Todos los campos de empresa pueden estar vacíos. Usar `{% if company.nit %}` antes de mostrarlos.
 
@@ -556,7 +556,7 @@ company = {
     "phone": "+57 300 000 0000",
     "email": "contacto@thecollectorsforge.com",
     "nit": "900.000.000-1",
-    "logo_url": "http://host/static/logo.png",
+    "logo_url": "data:image/png;base64,iVBORw0KG...",  # data URI inline desde MinIO
 }
 
 quote = {
