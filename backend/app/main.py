@@ -75,23 +75,44 @@ async def _backfill_vault_thumbnails() -> None:
     """
     Backfill idempotente de thumbnails de plate render del Vault.
 
-    Recorre los `model_files` con `local_thumbnail_path IS NULL`, descarga el
-    `.3mf` de MinIO y extrae el PNG embebido por OrcaSlicer/BambuStudio. Los
-    fallos por archivo se loggean y no detienen el resto (puede ser un .3mf
-    sin slicing, sin PNG embebido, o un objeto corrupto en MinIO).
+    Recorre los `model_files` cuyo thumbnail local **falta**:
+      - `local_thumbnail_path IS NULL` — nunca se generó.
+      - `local_thumbnail_path` apunta a un archivo que no existe en disco
+        (típico tras un redeploy del backend si `/app/static` no estaba
+        en un volumen persistente — los PNG quedan huérfanos en la BD
+        pero el archivo desapareció con el contenedor viejo).
 
-    Corre una sola vez al arrancar dentro del `lifespan`. Es no-op si todos los
-    modelos ya tienen su thumbnail local.
+    En ambos casos descarga el `.3mf` de MinIO y re-extrae el PNG embebido
+    por OrcaSlicer/BambuStudio. Los fallos por archivo se loggean y no
+    detienen el resto (puede ser un .3mf sin slicing, sin PNG embebido, o
+    un objeto corrupto en MinIO).
+
+    Corre una sola vez al arrancar dentro del `lifespan`. Es no-op si todos
+    los thumbnails ya están en disk.
     """
     # Import diferido para evitar dependencia circular con app.models en tests.
     from app.models.model_file import ModelFile
 
     try:
         async with async_session() as db:
-            result = await db.execute(
-                select(ModelFile).where(ModelFile.local_thumbnail_path.is_(None))
-            )
-            models = result.scalars().all()
+            result = await db.execute(select(ModelFile))
+            all_models = result.scalars().all()
+
+            # Considerar "huérfanos" a los modelos cuyo path es NULL O cuyo
+            # PNG referenciado ya no existe en disco. El segundo caso pasa
+            # cuando un redeploy del backend pierde /app/static.
+            def _needs_thumb(m):
+                if not m.local_thumbnail_path:
+                    return True
+                # local_thumbnail_path es "/static/thumbnails/{id}.png" — el
+                # archivo real vive en "/app/static/thumbnails/{id}.png".
+                rel = m.local_thumbnail_path.lstrip("/")
+                if rel.startswith("static/"):
+                    rel = rel[len("static/"):]
+                disk_path = Path("/app/static") / rel
+                return not disk_path.exists()
+
+            models = [m for m in all_models if _needs_thumb(m)]
 
             if not models:
                 return
@@ -107,6 +128,14 @@ async def _backfill_vault_thumbnails() -> None:
                     zip_bytes = await download_file(key)
                     png = extract_plate_png(zip_bytes)
                     if not png:
+                        # Si el path en BD apuntaba a un archivo inexistente y
+                        # ya no podemos extraer un PNG, limpiamos la BD para
+                        # que el frontend caiga al fallback (thumbnail_url o
+                        # placeholder) en vez de pedir un 404.
+                        if model.local_thumbnail_path:
+                            model.local_thumbnail_path = None
+                            await db.commit()
+                            await db.refresh(model)
                         continue
                     model.local_thumbnail_path = save_thumbnail(model.id, png)
                     await db.commit()

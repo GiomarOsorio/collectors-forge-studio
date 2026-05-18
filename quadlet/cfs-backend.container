@@ -8,6 +8,11 @@ ContainerName=cfs-backend
 Image=localhost/cfs-backend:latest
 Network=cfs.network
 Volume=cfs-slicer-jobs.volume:/slicer_jobs:Z
+# Static files persistentes: thumbnails de Vault (Metadata/plate_N.png
+# extraídos de los .3mf) + logos de empresa + imágenes de impresiones.
+# Sin este volumen, cada redeploy del backend evapora los PNG y todas
+# las imágenes del Vault dan 404 hasta que se re-suba el modelo.
+Volume=cfs-static.volume:/app/static:Z
 # DATABASE_URL y demás variables vienen del .env (sin hardcodear SQLite aquí)
 EnvironmentFile=__ENV_FILE__
 Environment=ALGORITHM=HS256
