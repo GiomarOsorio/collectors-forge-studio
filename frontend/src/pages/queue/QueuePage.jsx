@@ -544,7 +544,7 @@ function VaultPickerDrawer({ open, onClose, onAdded, printers, filaments, isMobi
       notes: '',
     });
     setLoadingModels(true);
-    getVaultFiles({ params: { print_ready_only: true, page_size: 100 } })
+    getVaultFiles({ print_ready_only: true, page_size: 100 })
       .then((res) => {
         const data = res.data;
         setModels(Array.isArray(data) ? data : data?.items || []);
