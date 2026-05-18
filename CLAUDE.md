@@ -53,19 +53,24 @@
 - `hashed_password` siempre NULL — solo se autentica vía OIDC
 
 ## Estructura de Apps (Collector's Forge Studio)
-| App | Ruta | Color | Ícono |
-|-----|------|-------|-------|
-| Studio Home | `/` | — | — |
-| Cost | `/cost/*` | — | — |
-| Inventario | `/inventory/*` | — | — |
-| Slicer | `/slicer/*` | amber #F59E0B | Cpu |
-| Cola | `/queue/*` | teal #14B8A6 | ListOrdered |
-| Compañía | `/company/*` | indigo #6366F1 | Building2 |
-| Mantenimiento | `/maintenance/*` | violeta #8B5CF6 | Wrench |
 
-- `StudioHomePage.jsx` dentro de `StudioLayout.jsx` — panel estilo Okta
-- `AppSwitcherDrawer.jsx`: cajón z-50 para cambiar entre apps (advierte si hay datos sin guardar)
+| App | Ruta canónica | Color | Ícono |
+|-----|---------------|-------|-------|
+| Studio Home | `/` | — | — |
+| Cost | `/cost` | teal #2DD4BF | Calculator |
+| Inventario | `/inventory` | blue #3B82F6 | Package |
+| Slicer | `/slicer` | amber #F59E0B | Cpu |
+| Cola | `/queue` | teal #14B8A6 | ListOrdered |
+| Compañía | `/company` | indigo #6366F1 | Building2 |
+| Mantenimiento | `/maintenance` | violeta #8B5CF6 | Wrench |
+| Vault | `/vault` | rose #F43F5E | Archive |
+| Settings | `/settings` | teal #2DD4BF | Settings |
+
+URLs legacy (`/xxx/v2`, `/inventory/stock`, `/slicer/upload`, etc.) siguen funcionando como redirects de cortesía vía `<RedirectPreservingSearch>` en `App.jsx` (preserva query params).
+
+- `StudioHomePage.jsx` — panel estilo Okta con cards por app
 - `DirtyStateContext.jsx`: Set-based registry de formularios sucios (`setDirty/clearDirty/isDirty`)
+- `RedirectPreservingSearch` (`App.jsx`): wrapper de `<Navigate>` que conserva el query string al redirigir rutas legacy
 - Login redirige a `/` (StudioHomePage)
 
 ## Modelos y Migraciones (orden cronológico)
@@ -90,7 +95,7 @@
 - Modelo: `ClientQuote` en `backend/app/models/client_quote.py`
 - Schema: `ClientQuoteCreate` con items `[{name, quantity, unit_price}]`
 - Frontend: `/cost/manual` → `ManualQuotePage.jsx`
-- Historial: `/cost/quotes` → `QuotesPage.jsx` (COT-XXXX, PDF descargable)
+- Historial: `/cost` → `CostPage.jsx` tab Cotizaciones (COT-XXXX, PDF descargable)
 - PDF: `generate_client_quote_pdf()` en `pdf_generator.py`
 
 ## App Cola de Impresión
@@ -102,7 +107,11 @@
 - `additional_filaments_detail` JSONB: `{filament_id, name, weight_grams, material_cost}`
 
 ## App Compañía / PDF Templates
-- Rutas: `/company/profile`, `/company/branding`, `/company/templates`
+- Ruta: `/company` (admin) — dashboard con drawers integrados:
+  - `ProfileFormDrawer` (nombre, logo, NIT, contacto)
+  - `BrandingFormDrawer` (paleta + pdf_terms)
+  - `TemplatesDrawer` (set default, preview, editar, eliminar)
+- Editor Liquid grande: `/company/templates/new` y `/company/templates/:id` (ruta dedicada)
 - `pdf_palette` JSONB en Company: `[{name, hex}]` (reemplaza los 4 campos de color fijos)
 - `pdf_terms` TEXT en Company: términos de pago para pie de cotización
 - `CompanyTemplate` — template Liquid HTML para PDF de cotizaciones
@@ -111,17 +120,17 @@
 - `client_quotes.py`: despacha a WeasyPrint si hay CompanyTemplate `is_default=True`
 - WeasyPrint deps en Containerfile: `libpango`, `libpangocairo`, `libgdk-pixbuf`, `libcairo2`
 - **WeasyPrint CSS**: NO soporta flex/grid/position:absolute. Usar `<table>` para layouts multi-columna.
-- **Templates**: van en `/company/templates` (UI/DB), NO en código Python. Si Giomar pide modificar el template, retornar el HTML corregido como texto para copy-paste.
+- **Templates**: se editan desde el `TemplatesDrawer` en `/company` y el editor Liquid (`/company/templates/:id`), NO en código Python. Si Giomar pide modificar el template, retornar el HTML corregido como texto para copy-paste.
 
 ## App Mantenimiento
-- Rutas: `/maintenance/dashboard`, `/maintenance/logs`, `/maintenance/printers`
+- Ruta: `/maintenance` — tabs Dashboard + Historial; CRUD logs vía `LogFormDrawer`; edición inline de `current_hours` en drawer de impresora.
 - 3 modelos: `MaintenancePrinter`, `MaintenanceLog`, `MaintenanceLogItem`
 - Descuento atómico de inventario al crear un log
 - Dashboard: tarjetas por impresora con badges 🟢🟡🔴 por tipo de mantenimiento
 - Config tipos: `frontend/src/config/maintenance.js` (12 tipos basados en wiki BambuLab P2S)
 
 ## App Slicer
-- Rutas: `/slicer/upload`, `/slicer/history`
+- Ruta: `/slicer` — tabs Subir + Historial + drawer detalle.
 - 3 flujos: `.gcode/.3mf` (parse inmediato), STL (OrcaSlicer background), URL MakerWorld
 - "Usar en Calculadora" → `/cost/calculator?weight_grams=X&print_time_hours=Y&filament_type=Z`
 - `CalculatorPage` lee URL params con `useSearchParams`, convierte horas→minutos
@@ -131,10 +140,9 @@
 - `_es_3mf_proyecto()`: detecta ZIP con modelo pero sin .gcode
 
 ## Inventario / Categorías
+- Ruta: `/inventory` — `InventoryPage.jsx` con tabs internos (Filamentos, Insumos, Herramientas, Consumibles, Compras). Cada tab tiene su drawer de form (`FilamentFormDrawer`, `ItemFormDrawer`, `PurchaseOrderFormDrawer`).
 - `InventoryItem` + `PurchaseOrder` + `PrintedItem` + `InventoryCategory`
 - 7 categorías seed: Filamento (is_system, allows_decimals=True), 6 sin decimales
-- `InventoryStockPage` con sort por columnas, paginación 15 items, step dinámico por categoría
-- `InventoryFilamentsPage` + `InventorySuppliesPage` son wrappers de `InventoryStockPage`
 - Imágenes de impresiones: `POST /{id}/image` → `/app/static/prints/`, StaticFiles en `/static`
 
 ## Calculator (Motor de Cálculo)
@@ -187,7 +195,7 @@
 - **str | None en Python 3.9**: usar `Optional[str]` de `typing`
 - **UNIQUE en migración con datos existentes**: DELETE duplicados antes de `create_unique_constraint`
 - **ALTER TYPE JSONB**: DROP DEFAULT → ALTER → SET DEFAULT '[]'::jsonb
-- **InventoryStockPage**: `parseInt()` al guardar IDs desde `<select>` HTML (retorna string)
+- **InventoryPage select FKs**: `parseInt()` al guardar IDs desde `<select>` HTML (retorna string)
 - **Multiple head revisions Alembic**: crear merge migration con `down_revision = (head1, head2)`
 - **`exit 1` en función bash llamada en `$()`**: mata el subshell silenciosamente, bypasea `|| fallback`. Usar `return 1` en funciones siempre.
 - **`psql -c "stmt1; stmt2;"`**: todo va en una sola TX implícita. Error en stmt2 revierte stmt1. Separar en `-c` individuales.

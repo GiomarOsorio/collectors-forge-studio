@@ -1,8 +1,24 @@
 # Pantallas pendientes de diseño — Collector's Forge Studio
 
-**Última actualización**: 2026-05-16
+**Última actualización**: 2026-05-18
 **Para**: Claude Design (agent diseñador)
 **Audiencia**: tú vas a diseñar estas pantallas en el mismo estilo que las existentes (inventory / slicer / queue / maintenance / vault / company / settings) usando los tokens y patrones ya establecidos.
+
+---
+
+> ⚠️ **Estado de este documento (2026-05-18)**: varias de las secciones
+> listadas abajo **ya fueron implementadas** durante la migración a v2.
+> Notablemente: §5 (Cost cotizaciones), §12 (Slicer detalle de job vía
+> drawer), §13/§14 (Maintenance logs/printers absorbidos por
+> `MaintenancePage`), §15 (Queue historial absorbido por tab),
+> §16/§17/§18 (Company perfil/branding/templates vía drawers en
+> `CompanyPage`), §20.1 (picker Vault→Queue).
+>
+> Los headings de cada sección todavía mencionan nombres de componente
+> V1 que ya no existen (`QuotesPage`, `MaintenanceLogsPage`,
+> `CompanyProfilePage`, etc.) — son **referencias históricas a lo que
+> originalmente se iba a portar**. El estado actual y rutas canónicas
+> viven en `status.md`.
 
 ---
 
