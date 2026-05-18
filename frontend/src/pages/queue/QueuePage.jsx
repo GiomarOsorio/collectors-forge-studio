@@ -1,13 +1,13 @@
 /**
- * @file Página rediseñada de la app Queue (Claude Design v2).
+ * @file Página de la app Queue.
  *
  * Dos pestañas:
  *  - Activa: cola de pendientes + en impresión, ordenada por `position`.
  *  - Historial: jobs `done`/`cancelled` con timestamp.
  *
  * Cada item puede provenir de dos fuentes:
- *  - **Quote** (camino histórico): cotización guardada con precio calculado.
- *  - **Vault** (chunk C): modelo `.gcode.3mf` agregado vía `VaultPickerDrawer`.
+ *  - **Quote**: cotización guardada con precio calculado.
+ *  - **Vault**: modelo `.gcode.3mf` agregado vía `VaultPickerDrawer`.
  *
  * Acciones en cada item: Marcar imprimiendo / Marcar listo / Cancelar / Eliminar.
  * Cuando se marca `done` el backend descuenta inventario y suma horas a impresora.
@@ -517,7 +517,7 @@ function VaultPickerRow({ model, selected, onSelect }) {
  * 4. Submit → `addToQueueFromVault` y refresca la cola.
  *
  * Si no hay modelos `print_ready`, muestra empty state con CTA a
- * `/vault/upload/v2`.
+ * `/vault/upload`.
  */
 function VaultPickerDrawer({ open, onClose, onAdded, printers, filaments, isMobile }) {
   const [models, setModels] = useState([]);
@@ -615,7 +615,7 @@ function VaultPickerDrawer({ open, onClose, onAdded, printers, filaments, isMobi
           }
           action={
             models.length === 0 ? (
-              <Link to="/vault/upload/v2" className="btn btn-primary btn-sm">
+              <Link to="/vault/upload" className="btn btn-primary btn-sm">
                 <Plus size={13} /> Subir al Vault
               </Link>
             ) : null

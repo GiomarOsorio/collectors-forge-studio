@@ -29,10 +29,10 @@ import { useIsMobile } from '../hooks/useMediaQuery';
 
 function renderLayout() {
   return render(
-    <MemoryRouter initialEntries={['/inventory/v2']}>
+    <MemoryRouter initialEntries={['/inventory']}>
       <Routes>
         <Route element={<AppLayout />}>
-          <Route path="/inventory/v2" element={<div data-testid="page">Inventory</div>} />
+          <Route path="/inventory" element={<div data-testid="page">Inventory</div>} />
         </Route>
       </Routes>
     </MemoryRouter>,

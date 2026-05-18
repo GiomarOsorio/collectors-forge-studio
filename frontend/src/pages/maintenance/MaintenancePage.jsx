@@ -1,17 +1,14 @@
 /**
- * @file Página rediseñada de la app Mantenimiento (Claude Design v2).
+ * @file Página de la app Mantenimiento.
  *
  * Dos pestañas:
  *  - Dashboard: tarjetas por impresora con badges 🟢🟡🔴 por tipo de mantto.
  *  - Historial: lista cronológica de registros con buscador + filtro impresora.
  *
- * **Reemplaza por completo** las V1 `MaintenanceDashboardPage`, `MaintenanceLogsPage`
- * y `MaintenancePrintersPage`:
- *   - Crear / editar / eliminar logs vive en el `LogFormDrawer` invocado desde
- *     header, FAB, drawer de impresora y drawer de log.
- *   - Actualizar `current_hours` de la impresora vive en `PrinterHoursInlineForm`
- *     dentro del drawer de impresora.
- *   - Crear / eliminar impresoras sigue en `/cost/printers` (fuente única).
+ * Crear / editar / eliminar logs vive en `LogFormDrawer` (header, FAB,
+ * drawer de impresora y drawer de log). Actualizar `current_hours` vive
+ * en `PrinterHoursInlineForm` dentro del drawer de impresora. Crear /
+ * eliminar impresoras sigue en `/cost/printers` (fuente única).
  *
  * Lee summary `/api/maintenance/summary/`, logs `/api/maintenance/logs/`,
  * `/printers/` y `/inventory/items/`.

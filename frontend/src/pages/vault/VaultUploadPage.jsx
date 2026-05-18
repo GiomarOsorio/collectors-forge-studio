@@ -1,21 +1,19 @@
 /**
- * @file Página rediseñada de subida al Vault (Claude Design v2).
+ * @file Página de subida al Vault — admin only.
  *
- * Reemplaza por completo la V1 `VaultUploadPage.jsx`. Soporta los dos slots
- * de archivo definidos en `ModelFile`:
+ * Soporta los dos slots de archivo definidos en `ModelFile`:
  *
  * - **source_file** (`.3mf` editable) — proyecto OrcaSlicer/BambuStudio.
  * - **print_file** (`.gcode.3mf` laminado) — paquete con G-code listo para
  *   imprimir. El backend parsea su header y autollena
  *   `sliced_weight_g` / `sliced_time_seconds` / `sliced_filament_type` para
- *   que el picker de Queue (Chunk C) pueda meterlo directo a cola.
+ *   que el picker de Queue pueda meterlo directo a cola.
  *
  * Al menos uno de los dos slots tiene que estar presente. Si solo se
  * sube `.3mf` editable, "Agregar a cola" estará deshabilitado (con tooltip
  * "lamina primero en Slicer y vuelve a subir").
  *
- * Solo accesible para usuarios con role='admin'. Los no-admins son
- * redirigidos a /vault al montar el componente.
+ * Los no-admins son redirigidos a /vault al montar el componente.
  *
  * @module pages/vault/VaultUploadPage
  */

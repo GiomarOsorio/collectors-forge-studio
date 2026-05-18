@@ -17,11 +17,11 @@ import { useBadges } from '../hooks/useBadges';
 
 /** Apps fijas que aparecen en la bottom nav (5 slots). */
 const ITEMS = [
-  { id: 'cost',        label: 'Costos',     icon: Calculator,  to: '/cost/v2',         match: '/cost' },
-  { id: 'inventory',   label: 'Inventario', icon: Package,     to: '/inventory/v2',    match: '/inventory' },
-  { id: 'queue',       label: 'Cola',       icon: ListOrdered, to: '/queue/v2',        match: '/queue',       badgeKey: 'pendingQueue' },
-  { id: 'slicer',      label: 'Slicer',     icon: Cpu,         to: '/slicer/v2',       match: '/slicer' },
-  { id: 'maintenance', label: 'Mantto',     icon: Wrench,      to: '/maintenance/v2',  match: '/maintenance', badgeKey: 'overdueMaintenance', badgeWarn: true },
+  { id: 'cost',        label: 'Costos',     icon: Calculator,  to: '/cost',         match: '/cost' },
+  { id: 'inventory',   label: 'Inventario', icon: Package,     to: '/inventory',    match: '/inventory' },
+  { id: 'queue',       label: 'Cola',       icon: ListOrdered, to: '/queue',        match: '/queue',       badgeKey: 'pendingQueue' },
+  { id: 'slicer',      label: 'Slicer',     icon: Cpu,         to: '/slicer',       match: '/slicer' },
+  { id: 'maintenance', label: 'Mantto',     icon: Wrench,      to: '/maintenance',  match: '/maintenance', badgeKey: 'overdueMaintenance', badgeWarn: true },
 ];
 
 /**

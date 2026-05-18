@@ -10,7 +10,8 @@
  *     /         → Collector's Forge Studio (lanzador de apps)
  *     /cost/*   → Aplicación Cost (calculadora de costos de impresión 3D)
  *
- * Estructura de rutas (rutas canónicas; las versiones legacy redirigen):
+ * Estructura de rutas. URLs legacy redirigen al canónico preservando
+ * query params (vía `RedirectPreservingSearch`).
  *
  * Públicas:
  * - /login                       → Página de inicio de sesión
@@ -18,24 +19,24 @@
  *
  * Protegidas:
  * - /                            → Studio Home (lanzador de apps)
- * - /inventory/v2                → Inventario (tabs internos: Filamentos /
- *                                  Insumos / Herr / Consumibles / Compras)
+ * - /inventory                   → Inventario (tabs: Filamentos / Insumos /
+ *                                  Herr / Consumibles / Compras)
  * - /inventory/purchases         → Pedidos de compra (tabla)
  * - /inventory/prints            → Disponible para venta
  * - /inventory/io                → Importar / Exportar CSV
- * - /cost/v2                     → Cost dashboard (tabs Cotizaciones / Historial)
+ * - /cost                        → Dashboard de costos (tabs Cotizaciones / Historial)
  * - /cost/calculator             → Calculadora de costos
  * - /cost/manual                 → Nueva cotización manual
  * - /cost/printers               → Gestión de impresoras
  * - /cost/history                → Historial de cotizaciones internas
  * - /cost/settings               → Tarifa eléctrica & ajustes
- * - /settings/v2                 → Settings (Cuenta + Usuarios admin)
- * - /slicer/v2                   → Slicer (Upload / Historial / detalle vía drawer)
- * - /maintenance/v2              → Mantenimiento (Dashboard + Historial + CRUD)
- * - /queue/v2                    → Cola (Activa + Historial)
+ * - /settings                    → Settings (Cuenta + Usuarios admin)
+ * - /slicer                      → Slicer (Upload / Historial / detalle vía drawer)
+ * - /maintenance                 → Mantenimiento (Dashboard + Historial + CRUD)
+ * - /queue                       → Cola de impresión (Activa + Historial)
  * - /vault                       → Vault de modelos (.3mf / .gcode.3mf)
- * - /vault/upload/v2             → Subir modelo (admin)
- * - /company/v2                  → Compañía (admin — Perfil / Marca / Templates)
+ * - /vault/upload                → Subir modelo (admin)
+ * - /company                     → Compañía (admin — Perfil / Marca / Templates)
  * - /company/templates/new       → Crear template Liquid (admin)
  * - /company/templates/:id       → Editar template Liquid (admin)
  *
@@ -152,100 +153,99 @@ function AppRoutes() {
         {/* Inventario — los 5 tabs viejos (filaments/supplies/tools/
             consumables/stock) se absorbieron en los tabs internos de
             InventoryPage v2. Mantenemos redirects para bookmarks. */}
+        {/* Inventario — `index` es ahora la pantalla canónica con tabs
+            internos (filamentos / insumos / herramientas / consumibles /
+            compras). Sub-rutas dedicadas para pedidos / prints / I/O.
+            Las URLs legacy (/v2 + 5 tabs viejos) redirigen al index. */}
         <Route path="/inventory">
-          <Route index element={<Navigate to="/inventory/v2" replace />} />
-          <Route path="v2" element={<InventoryPage />} />
-          <Route path="filaments"   element={<RedirectPreservingSearch to="/inventory/v2" />} />
-          <Route path="supplies"    element={<RedirectPreservingSearch to="/inventory/v2" />} />
-          <Route path="tools"       element={<RedirectPreservingSearch to="/inventory/v2" />} />
-          <Route path="consumables" element={<RedirectPreservingSearch to="/inventory/v2" />} />
-          <Route path="stock"       element={<RedirectPreservingSearch to="/inventory/v2" />} />
-          <Route path="purchases" element={<InventoryPurchasesPage />} />
-          <Route path="prints"    element={<InventoryPrintsPage />} />
-          <Route path="io"        element={<InventoryImportExportPage />} />
+          <Route index               element={<InventoryPage />} />
+          <Route path="v2"           element={<RedirectPreservingSearch to="/inventory" />} />
+          <Route path="filaments"    element={<RedirectPreservingSearch to="/inventory" />} />
+          <Route path="supplies"     element={<RedirectPreservingSearch to="/inventory" />} />
+          <Route path="tools"        element={<RedirectPreservingSearch to="/inventory" />} />
+          <Route path="consumables"  element={<RedirectPreservingSearch to="/inventory" />} />
+          <Route path="stock"        element={<RedirectPreservingSearch to="/inventory" />} />
+          <Route path="purchases"    element={<InventoryPurchasesPage />} />
+          <Route path="prints"       element={<InventoryPrintsPage />} />
+          <Route path="io"           element={<InventoryImportExportPage />} />
         </Route>
 
-        {/* Cost — QuotesPage V1 absorbida por CostPage V2 (tab Cotizaciones).
-            CalculatorPageV2 era incompleto y se borró; queda solo la V1
-            funcional en /cost/calculator. Redirect /cost/calculator/v2 → V1
-            mientras se hace el visual refresh completo en un PR futuro. */}
+        {/* Cost — `index` es el dashboard (tabs Cotizaciones / Historial).
+            Sub-rutas para Calculator, Manual, Printers, History y Settings
+            (tarifa eléctrica). /cost/quotes y /cost/calculator/v2 redirigen. */}
         <Route path="/cost">
-          <Route index element={<Navigate to="/cost/v2" replace />} />
-          <Route path="v2" element={<CostPage />} />
+          <Route index               element={<CostPage />} />
+          <Route path="v2"           element={<RedirectPreservingSearch to="/cost" />} />
+          <Route path="calculator"   element={<CalculatorPage />} />
           <Route path="calculator/v2" element={<RedirectPreservingSearch to="/cost/calculator" />} />
-          <Route path="calculator" element={<CalculatorPage />} />
-          <Route path="quotes" element={<RedirectPreservingSearch to="/cost/v2" />} />
-          <Route path="manual" element={<ManualQuotePage />} />
-          <Route path="printers" element={<PrintersPage />} />
-          <Route path="history" element={<HistoryPage />} />
-          <Route path="settings" element={<CostSettingsPage />} />
+          <Route path="quotes"       element={<RedirectPreservingSearch to="/cost" />} />
+          <Route path="manual"       element={<ManualQuotePage />} />
+          <Route path="printers"     element={<PrintersPage />} />
+          <Route path="history"      element={<HistoryPage />} />
+          <Route path="settings"     element={<CostSettingsPage />} />
         </Route>
 
-        {/* Settings — V1 (Cuenta / Empresa / Usuarios) reemplazadas por
-            SettingsPage con drawers integrados. /settings/company
-            redirige a /company/v2 (Fase 6 ya tenía el ProfileFormDrawer). */}
+        {/* Settings — `index` cubre Cuenta + Usuarios (admin) vía drawers.
+            /settings/company redirige a /company para editar perfil. */}
         <Route path="/settings">
-          <Route index element={<Navigate to="/settings/v2" replace />} />
-          <Route path="v2" element={<SettingsPage />} />
-          <Route path="account" element={<Navigate to="/settings/v2" replace />} />
-          <Route path="users"   element={<Navigate to="/settings/v2" replace />} />
-          <Route path="company" element={<Navigate to="/company/v2" replace />} />
+          <Route index           element={<SettingsPage />} />
+          <Route path="v2"       element={<RedirectPreservingSearch to="/settings" />} />
+          <Route path="account"  element={<RedirectPreservingSearch to="/settings" />} />
+          <Route path="users"    element={<RedirectPreservingSearch to="/settings" />} />
+          <Route path="company"  element={<RedirectPreservingSearch to="/company" />} />
         </Route>
 
-        {/* Slicer — Upload/History/JobDetail absorbidos por tabs+drawer
-            de SlicerPage v2. Redirects para bookmarks viejos. */}
+        {/* Slicer — `index` con tabs internos (Upload / Historial) + drawer
+            de detalle. Las URLs legacy redirigen. */}
         <Route path="/slicer">
-          <Route index element={<Navigate to="/slicer/v2" replace />} />
-          <Route path="v2" element={<SlicerPage />} />
-          <Route path="upload"   element={<RedirectPreservingSearch to="/slicer/v2" />} />
-          <Route path="history"  element={<RedirectPreservingSearch to="/slicer/v2" />} />
-          <Route path="jobs/:id" element={<RedirectPreservingSearch to="/slicer/v2" />} />
+          <Route index           element={<SlicerPage />} />
+          <Route path="v2"       element={<RedirectPreservingSearch to="/slicer" />} />
+          <Route path="upload"   element={<RedirectPreservingSearch to="/slicer" />} />
+          <Route path="history"  element={<RedirectPreservingSearch to="/slicer" />} />
+          <Route path="jobs/:id" element={<RedirectPreservingSearch to="/slicer" />} />
         </Route>
 
-        {/* Mantenimiento — V2 reemplaza por completo Dashboard/Logs/Printers V1
-            (el CRUD vive ahora dentro del MaintenancePage vía LogFormDrawer
-            + edición inline de current_hours en el drawer de impresora). */}
+        {/* Mantenimiento — `index` con Dashboard + Historial + CRUD logs
+            + edición inline de horas vía drawer. URLs legacy redirigen. */}
         <Route path="/maintenance">
-          <Route index element={<Navigate to="/maintenance/v2" replace />} />
-          <Route path="v2" element={<MaintenancePage />} />
-          <Route path="dashboard" element={<Navigate to="/maintenance/v2" replace />} />
-          <Route path="logs" element={<Navigate to="/maintenance/v2" replace />} />
-          <Route path="printers" element={<Navigate to="/maintenance/v2" replace />} />
+          <Route index           element={<MaintenancePage />} />
+          <Route path="v2"       element={<RedirectPreservingSearch to="/maintenance" />} />
+          <Route path="dashboard" element={<RedirectPreservingSearch to="/maintenance" />} />
+          <Route path="logs"     element={<RedirectPreservingSearch to="/maintenance" />} />
+          <Route path="printers" element={<RedirectPreservingSearch to="/maintenance" />} />
         </Route>
 
-        {/* Queue — V1 (QueuePage + QueueHistoryPage) absorbidas por tabs
-            internos de la v2 (Activa / Historial). Redirects para bookmarks. */}
+        {/* Queue — `index` con tabs internos (Activa / Historial). */}
         <Route path="/queue">
-          <Route index element={<Navigate to="/queue/v2" replace />} />
-          <Route path="v2" element={<QueuePage />} />
-          <Route path="legacy"  element={<RedirectPreservingSearch to="/queue/v2" />} />
-          <Route path="history" element={<RedirectPreservingSearch to="/queue/v2" />} />
+          <Route index           element={<QueuePage />} />
+          <Route path="v2"       element={<RedirectPreservingSearch to="/queue" />} />
+          <Route path="legacy"   element={<RedirectPreservingSearch to="/queue" />} />
+          <Route path="history"  element={<RedirectPreservingSearch to="/queue" />} />
         </Route>
 
-        {/* Compañía (solo admin) — Profile/Branding/Templates list reemplazadas
-            por CompanyPage (drawers integrados). El editor de templates
-            sigue como ruta dedicada por su tamaño (textarea HTML grande). */}
+        {/* Compañía (solo admin) — `index` con drawers integrados
+            (Perfil / Marca / Templates list). El editor de templates
+            queda como ruta dedicada por su tamaño (textarea HTML grande). */}
         <Route
           path="/company"
           element={<AdminRoute><Outlet /></AdminRoute>}
         >
-          <Route index element={<Navigate to="/company/v2" replace />} />
-          <Route path="v2" element={<CompanyPage />} />
-          <Route path="profile"       element={<Navigate to="/company/v2" replace />} />
-          <Route path="branding"      element={<Navigate to="/company/v2" replace />} />
-          <Route path="templates"     element={<Navigate to="/company/v2" replace />} />
+          <Route index               element={<CompanyPage />} />
+          <Route path="v2"           element={<RedirectPreservingSearch to="/company" />} />
+          <Route path="profile"      element={<RedirectPreservingSearch to="/company" />} />
+          <Route path="branding"     element={<RedirectPreservingSearch to="/company" />} />
+          <Route path="templates"    element={<RedirectPreservingSearch to="/company" />} />
           <Route path="templates/new" element={<CompanyTemplateEditorPage />} />
           <Route path="templates/:id" element={<CompanyTemplateEditorPage />} />
         </Route>
 
-        {/* Vault — V1 (galería + upload) reemplazada por V2. Las rutas
-            legacy redirigen a v2 para preservar bookmarks viejos. */}
+        {/* Vault — `index` es la galería; subir es ruta dedicada. */}
         <Route path="/vault">
-          <Route index element={<VaultPage />} />
-          <Route path="v2" element={<VaultPage />} />
-          <Route path="legacy" element={<Navigate to="/vault" replace />} />
-          <Route path="upload" element={<Navigate to="/vault/upload/v2" replace />} />
-          <Route path="upload/v2" element={<VaultUploadPage />} />
+          <Route index           element={<VaultPage />} />
+          <Route path="v2"       element={<RedirectPreservingSearch to="/vault" />} />
+          <Route path="legacy"   element={<RedirectPreservingSearch to="/vault" />} />
+          <Route path="upload"   element={<VaultUploadPage />} />
+          <Route path="upload/v2" element={<RedirectPreservingSearch to="/vault/upload" />} />
         </Route>
       </Route>
     </Routes>
