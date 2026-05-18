@@ -14,18 +14,18 @@ test.describe('Cost — flujos críticos', () => {
     await loginAsDev(page);
   });
 
-  test('navega de /cost/v2 a la calculadora vía CTA', async ({ page }, testInfo) => {
+  test('navega de /cost a la calculadora vía CTA', async ({ page }, testInfo) => {
     // El CTA "Nueva cotización" vive en el header desktop. En mobile no existe
     // (el equivalente es el FAB). Skip mobile.
     test.skip(testInfo.project.name === 'mobile-iphone12', 'CTA solo en desktop');
-    await page.goto('/cost/v2');
+    await page.goto('/cost');
     await page.waitForLoadState('networkidle');
     const ctaNueva = page.getByRole('link', { name: /nueva cotización/i }).first();
     await expect(ctaNueva).toBeVisible();
   });
 
   test('cambia entre tabs Cotizaciones / Historial / Calculadora', async ({ page }) => {
-    await page.goto('/cost/v2');
+    await page.goto('/cost');
     await page.waitForLoadState('networkidle');
 
     // Tab Historial existe y se puede activar
@@ -37,10 +37,10 @@ test.describe('Cost — flujos críticos', () => {
   });
 
   test('calculator pre-rellena weight_grams y print_time desde slicer', async ({ page }) => {
-    // /cost/calculator/v2 fue borrada en Fase 9 chunk B (V2 era incompleta);
-    // el redirect a /cost/calculator preserva el query string vía
-    // RedirectPreservingSearch. La calculadora V1 normaliza weight a 2
-    // decimales (step=0.01) y convierte print_time_hours → minutos.
+    // /cost/calculator/v2 sigue como ruta legacy (redirect a /cost/calculator
+    // preservando query string vía RedirectPreservingSearch). Verificamos que
+    // el redirect funciona: la calculadora normaliza weight a 2 decimales
+    // (step=0.01) y convierte print_time_hours → minutos.
     await page.goto('/cost/calculator/v2?weight_grams=245&print_time_hours=3.5');
     await page.waitForLoadState('networkidle');
 
@@ -56,7 +56,7 @@ test.describe('Cost — flujos críticos', () => {
   // intermitente en CI. Refactor pendiente: agregar data-testid al toast o
   // chequear el panel de resumen vacío en lugar del toast.
   test.skip('botón Calcular muestra error si faltan campos', async ({ page }) => {
-    await page.goto('/cost/calculator/v2');
+    await page.goto('/cost/calculator');
     await page.waitForLoadState('networkidle');
     const btnCalc = page.getByRole('button', { name: /calcular/i }).first();
     await btnCalc.click();

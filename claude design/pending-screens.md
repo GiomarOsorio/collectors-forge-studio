@@ -189,7 +189,7 @@ const STATUS_PRESETS = {
 
 Usa el tone SEMÁNTICO, no el color visual literal. Si algo es "en camino" → tone `printing` (azul), no inventes uno nuevo.
 
-## 0.6 EmptyState v2
+## 0.6 EmptyState
 
 ```jsx
 <EmptyState
@@ -421,7 +421,7 @@ Pantalla full-screen con fondo dark + gradient sutil. Centrado vertical y horizo
 
 ---
 
-## 2. Cost — Cotizaciones — `/cost/v2` (CostPage)
+## 2. Cost — Cotizaciones — `/cost` (CostPage)
 
 **Propósito**: Hub de la app Cost. Lista cotizaciones recientes + estadísticas + accesos a calcular, manual, historial.
 **Acceso**: usuario.
@@ -432,7 +432,7 @@ Pantalla full-screen con fondo dark + gradient sutil. Centrado vertical y horizo
 
 1. **Cotizaciones** — ClientQuotes (manuales del cliente)
 2. **Historial** — Quotes (de calcular pieza)
-3. **Calculadora** — link a `/cost/calculator/v2`
+3. **Calculadora** — link a `/cost/calculator`
 
 ### KPIs desktop (4 tiles, accent teal #2DD4BF)
 
@@ -489,11 +489,11 @@ Pantalla full-screen con fondo dark + gradient sutil. Centrado vertical y horizo
 
 - Status posibles (mapping a tone): `borrador → info`, `enviada → printing`, `aceptada → done`, `vencida → danger`, `cancelada → neutral`
 - ClientQuote vs Quote: ambas se listan pero en tabs distintos
-- "Calculadora" tab solo redirige a /cost/calculator/v2 (no contenido propio)
+- "Calculadora" tab solo redirige a /cost/calculator (no contenido propio)
 
 ---
 
-## 3. Cost — Calcular pieza — `/cost/calculator/v2` (CalculatorPageV2)
+## 3. Cost — Calcular pieza — `/cost/calculator` (CalculatorPage)
 
 **Propósito**: Calculadora de costo de una pieza individual. Toma weight, time, material, configura márgenes y calcula precio.
 **Acceso**: usuario.
@@ -667,8 +667,8 @@ Igual al CostPage tab "Historial" pero standalone. Probablemente **fusionar con 
 
 ### Notas
 
-- Click row → DetailDrawer derecho con breakdown completo (mismo del CalculatorPageV2)
-- "Duplicar" → carga la quote en /cost/calculator/v2 con prefill
+- Click row → DetailDrawer derecho con breakdown completo (mismo del CalculatorPage)
+- "Duplicar" → carga la quote en /cost/calculator con prefill
 
 ---
 
@@ -864,7 +864,7 @@ Fecha | Cliente | Pieza | Material | Peso real | Tiempo real | Costo real | vs C
 
 ### Layout desktop
 
-Igual al "Compras" tab del Inventory v2 actual, pero con MÁS detalle. Use:
+Igual al "Compras" tab del Inventory actual, pero con MÁS detalle. Use:
 
 - KPI strip (#8B5CF6 morado): Total POs · En ruta · Completadas mes · Total invertido
 - Tabs internos: Activas · Completadas · Borradores
@@ -899,7 +899,7 @@ Tres secciones:
 
 - MobileAppHeader (Inventario · Pedidos)
 - Mini KPI strip (En ruta / Mes / Total invertido)
-- Lista de PurchaseRow compacta (igual al mobile v2)
+- Lista de PurchaseRow compacta (igual al mobile)
 - FAB "+ Nueva orden"
 - Sheet detail con form
 
@@ -1258,7 +1258,7 @@ Sección 2 — Programación
 
 ### Modelo `PrintQueueItem` (status = done|cancelled)
 
-Ya conocido del Queue v2 actual:
+Ya conocido del Queue actual:
 - `id`, `quote_id` (FK SET NULL), `status`, `position`, `started_at`, `completed_at`
 - `printer_id`, `filament_id`, `weight_grams`, `time_seconds`
 - `supplies_detail` jsonb, `additional_filaments_detail` jsonb
@@ -1660,9 +1660,9 @@ Mismo flujo pero stack vertical, sin max-width.
 
 ---
 
-## 20.1 Vault — Selector inline para "Agregar a cola" (PENDIENTE — Fase 5)
+## 20.1 Vault — Selector inline para "Agregar a cola" (✅ IMPLEMENTADO — `VaultPickerDrawer` en `QueuePage`)
 
-**Propósito**: Hoy el botón "Agregar a cola" del header de `/queue/v2`
+**Propósito**: Hoy el botón "Agregar a cola" del header de `/queue`
 navega a `/cost/quotes` (historial de cotizaciones internas). Eso es un
 **stub temporal** — el flujo natural debería ser elegir un modelo del Vault
 que ya tenga `.gcode.3mf` y meterlo a la cola directamente.
@@ -1675,7 +1675,7 @@ que ya tenga `.gcode.3mf` y meterlo a la cola directamente.
 ### UX desktop — modal/drawer picker
 
 ```
-[Click "Agregar a cola" en QueuePageV2 header]
+[Click "Agregar a cola" en QueuePage header]
   ↓
 ┌──── DRAWER PICKER (DetailDrawer width 520) ─────┐
 │ EYEBROW: COLA · NUEVO ITEM                       │
@@ -1717,7 +1717,7 @@ scroll, footer sticky con CTA.
 
 ### Notas
 
-- Esto **reemplaza** la nav actual `Link to="/cost/quotes"` en `QueuePageV2.jsx` (header desktop + FAB mobile + EmptyState CTA).
+- Esto **reemplaza** la nav actual `Link to="/cost/quotes"` en `QueuePage.jsx` (header desktop + FAB mobile + EmptyState CTA).
 - Mantener un atajo secundario "¿necesitas cotizar primero? → /cost/quotes" en el footer del picker para no romper el flujo de quien quiere cotizar antes de imprimir.
 - Backend: `PrintQueueItem` necesita columnas adicionales `vault_model_id` (FK nullable a `ModelFile`) y `print_file_snapshot_path` (path al `.gcode.3mf` congelado al momento de agregar — para que cambios futuros en Vault no rompan el item ya encolado).
 - Migración Alembic: `*_queue_vault_link.py` agrega esas dos columnas + index.
@@ -1850,7 +1850,7 @@ Esfuerzo: S (~150 líneas), M (~400 líneas), L (~800+ líneas).
 - **NO usar `flex` o `grid`** en código que vaya a WeasyPrint (templates Liquid PDF). Usar `<table>`.
 - **Forms**: siempre el patrón FilamentFormDrawer (drawer derecho desktop / sheet mobile).
 - **Lists**: siempre con sticky toolbar arriba (search + filtros + count).
-- **Empty states**: usar EmptyState v2 con accent del app.
+- **Empty states**: usar EmptyState con accent del app.
 - **Status badges**: usar StatusPill con tone semántico, no inventar colores.
 - **Action buttons primarios**: teal por default (forge-teal #2DD4BF). Excepciones por app accent si aplica.
 - **Drag handles**: usar `GripVertical` lucide, opacity 0 default → 60 on hover.

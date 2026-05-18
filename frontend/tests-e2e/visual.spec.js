@@ -16,13 +16,13 @@ import { loginAsDev } from './helpers/auth.js';
 
 const PAGES = [
   { path: '/', name: 'studio-home' },
-  { path: '/inventory/v2', name: 'inventory' },
-  { path: '/cost/v2', name: 'cost' },
+  { path: '/inventory', name: 'inventory' },
+  { path: '/cost', name: 'cost' },
   { path: '/cost/calculator/v2', name: 'calculator' },
-  { path: '/slicer/v2', name: 'slicer' },
-  { path: '/queue/v2', name: 'queue' },
-  { path: '/maintenance/v2', name: 'maintenance' },
-  { path: '/vault/v2', name: 'vault' },
+  { path: '/slicer', name: 'slicer' },
+  { path: '/queue', name: 'queue' },
+  { path: '/maintenance', name: 'maintenance' },
+  { path: '/vault', name: 'vault' },
 ];
 
 test.describe('Visual regression — pantallas v2', () => {

@@ -1,14 +1,13 @@
 /**
- * @file Página rediseñada del Slicer (Claude Design port — Día 5).
+ * @file Página de la app Slicer.
  *
  * Dos pestañas:
  *  - Subir: 3 tarjetas grandes con los flujos disponibles (.3mf/.gcode,
- *    STL → OrcaSlicer, MakerWorld URL). Cada tarjeta lleva al uploader actual
- *    en `/slicer/upload`.
+ *    STL → OrcaSlicer, MakerWorld URL).
  *  - Historial: grid de jobs con metadata (filamento, tiempo, peso, status,
  *    dimensiones). Click → DetailDrawer/MobileSheet con plates breakdown.
  *
- * Reusa primitives de `components/ui/`. Desktop y mobile comparten estado.
+ * Desktop y mobile comparten estado.
  *
  * @module pages/slicer/SlicerPage
  */

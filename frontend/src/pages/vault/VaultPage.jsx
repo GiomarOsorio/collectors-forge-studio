@@ -1,12 +1,10 @@
 /**
- * @file Página rediseñada del Vault (Claude Design v2).
+ * @file Página de la app Vault — galería de modelos `.3mf` / `.gcode.3mf`.
  *
- * Galería de modelos `.3mf` con thumbnails locales (extraídos del ZIP en Fase 4)
- * con prioridad sobre `thumbnail_url` externo.
- *
- * Pendiente Fase 5 (PRs siguientes): soporte de `.gcode.3mf` además de `.3mf`
- * editable + picker drawer "Agregar a cola desde Vault" — ver
- * `claude design/pending-screens.md` §20 + §20.1.
+ * Thumbnails locales (extraídos del ZIP del modelo) con prioridad sobre el
+ * `thumbnail_url` externo. Cada modelo puede tener un slot `source_file`
+ * (`.3mf` editable) y/o `print_file` (`.gcode.3mf` laminado, listo para
+ * imprimir desde la cola).
  *
  * @module pages/vault/VaultPage
  */
@@ -370,7 +368,7 @@ function VaultDrawerFooter({
       )}
       {isAdmin && (
         <Link
-          to={`/vault/upload/v2?replace=${file.id}`}
+          to={`/vault/upload?replace=${file.id}`}
           className="btn btn-ghost btn-sm"
           aria-label="Editar"
         >
@@ -568,7 +566,7 @@ export default function VaultPage() {
                 isAdmin && files.length === 0 ? (
                   <button
                     type="button"
-                    onClick={() => navigate('/vault/upload/v2')}
+                    onClick={() => navigate('/vault/upload')}
                     className="btn btn-primary btn-sm"
                   >
                     <Upload size={13} /> Subir primer modelo
@@ -589,7 +587,7 @@ export default function VaultPage() {
         {isAdmin && (
           <button
             type="button"
-            onClick={() => navigate('/vault/upload/v2')}
+            onClick={() => navigate('/vault/upload')}
             className="fixed bottom-20 right-4 z-40 inline-flex items-center gap-2 pl-4 pr-5 py-3.5 rounded-full font-semibold text-sm shadow-2xl active:scale-95 transition-transform"
             style={{ background: ACCENT, color: '#FFF', boxShadow: `0 8px 24px ${ACCENT}55` }}
             aria-label="Subir modelo"
@@ -642,7 +640,7 @@ export default function VaultPage() {
           </span>
         </div>
         {isAdmin && (
-          <Link to="/vault/upload/v2" className="btn btn-primary btn-sm">
+          <Link to="/vault/upload" className="btn btn-primary btn-sm">
             <Upload size={13} /> Subir modelo
           </Link>
         )}
@@ -685,7 +683,7 @@ export default function VaultPage() {
           }
           action={
             isAdmin && files.length === 0 ? (
-              <Link to="/vault/upload/v2" className="btn btn-primary btn-sm">
+              <Link to="/vault/upload" className="btn btn-primary btn-sm">
                 <Upload size={13} /> Subir primer modelo
               </Link>
             ) : null
