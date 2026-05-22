@@ -7,7 +7,7 @@ con múltiples líneas de producto, nombre de cliente y fechas de vigencia.
 
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import Annotated, List, Optional
+from typing import Annotated, List, Literal, Optional
 
 from pydantic import BaseModel, Field, PlainSerializer, model_validator
 
@@ -24,11 +24,15 @@ class ClientQuoteLineItem(BaseModel):
     Atributos:
         name:       Nombre o descripción del producto/servicio.
         quantity:   Cantidad de unidades.
-        unit_price: Precio unitario en USD.
+        unit_price: Precio unitario.
+        currency:   Moneda del unit_price ("USD" o "COP"). Default USD por
+                    retrocompatibilidad — items sin currency en JSONB legacy
+                    se asumen en USD.
     """
     name: str = Field(min_length=1)
     quantity: DecimalAsFloat = Field(gt=0)
     unit_price: DecimalAsFloat = Field(ge=0)
+    currency: Literal["USD", "COP"] = Field(default="USD")
 
 
 class ClientQuoteCreate(BaseModel):

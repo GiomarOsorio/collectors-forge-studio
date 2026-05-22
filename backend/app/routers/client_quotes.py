@@ -92,9 +92,16 @@ async def create_client_quote(
     """
     expiry_date = data.quote_date + timedelta(days=data.expiry_days)
     cop_rate = await get_usd_to_cop()
+    cop_rate_dec = Decimal(str(cop_rate))
 
+    # `subtotal` se mantiene en USD por compatibilidad con PDF + datos
+    # existentes. Items en COP se convierten a USD vía rate al sumar.
     subtotal = sum(
-        Decimal(str(item.quantity)) * Decimal(str(item.unit_price))
+        (
+            Decimal(str(item.quantity))
+            * Decimal(str(item.unit_price))
+            / (cop_rate_dec if item.currency == "COP" else Decimal("1"))
+        )
         for item in data.items
     )
 
@@ -103,6 +110,7 @@ async def create_client_quote(
             "name": item.name,
             "quantity": float(item.quantity),
             "unit_price": float(item.unit_price),
+            "currency": item.currency,
         }
         for item in data.items
     ]

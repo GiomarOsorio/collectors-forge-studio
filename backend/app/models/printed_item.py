@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import String, Numeric, DateTime, Text, Integer
+from sqlalchemy import String, Numeric, DateTime, Text, Integer, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -44,6 +44,10 @@ class PrintedItem(Base):
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     unit_price: Mapped[Optional[Decimal]] = mapped_column(
         Numeric(10, 2), nullable=True
+    )
+    # Moneda del unit_price: 'USD' o 'COP'. Default USD por compat con UI V1.
+    currency: Mapped[str] = mapped_column(
+        String(3), nullable=False, server_default=text("'USD'")
     )
 
     # Material y acabado
