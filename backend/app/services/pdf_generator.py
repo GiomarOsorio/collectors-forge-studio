@@ -552,9 +552,11 @@ def generate_client_quote_pdf(
         ]
     ]
     for item in items:
-        qty      = item["quantity"]
-        unit_p   = item["unit_price"] * usd_rate
-        line_tot = qty * unit_p
+        qty       = item["quantity"]
+        # currency por item (issue #78). Items sin campo = USD legacy.
+        item_curr = item.get("currency", "USD")
+        unit_p    = item["unit_price"] * usd_rate if item_curr == "USD" else item["unit_price"]
+        line_tot  = qty * unit_p
         rows.append([
             Paragraph(item["name"],       st["sTC"]),
             Paragraph(str(qty),           st["sTC"]),

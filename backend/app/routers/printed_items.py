@@ -80,6 +80,7 @@ def _to_response(item: PrintedItem) -> PrintedItemResponse:
         image_url=image_url,
         quantity=item.quantity,
         unit_price=item.unit_price,
+        currency=item.currency or "USD",
         material=item.material,
         color=item.color,
         created_at=item.created_at,
@@ -145,6 +146,7 @@ async def create_printed_item(
         description=data.description,
         quantity=data.quantity,
         unit_price=data.unit_price,
+        currency=data.currency,
         material=data.material,
         color=data.color,
     )

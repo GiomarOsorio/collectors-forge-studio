@@ -11,9 +11,23 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createClientQuote, getPrintedItems } from '../services/api';
+import { createClientQuote, getPrintedItems, getExchangeRate } from '../services/api';
 import toast from 'react-hot-toast';
 import { FileEdit, Plus, Trash2, Package, X, ToggleLeft, ToggleRight } from 'lucide-react';
+import { fmtCOP, fmtUSD } from '../utils/inventoryAdapter';
+
+/**
+ * Convierte un monto a COP usando la tasa actual.
+ * @param {number} amount
+ * @param {'USD'|'COP'} currency
+ * @param {number} rate - USD → COP
+ * @returns {number} COP equivalente
+ */
+const toCOP = (amount, currency, rate) => {
+  if (currency === 'COP') return amount;
+  if (!rate) return 0;
+  return amount * rate;
+};
 
 /**
  * Retorna la fecha de hoy en formato YYYY-MM-DD para el input type="date".
@@ -45,11 +59,15 @@ export default function ManualQuotePage() {
   const [loading, setLoading] = useState(false);
   const [prints, setPrints] = useState([]);
   const [selectorOpen, setSelectorOpen] = useState(null); // idx de la línea que abrió el selector
+  const [exchangeRate, setExchangeRate] = useState(null); // USD → COP
 
   useEffect(() => {
     getPrintedItems({ limit: 100 })
       .then((res) => setPrints(res.data.items || []))
       .catch(() => {}); // silencioso si no hay impresiones
+    getExchangeRate()
+      .then((res) => setExchangeRate(Number(res.data.rate_used)))
+      .catch(() => {}); // silencioso, conversión sólo se muestra si está disponible
   }, []);
 
   /** @type {[Object, Function]} Datos principales de la cotización */
@@ -68,7 +86,7 @@ export default function ManualQuotePage() {
 
   /** @type {[Array, Function]} Líneas de producto */
   const [items, setItems] = useState([
-    { name: '', quantity: '1', unit_price: '' },
+    { name: '', quantity: '1', unit_price: '', currency: 'COP' },
   ]);
 
   const handleChange = (e) => {
@@ -91,6 +109,7 @@ export default function ManualQuotePage() {
    * - Si idx es 'add', agrega una nueva línea con los datos del producto.
    */
   const selectPrint = (idx, print) => {
+    const printCurrency = print.currency || 'USD';
     if (idx === 'add') {
       setItems((prev) => [
         ...prev,
@@ -98,12 +117,13 @@ export default function ManualQuotePage() {
           name: print.name,
           quantity: '1',
           unit_price: print.unit_price != null ? String(print.unit_price) : '',
+          currency: printCurrency,
         },
       ]);
     } else {
       setItems((prev) => prev.map((it, i) =>
         i === idx
-          ? { ...it, name: print.name, unit_price: print.unit_price != null ? String(print.unit_price) : it.unit_price }
+          ? { ...it, name: print.name, unit_price: print.unit_price != null ? String(print.unit_price) : it.unit_price, currency: printCurrency }
           : it
       ));
     }
@@ -116,15 +136,18 @@ export default function ManualQuotePage() {
     setItems((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  /** Calcula el subtotal en tiempo real. */
-  const subtotal = items.reduce((sum, it) => {
+  /**
+   * Subtotal canónico en COP (suma de items con conversión USD → COP).
+   * También se calcula en USD para mostrar equivalencia debajo del total.
+   */
+  const subtotalCOP = items.reduce((sum, it) => {
     const qty = parseInt(it.quantity) || 0;
     const price = parseFloat(it.unit_price) || 0;
-    return sum + qty * price;
+    return sum + toCOP(qty * price, it.currency || 'COP', exchangeRate);
   }, 0);
 
-  const ivaAmount = includeIva ? subtotal * (parseFloat(ivaPercent) || 0) / 100 : 0;
-  const totalConIva = subtotal + ivaAmount;
+  const ivaAmountCOP = includeIva ? subtotalCOP * (parseFloat(ivaPercent) || 0) / 100 : 0;
+  const totalConIvaCOP = subtotalCOP + ivaAmountCOP;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -145,6 +168,7 @@ export default function ManualQuotePage() {
           name: it.name,
           quantity: parseInt(it.quantity) || 1,
           unit_price: parseFloat(it.unit_price) || 0,
+          currency: it.currency || 'COP',
         })),
         include_iva: includeIva,
         iva_percent: parseFloat(ivaPercent) || 19.0,
@@ -231,16 +255,22 @@ export default function ManualQuotePage() {
           <div className="space-y-3">
             {/* Encabezado de columnas (visible en sm+) */}
             <div className="hidden sm:grid grid-cols-12 gap-2 text-xs text-gunmetal font-medium px-1">
-              <span className="col-span-5">Descripción</span>
+              <span className="col-span-4">Descripción</span>
               <span className="col-span-2 text-right">Cantidad</span>
-              <span className="col-span-3 text-right">Precio unit. (USD)</span>
-              <span className="col-span-1 text-right">Total</span>
+              <span className="col-span-2 text-center">Moneda</span>
+              <span className="col-span-2 text-right">Precio unit.</span>
+              <span className="col-span-1 text-right">Total (COP)</span>
               <span className="col-span-1"></span>
             </div>
 
-            {items.map((it, idx) => (
+            {items.map((it, idx) => {
+              const qty = parseFloat(it.quantity) || 0;
+              const price = parseFloat(it.unit_price) || 0;
+              const lineTotalLocal = qty * price;
+              const lineTotalCOP = toCOP(lineTotalLocal, it.currency || 'COP', exchangeRate);
+              return (
               <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                <div className="col-span-12 sm:col-span-5 flex gap-1">
+                <div className="col-span-12 sm:col-span-4 flex gap-1">
                   <input
                     value={it.name} onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
                     className="tf-input text-sm flex-1" placeholder="Nombre del producto o servicio" required />
@@ -255,20 +285,49 @@ export default function ManualQuotePage() {
                     </button>
                   )}
                 </div>
-                <div className="col-span-4 sm:col-span-2">
+                <div className="col-span-3 sm:col-span-2">
                   <input
                     type="number" min="1" step="1" value={it.quantity}
                     onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
                     className="tf-input text-sm text-right" placeholder="1" required />
                 </div>
-                <div className="col-span-5 sm:col-span-3">
+                <div className="col-span-3 sm:col-span-2 flex justify-center">
+                  <div className="inline-flex rounded-md border border-dark-border overflow-hidden text-xs">
+                    <button
+                      type="button"
+                      onClick={() => handleItemChange(idx, 'currency', 'COP')}
+                      className={`px-2 py-1 font-medium transition-colors ${
+                        (it.currency || 'COP') === 'COP'
+                          ? 'bg-forge-teal text-forge-black'
+                          : 'text-gunmetal hover:text-tech-white'
+                      }`}
+                      aria-pressed={(it.currency || 'COP') === 'COP'}
+                    >COP</button>
+                    <button
+                      type="button"
+                      onClick={() => handleItemChange(idx, 'currency', 'USD')}
+                      className={`px-2 py-1 font-medium transition-colors ${
+                        it.currency === 'USD'
+                          ? 'bg-forge-teal text-forge-black'
+                          : 'text-gunmetal hover:text-tech-white'
+                      }`}
+                      aria-pressed={it.currency === 'USD'}
+                    >USD</button>
+                  </div>
+                </div>
+                <div className="col-span-4 sm:col-span-2">
                   <input
                     type="number" min="0" step="0.01" value={it.unit_price}
                     onChange={(e) => handleItemChange(idx, 'unit_price', e.target.value)}
                     className="tf-input text-sm text-right" placeholder="0.00" required />
+                  {it.currency === 'USD' && exchangeRate && price > 0 && (
+                    <p className="text-[10px] text-gunmetal text-right mt-0.5 mono">
+                      ≈ {fmtCOP(price * exchangeRate)}
+                    </p>
+                  )}
                 </div>
-                <div className="col-span-2 sm:col-span-1 text-right text-sm text-tech-white font-medium">
-                  {((parseFloat(it.quantity) || 0) * (parseFloat(it.unit_price) || 0)).toFixed(2)}
+                <div className="col-span-1 text-right text-sm text-tech-white font-medium mono">
+                  {fmtCOP(lineTotalCOP)}
                 </div>
                 <div className="col-span-1 flex justify-end">
                   <button
@@ -279,7 +338,7 @@ export default function ManualQuotePage() {
                   </button>
                 </div>
               </div>
-            ))}
+            );})}
           </div>
 
           {/* Subtotal + IVA toggle */}
@@ -314,28 +373,39 @@ export default function ManualQuotePage() {
               )}
             </div>
 
-            {/* Resumen de totales */}
+            {/* Resumen de totales en COP (canónico). USD se muestra como equivalencia. */}
             <div className="text-right space-y-1">
               <div className="flex items-center justify-end gap-4">
                 <p className="text-sm text-gunmetal">Subtotal</p>
-                <p className="text-lg font-semibold text-tech-white w-28">$ {subtotal.toFixed(2)}</p>
+                <p className="text-lg font-semibold text-tech-white w-36 mono">{fmtCOP(subtotalCOP)}</p>
               </div>
               {includeIva ? (
                 <>
                   <div className="flex items-center justify-end gap-4">
                     <p className="text-sm text-gunmetal">IVA ({parseFloat(ivaPercent) || 0}%)</p>
-                    <p className="text-lg font-semibold text-tech-white w-28">$ {ivaAmount.toFixed(2)}</p>
+                    <p className="text-lg font-semibold text-tech-white w-36 mono">{fmtCOP(ivaAmountCOP)}</p>
                   </div>
                   <div className="flex items-center justify-end gap-4 border-t border-dark-border pt-1 mt-1">
-                    <p className="text-sm text-gunmetal font-medium">Total (USD)</p>
-                    <p className="text-2xl font-bold text-forge-teal w-28">$ {totalConIva.toFixed(2)}</p>
+                    <p className="text-sm text-gunmetal font-medium">Total (COP)</p>
+                    <p className="text-2xl font-bold text-forge-teal w-36 mono">{fmtCOP(totalConIvaCOP)}</p>
                   </div>
+                  {exchangeRate && (
+                    <p className="text-[11px] text-gunmetal mono">≈ {fmtUSD(totalConIvaCOP / exchangeRate)}</p>
+                  )}
                 </>
               ) : (
-                <div className="flex items-center justify-end gap-4">
-                  <p className="text-sm text-gunmetal">IVA</p>
-                  <p className="text-sm text-gunmetal w-28">No Aplica</p>
-                </div>
+                <>
+                  <div className="flex items-center justify-end gap-4">
+                    <p className="text-sm text-gunmetal">IVA</p>
+                    <p className="text-sm text-gunmetal w-36">No Aplica</p>
+                  </div>
+                  {exchangeRate && subtotalCOP > 0 && (
+                    <p className="text-[11px] text-gunmetal mono">≈ {fmtUSD(subtotalCOP / exchangeRate)}</p>
+                  )}
+                </>
+              )}
+              {!exchangeRate && items.some((it) => it.currency === 'USD') && (
+                <p className="text-[11px] text-amber-400">⚠ Tasa USD→COP no disponible</p>
               )}
             </div>
           </div>
@@ -383,8 +453,12 @@ export default function ManualQuotePage() {
                     <span className="text-tech-white text-sm font-medium group-hover:text-blue-400 transition-colors">
                       {p.name}
                     </span>
-                    <span className="text-forge-teal text-sm font-bold ml-2 shrink-0">
-                      {p.unit_price != null ? `$ ${parseFloat(p.unit_price).toFixed(2)}` : '—'}
+                    <span className="text-forge-teal text-sm font-bold ml-2 shrink-0 mono">
+                      {p.unit_price != null
+                        ? (p.currency === 'COP'
+                            ? fmtCOP(parseFloat(p.unit_price))
+                            : `${fmtUSD(parseFloat(p.unit_price))} USD`)
+                        : '—'}
                     </span>
                   </div>
                   <div className="flex gap-2 mt-0.5">

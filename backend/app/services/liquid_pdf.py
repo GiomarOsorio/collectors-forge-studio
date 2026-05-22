@@ -381,8 +381,10 @@ def _build_cot_context(
     items_raw = client_quote.items
     items_ctx = []
     for item in items_raw:
-        unit_p   = item["unit_price"] * usd_rate
-        line_tot = item["quantity"] * unit_p
+        # currency por item (issue #78). Items legacy sin campo = USD.
+        item_curr = item.get("currency", "USD")
+        unit_p    = item["unit_price"] * usd_rate if item_curr == "USD" else item["unit_price"]
+        line_tot  = item["quantity"] * unit_p
         items_ctx.append({
             "name":           item["name"],
             "quantity":       int(item["quantity"]) if item["quantity"] == int(item["quantity"]) else item["quantity"],

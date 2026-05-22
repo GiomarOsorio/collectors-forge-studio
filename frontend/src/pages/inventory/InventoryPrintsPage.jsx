@@ -22,15 +22,29 @@ import {
   deletePrintedItem,
   sellPrintedItem,
   uploadPrintedItemImage,
+  getExchangeRate,
 } from '../../services/api';
+import { fmtCOP, fmtUSD } from '../../utils/inventoryAdapter';
 
-/** Estado vacío del formulario */
+/**
+ * Formatea el precio según la moneda del ítem (issue #78).
+ * @param {number|string|null} price
+ * @param {'USD'|'COP'} currency
+ */
+const fmtPrice = (price, currency) => {
+  if (price == null || price === '') return '—';
+  const n = parseFloat(price);
+  return currency === 'COP' ? fmtCOP(n) : `${fmtUSD(n)} USD`;
+};
+
+/** Estado vacío del formulario (default COP por preferencia de Giomar) */
 const EMPTY_FORM = {
   name: '',
   category: '',
   description: '',
   quantity: '0',
   unit_price: '',
+  currency: 'COP',
   material: '',
   color: '',
 };
@@ -46,7 +60,12 @@ const CATEGORIAS_SUGERIDAS = [
  *
  * @param {{ item: object, onEdit: Function, onDelete: Function, onSell: Function }} props
  */
-function PrintCard({ item, onEdit, onDelete, onSell }) {
+function PrintCard({ item, onEdit, onDelete, onSell, exchangeRate }) {
+  const itemCurrency = item.currency || 'USD';
+  const priceNum = item.unit_price != null ? parseFloat(item.unit_price) : null;
+  const priceCOP = priceNum != null && itemCurrency === 'USD' && exchangeRate
+    ? priceNum * exchangeRate
+    : null;
   return (
     <div className="tf-card rounded-xl overflow-hidden flex flex-col group hover:border-blue-500/30 transition-colors">
       {/* Imagen o placeholder */}
@@ -98,8 +117,11 @@ function PrintCard({ item, onEdit, onDelete, onSell }) {
 
         {/* Precio y acciones */}
         <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#222630]">
-          <span className="text-tech-white font-bold text-sm">
-            {item.unit_price ? `$ ${parseFloat(item.unit_price).toFixed(2)}` : '—'}
+          <span className="text-tech-white font-bold text-sm mono">
+            <span>{fmtPrice(item.unit_price, itemCurrency)}</span>
+            {priceCOP != null && (
+              <span className="block text-[10px] text-gunmetal font-normal">≈ {fmtCOP(priceCOP)}</span>
+            )}
           </span>
           <div className="flex gap-1">
             <button
@@ -150,6 +172,7 @@ export default function InventoryPrintsPage() {
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [exchangeRate, setExchangeRate] = useState(null);
   const fileInputRef = useRef(null);
 
   const load = async () => {
@@ -165,7 +188,12 @@ export default function InventoryPrintsPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    getExchangeRate()
+      .then((res) => setExchangeRate(Number(res.data.rate_used)))
+      .catch(() => {});
+  }, []);
 
   const openCreate = () => {
     setEditingItem(null);
@@ -183,6 +211,7 @@ export default function InventoryPrintsPage() {
       description: item.description || '',
       quantity: String(item.quantity ?? 0),
       unit_price: item.unit_price != null ? String(item.unit_price) : '',
+      currency: item.currency || 'USD',
       material: item.material || '',
       color: item.color || '',
     });
@@ -211,6 +240,7 @@ export default function InventoryPrintsPage() {
         description: form.description || null,
         quantity: parseInt(form.quantity) || 0,
         unit_price: form.unit_price ? parseFloat(form.unit_price) : null,
+        currency: form.currency || 'COP',
         material: form.material || null,
         color: form.color || null,
       };
@@ -315,6 +345,7 @@ export default function InventoryPrintsPage() {
               onEdit={openEdit}
               onDelete={handleDelete}
               onSell={(it) => { setSellItem(it); setSellQty(1); }}
+              exchangeRate={exchangeRate}
             />
           ))}
         </div>
@@ -427,7 +458,23 @@ export default function InventoryPrintsPage() {
                   />
                 </div>
                 <div>
-                  <label className="tf-label">Precio de venta (USD)</label>
+                  <label className="tf-label flex items-center justify-between gap-2">
+                    <span>Precio de venta ({form.currency})</span>
+                    <div className="inline-flex rounded-md border border-dark-border overflow-hidden text-[10px]">
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, currency: 'COP' })}
+                        className={`px-1.5 py-0.5 font-medium ${form.currency === 'COP' ? 'bg-forge-teal text-forge-black' : 'text-gunmetal'}`}
+                        aria-pressed={form.currency === 'COP'}
+                      >COP</button>
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, currency: 'USD' })}
+                        className={`px-1.5 py-0.5 font-medium ${form.currency === 'USD' ? 'bg-forge-teal text-forge-black' : 'text-gunmetal'}`}
+                        aria-pressed={form.currency === 'USD'}
+                      >USD</button>
+                    </div>
+                  </label>
                   <input
                     name="unit_price"
                     type="number"
@@ -438,6 +485,11 @@ export default function InventoryPrintsPage() {
                     className="tf-input text-right"
                     placeholder="0.00"
                   />
+                  {form.currency === 'USD' && exchangeRate && form.unit_price && (
+                    <p className="text-[10px] text-gunmetal text-right mt-0.5 mono">
+                      ≈ {fmtCOP(parseFloat(form.unit_price) * exchangeRate)}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -496,7 +548,7 @@ export default function InventoryPrintsPage() {
               </p>
               {sellItem.unit_price && (
                 <p className="text-gunmetal text-sm">
-                  Precio unitario: <span className="text-tech-white font-bold">$ {parseFloat(sellItem.unit_price).toFixed(2)}</span>
+                  Precio unitario: <span className="text-tech-white font-bold mono">{fmtPrice(sellItem.unit_price, sellItem.currency || 'USD')}</span>
                 </p>
               )}
             </div>
@@ -512,8 +564,8 @@ export default function InventoryPrintsPage() {
                 className="tf-input text-right text-xl font-bold"
               />
               {sellItem.unit_price && (
-                <p className="text-right text-sm text-blue-400 mt-1 font-medium">
-                  Total: $ {(parseFloat(sellItem.unit_price) * sellQty).toFixed(2)}
+                <p className="text-right text-sm text-blue-400 mt-1 font-medium mono">
+                  Total: {fmtPrice(parseFloat(sellItem.unit_price) * sellQty, sellItem.currency || 'USD')}
                 </p>
               )}
             </div>

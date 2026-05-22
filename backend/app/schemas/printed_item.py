@@ -9,7 +9,7 @@ internamente y se serializan como float en JSON.
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, List, Optional
+from typing import Annotated, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, PlainSerializer
 
@@ -34,6 +34,7 @@ class PrintedItemCreate(BaseModel):
     description: Optional[str] = None
     quantity: int = Field(default=0, ge=0)
     unit_price: Optional[Decimal] = Field(default=None, ge=0)
+    currency: Literal["USD", "COP"] = Field(default="USD")
     material: Optional[str] = Field(default=None, max_length=100)
     color: Optional[str] = Field(default=None, max_length=50)
 
@@ -51,6 +52,7 @@ class PrintedItemUpdate(BaseModel):
     description: Optional[str] = None
     quantity: Optional[int] = Field(default=None, ge=0)
     unit_price: Optional[Decimal] = Field(default=None, ge=0)
+    currency: Optional[Literal["USD", "COP"]] = None
     material: Optional[str] = Field(default=None, max_length=100)
     color: Optional[str] = Field(default=None, max_length=50)
 
@@ -73,6 +75,7 @@ class PrintedItemResponse(BaseModel):
     image_url: Optional[str] = None
     quantity: int
     unit_price: Optional[DecimalAsFloat]
+    currency: Literal["USD", "COP"] = "USD"
     material: Optional[str]
     color: Optional[str]
     created_at: datetime
