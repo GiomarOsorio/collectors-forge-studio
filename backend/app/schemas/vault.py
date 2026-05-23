@@ -48,6 +48,16 @@ class ModelFileUpdate(BaseModel):
     creator_url: Optional[str] = Field(default=None, max_length=1000)
 
 
+class PlateInfo(BaseModel):
+    """Info de un plate del .gcode.3mf (issue #68)."""
+    plate_index: int
+    weight_g: Optional[float] = None
+    time_seconds: Optional[int] = None
+    filament_type: Optional[str] = None
+    printer_model: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+
+
 class ModelFileResponse(BaseModel):
     """Respuesta completa de un archivo del Vault con ambos slots."""
     id: int
@@ -84,6 +94,12 @@ class ModelFileResponse(BaseModel):
     source_platform: Optional[str]
     creator_name: Optional[str]
     creator_url: Optional[str]
+
+    # Multi-plate (issue #68). `active_plate_index` indica cuál plate
+    # actualmente sincroniza `sliced_*` + thumbnail principal.
+    active_plate_index: int = 0
+    plates: List[PlateInfo] = Field(default_factory=list)
+
     created_at: datetime
     updated_at: datetime
 

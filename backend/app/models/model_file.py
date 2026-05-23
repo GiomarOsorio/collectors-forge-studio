@@ -32,8 +32,10 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
+    text,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.database import Base
@@ -97,10 +99,19 @@ class ModelFile(Base):
     print_file_size: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
 
     # ── Metadatos pre-parseados del .gcode.3mf (slot print) ────────────────
+    # Estos campos son CACHE del plate activo — sincronizados al cambiar
+    # `active_plate_index` o al re-subir el .gcode.3mf. Queue + Calc leen
+    # estos campos directamente sin tocar `plates`.
     sliced_weight_g: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
     sliced_time_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     sliced_printer_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     sliced_filament_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+
+    # Plate activo dentro del .gcode.3mf — el que se muestra en thumbnail y
+    # el que cachea los `sliced_*`. Issue #68. Default 0 (primer plate).
+    active_plate_index: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("0")
+    )
 
     # ── Display / metadata ──────────────────────────────────────────────────
     name: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -123,6 +134,16 @@ class ModelFile(Base):
         onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
+    # ── Plates extraídos del .gcode.3mf (issue #68) ─────────────────────────
+    # Un `ModelFile` con multi-plate tiene N rows en `model_file_plates`.
+    # cascade=delete-orphan: si se borra el modelo, todos los plates se van.
+    plates: Mapped[list["ModelFilePlate"]] = relationship(
+        "ModelFilePlate",
+        back_populates="model_file",
+        cascade="all, delete-orphan",
+        order_by="ModelFilePlate.plate_index",
+    )
+
     # ── Helpers ─────────────────────────────────────────────────────────────
 
     @property
@@ -134,3 +155,53 @@ class ModelFile(Base):
     def total_size_bytes(self) -> int:
         """Suma source + print (cualquiera puede ser None) — usado por la cuota."""
         return (self.source_file_size or 0) + (self.print_file_size or 0)
+
+
+class ModelFilePlate(Base):
+    """
+    Plate individual extraído de un `.gcode.3mf` multi-plate. Issue #68.
+
+    Un `ModelFile` con N plates tiene N rows aquí, una por cada placa.
+    `plate_index` es 0-based para alinear con `ModelFile.active_plate_index`.
+
+    Cada plate tiene su propio thumbnail PNG en MinIO bajo
+    `thumbnails/{model_file_id}_plate{plate_index}.png` y sus propios
+    `weight_g` / `time_seconds` / `filament_type` extraídos del parser.
+
+    El `thumbnail_key` de `ModelFile` apunta al plate activo (refrescado
+    al cambiar `active_plate_index`).
+    """
+
+    __tablename__ = "model_file_plates"
+    __table_args__ = (
+        UniqueConstraint("model_file_id", "plate_index", name="uq_model_file_plate_idx"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    model_file_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("model_files.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # 0-based: coincide con ModelFile.active_plate_index
+    plate_index: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # Metadata extraída del .gcode.3mf por plate
+    weight_g: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
+    time_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    filament_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    printer_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    # Key MinIO del thumbnail específico de este plate
+    thumbnail_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
+
+    model_file: Mapped["ModelFile"] = relationship(
+        "ModelFile", back_populates="plates"
+    )

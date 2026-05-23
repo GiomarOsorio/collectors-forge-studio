@@ -39,13 +39,56 @@ _PLATE_RE = re.compile(r"^Metadata/plate_\d+\.png$")
 
 def thumbnail_key(model_file_id: int) -> str:
     """
-    Devuelve la key canónica en MinIO para el thumbnail de un `ModelFile`.
+    Devuelve la key canónica en MinIO para el thumbnail principal de un
+    `ModelFile`. Por defecto apunta al plate activo (issue #68).
 
     No hace I/O — es solo la convención de naming. La key es
     `thumbnails/{id}.png` dentro del bucket configurado en
     `MINIO_BUCKET` (`cfs-models`).
     """
     return f"{_THUMB_PREFIX}/{model_file_id}.png"
+
+
+def thumbnail_key_for_plate(model_file_id: int, plate_index: int) -> str:
+    """
+    Key MinIO del thumbnail de un plate específico (issue #68).
+
+    Formato: `thumbnails/{model_file_id}_plate{plate_index}.png`.
+    El plate activo replica adicionalmente bajo `thumbnails/{id}.png`
+    para mantener el endpoint legacy `GET /api/vault/{id}/thumbnail`.
+    """
+    return f"{_THUMB_PREFIX}/{model_file_id}_plate{plate_index}.png"
+
+
+def extract_all_plates_pngs(zip_bytes: bytes) -> dict:
+    """
+    Extrae TODOS los plate PNGs de un `.3mf` (ZIP). Issue #68.
+
+    Returns:
+        dict {plate_index (0-based): png_bytes}. Dict vacío si no se
+        encuentran. `Metadata/plate_N.png` → plate_index N-1 (los
+        slicers numeran desde 1; nosotros 0-based para coincidir con
+        `ModelFile.active_plate_index`).
+    """
+    out: dict = {}
+    try:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            for name in zf.namelist():
+                m = re.match(r"^Metadata/plate_(\d+)\.png$", name)
+                if not m:
+                    continue
+                idx = int(m.group(1)) - 1  # 1-based → 0-based
+                if idx >= 0 and idx not in out:
+                    out[idx] = zf.read(name)
+            # Fallback adicional para archivos sin numeración
+            if not out:
+                for fallback in ("Metadata/thumbnail.png", "Metadata/model_thumbnail.png"):
+                    if fallback in zf.namelist():
+                        out[0] = zf.read(fallback)
+                        break
+    except (zipfile.BadZipFile, OSError) as exc:
+        logger.debug("No se pudieron extraer plates del .3mf: %s", exc)
+    return out
 
 
 def extract_plate_png(zip_bytes: bytes, plate_number: Optional[int] = None) -> Optional[bytes]:
@@ -87,7 +130,7 @@ def extract_plate_png(zip_bytes: bytes, plate_number: Optional[int] = None) -> O
 
 async def save_thumbnail(model_file_id: int, png_bytes: bytes) -> str:
     """
-    Sube los bytes PNG a MinIO y devuelve la key resultante.
+    Sube los bytes PNG del thumbnail principal a MinIO y devuelve la key.
 
     Args:
         model_file_id:  PK del `model_files` al que pertenece la imagen.
@@ -104,10 +147,37 @@ async def save_thumbnail(model_file_id: int, png_bytes: bytes) -> str:
     return key
 
 
+async def save_plate_thumbnail(model_file_id: int, plate_index: int, png_bytes: bytes) -> str:
+    """Sube el thumbnail de un plate específico (issue #68)."""
+    key = thumbnail_key_for_plate(model_file_id, plate_index)
+    await upload_file(key, png_bytes, content_type="image/png")
+    return key
+
+
+async def copy_plate_to_primary(model_file_id: int, png_bytes: bytes) -> str:
+    """
+    Sincroniza el thumbnail del plate activo al slot principal
+    (`thumbnails/{id}.png`) para que el endpoint legacy
+    `GET /api/vault/{id}/thumbnail` siga funcionando.
+    """
+    key = thumbnail_key(model_file_id)
+    await upload_file(key, png_bytes, content_type="image/png")
+    return key
+
+
 async def delete_thumbnail(model_file_id: int) -> None:
-    """Borra el thumbnail de MinIO (no-op silencioso si ya no existe)."""
+    """Borra el thumbnail principal de MinIO (no-op si ya no existe)."""
     key = thumbnail_key(model_file_id)
     try:
         await delete_file(key)
     except Exception as exc:
         logger.debug("No se pudo borrar thumbnail %s: %s", key, exc)
+
+
+async def delete_plate_thumbnail(model_file_id: int, plate_index: int) -> None:
+    """Borra el thumbnail de un plate específico (issue #68)."""
+    key = thumbnail_key_for_plate(model_file_id, plate_index)
+    try:
+        await delete_file(key)
+    except Exception as exc:
+        logger.debug("No se pudo borrar plate thumbnail %s: %s", key, exc)
