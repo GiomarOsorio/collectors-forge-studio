@@ -49,6 +49,7 @@ import { useConfirm } from '../../components/ConfirmDialog';
 import {
   deleteSlicingJob,
   fetchMakerworld,
+  getInventoryFilaments,
   getSlicingJobs,
   uploadGcode,
   uploadStl,
@@ -612,14 +613,201 @@ function JobDrawerBody({ job }) {
 }
 
 /**
+ * Diálogo de mapeo filamentos → inventario (issue #74).
+ *
+ * Cuando un job tiene N filaments (multi-material o single), abre un modal
+ * donde el usuario asigna cada slot del slicer (filament_type + colour_hex
+ * + weight_g) a un filamento real del inventario. Auto-match por tipo
+ * inicial. Submit construye query params con inventory_item_id (slot 0) +
+ * extra_id_1..N + extra_weight_1..N + weight_grams + print_time_hours.
+ */
+function FilamentMappingDialog({ open, onClose, job, onConfirm }) {
+  const [filaments, setFilaments] = useState([]);
+  const [mapping, setMapping] = useState({}); // {slot_idx: inventory_item_id}
+  const [loading, setLoading] = useState(false);
+
+  // Slots = filaments del primer plate (si multi-plate, requiere selección).
+  // Caso single-plate: el array filaments del plate 0 es el set completo.
+  const plate0 = (job?.plates || [])[0];
+  const slots = Array.isArray(plate0?.filaments) && plate0.filaments.length > 0
+    ? plate0.filaments
+    : (job?.filament_type
+        ? [{ filament_type: job.filament_type, colour_hex: '', weight_g: job.filament_weight_g || 0 }]
+        : []);
+
+  useEffect(() => {
+    if (!open) return;
+    setLoading(true);
+    getInventoryFilaments()
+      .then((res) => {
+        const list = (res.data || []).filter((f) => f.quantity > 0 && f.is_active !== false);
+        setFilaments(list);
+        // Auto-match: para cada slot, intentar matching por filament_type
+        const init = {};
+        slots.forEach((s, idx) => {
+          const match = list.find(
+            (f) => (f.filament_type || '').toLowerCase() === (s.filament_type || '').toLowerCase(),
+          );
+          if (match) init[idx] = match.id;
+        });
+        setMapping(init);
+      })
+      .catch(() => toast.error('No se pudieron cargar filamentos del inventario'))
+      .finally(() => setLoading(false));
+  }, [open, job?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!open) return null;
+
+  const canSubmit = slots.length > 0 && slots.every((_, i) => mapping[i]);
+
+  const handleSubmit = () => {
+    const params = new URLSearchParams();
+    const totalWeight = slots.reduce((s, x) => s + (Number(x.weight_g) || 0), 0)
+      || job.filament_weight_g || 0;
+    if (totalWeight) params.set('weight_grams', String(totalWeight.toFixed(0)));
+    if (job.print_time_seconds) {
+      params.set('print_time_hours', String((job.print_time_seconds / 3600).toFixed(4)));
+    }
+    // Slot 0 → filamento principal
+    if (mapping[0]) params.set('inventory_item_id', String(mapping[0]));
+    if (slots[0]?.weight_g) {
+      // El backend ya recibe weight_grams como total; el inventory_item_id
+      // principal usa el peso del slot 0. Si user en calc quiere ajustar,
+      // lo hace ahí.
+    }
+    // Slots adicionales → extra_id_N + extra_weight_N (1-based, max 4)
+    slots.slice(1, 5).forEach((s, i) => {
+      const idx = i + 1;
+      if (mapping[idx]) {
+        params.set(`extra_id_${idx}`, String(mapping[idx]));
+        params.set(`extra_weight_${idx}`, String((Number(s.weight_g) || 0).toFixed(0)));
+      }
+    });
+    if (slots.length > 1) {
+      params.set('color_changes', String(plate0?.color_changes || slots.length - 1));
+    }
+    onConfirm(params);
+  };
+
+  return (
+    <>
+      <div
+        onClick={onClose}
+        className="fixed inset-0 z-[80] backdrop-blur-sm"
+        style={{ background: 'rgba(6, 9, 18, 0.66)' }}
+      />
+      <div
+        role="dialog"
+        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[81] w-[min(560px,calc(100vw-32px))] max-h-[85vh] rounded-2xl overflow-hidden flex flex-col"
+        style={{ background: 'var(--color-surf-card)', border: '1px solid var(--color-border-strong)' }}
+      >
+        <header className="p-4 border-b border-[var(--color-border-soft)]">
+          <h2 className="text-[15px] font-semibold text-tech-white">Mapear filamentos al inventario</h2>
+          <p className="mono text-[10.5px] text-gunmetal mt-0.5">
+            {slots.length} {slots.length === 1 ? 'slot' : 'slots'} en el .gcode.3mf
+            {slots.length > 4 && ' · máx 4 multi-material (calc soporta hasta 5 filamentos)'}
+          </p>
+        </header>
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+          {loading ? (
+            <p className="text-[12px] text-gunmetal text-center py-6">Cargando filamentos…</p>
+          ) : slots.length === 0 ? (
+            <p className="text-[12px] text-gunmetal text-center py-6">
+              Este job no tiene filaments definidos en el .gcode.3mf.
+            </p>
+          ) : (
+            slots.slice(0, 5).map((s, idx) => {
+              const compatibleFilaments = filaments.filter(
+                (f) => !s.filament_type
+                  || (f.filament_type || '').toLowerCase() === s.filament_type.toLowerCase(),
+              );
+              const others = filaments.filter((f) => !compatibleFilaments.includes(f));
+              return (
+                <div
+                  key={idx}
+                  className="p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surf-card-2)] flex flex-col gap-2"
+                >
+                  <div className="flex items-center gap-2">
+                    {s.colour_hex && (
+                      <span
+                        className="w-5 h-5 rounded-full border border-black/30 shrink-0"
+                        style={{ background: s.colour_hex }}
+                      />
+                    )}
+                    <span className="text-[12.5px] font-semibold text-tech-white">
+                      Slot {idx + 1}
+                    </span>
+                    <span className="mono text-[10.5px] text-gunmetal">
+                      {s.filament_type || '—'} · {Number(s.weight_g || 0).toFixed(0)}g
+                    </span>
+                  </div>
+                  <select
+                    value={mapping[idx] || ''}
+                    onChange={(e) =>
+                      setMapping((cur) => ({ ...cur, [idx]: Number(e.target.value) || '' }))
+                    }
+                    className="w-full h-[36px] bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-3 text-[12.5px] text-tech-white outline-none"
+                  >
+                    <option value="">Selecciona filamento…</option>
+                    {compatibleFilaments.length > 0 && (
+                      <optgroup label="Compatibles">
+                        {compatibleFilaments.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.name} · {f.filament_type || '?'} · {Math.round(Number(f.quantity) || 0)}g
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {others.length > 0 && (
+                      <optgroup label="Otros tipos">
+                        {others.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.name} · {f.filament_type || '?'}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
+                </div>
+              );
+            })
+          )}
+        </div>
+        <footer className="p-3 border-t border-[var(--color-border-soft)] flex gap-2">
+          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button
+            variant="primary"
+            icon={Calculator}
+            onClick={handleSubmit}
+            disabled={!canSubmit}
+            className="flex-1 justify-center disabled:opacity-50"
+          >
+            {canSubmit ? 'Ir a Calculadora' : 'Selecciona todos los slots'}
+          </Button>
+        </footer>
+      </div>
+    </>
+  );
+}
+
+/**
  * Footer del JobDetailDrawer: acciones primarias + secundarias.
  * Se renderiza en el slot `footer` del DetailDrawer v2 (desktop) o inline
  * en el MobileSheet (mobile).
  */
 function JobDrawerFooter({ job, onDelete, onClose }) {
   const navigate = useNavigate();
+  const [mappingOpen, setMappingOpen] = useState(false);
   if (!job) return null;
+  const hasMultipleSlots = (job.plates?.[0]?.filaments?.length || 0) > 1;
+  // Issue #74: si hay multi-material o el user quiere mapear, abrir el dialog.
+  // Si el job es single sin filaments definidos, fallback al flujo legacy
+  // (solo weight + time + type heurístico).
   const useInCalculator = () => {
+    if (hasMultipleSlots || (job.plates?.[0]?.filaments?.length || 0) > 0) {
+      setMappingOpen(true);
+      return;
+    }
     const w = job.filament_weight_g;
     const t = (job.print_time_seconds || 0) / 3600;
     const params = new URLSearchParams();
@@ -633,6 +821,15 @@ function JobDrawerFooter({ job, onDelete, onClose }) {
       <Button variant="primary" icon={Calculator} onClick={useInCalculator} className="flex-1 justify-center">
         Usar en Calculadora
       </Button>
+      <FilamentMappingDialog
+        open={mappingOpen}
+        onClose={() => setMappingOpen(false)}
+        job={job}
+        onConfirm={(params) => {
+          setMappingOpen(false);
+          navigate(`/cost/calculator?${params.toString()}`);
+        }}
+      />
       <Button
         variant="ghost"
         icon={Trash2}
