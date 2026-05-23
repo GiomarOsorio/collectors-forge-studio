@@ -99,28 +99,45 @@ export default function CompanyTemplateEditorPage() {
     }
   };
 
+  const openPdfBlob = (b64) => {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 15000);
+  };
+
   const handlePreview = async () => {
-    // Preferir el PDF base64 ya generado por /validate (sin necesidad de guardar)
-    if (validation?.ok && validation?.preview_pdf_b64) {
-      const binary = atob(validation.preview_pdf_b64);
-      const bytes  = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
-      window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 15000);
-      return;
-    }
-    // Fallback: template guardado — llamar al endpoint de preview
-    if (!id) {
-      toast('Valida el template primero para previsualizar');
-      return;
-    }
+    // Issue #65 fix: auto-valida si no hay validation cached (caso nuevo
+    // template sin haber tocado el botón "Validar" todavía).
     setPreviewing(true);
     try {
-      const res = await previewTemplate(id);
-      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
-      window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 15000);
+      let val = validation;
+      if (!val || !val.preview_pdf_b64) {
+        const res = await validateTemplate({
+          content: form.content,
+          template_type: form.template_type,
+        });
+        val = res.data;
+        setValidation(val);
+      }
+      if (val?.ok && val?.preview_pdf_b64) {
+        openPdfBlob(val.preview_pdf_b64);
+        return;
+      }
+      // Template inválido — mostrar errores en panel
+      if (val && !val.ok) {
+        toast.error('Template con errores — revisa el panel de validación');
+        return;
+      }
+      // Fallback: template ya guardado → endpoint preview persistido
+      if (id) {
+        const res = await previewTemplate(id);
+        const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 15000);
+      }
     } catch (err) {
       toast.error(apiErrorMsg(err, 'Error generando preview'));
     } finally {
