@@ -41,6 +41,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useConfirm } from '../../components/ConfirmDialog';
 import {
   deleteVaultFile,
+  setActiveVaultPlate,
   downloadVaultPrint,
   downloadVaultSource,
   getVaultFiles,
@@ -188,10 +189,13 @@ function VaultRow({ file, onClick }) {
  * `DetailDrawer` v2; las acciones viven en `VaultDrawerFooter`. Muestra
  * los dos slots (source / print) por separado + metadatos sliced si los hay.
  */
-function VaultDrawerBody({ file }) {
+function VaultDrawerBody({ file, onActivePlateChange }) {
   if (!file) return null;
   const thumb = getThumbnail(file);
   const sliceTime = fmtTime(file.sliced_time_seconds);
+  const plates = Array.isArray(file.plates) ? file.plates : [];
+  const hasMultiplePlates = plates.length > 1;
+  const activeIdx = file.active_plate_index ?? 0;
   return (
     <div className="flex flex-col gap-4">
       <div
@@ -207,6 +211,58 @@ function VaultDrawerBody({ file }) {
           <Archive size={50} style={{ color: `${ACCENT}55` }} />
         )}
       </div>
+
+      {/* Plate picker — issue #68. Solo aparece si hay >1 plate. */}
+      {hasMultiplePlates && (
+        <div>
+          <span className="lbl-eyebrow text-[9px] mb-1.5 block">
+            Plates ({plates.length}) · principal: #{activeIdx + 1}
+          </span>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {plates.map((p) => {
+              const active = p.plate_index === activeIdx;
+              return (
+                <button
+                  key={p.plate_index}
+                  type="button"
+                  onClick={() => onActivePlateChange?.(p.plate_index)}
+                  className="shrink-0 rounded-md overflow-hidden flex flex-col items-stretch transition-all"
+                  style={{
+                    border: active
+                      ? `2px solid ${ACCENT}`
+                      : '2px solid var(--color-border)',
+                    background: 'var(--color-surf-sidebar)',
+                    width: 80,
+                  }}
+                  title={`Plate ${p.plate_index + 1}${p.weight_g ? ` · ${Math.round(p.weight_g)}g` : ''}`}
+                >
+                  <div className="h-16 flex items-center justify-center bg-[var(--color-surf-sidebar)]">
+                    {p.thumbnail_url ? (
+                      <img
+                        src={p.thumbnail_url}
+                        alt={`Plate ${p.plate_index + 1}`}
+                        className="w-full h-full object-contain"
+                      />
+                    ) : (
+                      <Archive size={20} style={{ color: `${ACCENT}88` }} />
+                    )}
+                  </div>
+                  <div
+                    className="mono text-[9px] py-1 text-center"
+                    style={{
+                      background: active ? `${ACCENT}25` : 'transparent',
+                      color: active ? ACCENT : 'var(--color-steel)',
+                    }}
+                  >
+                    #{p.plate_index + 1}
+                    {p.weight_g ? ` · ${Math.round(p.weight_g)}g` : ''}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Slots de archivos */}
       <div className="flex flex-col gap-2">
@@ -481,6 +537,22 @@ export default function VaultPage() {
   const handleDownloadSource = (f) => _downloadSlot(f, 'source');
   const handleDownloadPrint = (f) => _downloadSlot(f, 'print');
 
+  /**
+   * Cambia el plate activo del modelo seleccionado (issue #68). Actualiza
+   * el `selected` local + recarga la lista para reflejar el nuevo thumbnail
+   * en el grid.
+   */
+  const handleActivePlateChange = async (plateIndex) => {
+    if (!selected) return;
+    try {
+      const res = await setActiveVaultPlate(selected.id, plateIndex);
+      setSelected(res.data);
+      await load();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'No se pudo cambiar el plate activo');
+    }
+  };
+
   const handleDelete = async (f) => {
     const ok = await confirm(`¿Eliminar "${f.name}"?`, 'Eliminar');
     if (!ok) return false;
@@ -656,7 +728,7 @@ export default function VaultPage() {
           height="full"
         >
           <div className="px-5 pt-4 pb-3">
-            <VaultDrawerBody file={selected} />
+            <VaultDrawerBody file={selected} onActivePlateChange={handleActivePlateChange} />
           </div>
           {selected && (
             <div className="px-5 pt-3 pb-5 border-t border-[var(--color-border-soft)] flex flex-wrap gap-2 sticky bottom-0 bg-[var(--color-surf-sidebar)]">
@@ -842,7 +914,7 @@ export default function VaultPage() {
           )
         }
       >
-        <VaultDrawerBody file={selected} />
+        <VaultDrawerBody file={selected} onActivePlateChange={handleActivePlateChange} />
       </DetailDrawer>
 
       <footer className="mt-auto px-6 py-2.5 border-t border-[var(--color-border-soft)] bg-[var(--color-surf-sidebar)] flex flex-wrap items-center gap-4 text-[11px] text-gunmetal">

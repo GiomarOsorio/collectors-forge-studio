@@ -35,10 +35,11 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.responses import Response
 from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database import get_db
-from app.models.model_file import ModelFile
+from app.models.model_file import ModelFile, ModelFilePlate
 from app.models.user import User
 from app.schemas.vault import (
     ModelFileListResponse,
@@ -49,11 +50,16 @@ from app.schemas.vault import (
     VaultStatsResponse,
 )
 from app.services.auth import get_admin_user, get_current_user
-from app.services.slicer_parser import parse_3mf_file
+from app.services.slicer_parser import parse_3mf_all_plates, parse_3mf_file
 from app.services.thumbnail_extractor import (
+    copy_plate_to_primary,
+    delete_plate_thumbnail,
     delete_thumbnail,
+    extract_all_plates_pngs,
     extract_plate_png,
+    save_plate_thumbnail,
     save_thumbnail,
+    thumbnail_key_for_plate,
 )
 from app.services.vault_metadata import fetch_metadata
 from app.services.vault_storage import delete_file, download_file, upload_file
@@ -75,8 +81,12 @@ def _ext_ok(filename: str, allowed_suffixes: tuple) -> bool:
 
 
 async def _get_model_file(db: AsyncSession, file_id: int) -> ModelFile:
-    """Obtiene un ModelFile por ID; lanza 404 si no existe."""
-    result = await db.execute(select(ModelFile).where(ModelFile.id == file_id))
+    """Obtiene un ModelFile por ID; lanza 404 si no existe. Eager-load plates."""
+    result = await db.execute(
+        select(ModelFile)
+        .options(selectinload(ModelFile.plates))
+        .where(ModelFile.id == file_id)
+    )
     model = result.scalar_one_or_none()
     if not model:
         raise HTTPException(
@@ -109,6 +119,21 @@ def _to_response(model: ModelFile, username: Optional[str]) -> ModelFileResponse
     if model.thumbnail_key:
         ts = int(model.updated_at.timestamp()) if model.updated_at else 0
         local_thumbnail_url = f"/api/vault/{model.id}/thumbnail?v={ts}"
+    # Plates serializados con thumbnail proxy URL (issue #68)
+    ts = int(model.updated_at.timestamp()) if model.updated_at else 0
+    plates_payload = []
+    for p in sorted(model.plates or [], key=lambda x: x.plate_index):
+        plate_thumb = None
+        if p.thumbnail_key:
+            plate_thumb = f"/api/vault/{model.id}/plate/{p.plate_index}/thumbnail?v={ts}"
+        plates_payload.append({
+            "plate_index": p.plate_index,
+            "weight_g": float(p.weight_g) if p.weight_g is not None else None,
+            "time_seconds": p.time_seconds,
+            "filament_type": p.filament_type,
+            "printer_model": p.printer_model,
+            "thumbnail_url": plate_thumb,
+        })
     return ModelFileResponse(
         id=model.id,
         uploaded_by=model.uploaded_by,
@@ -131,9 +156,131 @@ def _to_response(model: ModelFile, username: Optional[str]) -> ModelFileResponse
         source_platform=model.source_platform,
         creator_name=model.creator_name,
         creator_url=model.creator_url,
+        active_plate_index=model.active_plate_index,
+        plates=plates_payload,
         created_at=model.created_at,
         updated_at=model.updated_at,
     )
+
+
+def _parse_all_plates_from_bytes(content: bytes) -> list:
+    """
+    Parsea TODOS los plates del `.gcode.3mf`. Retorna lista de PlateResult
+    (vacía si no hay plates o el archivo no es válido). Issue #68.
+    """
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".3mf", delete=False) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+        try:
+            return parse_3mf_all_plates(tmp_path) or []
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+    except (OSError, ValueError) as exc:
+        logger.warning("No se pudo parsear plates del .gcode.3mf: %s", exc)
+        return []
+
+
+def _sync_active_plate_cache(model: ModelFile, active: Optional[ModelFilePlate]) -> None:
+    """
+    Sincroniza los campos cache `sliced_*` + `thumbnail_key` del ModelFile
+    desde un ModelFilePlate. Issue #68 — queue/calc leen `sliced_*`
+    directamente, así que mantener el cache evita queries extra.
+    """
+    if active is None:
+        model.sliced_weight_g = None
+        model.sliced_time_seconds = None
+        model.sliced_filament_type = None
+        model.sliced_printer_model = None
+        return
+    model.sliced_weight_g = active.weight_g
+    model.sliced_time_seconds = active.time_seconds
+    model.sliced_filament_type = active.filament_type
+    model.sliced_printer_model = active.printer_model
+
+
+async def _persist_plates_from_print_file(
+    db: AsyncSession,
+    model: ModelFile,
+    print_bytes: bytes,
+) -> None:
+    """
+    Extrae todos los plates de un `.gcode.3mf` y los persiste como
+    `ModelFilePlate` rows. Sube cada thumbnail a MinIO bajo
+    `thumbnails/{id}_plate{idx}.png`. Sincroniza `sliced_*` + thumbnail
+    principal del ModelFile desde el plate activo (default 0).
+
+    Idempotente: borra plates anteriores del modelo antes de crear los
+    nuevos (caso edit/replace).
+
+    Issue #68.
+    """
+    # Limpiar plates anteriores + thumbnails de MinIO
+    if model.plates:
+        for old in model.plates:
+            await delete_plate_thumbnail(model.id, old.plate_index)
+        model.plates.clear()
+        await db.flush()
+
+    plates = _parse_all_plates_from_bytes(print_bytes)
+    pngs = extract_all_plates_pngs(print_bytes)
+
+    if not plates and not pngs:
+        # No multi-plate detectado; el caller hará fallback al flujo legacy.
+        return
+
+    # Si solo hay thumbnails (sin parser plates), crear 1 plate por thumb
+    if not plates:
+        for idx in sorted(pngs.keys()):
+            model.plates.append(
+                ModelFilePlate(plate_index=idx)
+            )
+    else:
+        for pr in plates:
+            # parse_3mf_all_plates devuelve plate_number 1-based
+            idx = max(0, (pr.plate_number or 1) - 1)
+            model.plates.append(
+                ModelFilePlate(
+                    plate_index=idx,
+                    weight_g=Decimal(str(pr.filament_weight_g)) if pr.filament_weight_g is not None else None,
+                    time_seconds=pr.print_time_seconds,
+                    filament_type=pr.filament_type,
+                    printer_model=None,
+                )
+            )
+
+    await db.flush()  # asigna IDs a los plates nuevos
+
+    # Subir cada thumbnail a MinIO
+    for plate in model.plates:
+        png = pngs.get(plate.plate_index)
+        if png:
+            try:
+                plate.thumbnail_key = await save_plate_thumbnail(
+                    model.id, plate.plate_index, png
+                )
+            except Exception as exc:
+                logger.warning(
+                    "No se pudo subir thumbnail plate %s del modelo %s: %s",
+                    plate.plate_index, model.id, exc,
+                )
+
+    # Sincronizar cache desde plate activo
+    model.active_plate_index = 0
+    active = next((p for p in model.plates if p.plate_index == 0), None)
+    if active is None and model.plates:
+        active = model.plates[0]
+        model.active_plate_index = active.plate_index
+    _sync_active_plate_cache(model, active)
+
+    # Replicar thumbnail del plate activo al slot principal
+    if active and active.plate_index in pngs:
+        try:
+            model.thumbnail_key = await copy_plate_to_primary(
+                model.id, pngs[active.plate_index]
+            )
+        except Exception as exc:
+            logger.warning("No se pudo replicar thumbnail principal: %s", exc)
 
 
 def _parse_sliced_from_print_file(content: bytes) -> dict:
@@ -192,7 +339,7 @@ async def list_vault_files(
     `print_ready_only` (usado por el picker de Queue para listar solo
     modelos con `.gcode.3mf` disponibles).
     """
-    base_q = select(ModelFile)
+    base_q = select(ModelFile).options(selectinload(ModelFile.plates))
 
     if q:
         # Búsqueda substring case-insensitive sobre name + description + tags.
@@ -391,21 +538,27 @@ async def upload_vault_file(
     await db.commit()
     await db.refresh(model)
 
-    # Extraer plate-render del print_file primero (más rico en thumbnails);
-    # si no, intentar source_file. Si ninguno trae, seguimos sin thumbnail.
-    png = None
+    # Issue #68 — persistir TODOS los plates del print_file. Sincroniza
+    # `sliced_*` + `thumbnail_key` desde el plate activo (default 0) y
+    # sube cada thumbnail individual a MinIO.
     if print_bytes is not None:
-        png = extract_plate_png(print_bytes)
-    if png is None and source_bytes is not None:
-        png = extract_plate_png(source_bytes)
-    if png:
         try:
-            model.thumbnail_key = await save_thumbnail(model.id, png)
-            await db.commit()
-            await db.refresh(model)
+            await _persist_plates_from_print_file(db, model, print_bytes)
         except Exception as exc:
-            logger.warning("No se pudo guardar thumbnail de %s: %s", model.id, exc)
+            logger.warning("No se pudieron persistir plates de %s: %s", model.id, exc)
 
+    # Fallback legacy: si no hay plates pero hay source con thumbnail,
+    # extraemos al menos uno para el thumbnail principal.
+    if not model.plates and source_bytes is not None:
+        png = extract_plate_png(source_bytes)
+        if png:
+            try:
+                model.thumbnail_key = await save_thumbnail(model.id, png)
+            except Exception as exc:
+                logger.warning("No se pudo guardar thumbnail source de %s: %s", model.id, exc)
+
+    await db.commit()
+    await db.refresh(model)
     return _to_response(model, current_user.username)
 
 
@@ -494,6 +647,91 @@ async def get_vault_thumbnail(
         media_type="image/png",
         headers={"Cache-Control": "public, max-age=86400"},
     )
+
+
+@router.get("/{file_id}/plate/{plate_index}/thumbnail")
+async def get_vault_plate_thumbnail(
+    file_id: int,
+    plate_index: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Sirve el PNG de un plate específico (issue #68). Endpoint PÚBLICO
+    (mismo razonamiento que `/thumbnail`: <img> no envía Authorization).
+
+    Path: `thumbnails/{file_id}_plate{plate_index}.png` en MinIO.
+    """
+    model = await _get_model_file(db, file_id)
+    plate = next(
+        (p for p in model.plates or [] if p.plate_index == plate_index),
+        None,
+    )
+    if plate is None or not plate.thumbnail_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Plate {plate_index} sin thumbnail",
+        )
+    try:
+        data = await download_file(plate.thumbnail_key)
+    except Exception as exc:
+        logger.warning("No se pudo descargar plate thumbnail %s: %s", plate.thumbnail_key, exc)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Plate thumbnail no disponible",
+        ) from exc
+    return Response(
+        content=data,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+@router.patch("/{file_id}/active-plate", response_model=ModelFileResponse)
+async def set_active_plate(
+    file_id: int,
+    plate_index: int = Query(..., ge=0),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Cambia el plate activo del modelo (issue #68).
+
+    - Actualiza `ModelFile.active_plate_index`.
+    - Sincroniza `sliced_*` cache desde el plate elegido (queue/calc
+      leen estos campos directamente).
+    - Replica el thumbnail del plate activo al slot principal
+      (`thumbnails/{id}.png`) para que el endpoint legacy y el cache
+      de `<img>` apunten al nuevo render.
+    """
+    model = await _get_model_file(db, file_id)
+    plate = next(
+        (p for p in model.plates or [] if p.plate_index == plate_index),
+        None,
+    )
+    if plate is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Plate {plate_index} no existe para este modelo",
+        )
+    model.active_plate_index = plate_index
+    _sync_active_plate_cache(model, plate)
+    # Replicar thumbnail del plate activo al slot principal
+    if plate.thumbnail_key:
+        try:
+            png = await download_file(plate.thumbnail_key)
+            model.thumbnail_key = await copy_plate_to_primary(model.id, png)
+        except Exception as exc:
+            logger.warning("No se pudo replicar thumbnail al cambiar active plate: %s", exc)
+    model.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    await db.commit()
+    await db.refresh(model)
+    username = None
+    if model.uploaded_by:
+        u_result = await db.execute(
+            select(User.username).where(User.id == model.uploaded_by)
+        )
+        username = u_result.scalar_one_or_none()
+    return _to_response(model, username)
 
 
 @router.get("/{file_id}", response_model=ModelFileResponse)
@@ -600,24 +838,28 @@ async def _replace_slot(
         model.print_file_key = new_key
         model.print_file_name = file.filename
         model.print_file_size = new_size
-        # Re-parsear sliced_* del nuevo print_file.
-        sliced = _parse_sliced_from_print_file(content)
-        model.sliced_weight_g = sliced.get("sliced_weight_g")
-        model.sliced_time_seconds = sliced.get("sliced_time_seconds")
-        model.sliced_printer_model = sliced.get("sliced_printer_model")
-        model.sliced_filament_type = sliced.get("sliced_filament_type")
+        # Re-persistir TODOS los plates desde el nuevo print_file (issue
+        # #68). `_persist_plates_from_print_file` borra los plates
+        # anteriores + thumbnails + sincroniza sliced_* + thumbnail
+        # principal desde plate 0.
+        try:
+            await _persist_plates_from_print_file(db, model, content)
+        except Exception as exc:
+            logger.warning("No se pudo re-persistir plates de %s: %s", model.id, exc)
 
     model.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
-    # Re-extraer thumbnail si este slot puede aportar uno mejor.
-    png = extract_plate_png(content)
-    if png:
-        await delete_thumbnail(model.id)
-        try:
-            model.thumbnail_key = await save_thumbnail(model.id, png)
-        except Exception as exc:
-            logger.warning("No se pudo guardar thumbnail de %s: %s", model.id, exc)
-            model.thumbnail_key = None
+    # Si fue replace de source y no había plates ya, intentar thumbnail
+    # fallback desde el source. (En print el flow de plates ya cubre).
+    if slot == "source" and not model.plates:
+        png = extract_plate_png(content)
+        if png:
+            await delete_thumbnail(model.id)
+            try:
+                model.thumbnail_key = await save_thumbnail(model.id, png)
+            except Exception as exc:
+                logger.warning("No se pudo guardar thumbnail de %s: %s", model.id, exc)
+                model.thumbnail_key = None
 
     await db.commit()
     await db.refresh(model)

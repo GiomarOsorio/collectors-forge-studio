@@ -41,7 +41,7 @@ from app.models.slicing_job import SlicingJob
 from app.models.printed_item import PrintedItem
 from app.models.maintenance import MaintenanceLog, MaintenanceLogItem
 from app.models.queue import PrintQueueItem
-from app.models.model_file import ModelFile
+from app.models.model_file import ModelFile, ModelFilePlate
 
 __all__ = [
     "Company", "CompanyTemplate", "User", "Filament", "Printer", "AppSettings",
@@ -50,5 +50,5 @@ __all__ = [
     "SlicingJob", "PrintedItem",
     "MaintenanceLog", "MaintenanceLogItem",
     "PrintQueueItem",
-    "ModelFile",
+    "ModelFile", "ModelFilePlate",
 ]

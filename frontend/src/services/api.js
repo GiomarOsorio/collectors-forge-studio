@@ -784,6 +784,15 @@ export const downloadVaultPrint = (id) =>
 export const getVaultFile = (id) => api.get(`/vault/${id}`);
 
 /**
+ * Cambia el plate activo de un modelo del Vault (issue #68).
+ * Backend sincroniza sliced_* + thumbnail principal al plate elegido.
+ * @param {number} id - ID del modelo
+ * @param {number} plateIndex - 0-based
+ */
+export const setActiveVaultPlate = (id, plateIndex) =>
+  api.patch(`/vault/${id}/active-plate`, null, { params: { plate_index: plateIndex } });
+
+/**
  * Actualiza los metadatos de un archivo del Vault (solo admins).
  * @param {number} id - ID del archivo
  * @param {Object} data - Campos a actualizar
