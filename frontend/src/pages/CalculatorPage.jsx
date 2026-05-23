@@ -358,7 +358,7 @@ function CalcHeader({ isStale, onOpenStaleModal }) {
           Cost · Calculadora
         </div>
         <h1 className="m-0 text-[18px] font-semibold text-tech-white tracking-tight whitespace-nowrap">
-          Cotizar pieza
+          Calcular piezas
         </h1>
       </div>
       {isStale && (
@@ -1034,7 +1034,7 @@ const matchesAny = (item, patterns) => {
   return patterns.some((p) => name.includes(p));
 };
 
-export default function CalculatorPage() {
+export default function CalculatorPage({ embedded = false } = {}) {
   const [searchParams] = useSearchParams();
   const isMobile = useIsMobile();
 
@@ -1284,8 +1284,8 @@ export default function CalculatorPage() {
   // ── Mobile shell ────────────────────────────────────────────────────────
   if (isMobile) {
     return (
-      <div className="flex flex-col min-h-screen bg-forge-black">
-        <CalcHeader isStale={isStale} onOpenStaleModal={() => setStaleModalOpen(true)} />
+      <div className={`flex flex-col bg-forge-black ${embedded ? 'min-h-[700px]' : 'min-h-screen'}`}>
+        {!embedded && <CalcHeader isStale={isStale} onOpenStaleModal={() => setStaleModalOpen(true)} />}
         <main className="flex-1 pb-28 overflow-y-auto">
           <CalcForm form={form} setField={setField} filaments={filaments} printers={printers} supplies={supplies} consumables={consumables} errors={errors} />
         </main>
@@ -1350,7 +1350,7 @@ export default function CalculatorPage() {
 
   // ── Desktop shell ────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col min-h-screen bg-forge-black">
+    <div className={`flex flex-col bg-forge-black ${embedded ? 'min-h-[700px]' : 'min-h-screen'}`}>
       <CalcHeader isStale={isStale} onOpenStaleModal={() => setStaleModalOpen(true)} />
       <div
         className="flex-1 min-h-0 grid"
