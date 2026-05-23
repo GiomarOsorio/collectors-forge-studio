@@ -20,7 +20,7 @@ import { forwardRef } from 'react';
  */
 
 const Button = forwardRef(function Button(
-  { variant = 'default', size = 'md', iconOnly = false, icon: Icon, iconSize = 14, className = '', children, ...rest },
+  { variant = 'default', size = 'md', iconOnly = false, icon: Icon, iconSize = 14, iconClassName = '', className = '', children, ...rest },
   ref,
 ) {
   const cls = [
@@ -35,7 +35,7 @@ const Button = forwardRef(function Button(
     .join(' ');
   return (
     <button ref={ref} type="button" className={cls} {...rest}>
-      {Icon && <Icon size={iconSize} />}
+      {Icon && <Icon size={iconSize} className={iconClassName} />}
       {children}
     </button>
   );

@@ -42,11 +42,16 @@ import {
   getQuotes,
 } from '../../services/api';
 import { fmtCOP } from '../../utils/inventoryAdapter';
+import CalculatorPage from '../CalculatorPage';
+import PrintersPage from '../PrintersPage';
+import CostSettingsPage from '../CostSettingsPage';
 
 const TABS = [
-  { id: 'cotizaciones', label: 'Cotizaciones', icon: FileText },
-  { id: 'historial',    label: 'Historial',    icon: History },
-  { id: 'calculadora',  label: 'Calculadora',  icon: Calculator },
+  { id: 'cotizaciones', label: 'Cotizaciones',     icon: FileText },
+  { id: 'historial',    label: 'Historial',        icon: History },
+  { id: 'calculadora',  label: 'Calculadora',      icon: Calculator },
+  { id: 'impresoras',   label: 'Impresoras',       icon: Printer },
+  { id: 'ajustes',      label: 'Tarifas y ajustes', icon: TrendingUp },
 ];
 
 /**
@@ -665,6 +670,12 @@ export default function CostPage() {
               ))}
             </ul>
           )
+        ) : tab === 'calculadora' ? (
+          <CalculatorPage embedded />
+        ) : tab === 'impresoras' ? (
+          <div className="p-4"><PrintersPage /></div>
+        ) : tab === 'ajustes' ? (
+          <div className="p-4"><CostSettingsPage /></div>
         ) : (
           <CalculatorPromo />
         )}
@@ -858,7 +869,9 @@ export default function CostPage() {
         </div>
       )}
 
-      {tab === 'calculadora' && <CalculatorPromo />}
+      {tab === 'calculadora' && <CalculatorPage embedded />}
+      {tab === 'impresoras' && <div className="px-6 pb-8"><PrintersPage /></div>}
+      {tab === 'ajustes' && <div className="px-6 pb-8"><CostSettingsPage /></div>}
 
       <DetailDrawer
         open={!!selected}

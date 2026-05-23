@@ -313,15 +313,20 @@ function SlicerUploadPanel({ onJobCreated }) {
   return (
     <div className="px-6 pt-4 pb-8 flex flex-col gap-5 max-w-3xl mx-auto w-full">
       {/* DropZone — flujo principal */}
-      <div style={{ ['--page-accent']: ACCENT }}>
+      <div style={{ ['--page-accent']: ACCENT }} className="relative">
         <DropZone
           accept=".3mf,.gcode,.stl"
           hint={uploading ? progress : 'Suelta tu modelo aquí'}
           meta="o pulsa para seleccionar · .3mf · .gcode · .stl"
-          cta={uploading ? 'Procesando…' : 'Examinar archivos'}
+          cta={uploading ? '' : 'Examinar archivos'}
           accent={ACCENT}
           onFiles={uploading ? () => {} : handleFiles}
         />
+        {uploading && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <Loader2 size={36} className="animate-spin" style={{ color: ACCENT }} />
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -385,11 +390,12 @@ function SlicerUploadPanel({ onJobCreated }) {
           />
           <Button
             variant="primary"
-            icon={Globe}
+            icon={uploading ? Loader2 : Globe}
+            iconClassName={uploading ? 'animate-spin' : ''}
             onClick={handleMakerworld}
             disabled={uploading || !makerworldUrl.trim()}
           >
-            {uploading ? 'Procesando…' : 'Traer modelo'}
+            {uploading ? '' : 'Traer modelo'}
           </Button>
         </div>
       </div>
