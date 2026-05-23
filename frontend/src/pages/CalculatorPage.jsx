@@ -77,7 +77,7 @@ function FormFieldRow({ label, required, hint, error, children }) {
 }
 
 const FORM_INPUT_CLS =
-  'w-full bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-3 py-2 text-[13px] text-tech-white outline-none focus:border-forge-teal/60';
+  'w-full h-[38px] bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-3 text-[13px] text-tech-white outline-none focus:border-forge-teal/60';
 
 function FormInput({ value, onChange, type = 'text', placeholder, mono, suffix, min, max, step }) {
   const className = `${FORM_INPUT_CLS} ${mono ? 'mono' : ''}`;
@@ -109,19 +109,33 @@ function FormInput({ value, onChange, type = 'text', placeholder, mono, suffix, 
 function Stepper({ value, onChange, suffix, min = 0, max = 99999, step = 1 }) {
   const dec = () => onChange(Math.max(min, (Number(value) || 0) - step));
   const inc = () => onChange(Math.min(max, (Number(value) || 0) + step));
+  // UX: si value === 0 mostramos string vacío para que al tipear el primer
+  // dígito reemplace en lugar de quedar "0<digito>". onChange parsea string
+  // vacío como 0 para mantener el modelo numérico.
+  const displayValue = Number(value) === 0 ? '' : value;
+  const handleChange = (e) => {
+    const raw = e.target.value;
+    if (raw === '' || raw === '-') {
+      onChange(0);
+      return;
+    }
+    const n = Number(raw);
+    if (!Number.isNaN(n)) onChange(n);
+  };
   return (
-    <div className="flex items-stretch bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md overflow-hidden focus-within:border-forge-teal/60">
-      <button type="button" onClick={dec} className="w-8 bg-[var(--color-surf-card-2)] border-r border-[var(--color-border)] text-steel font-semibold text-base hover:text-tech-white">−</button>
+    <div className="flex items-stretch h-[38px] bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md overflow-hidden focus-within:border-forge-teal/60">
+      <button type="button" onClick={dec} className="w-8 shrink-0 bg-[var(--color-surf-card-2)] border-r border-[var(--color-border)] text-steel font-semibold text-base hover:text-tech-white">−</button>
       <input
-        type="number" value={value ?? 0}
-        onChange={(e) => onChange(Number(e.target.value))}
+        type="number" value={displayValue}
+        onChange={handleChange}
         min={min} max={max} step={step}
-        className="flex-1 bg-transparent border-0 outline-0 text-tech-white mono text-center text-[13px] font-semibold"
+        placeholder="0"
+        className="flex-1 min-w-0 bg-transparent border-0 outline-0 text-tech-white mono text-center text-[13px] font-semibold placeholder:text-gunmetal-dim"
       />
       {suffix && (
-        <span className="mono px-2 self-center text-[10.5px] text-gunmetal">{suffix}</span>
+        <span className="mono px-2 self-center text-[10.5px] text-gunmetal shrink-0">{suffix}</span>
       )}
-      <button type="button" onClick={inc} className="w-8 bg-[var(--color-surf-card-2)] border-l border-[var(--color-border)] text-steel font-semibold text-base hover:text-tech-white">+</button>
+      <button type="button" onClick={inc} className="w-8 shrink-0 bg-[var(--color-surf-card-2)] border-l border-[var(--color-border)] text-steel font-semibold text-base hover:text-tech-white">+</button>
     </div>
   );
 }
@@ -370,7 +384,7 @@ function ResultStat({ icon: Icon, label, value, sub }) {
   );
 }
 
-function CalcResult({ result, form, calcLoading, calcError, onReprint, onGenerateQuote, savingQuote }) {
+function CalcResult({ result, form, calcLoading, calcError, onReprint, onGenerateQuote, onCalculate, savingQuote, dirty, canCalc }) {
   const hasResult = result && !calcError;
   return (
     <div
@@ -428,7 +442,7 @@ function CalcResult({ result, form, calcLoading, calcError, onReprint, onGenerat
                   color: REPRINT_TONE,
                 }}
               >
-                <AlertCircle size={11} /> Reimpresión por fallos (+15%)
+                <AlertCircle size={11} /> Margen por fallos (+15%)
               </div>
             )}
           </>
@@ -437,41 +451,70 @@ function CalcResult({ result, form, calcLoading, calcError, onReprint, onGenerat
         )}
       </div>
 
-      {hasResult && (
-        <div className="grid grid-cols-2 gap-1.5">
-          <ResultStat
-            icon={Clock}
-            label="Tiempo"
-            value={`${(Number(result.print_time_hours) || 0).toFixed(2)} h`}
-          />
-          <ResultStat
-            icon={Zap}
-            label="Energía"
-            value={`${((Number(result.electricity_kwh) || 0)).toFixed(2)} kWh`}
-            sub={fmtCOP(Number(result.electricity_cost_cop) || 0)}
-          />
-          <ResultStat
-            icon={Droplet}
-            label="Material"
-            value={`${form.weight_grams || 0} g`}
-            sub={fmtUSD(Number(result.material_cost_usd) || 0)}
-          />
-          <ResultStat
-            icon={TrendingUp}
-            label="Margen"
-            value={`${form.margin_percent || 0}%`}
-            sub={fmtCOP(Number(result.margin_amount_cop) || 0)}
-          />
-        </div>
-      )}
+      {hasResult && (() => {
+        const rate = Number(result.usd_to_cop_rate || 0);
+        const tcop = (usd) => Number(usd || 0) * rate;
+        const totalHours = (Number(form.hours) || 0) + (Number(form.minutes) || 0) / 60;
+        return (
+          <div className="grid grid-cols-2 gap-1.5">
+            <ResultStat
+              icon={Clock}
+              label="Tiempo"
+              value={`${totalHours.toFixed(2)} h`}
+            />
+            <ResultStat
+              icon={Zap}
+              label="Energía"
+              value={fmtCOP(tcop(result.electricity_cost))}
+            />
+            <ResultStat
+              icon={Droplet}
+              label="Material"
+              value={`${form.weight_grams || 0} g`}
+              sub={fmtUSD(Number(result.material_cost) || 0)}
+            />
+            <ResultStat
+              icon={TrendingUp}
+              label="Margen"
+              value={`${form.margin_percent || 0}%`}
+              sub={fmtCOP(tcop(result.margin_amount))}
+            />
+          </div>
+        );
+      })()}
 
       <div className="mt-auto flex flex-col gap-2">
         <button
           type="button"
-          onClick={onGenerateQuote}
-          disabled={!hasResult || savingQuote}
+          onClick={onCalculate}
+          disabled={!canCalc || calcLoading}
           className="inline-flex items-center justify-center gap-1.5 px-3.5 py-3 rounded-lg text-[13px] font-semibold disabled:opacity-50"
           style={{ background: ACCENT, color: '#0A1014', border: 0 }}
+        >
+          {calcLoading ? <Loader2 size={13} className="animate-spin" /> : <Calculator size={13} />}
+          {calcLoading
+            ? 'Calculando…'
+            : !canCalc
+              ? 'Completa los campos'
+              : dirty
+                ? 'Calcular'
+                : 'Recalcular'}
+        </button>
+        {hasResult && dirty && !calcLoading && (
+          <div className="mono text-[10.5px] text-amber-400 text-center">
+            ⚠ El formulario cambió. Recalculá para actualizar el total.
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={onGenerateQuote}
+          disabled={!hasResult || savingQuote}
+          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-lg text-[12.5px] font-medium disabled:opacity-50"
+          style={{
+            background: 'var(--color-surf-card-2)',
+            border: '1px solid var(--color-border-strong)',
+            color: 'var(--color-tech-white)',
+          }}
         >
           {savingQuote ? <Loader2 size={13} className="animate-spin" /> : <ArrowUpRight size={13} />}
           {savingQuote ? 'Guardando…' : 'Guardar en historial'}
@@ -479,8 +522,7 @@ function CalcResult({ result, form, calcLoading, calcError, onReprint, onGenerat
         <button
           type="button"
           onClick={onReprint}
-          disabled={!hasResult}
-          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-lg text-[12.5px] font-medium disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-lg text-[12.5px] font-medium"
           style={{
             background: form.mode === 'reprint' ? `color-mix(in oklab, ${REPRINT_TONE} 16%, transparent)` : 'var(--color-surf-card-2)',
             border: `1px solid ${form.mode === 'reprint' ? `color-mix(in oklab, ${REPRINT_TONE} 40%, transparent)` : 'var(--color-border-strong)'}`,
@@ -488,7 +530,7 @@ function CalcResult({ result, form, calcLoading, calcError, onReprint, onGenerat
           }}
         >
           <RotateCcw size={12} />
-          {form.mode === 'reprint' ? 'Reimpresión aplicada' : 'Reimprimir esta pieza (+15%)'}
+          {form.mode === 'reprint' ? 'Margen por fallos +15% incluido' : 'Activar margen por fallos +15%'}
         </button>
       </div>
     </div>
@@ -555,17 +597,28 @@ function CalcBreakdown({ result, form, exchangeRate }) {
       </div>
     );
   }
-  const materialCOP = Number(result.material_cost_cop ?? (result.material_cost_usd || 0) * (exchangeRate || 0));
-  const materialUSD = Number(result.material_cost_usd ?? 0);
-  const machineCOP = Number(result.machine_cost_cop ?? result.depreciation_cost_cop ?? 0);
-  const energyCOP = Number(result.electricity_cost_cop ?? 0);
-  const laborCOP = Number(result.labor_cost_cop ?? 0);
-  const subtotalCOP = Number(result.subtotal_cop ?? result.cost_before_margin_cop ?? (materialCOP + machineCOP + energyCOP + laborCOP));
-  const marginCOP = Number(result.margin_amount_cop ?? 0);
-  const ivaCOP = Number(result.iva_cop ?? 0);
-  const perUnitCOP = Number(result.unit_price_cop ?? result.total_price_cop ?? 0);
-  const finalCOP = Number(result.total_price_cop ?? result.total_price ?? 0);
+  // Backend response (QuoteCostBreakdown): material_cost, depreciation_cost,
+  // electricity_cost, labor_cost, failure_cost, subtotal, margin_amount,
+  // total_per_unit, total_price (todos USD). total_per_unit_cop +
+  // total_price_cop son los únicos CON conversión.
+  const rate = Number(result.usd_to_cop_rate ?? exchangeRate ?? 0);
+  const toCOP = (usd) => Number(usd || 0) * rate;
+  const materialUSD = Number(result.material_cost || 0);
+  const materialCOP = toCOP(materialUSD);
+  const machineCOP = toCOP(result.depreciation_cost);
+  const energyCOP = toCOP(result.electricity_cost);
+  const laborCOP = toCOP(result.labor_cost);
+  const suppliesCOP = toCOP(result.supplies_cost);
+  const consumablesCOP = toCOP(result.consumables_wear_cost);
+  const failureCOP = toCOP(result.failure_cost);
+  const subtotalCOP = toCOP(result.subtotal);
+  const marginCOP = toCOP(result.margin_amount);
+  const perUnitCOP = Number(result.total_per_unit_cop ?? toCOP(result.total_per_unit));
+  const finalCOP = Number(result.total_price_cop ?? toCOP(result.total_price));
   const isReprint = form.mode === 'reprint';
+  // Mode 'reprint' (default): aplicamos +15% adicional sobre subtotal. El
+  // backend devuelve también failure_cost si settings.failure_rate_percent
+  // está configurado — los mostramos por separado si > 0.
   const reprintCOP = isReprint ? subtotalCOP * 0.15 : 0;
 
   return (
@@ -583,7 +636,16 @@ function CalcBreakdown({ result, form, exchangeRate }) {
         <BreakLine label="Material" icon={Droplet} tone="#3B82F6" valueCOP={materialCOP} valueUSD={materialUSD} hint={`${form.weight_grams || 0}g · principal + multi-material`} />
         <BreakLine label="Máquina" icon={Cpu} tone="#A78BFA" valueCOP={machineCOP} hint="Amortización por hora" />
         <BreakLine label="Energía" icon={Zap} tone={AMBER} valueCOP={energyCOP} hint="Watts × horas × tarifa kWh" />
-        <BreakLine label="Trabajo" icon={Calculator} tone="#34D399" valueCOP={laborCOP} last hint="Prep + post-procesamiento" />
+        <BreakLine label="Trabajo" icon={Calculator} tone="#34D399" valueCOP={laborCOP} hint="Prep + post-procesamiento" />
+        {suppliesCOP > 0 && (
+          <BreakLine label="Insumos extra" icon={Cpu} tone="#06B6D4" valueCOP={suppliesCOP} hint="Placas, hotends, partes" />
+        )}
+        {consumablesCOP > 0 && (
+          <BreakLine label="Consumibles" icon={Cpu} tone="#F472B6" valueCOP={consumablesCOP} hint="Desgaste por horas" />
+        )}
+        {failureCOP > 0 && (
+          <BreakLine label="Fallos (settings)" icon={AlertCircle} tone="#FB7185" valueCOP={failureCOP} hint="Tasa de fallos global" last />
+        )}
       </div>
 
       <SubtotalLine label="Subtotal antes de margen" value={subtotalCOP} />
@@ -598,7 +660,7 @@ function CalcBreakdown({ result, form, exchangeRate }) {
         >
           <AlertCircle size={13} style={{ color: REPRINT_TONE }} />
           <span className="flex-1 text-[12px] font-medium text-tech-white">
-            Reimpresión por fallos (+15%)
+            Margen por fallos (+15%)
           </span>
           <span className="mono text-[13px] font-semibold text-tech-white">
             {fmtCOP(reprintCOP)}
@@ -607,10 +669,7 @@ function CalcBreakdown({ result, form, exchangeRate }) {
       )}
 
       <div className="rounded-lg overflow-hidden border border-[var(--color-border)] bg-[var(--color-surf-card)]">
-        <BreakLine label={`Margen (${form.margin_percent || 0}%)`} icon={TrendingUp} tone={ACCENT} valueCOP={marginCOP} hint="Ganancia operativa" last={ivaCOP === 0} />
-        {ivaCOP > 0 && (
-          <BreakLine label="IVA (19%)" icon={Calculator} tone="#6366F1" valueCOP={ivaCOP} hint="Aplicado al subtotal con margen" last />
-        )}
+        <BreakLine label={`Margen (${form.margin_percent || 0}%)`} icon={TrendingUp} tone={ACCENT} valueCOP={marginCOP} hint="Ganancia operativa" last />
       </div>
 
       <SubtotalLine label="Total por unidad" value={perUnitCOP} highlight />
@@ -942,12 +1001,16 @@ const DEFAULT_FORM = {
   hours: 0,
   minutes: 0,
   preparation_minutes: 0,
-  post_processing_minutes: 15,
+  post_processing_minutes: 0,
   quantity: 1,
   color_changes: 0,
   margin_percent: 35,
   include_iva: false,
-  mode: 'standard',
+  // 'reprint' por default = SIEMPRE incluir margen +15% por fallos. Giomar:
+  // "no podríamos dar dos cotizaciones, siempre colocamos ese margen por si
+  // falla la impresión". El usuario puede desactivarlo a 'standard' si no
+  // aplica (ej. piezas ya probadas).
+  mode: 'reprint',
   additional_filaments_ids: [],
   additional_filaments_grams: [],
   supplies: [],          // [{ inventory_item_id, quantity }]
@@ -1133,41 +1196,44 @@ export default function CalculatorPage() {
     Number(f.weight_grams) > 0 &&
     (Number(f.hours) > 0 || Number(f.minutes) > 0);
 
-  useEffect(() => {
-    if (initialLoading) return;
-    if (!canCalc(debouncedForm)) {
-      setResult(null);
-      setCalcError(null);
+  // Reactive auto-calc REMOVIDO: el debounce 300ms del PR #83 disparaba
+  // tantos requests que Cloudflare nos bloqueó (2026-05-22, reportado por
+  // Giomar). Ahora el cálculo es manual via botón "Calcular". `dirty` indica
+  // si el form cambió desde el último cálculo exitoso.
+  const [lastCalcedPayload, setLastCalcedPayload] = useState(null);
+  const dirty = useMemo(() => {
+    if (!result) return true;
+    return JSON.stringify(buildPayload(debouncedForm)) !== lastCalcedPayload;
+  }, [debouncedForm, result, lastCalcedPayload]);
+
+  const runCalc = async () => {
+    if (!canCalc(form)) {
+      setCalcError('Completa los campos requeridos antes de calcular');
       return;
     }
-    let cancelled = false;
+    const payload = buildPayload(form);
     setCalcLoading(true);
     setCalcError(null);
-    calculateQuote(buildPayload(debouncedForm))
-      .then((res) => {
-        if (cancelled) return;
-        let data = res.data;
-        // Aplicar 15% reimpresión sobre total si mode=reprint
-        if (debouncedForm.mode === 'reprint') {
-          const factor = 1.15;
-          const fields = ['total_price', 'total_price_cop', 'unit_price', 'unit_price_cop'];
-          data = { ...data };
-          fields.forEach((k) => {
-            if (data[k] != null) data[k] = Number(data[k]) * factor;
-          });
-        }
-        setResult(data);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setCalcError(err?.response?.data?.detail || 'Error en el cálculo');
-        setResult(null);
-      })
-      .finally(() => !cancelled && setCalcLoading(false));
-    return () => {
-      cancelled = true;
-    };
-  }, [debouncedForm, initialLoading]);
+    try {
+      const res = await calculateQuote(payload);
+      let data = res.data;
+      if (form.mode === 'reprint') {
+        const factor = 1.15;
+        const fields = ['total_price', 'total_price_cop', 'unit_price', 'unit_price_cop'];
+        data = { ...data };
+        fields.forEach((k) => {
+          if (data[k] != null) data[k] = Number(data[k]) * factor;
+        });
+      }
+      setResult(data);
+      setLastCalcedPayload(JSON.stringify(payload));
+    } catch (err) {
+      setCalcError(err?.response?.data?.detail || 'Error en el cálculo');
+      setResult(null);
+    } finally {
+      setCalcLoading(false);
+    }
+  };
 
   // ── Validation errors (display) ─────────────────────────────────────────
   const errors = useMemo(() => {
@@ -1292,7 +1358,10 @@ export default function CalculatorPage() {
           calcError={calcError}
           onReprint={onReprint}
           onGenerateQuote={onGenerateQuote}
+          onCalculate={runCalc}
           savingQuote={savingQuote}
+          dirty={dirty}
+          canCalc={canCalc(form)}
         />
         <CalcBreakdown result={result} form={form} exchangeRate={result?.usd_to_cop_rate} />
       </div>
