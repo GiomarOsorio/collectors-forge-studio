@@ -633,8 +633,33 @@ const MODE_OPTIONS = [
   { id: 'reprint',  label: 'Reimpresión +15%', icon: RotateCcw, tone: REPRINT_TONE },
 ];
 
-function CalcForm({ form, setField, filaments, printers, errors }) {
-  const printerOpts = printers.map((p) => ({ id: p.id, label: `${p.brand || ''} ${p.model || p.name}`.trim(), aside: `${p.watts || '?'}W` }));
+function CalcForm({ form, setField, filaments, printers, supplies, consumables, errors }) {
+  const printerOpts = printers.map((p) => {
+    const label = p.name || p.model || `Impresora ${p.id}`;
+    const watts = p.power_consumption_watts ?? p.watts;
+    return { id: p.id, label, aside: watts != null ? `${watts}W` : '' };
+  });
+  const addSupply = () => {
+    setField('supplies', [...(form.supplies || []), { inventory_item_id: '', quantity: 1 }]);
+  };
+  const updateSupply = (idx, key, val) => {
+    const next = [...(form.supplies || [])];
+    next[idx] = { ...next[idx], [key]: val };
+    setField('supplies', next);
+  };
+  const removeSupply = (idx) => {
+    const next = [...(form.supplies || [])];
+    next.splice(idx, 1);
+    setField('supplies', next);
+  };
+  const toggleConsumable = (id) => {
+    const cur = form.consumable_ids || [];
+    if (cur.includes(id)) {
+      setField('consumable_ids', cur.filter((x) => x !== id));
+    } else {
+      setField('consumable_ids', [...cur, id]);
+    }
+  };
   const addExtra = () => {
     const ids = form.additional_filaments_ids || [];
     const grams = form.additional_filaments_grams || [];
@@ -666,9 +691,14 @@ function CalcForm({ form, setField, filaments, printers, errors }) {
         <FormFieldRow label="Nombre" required error={errors.piece_name}>
           <FormInput value={form.piece_name} onChange={(v) => setField('piece_name', v)} placeholder="ej. Minifig dragon v3" />
         </FormFieldRow>
-        <FormFieldRow label="Cantidad de unidades">
-          <Stepper value={form.quantity} onChange={(v) => setField('quantity', v)} min={1} max={999} suffix="u" />
-        </FormFieldRow>
+        <div className="grid grid-cols-2 gap-2">
+          <FormFieldRow label="Cantidad de unidades">
+            <Stepper value={form.quantity} onChange={(v) => setField('quantity', v)} min={1} max={999} suffix="u" />
+          </FormFieldRow>
+          <FormFieldRow label="Cambios de color" hint="Multi-material AMS">
+            <Stepper value={form.color_changes} onChange={(v) => setField('color_changes', v)} min={0} max={50} suffix="x" />
+          </FormFieldRow>
+        </div>
       </FormSection>
 
       <FormSection title="Tiempo de impresión">
@@ -678,6 +708,14 @@ function CalcForm({ form, setField, filaments, printers, errors }) {
           </FormFieldRow>
           <FormFieldRow label="Minutos">
             <Stepper value={form.minutes} onChange={(v) => setField('minutes', v)} min={0} max={59} step={5} suffix="m" />
+          </FormFieldRow>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <FormFieldRow label="Preparación (min)" hint="Setup pre-impresión">
+            <Stepper value={form.preparation_minutes} onChange={(v) => setField('preparation_minutes', v)} min={0} max={240} step={5} suffix="m" />
+          </FormFieldRow>
+          <FormFieldRow label="Post-procesamiento (min)" hint="Limpieza + acabado">
+            <Stepper value={form.post_processing_minutes} onChange={(v) => setField('post_processing_minutes', v)} min={0} max={240} step={5} suffix="m" />
           </FormFieldRow>
         </div>
       </FormSection>
@@ -759,6 +797,97 @@ function CalcForm({ form, setField, filaments, printers, errors }) {
         )}
       </FormSection>
 
+      <FormSection title="Insumos extra (placas, hotends, partes)">
+        {(form.supplies || []).length === 0 ? (
+          <button
+            type="button"
+            onClick={addSupply}
+            disabled={supplies.length === 0}
+            className="px-3 py-2.5 rounded-lg text-[12px] text-steel border border-dashed border-[var(--color-border-strong)] inline-flex items-center justify-center gap-1.5 hover:text-tech-white disabled:opacity-40"
+          >
+            <Plus size={12} /> Agregar insumo
+          </button>
+        ) : (
+          <>
+            {form.supplies.map((s, idx) => (
+              <div key={idx} className="grid gap-1.5 items-start" style={{ gridTemplateColumns: 'minmax(0,1fr) 90px 28px' }}>
+                <select
+                  value={s.inventory_item_id}
+                  onChange={(e) => updateSupply(idx, 'inventory_item_id', e.target.value ? Number(e.target.value) : '')}
+                  className={FORM_INPUT_CLS}
+                >
+                  <option value="">Selecciona insumo…</option>
+                  {Object.entries(
+                    supplies.reduce((acc, inv) => {
+                      const cat = inv.category || 'Otros';
+                      (acc[cat] = acc[cat] || []).push(inv);
+                      return acc;
+                    }, {}),
+                  ).map(([cat, items]) => (
+                    <optgroup key={cat} label={cat}>
+                      {items.map((inv) => (
+                        <option key={inv.id} value={inv.id}>{inv.name}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                <Stepper value={s.quantity} onChange={(v) => updateSupply(idx, 'quantity', v)} min={1} max={999} suffix="u" />
+                <button
+                  type="button"
+                  onClick={() => removeSupply(idx)}
+                  className="w-7 h-9 rounded-md border border-[var(--color-border-strong)] text-gunmetal inline-flex items-center justify-center hover:text-rose-400 hover:border-rose-400/40"
+                  aria-label="Quitar insumo"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={addSupply}
+              className="self-start px-3 py-1.5 rounded-md text-[11.5px] text-steel border border-dashed border-[var(--color-border-strong)] inline-flex items-center gap-1.5 hover:text-tech-white"
+            >
+              <Plus size={11} /> Agregar otro
+            </button>
+          </>
+        )}
+      </FormSection>
+
+      <FormSection title="Consumibles (desgaste por horas)">
+        {consumables.length === 0 ? (
+          <p className="mono text-[10.5px] text-gunmetal-dim">
+            No hay consumibles registrados con vida útil. Agrégalos en /inventory.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-1 max-h-48 overflow-y-auto p-1 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-lg">
+            {consumables.map((c) => {
+              const checked = (form.consumable_ids || []).includes(c.id);
+              return (
+                <label
+                  key={c.id}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-md text-[12px] hover:bg-[var(--color-surf-card-2)] cursor-pointer"
+                  style={{
+                    background: checked ? `color-mix(in oklab, ${ACCENT} 10%, transparent)` : 'transparent',
+                    border: checked ? `1px solid color-mix(in oklab, ${ACCENT} 28%, transparent)` : '1px solid transparent',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleConsumable(c.id)}
+                    className="w-3.5 h-3.5 accent-[var(--color-forge-teal)]"
+                  />
+                  <span className="flex-1 text-tech-white truncate">{c.name}</span>
+                  {c.useful_life_hours && (
+                    <span className="mono text-[10px] text-gunmetal">{c.useful_life_hours}h vida</span>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+        )}
+      </FormSection>
+
       <FormSection title="Modo de cálculo">
         <FormFieldRow label="Tipo">
           <FormChips value={form.mode} onChange={(v) => setField('mode', v)} options={MODE_OPTIONS} />
@@ -812,12 +941,30 @@ const DEFAULT_FORM = {
   weight_grams: 0,
   hours: 0,
   minutes: 0,
+  preparation_minutes: 0,
+  post_processing_minutes: 15,
   quantity: 1,
+  color_changes: 0,
   margin_percent: 35,
   include_iva: false,
   mode: 'standard',
   additional_filaments_ids: [],
   additional_filaments_grams: [],
+  supplies: [],          // [{ inventory_item_id, quantity }]
+  consumable_ids: [],    // ids de inventory items category=Consumible con useful_life_hours
+};
+
+// Auto-selección de consumibles default por substring del nombre (V1 legacy)
+const DEFAULT_CONSUMABLE_PATTERNS = [
+  'bambu lab placa pei',
+  'filament cutter',
+  'hottend socks',
+  'ptfe',
+];
+
+const matchesAny = (item, patterns) => {
+  const name = (item.name || '').toLowerCase();
+  return patterns.some((p) => name.includes(p));
 };
 
 export default function CalculatorPage() {
@@ -827,6 +974,8 @@ export default function CalculatorPage() {
   // Datos catálogo
   const [filaments, setFilaments] = useState([]);
   const [printers, setPrinters] = useState([]);
+  const [supplies, setSupplies] = useState([]);       // category != Filamento && != Consumible
+  const [consumables, setConsumables] = useState([]); // category=Consumible con vida útil
   const [tariffPeriod, setTariffPeriod] = useState(null); // 'YYYY-MM' o null
   const [tariffRateCOP, setTariffRateCOP] = useState(null);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -863,11 +1012,25 @@ export default function CalculatorPage() {
       getSettings(),
       getElectricityTariffs().catch(() => ({ data: [] })),
     ])
-      .then(([fRes, _allRes, pRes, sRes, tariffsRes]) => {
+      .then(([fRes, allRes, pRes, sRes, tariffsRes]) => {
         const filamentItems = [...fRes.data].sort((a, b) => a.name.localeCompare(b.name, 'es'));
         const sortedPrinters = [...pRes.data].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+        const allItems = allRes.data || [];
+        const supplyItems = allItems
+          .filter((i) => i.category !== 'Filamento' && i.category !== 'Consumible')
+          .sort((a, b) => (a.category || '').localeCompare(b.category || '', 'es') || a.name.localeCompare(b.name, 'es'));
+        const consumableItems = allItems
+          .filter((i) => i.category === 'Consumible' && i.useful_life_hours > 0)
+          .sort((a, b) => a.name.localeCompare(b.name, 'es'));
         setFilaments(filamentItems);
         setPrinters(sortedPrinters);
+        setSupplies(supplyItems);
+        setConsumables(consumableItems);
+
+        // Auto-seleccionar consumibles default (placa PEI, cutter, socks, PTFE)
+        const defaultConsumables = consumableItems
+          .filter((c) => matchesAny(c, DEFAULT_CONSUMABLE_PATTERNS))
+          .map((c) => c.id);
         // Tariff actual: primer item de listElectricityTariffs (ordenado desc)
         const tariffs = tariffsRes.data || [];
         if (tariffs.length > 0) {
@@ -883,12 +1046,14 @@ export default function CalculatorPage() {
         } else {
           setTariffPeriod(currentTariffPeriod());
         }
-        // Defaults: primera impresora, primer filamento, margen settings
+        // Defaults: primera impresora, primer filamento, margen settings,
+        // consumables default seleccionados
         setForm((cur) => ({
           ...cur,
           margin_percent: Number(sRes.data.default_margin_percent || 35),
           printer_id: sortedPrinters[0]?.id || '',
           inventory_item_id: filamentItems[0]?.id || '',
+          consumable_ids: defaultConsumables,
         }));
 
         // Slicer URL params
@@ -936,6 +1101,9 @@ export default function CalculatorPage() {
         weight_grams: Number((f.additional_filaments_grams || [])[i] || 0),
       }))
       .filter((x) => x.inventory_item_id && x.weight_grams > 0);
+    const validSupplies = (f.supplies || [])
+      .filter((s) => s.inventory_item_id && Number(s.quantity) > 0)
+      .map((s) => ({ inventory_item_id: Number(s.inventory_item_id), quantity: Number(s.quantity) }));
     return {
       piece_name: f.piece_name || 'Pieza',
       description: f.description || null,
@@ -944,14 +1112,14 @@ export default function CalculatorPage() {
       printer_id: Number(f.printer_id),
       weight_grams: Number(f.weight_grams) || 0,
       print_time_hours: (Number(f.hours) || 0) + (Number(f.minutes) || 0) / 60,
-      preparation_time_hours: 0,
-      post_processing_time_hours: 0.25,
+      preparation_time_hours: (Number(f.preparation_minutes) || 0) / 60,
+      post_processing_time_hours: (Number(f.post_processing_minutes) || 0) / 60,
       quantity: Number(f.quantity) || 1,
       margin_percent: Number(f.margin_percent) || 0,
-      color_changes: 0,
-      supplies: [],
+      color_changes: Number(f.color_changes) || 0,
+      supplies: validSupplies,
       additional_filaments: additional,
-      consumable_ids: [],
+      consumable_ids: f.consumable_ids || [],
       // Reimpresión: cargamos el +15% como un margen extra ad-hoc
       // (backend no tiene flag específico; emulamos)
       ...(f.mode === 'reprint' ? { extra_failure_percent: 15 } : {}),
@@ -1047,7 +1215,7 @@ export default function CalculatorPage() {
       <div className="flex flex-col min-h-screen bg-forge-black">
         <CalcHeader isStale={isStale} onOpenStaleModal={() => setStaleModalOpen(true)} />
         <main className="flex-1 pb-28 overflow-y-auto">
-          <CalcForm form={form} setField={setField} filaments={filaments} printers={printers} errors={errors} />
+          <CalcForm form={form} setField={setField} filaments={filaments} printers={printers} supplies={supplies} consumables={consumables} errors={errors} />
         </main>
         <div
           className="fixed bottom-0 inset-x-0 z-30 px-4 py-3 border-t flex items-center gap-2"
@@ -1116,7 +1284,7 @@ export default function CalculatorPage() {
         className="flex-1 min-h-0 grid"
         style={{ gridTemplateColumns: 'minmax(420px, 1.2fr) minmax(320px, 1fr) minmax(320px, 1fr)' }}
       >
-        <CalcForm form={form} setField={setField} filaments={filaments} printers={printers} errors={errors} />
+        <CalcForm form={form} setField={setField} filaments={filaments} printers={printers} supplies={supplies} consumables={consumables} errors={errors} />
         <CalcResult
           result={result}
           form={form}
