@@ -1,19 +1,27 @@
 /**
- * @file Página de pedidos de compra con tracking.
+ * @file Pedidos de compra v2 (port Claude Design — HANDOFF-inventory-purchases.md).
  *
- * Permite registrar compras realizadas en proveedores (Amazon, Delbex, etc.)
- * con número de tracking. Al marcar un pedido como llegado, el stock del
- * inventario se actualiza automáticamente.
+ * Pantalla dedicada `/inventory/purchases`. Diferente al tab "Compras"
+ * dentro de `/inventory` (InventoryPage) — esta es la vista de gestión
+ * full-featured con KPI strip, filtros pill, list de POs y drawers v2.
+ *
+ * Resuelve issues:
+ *   #54 — card renderiza `po.supplier` (no "Proveedor sin nombre"),
+ *         total = Σ qty × unit_cost, "Sin ítems" cuando items vacío,
+ *         copy del form "se suma al inventario" (no "se descuenta").
+ *   #73 — validación inline NewPODrawer: supplier requerido + ≥1 ítem,
+ *         botón cambia "Crear pedido" ↔ "Faltan campos" y queda
+ *         disabled hasta cumplir.
  *
  * @module pages/inventory/InventoryPurchasesPage
  */
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { useConfirm } from '../../components/ConfirmDialog';
 import {
-  Plus, X, Eye, Trash2, PackageCheck, Truck, Clock, Ban,
-  ShoppingCart, Pencil, RefreshCw, Loader, SendHorizonal,
+  Truck, Plus, Download, Search, Check, X, ChevronRight, Clock,
+  Building2, Edit, Box, ShoppingCart, RefreshCw, Pencil, Loader,
+  Trash2, Package,
 } from 'lucide-react';
 import {
   getPurchaseOrders,
@@ -24,63 +32,701 @@ import {
   getInventoryItems,
   scanTracking,
 } from '../../services/api';
-import { formatQuantity } from '../../utils/format';
+import { useConfirm } from '../../components/ConfirmDialog';
+import { useIsMobile } from '../../hooks/useMediaQuery';
+import { DetailDrawer, MobileSheet, StatusPill, EmptyState } from '../../components/ui';
+import { fmtCOP } from '../../utils/inventoryAdapter';
 
-/** Mapa de colores y etiquetas por estado del pedido */
+const APP_ACCENT = '#3B82F6'; // app-inventory
+
 const STATUS_CONFIG = {
-  pendiente:   { label: 'No despachado', color: 'text-gunmetal',    bg: 'bg-gunmetal/20',    border: 'border-gunmetal/30',    icon: Clock },
-  despachado:  { label: 'Despachado',    color: 'text-amber-400',   bg: 'bg-amber-400/10',   border: 'border-amber-400/30',   icon: SendHorizonal },
-  en_transito: { label: 'En tránsito',   color: 'text-blue-400',    bg: 'bg-blue-500/20',    border: 'border-blue-500/30',    icon: Truck },
-  entregado:   { label: 'Entregado',     color: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'border-emerald-400/30', icon: PackageCheck },
-  llegado:     { label: 'Recibido',      color: 'text-green-400',   bg: 'bg-green-500/20',   border: 'border-green-500/30',   icon: PackageCheck },
-  cancelado:   { label: 'Cancelado',     color: 'text-red-400',     bg: 'bg-red-500/20',     border: 'border-red-500/30',     icon: Ban },
+  pendiente:   { label: 'Pendiente',  tone: 'pending',  icon: Clock,    color: '#94A0AE' },
+  en_transito: { label: 'En tránsito', tone: 'printing', icon: Truck,   color: '#3B82F6' },
+  llegado:     { label: 'Llegado',    tone: 'done',     icon: Check,    color: '#34D399' },
+  cancelado:   { label: 'Cancelado',  tone: 'danger',   icon: X,        color: '#F87171' },
 };
 
-/** Estado vacío de un ítem del pedido */
-const EMPTY_ITEM = { name: '', quantity: '1', unit_cost: '0', inventory_item_id: '', notes: '' };
-
-/** Formatea fecha YYYY-MM-DD a dd/mm/yyyy */
-const fmt = (str) => {
-  if (!str) return '—';
-  const [y, m, d] = str.split('T')[0].split('-');
-  return `${d}/${m}/${y}`;
+// Backend campos sin total persistido — computamos siempre desde items.
+const poTotal = (po) => {
+  if (!po || !Array.isArray(po.items)) return 0;
+  return po.items.reduce((s, l) => s + (Number(l.quantity) || 0) * (Number(l.unit_cost) || 0), 0);
 };
 
-/** Insignia de estado del pedido */
-function StatusBadge({ status }) {
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pendiente;
-  const Icon = cfg.icon;
+// ─── Header + KPI strip ──────────────────────────────────────────────────
+
+function PurchasesHeader({ purchases, onNew, onScan, scanning }) {
+  const open = purchases.filter((p) => p.status === 'pendiente' || p.status === 'en_transito');
+  const onRoute = open.reduce((s, p) => s + poTotal(p), 0);
+  const vendors = new Set(purchases.map((p) => p.supplier).filter(Boolean)).size;
+  const arrived = purchases.filter((p) => p.status === 'llegado').length;
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.bg} ${cfg.color} border ${cfg.border}`}>
-      <Icon size={10} /> {cfg.label}
-    </span>
+    <>
+      <header className="flex items-center gap-3.5 px-5 py-3.5 border-b border-[var(--color-border-soft)] bg-forge-black">
+        <div
+          className="w-9 h-9 rounded-lg shrink-0 inline-flex items-center justify-center"
+          style={{
+            background: `color-mix(in oklab, ${APP_ACCENT} 14%, transparent)`,
+            border: `1px solid color-mix(in oklab, ${APP_ACCENT} 32%, transparent)`,
+            color: APP_ACCENT,
+          }}
+        >
+          <Truck size={17} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="mono inline-flex items-center gap-1.5 text-[9.5px] uppercase tracking-[0.14em] text-gunmetal">
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: APP_ACCENT }} />
+            Inventario · Pedidos
+          </div>
+          <h1 className="m-0 text-[18px] font-semibold text-tech-white tracking-tight whitespace-nowrap">
+            Compras a proveedores
+          </h1>
+        </div>
+        <button
+          type="button"
+          onClick={onScan}
+          disabled={scanning}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] text-steel border border-[var(--color-border-strong)] hover:text-tech-white disabled:opacity-50"
+          title="Consulta parcelsapp.com para todos los pedidos activos"
+        >
+          {scanning ? <Loader size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+          Tracking
+        </button>
+        <button
+          type="button"
+          onClick={onNew}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold"
+          style={{ background: APP_ACCENT, color: '#0A1014' }}
+        >
+          <Plus size={13} /> Nueva orden
+        </button>
+      </header>
+      <div className="flex gap-2 px-5 py-3 border-b border-[var(--color-border-soft)] bg-forge-black overflow-x-auto">
+        <IpKPI label="Órdenes abiertas" icon={Truck} value={open.length} sub={`${purchases.length} totales`} />
+        <IpKPI label="En ruta · COP" icon={ShoppingCart} value={fmtCOP(onRoute)} sub="Por recibir" big />
+        <IpKPI label="Vendors" icon={Building2} value={vendors} sub="distintos" />
+        <IpKPI label="Llegadas" icon={Check} value={arrived} sub="recibidas" />
+      </div>
+    </>
   );
 }
 
-/**
- * Página de pedidos de compra.
- * @returns {JSX.Element}
- */
-export default function InventoryPurchasesPage() {
-  const confirm = useConfirm();
-  const [orders, setOrders] = useState([]);
-  const [inventoryItems, setInventoryItems] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingOrder, setEditingOrder] = useState(null); // null = crear, obj = editar
-  const [saving, setSaving] = useState(false);
-  const [scanning, setScanning] = useState(false);
+function IpKPI({ label, value, sub, icon: Icon, big }) {
+  return (
+    <div className="flex-1 min-w-[160px] p-3 rounded-lg bg-[var(--color-surf-card)] border border-[var(--color-border)] flex flex-col gap-1">
+      <div className="flex items-center gap-1.5">
+        <span
+          className="w-[18px] h-[18px] rounded inline-flex items-center justify-center"
+          style={{ background: `color-mix(in oklab, ${APP_ACCENT} 14%, transparent)`, color: APP_ACCENT }}
+        >
+          <Icon size={11} />
+        </span>
+        <span className="mono text-[9px] uppercase tracking-[0.14em] text-gunmetal">{label}</span>
+      </div>
+      <div className={`mono font-semibold text-tech-white -tracking-tight truncate ${big ? 'text-[18px]' : 'text-[20px]'}`}>
+        {value}
+      </div>
+      {sub && <div className="mono text-[10px] text-gunmetal-dim truncate">{sub}</div>}
+    </div>
+  );
+}
 
-  /** Estado del formulario de nuevo/editar pedido */
-  const [form, setForm] = useState({
+// ─── Filters bar ─────────────────────────────────────────────────────────
+
+function PurchasesFilters({ purchases, statusFilter, onStatus, query, onQuery }) {
+  const counts = useMemo(() => {
+    const c = { all: purchases.length };
+    Object.keys(STATUS_CONFIG).forEach((k) => {
+      c[k] = purchases.filter((p) => p.status === k).length;
+    });
+    return c;
+  }, [purchases]);
+  const items = [
+    { id: 'all', label: 'Todas', color: 'var(--color-steel)' },
+    ...Object.entries(STATUS_CONFIG).map(([id, s]) => ({ id, label: s.label, color: s.color })),
+  ];
+  return (
+    <div className="flex flex-wrap items-center gap-2.5 px-5 py-3 border-b border-[var(--color-border-soft)] bg-forge-black">
+      <div className="flex gap-1 flex-wrap">
+        {items.map((it) => {
+          const active = statusFilter === it.id;
+          const color = it.color;
+          return (
+            <button
+              key={it.id}
+              type="button"
+              onClick={() => onStatus(it.id)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px] font-medium whitespace-nowrap transition-colors"
+              style={{
+                background: active ? `color-mix(in oklab, ${color} 14%, transparent)` : 'transparent',
+                border: `1px solid ${active ? `color-mix(in oklab, ${color} 38%, transparent)` : 'var(--color-border)'}`,
+                color: active ? color : 'var(--color-steel)',
+              }}
+            >
+              <span className="w-1 h-1 rounded-full" style={{ background: color }} />
+              {it.label}
+              <span
+                className="mono text-[9.5px] px-1.5 rounded-full border border-[var(--color-border-soft)]"
+                style={{
+                  background: active ? `color-mix(in oklab, ${color} 18%, transparent)` : 'rgba(228, 232, 237, 0.05)',
+                  color: active ? color : 'var(--color-gunmetal)',
+                }}
+              >
+                {counts[it.id] || 0}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] w-60 max-w-full">
+        <Search size={12} className="text-gunmetal shrink-0" />
+        <input
+          value={query}
+          onChange={(e) => onQuery(e.target.value)}
+          placeholder="Buscar PO o proveedor…"
+          className="flex-1 min-w-0 bg-transparent border-0 outline-0 text-tech-white text-[12px]"
+        />
+        {query && (
+          <button type="button" onClick={() => onQuery('')} className="text-gunmetal hover:text-tech-white">
+            <X size={11} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── PO card (lista principal) ───────────────────────────────────────────
+
+function POCard({ po, onClick }) {
+  const status = STATUS_CONFIG[po.status] || STATUS_CONFIG.pendiente;
+  const StatusIcon = status.icon;
+  const total = poTotal(po);
+  const linesCount = (po.items || []).length;
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(po)}
+      className="w-full text-left flex items-center gap-3.5 px-4 py-3 rounded-lg bg-[var(--color-surf-card)] border border-[var(--color-border)] hover:bg-[var(--color-surf-card-2)] hover:border-[var(--color-border-bright)] transition-colors"
+    >
+      <div className="flex flex-col gap-1 shrink-0 min-w-[110px]">
+        <span className="mono text-[13px] font-semibold text-tech-white">
+          PO-{String(po.id).padStart(4, '0')}
+        </span>
+        <StatusPill tone={status.tone} icon={StatusIcon}>{status.label}</StatusPill>
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <div
+            className="w-[22px] h-[22px] rounded shrink-0 inline-flex items-center justify-center"
+            style={{
+              background: 'rgba(99, 102, 241, 0.12)',
+              border: '1px solid rgba(99, 102, 241, 0.25)',
+              color: '#A5B4FC',
+            }}
+          >
+            <Building2 size={11} />
+          </div>
+          <span className="text-[13.5px] font-semibold text-tech-white truncate">
+            {po.supplier || 'Sin proveedor'}
+          </span>
+        </div>
+        <div className="mono text-[10.5px] text-gunmetal flex items-center gap-1.5 truncate">
+          <Clock size={10} />
+          <span>
+            Colocada {po.created_at ? String(po.created_at).split('T')[0] : '—'}
+          </span>
+          {po.estimated_arrival && (
+            <>
+              <span className="w-[3px] h-[3px] rounded-full bg-gunmetal-dim" />
+              <Truck size={10} />
+              <span>llega {String(po.estimated_arrival).split('T')[0]}</span>
+            </>
+          )}
+          {po.tracking_number && (
+            <>
+              <span className="w-[3px] h-[3px] rounded-full bg-gunmetal-dim" />
+              <span className="text-blue-400 mono truncate max-w-[180px]">
+                {po.tracking_number}
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="shrink-0 text-right min-w-[130px]">
+        <div className="mono text-[10.5px] text-gunmetal uppercase tracking-[0.12em]">
+          {linesCount === 0 ? 'Sin ítems' : `${linesCount} ${linesCount === 1 ? 'ítem' : 'ítems'}`}
+        </div>
+        <div className="mono text-[16px] font-semibold text-tech-white -tracking-tight mt-0.5 whitespace-nowrap">
+          {linesCount === 0 ? 'Sin ítems' : fmtCOP(total)}
+        </div>
+      </div>
+      <ChevronRight size={14} className="text-gunmetal-dim shrink-0" />
+    </button>
+  );
+}
+
+// ─── PO detail drawer ────────────────────────────────────────────────────
+
+function PODrawerBody({ po, onEdit, onArrive, onDelete }) {
+  const status = STATUS_CONFIG[po.status] || STATUS_CONFIG.pendiente;
+  const StatusIcon = status.icon;
+  const total = poTotal(po);
+  const items = po.items || [];
+  const linkedCount = items.filter((l) => l.inventory_item_id).length;
+
+  return (
+    <div className="p-4 flex flex-col gap-4">
+      <div
+        className="p-3.5 rounded-xl flex items-center gap-3"
+        style={{
+          background: `linear-gradient(135deg, color-mix(in oklab, ${APP_ACCENT} 8%, transparent), transparent), var(--color-surf-card-2)`,
+          border: '1px solid var(--color-border)',
+        }}
+      >
+        <div
+          className="w-11 h-11 rounded-xl inline-flex items-center justify-center"
+          style={{
+            background: `color-mix(in oklab, ${APP_ACCENT} 16%, transparent)`,
+            border: `1px solid color-mix(in oklab, ${APP_ACCENT} 32%, transparent)`,
+            color: APP_ACCENT,
+          }}
+        >
+          <Truck size={20} />
+        </div>
+        <div className="flex-1">
+          <StatusPill tone={status.tone} icon={StatusIcon} size="lg">{status.label}</StatusPill>
+          <div className="mono text-[10.5px] text-gunmetal mt-1">
+            {po.created_at ? `Colocada ${String(po.created_at).split('T')[0]}` : ''}
+            {po.estimated_arrival ? ` · ETA ${String(po.estimated_arrival).split('T')[0]}` : ''}
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="mono text-[9.5px] text-gunmetal uppercase tracking-[0.14em]">Total</div>
+          <div className="mono text-[20px] font-semibold text-tech-white -tracking-tight">
+            {items.length === 0 ? 'Sin ítems' : fmtCOP(total)}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="m-0 mb-2 text-[10.5px] uppercase tracking-[0.14em] text-steel font-semibold">
+          Ítems ({items.length})
+        </h3>
+        <div className="rounded-lg overflow-hidden border border-[var(--color-border)] bg-[var(--color-surf-card-2)]">
+          {items.length === 0 ? (
+            <div className="p-4 text-center text-[12px] text-gunmetal-dim">Sin ítems</div>
+          ) : (
+            items.map((l, i) => (
+              <div
+                key={l.id || i}
+                className="grid items-center gap-2.5 px-3 py-2.5"
+                style={{
+                  gridTemplateColumns: 'minmax(0, 1fr) 60px 100px 110px',
+                  borderBottom: i === items.length - 1 ? 0 : '1px solid var(--color-border-soft)',
+                }}
+              >
+                <div className="min-w-0">
+                  <div className="text-[12.5px] text-tech-white truncate">{l.name}</div>
+                  <div className="mono text-[9.5px] text-gunmetal-dim mt-0.5 flex items-center gap-1.5">
+                    {l.inventory_item_id && (
+                      <span className="text-[#3B82F6]">↳ inv #{l.inventory_item_id}</span>
+                    )}
+                    {l.notes && <span className="truncate">{l.notes}</span>}
+                  </div>
+                </div>
+                <span className="mono text-[12px] text-steel text-right">×{l.quantity}</span>
+                <span className="mono text-[11px] text-steel text-right">{fmtCOP(Number(l.unit_cost) || 0)}</span>
+                <span className="mono text-[13px] font-semibold text-tech-white text-right">
+                  {fmtCOP((Number(l.quantity) || 0) * (Number(l.unit_cost) || 0))}
+                </span>
+              </div>
+            ))
+          )}
+          {items.length > 0 && (
+            <div className="flex items-baseline justify-between px-3 py-2.5 bg-[var(--color-surf-card)] border-t border-[var(--color-border)]">
+              <span className="text-[12.5px] font-semibold text-tech-white">Total</span>
+              <span className="mono text-[16px] font-semibold text-tech-white -tracking-tight">
+                {fmtCOP(total)}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {po.notes && (
+        <div>
+          <h3 className="m-0 mb-2 text-[10.5px] uppercase tracking-[0.14em] text-steel font-semibold">
+            Notas internas
+          </h3>
+          <div className="px-3 py-2.5 rounded-lg bg-[var(--color-surf-card-2)] border border-[var(--color-border)] text-[12.5px] leading-[1.5] text-steel">
+            {po.notes}
+          </div>
+        </div>
+      )}
+
+      {po.status === 'en_transito' && (
+        <div
+          className="px-3 py-2.5 rounded-lg flex items-center gap-2.5"
+          style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.28)' }}
+        >
+          <Check size={15} className="text-emerald-400" />
+          <div className="flex-1">
+            <div className="text-[12.5px] font-medium text-tech-white">
+              Al marcar como Llegado se suma al inventario
+            </div>
+            <div className="mono text-[10px] text-gunmetal mt-0.5">
+              {linkedCount} de {items.length} ítems vinculados al inventario
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onEdit}
+          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-[12.5px] font-medium text-steel border border-[var(--color-border-strong)] hover:text-tech-white"
+        >
+          <Pencil size={13} /> Editar
+        </button>
+        {po.status !== 'llegado' && po.status !== 'cancelado' && (
+          <button
+            type="button"
+            onClick={onArrive}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-[12.5px] font-semibold"
+            style={{ background: '#34D399', color: '#0A2716' }}
+          >
+            <Check size={13} /> Marcar como Llegado
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onDelete}
+          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[12.5px] text-rose-400 border border-[var(--color-border-strong)] hover:border-rose-400/40"
+          title="Eliminar pedido"
+        >
+          <Trash2 size={13} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── New PO drawer (form con validación #73) ──────────────────────────────
+
+const EMPTY_LINE = () => ({
+  id: `L${Date.now()}`,
+  name: '',
+  quantity: 1,
+  unit_cost: 0,
+  inventory_item_id: null,
+  notes: '',
+});
+
+const FORM_INPUT_CLS =
+  'w-full bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-3 py-2 text-[13px] text-tech-white outline-none focus:border-[#3B82F6]/60';
+
+function NewPOForm({ initial, inventoryItems, onSave, onCancel, mode = 'create', saving }) {
+  const [form, setForm] = useState(() => initial || {
     supplier: '',
-    tracking_number: '',
     carrier: '',
+    tracking_number: '',
     estimated_arrival: '',
     notes: '',
+    items: [],
+    status: 'pendiente',
   });
-  const [formItems, setFormItems] = useState([{ ...EMPTY_ITEM }]);
+  const set = (k, v) => setForm((cur) => ({ ...cur, [k]: v }));
+  const addLine = () => set('items', [...(form.items || []), EMPTY_LINE()]);
+  const updateLine = (idx, key, val) => {
+    const next = [...(form.items || [])];
+    next[idx] = { ...next[idx], [key]: val };
+    set('items', next);
+  };
+  const removeLine = (idx) => {
+    const next = [...(form.items || [])];
+    next.splice(idx, 1);
+    set('items', next);
+  };
+
+  // Validation — issue #73
+  const errors = useMemo(() => ({
+    supplier: !form.supplier.trim() ? 'Requerido' : null,
+    items: (form.items || []).length === 0 ? 'Mínimo 1 ítem' : null,
+    lines: (form.items || []).map((l) => ({
+      name: !l.name.trim() ? 'Nombre requerido' : null,
+      quantity: !(Number(l.quantity) > 0) ? '> 0' : null,
+    })),
+  }), [form]);
+  const hasErrors = !!errors.supplier || !!errors.items ||
+    errors.lines.some((e) => e.name || e.quantity);
+
+  const total = (form.items || []).reduce(
+    (s, l) => s + (Number(l.quantity) || 0) * (Number(l.unit_cost) || 0),
+    0,
+  );
+
+  return (
+    <div className="p-4 flex flex-col gap-4">
+      <div
+        className="p-3 rounded-lg text-[12.5px] leading-[1.55] text-steel"
+        style={{ background: 'rgba(59, 130, 246, 0.06)', border: '1px solid rgba(59, 130, 246, 0.20)' }}
+      >
+        Los campos marcados con <span className="text-rose-400 font-semibold">*</span> son obligatorios.
+        La orden empieza en estado <span className="text-tech-white font-semibold">Pendiente</span>;
+        al marcar como <span className="text-emerald-400 font-semibold">Llegado</span> se suma al
+        inventario cualquier ítem vinculado.
+      </div>
+
+      <FormSection title="Proveedor">
+        <FormFieldRow label="Proveedor" required error={errors.supplier}>
+          <input
+            value={form.supplier}
+            onChange={(e) => set('supplier', e.target.value)}
+            placeholder="ej. 3D Hardware Colombia"
+            className={FORM_INPUT_CLS}
+            autoFocus
+          />
+        </FormFieldRow>
+        <div className="grid grid-cols-2 gap-2">
+          <FormFieldRow label="Transportista">
+            <input
+              value={form.carrier || ''}
+              onChange={(e) => set('carrier', e.target.value)}
+              placeholder="UPS, FedEx…"
+              className={FORM_INPUT_CLS}
+            />
+          </FormFieldRow>
+          <FormFieldRow label="Tracking">
+            <input
+              value={form.tracking_number || ''}
+              onChange={(e) => set('tracking_number', e.target.value)}
+              placeholder="1Z..."
+              className={`${FORM_INPUT_CLS} mono`}
+            />
+          </FormFieldRow>
+        </div>
+        <FormFieldRow label="ETA esperado" hint="ej. fecha estimada de llegada">
+          <input
+            type="date"
+            value={form.estimated_arrival || ''}
+            onChange={(e) => set('estimated_arrival', e.target.value)}
+            className={FORM_INPUT_CLS}
+          />
+        </FormFieldRow>
+        {mode === 'edit' && (
+          <FormFieldRow label="Estado">
+            <select
+              value={form.status}
+              onChange={(e) => set('status', e.target.value)}
+              className={FORM_INPUT_CLS}
+            >
+              {Object.entries(STATUS_CONFIG).map(([k, v]) => (
+                <option key={k} value={k}>{v.label}</option>
+              ))}
+            </select>
+          </FormFieldRow>
+        )}
+      </FormSection>
+
+      <FormSection title="Ítems del pedido">
+        {(form.items || []).length === 0 ? (
+          <div
+            className="p-5 rounded-lg text-center"
+            style={{
+              background: 'var(--color-surf-card)',
+              border: errors.items ? '1px dashed #FB7185' : '1px dashed var(--color-border-strong)',
+            }}
+          >
+            <Box size={20} className="mx-auto mb-1.5 text-gunmetal" />
+            <div className={`text-[12.5px] font-medium mb-2 ${errors.items ? 'text-rose-400' : 'text-steel'}`}>
+              {errors.items || 'Sin ítems'}
+            </div>
+            <button
+              type="button"
+              onClick={addLine}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11.5px] font-semibold"
+              style={{ background: APP_ACCENT, color: '#0A1014' }}
+            >
+              <Plus size={11} /> Agregar ítem
+            </button>
+          </div>
+        ) : (
+          <>
+            {form.items.map((l, idx) => (
+              <div
+                key={l.id || idx}
+                className="p-3 rounded-lg bg-[var(--color-surf-card)] border border-[var(--color-border)] flex flex-col gap-2"
+              >
+                <div className="grid gap-1.5" style={{ gridTemplateColumns: 'minmax(0, 1fr) 32px' }}>
+                  <FormFieldRow label="Nombre" required error={errors.lines[idx]?.name}>
+                    <input
+                      value={l.name}
+                      onChange={(e) => updateLine(idx, 'name', e.target.value)}
+                      placeholder="Nombre del ítem"
+                      className={FORM_INPUT_CLS}
+                    />
+                  </FormFieldRow>
+                  <button
+                    type="button"
+                    onClick={() => removeLine(idx)}
+                    aria-label="Quitar ítem"
+                    className="self-end h-9 rounded-md border border-[var(--color-border-strong)] text-gunmetal inline-flex items-center justify-center hover:text-rose-400 hover:border-rose-400/40"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+                <div className="grid gap-1.5" style={{ gridTemplateColumns: '80px 120px 1fr 110px', alignItems: 'end' }}>
+                  <FormFieldRow label="Cantidad" required error={errors.lines[idx]?.quantity}>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={l.quantity}
+                      onChange={(e) => updateLine(idx, 'quantity', Number(e.target.value))}
+                      className={`${FORM_INPUT_CLS} mono text-right`}
+                    />
+                  </FormFieldRow>
+                  <FormFieldRow label="Costo unit. COP">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={l.unit_cost}
+                      onChange={(e) => updateLine(idx, 'unit_cost', Number(e.target.value))}
+                      className={`${FORM_INPUT_CLS} mono text-right`}
+                    />
+                  </FormFieldRow>
+                  <FormFieldRow label="Vincular a inventario (opcional)">
+                    <select
+                      value={l.inventory_item_id || ''}
+                      onChange={(e) => updateLine(idx, 'inventory_item_id', e.target.value ? Number(e.target.value) : null)}
+                      className={FORM_INPUT_CLS}
+                    >
+                      <option value="">Sin vincular</option>
+                      {Object.entries(
+                        inventoryItems.reduce((acc, inv) => {
+                          const cat = inv.category || 'Sin categoría';
+                          (acc[cat] = acc[cat] || []).push(inv);
+                          return acc;
+                        }, {}),
+                      ).map(([cat, items]) => (
+                        <optgroup key={cat} label={cat}>
+                          {items.map((inv) => (
+                            <option key={inv.id} value={inv.id}>{inv.name}</option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                  </FormFieldRow>
+                  <div className="mono text-[13px] font-semibold text-tech-white text-right pb-2">
+                    {fmtCOP((Number(l.quantity) || 0) * (Number(l.unit_cost) || 0))}
+                  </div>
+                </div>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={addLine}
+              className="self-start inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11.5px] font-medium text-steel border border-dashed border-[var(--color-border-strong)] hover:text-tech-white"
+            >
+              <Plus size={11} /> Agregar otro ítem
+            </button>
+            <div
+              className="flex items-baseline justify-between px-3 py-2.5 rounded-lg mt-1 bg-[var(--color-surf-card-2)] border border-[var(--color-border)]"
+            >
+              <span className="text-[12.5px] font-semibold text-tech-white">Total estimado</span>
+              <span className="mono text-[17px] font-semibold -tracking-tight" style={{ color: APP_ACCENT }}>
+                {fmtCOP(total)}
+              </span>
+            </div>
+          </>
+        )}
+      </FormSection>
+
+      <FormSection title="Notas internas">
+        <textarea
+          value={form.notes || ''}
+          onChange={(e) => set('notes', e.target.value)}
+          placeholder="Detalles para el equipo (no se envía al proveedor)"
+          rows={3}
+          className={`${FORM_INPUT_CLS} resize-y min-h-[70px] leading-relaxed`}
+        />
+      </FormSection>
+
+      <div className="flex gap-2 pt-2 border-t border-[var(--color-border-soft)]">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-3.5 py-2 rounded-lg text-[12.5px] font-medium text-steel border border-[var(--color-border-strong)] hover:text-tech-white"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={() => onSave(form)}
+          disabled={hasErrors || saving}
+          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-[12.5px] font-semibold disabled:cursor-not-allowed"
+          style={{
+            background: hasErrors ? 'var(--color-surf-card-2)' : APP_ACCENT,
+            color: hasErrors ? 'var(--color-gunmetal)' : '#0A1014',
+            border: hasErrors ? '1px solid var(--color-border-strong)' : 0,
+          }}
+        >
+          {saving ? <Loader size={12} className="animate-spin" /> : <Plus size={12} />}
+          {hasErrors ? 'Faltan campos' : (mode === 'edit' ? 'Guardar cambios' : 'Crear pedido')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function FormSection({ title, children }) {
+  return (
+    <section>
+      <h3 className="mono mb-2 text-[10.5px] uppercase tracking-[0.16em] text-steel font-semibold whitespace-nowrap">
+        {title}
+      </h3>
+      <div className="flex flex-col gap-2">{children}</div>
+    </section>
+  );
+}
+
+function FormFieldRow({ label, required, hint, error, children }) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-1">
+        <label className="mono text-[9.5px] uppercase tracking-[0.12em] text-gunmetal">
+          {label} {required && <span className="text-rose-400">*</span>}
+        </label>
+        {error && <span className="text-[10.5px] font-medium text-rose-400 whitespace-nowrap">{error}</span>}
+      </div>
+      {children}
+      {hint && !error && (
+        <div className="mono mt-0.5 text-[9.5px] text-gunmetal-dim">{hint}</div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main page ───────────────────────────────────────────────────────────
+
+export default function InventoryPurchasesPage() {
+  const isMobile = useIsMobile();
+  const confirm = useConfirm();
+
+  const [purchases, setPurchases] = useState([]);
+  const [inventoryItems, setInventoryItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [scanning, setScanning] = useState(false);
+
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [query, setQuery] = useState('');
+
+  const [selected, setSelected] = useState(null);
+  const [formMode, setFormMode] = useState(null); // null | 'create' | 'edit'
+  const [editingInitial, setEditingInitial] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   const load = async () => {
     try {
@@ -88,14 +734,14 @@ export default function InventoryPurchasesPage() {
         getPurchaseOrders(),
         getInventoryItems(),
       ]);
-      setOrders(ordersRes.data);
+      setPurchases(ordersRes.data || []);
       setInventoryItems(
-        [...itemsRes.data].sort((a, b) =>
-          (a.category || '').localeCompare(b.category || '', 'es') || a.name.localeCompare(b.name, 'es')
-        )
+        [...(itemsRes.data || [])].sort((a, b) =>
+          (a.category || '').localeCompare(b.category || '', 'es') || a.name.localeCompare(b.name, 'es'),
+        ),
       );
     } catch {
-      toast.error('Error al cargar los pedidos');
+      toast.error('Error al cargar pedidos');
     } finally {
       setLoading(false);
     }
@@ -103,501 +749,253 @@ export default function InventoryPurchasesPage() {
 
   useEffect(() => { load(); }, []);
 
-  const openCreate = () => {
-    setEditingOrder(null);
-    setForm({ supplier: '', tracking_number: '', carrier: '', estimated_arrival: '', notes: '' });
-    setFormItems([{ ...EMPTY_ITEM }]);
-    setModalOpen(true);
-  };
-
-  const openEdit = (order) => {
-    setEditingOrder(order);
-    setForm({
-      supplier: order.supplier || '',
-      tracking_number: order.tracking_number || '',
-      carrier: order.carrier || '',
-      estimated_arrival: order.estimated_arrival ? order.estimated_arrival.split('T')[0] : '',
-      notes: order.notes || '',
-    });
-    setFormItems(
-      (order.items || []).map((it) => ({
-        name: it.name || '',
-        quantity: String(it.quantity ?? 1),
-        unit_cost: String(it.unit_cost ?? 0),
-        inventory_item_id: it.inventory_item_id ? String(it.inventory_item_id) : '',
-        notes: it.notes || '',
-      }))
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let arr = statusFilter === 'all' ? purchases : purchases.filter((p) => p.status === statusFilter);
+    if (q) {
+      arr = arr.filter((p) =>
+        (p.supplier || '').toLowerCase().includes(q) ||
+        (p.tracking_number || '').toLowerCase().includes(q) ||
+        String(p.id).includes(q),
+      );
+    }
+    return arr.sort((a, b) =>
+      new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
     );
-    setSelected(null);
-    setModalOpen(true);
-  };
+  }, [purchases, statusFilter, query]);
 
-  const handleFormChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
-
-  const handleItemChange = (idx, field, value) => {
-    setFormItems((prev) => prev.map((it, i) => i === idx ? { ...it, [field]: value } : it));
-    // Si seleccionó un ítem de inventario, pre-llenar el nombre
-    if (field === 'inventory_item_id' && value) {
-      const inv = inventoryItems.find((i) => String(i.id) === String(value));
-      if (inv) {
-        setFormItems((prev) => prev.map((it, i) =>
-          i === idx ? { ...it, inventory_item_id: value, name: inv.name } : it
-        ));
-      }
-    }
-  };
-
-  const addFormItem = () => setFormItems((prev) => [...prev, { ...EMPTY_ITEM }]);
-  const removeFormItem = (idx) => {
-    if (formItems.length === 1) return;
-    setFormItems((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!form.supplier.trim()) { toast.error('El proveedor es obligatorio'); return; }
-    for (const it of formItems) {
-      if (!it.name.trim()) { toast.error('Cada ítem debe tener un nombre'); return; }
-    }
-    setSaving(true);
-    const payload = {
-      supplier: form.supplier.trim(),
-      tracking_number: form.tracking_number || null,
-      carrier: form.carrier || null,
-      estimated_arrival: form.estimated_arrival || null,
-      notes: form.notes || null,
-      items: formItems.map((it) => ({
-        name: it.name.trim(),
-        quantity: parseInt(it.quantity, 10) || 1,
-        unit_cost: parseFloat(it.unit_cost) || 0,
-        inventory_item_id: it.inventory_item_id ? parseInt(it.inventory_item_id) : null,
-        notes: it.notes || null,
-      })),
-    };
+  const onScan = async () => {
+    setScanning(true);
+    const tid = toast.loading('Consultando tracking…');
     try {
-      if (editingOrder) {
-        await updatePurchaseOrder(editingOrder.id, payload);
-        toast.success('Pedido actualizado');
-      } else {
-        await createPurchaseOrder(payload);
-        toast.success('Pedido registrado');
-      }
-      setModalOpen(false);
+      const res = await scanTracking();
+      const { scanned = 0, updated = 0, errors = 0 } = res.data || {};
+      toast.dismiss(tid);
+      toast.success(`Tracking: ${scanned} revisados, ${updated} actualizados${errors ? `, ${errors} errores` : ''}`);
       load();
     } catch {
-      toast.error(editingOrder ? 'Error al actualizar el pedido' : 'Error al guardar el pedido');
+      toast.dismiss(tid);
+      toast.error('No se pudo actualizar tracking');
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const openCreate = () => {
+    setEditingInitial(null);
+    setFormMode('create');
+  };
+
+  const openEdit = (po) => {
+    setEditingInitial({
+      id: po.id,
+      supplier: po.supplier || '',
+      carrier: po.carrier || '',
+      tracking_number: po.tracking_number || '',
+      estimated_arrival: po.estimated_arrival ? String(po.estimated_arrival).split('T')[0] : '',
+      notes: po.notes || '',
+      status: po.status,
+      items: (po.items || []).map((it) => ({
+        id: it.id || `L${Date.now()}_${Math.random()}`,
+        name: it.name || '',
+        quantity: Number(it.quantity) || 1,
+        unit_cost: Number(it.unit_cost) || 0,
+        inventory_item_id: it.inventory_item_id || null,
+        notes: it.notes || '',
+      })),
+    });
+    setFormMode('edit');
+    setSelected(null);
+  };
+
+  const handleSave = async (form) => {
+    setSaving(true);
+    try {
+      // Detect transición a llegado en edit — necesita /arrive endpoint
+      const isLlegadoTransition =
+        formMode === 'edit'
+        && form.status === 'llegado'
+        && editingInitial?.status !== 'llegado';
+      const payload = {
+        supplier: form.supplier.trim(),
+        carrier: (form.carrier || '').trim() || null,
+        tracking_number: (form.tracking_number || '').trim() || null,
+        estimated_arrival: form.estimated_arrival || null,
+        notes: (form.notes || '').trim() || null,
+        items: form.items.map((l) => ({
+          name: l.name.trim(),
+          quantity: Number(l.quantity),
+          unit_cost: Number(l.unit_cost) || 0,
+          inventory_item_id: l.inventory_item_id || null,
+          notes: (l.notes || '').trim() || null,
+        })),
+      };
+      if (formMode === 'edit' && !isLlegadoTransition) payload.status = form.status;
+      if (formMode === 'edit') {
+        await updatePurchaseOrder(editingInitial.id, payload);
+        if (isLlegadoTransition) {
+          await arrivePurchaseOrder(editingInitial.id);
+        }
+      } else {
+        await createPurchaseOrder(payload);
+      }
+      toast.success(
+        isLlegadoTransition
+          ? `Orden marcada como llegada. Stock actualizado.`
+          : (formMode === 'edit' ? 'Pedido actualizado' : 'Pedido creado'),
+      );
+      setFormMode(null);
+      setEditingInitial(null);
+      load();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Error al guardar');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!await confirm('¿Eliminar este pedido?', 'Eliminar')) return;
+  const handleArrive = async (po) => {
+    if (!await confirm(`Marcar PO-${po.id} como llegado? El stock vinculado se sumará al inventario.`, 'Confirmar')) return;
     try {
-      await deletePurchaseOrder(id);
+      await arrivePurchaseOrder(po.id);
+      toast.success('Pedido marcado como llegado · stock actualizado');
+      setSelected(null);
+      load();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Error al marcar llegado');
+    }
+  };
+
+  const handleDelete = async (po) => {
+    if (!await confirm(`¿Eliminar PO-${po.id}? Esta acción no se puede deshacer.`, 'Eliminar')) return;
+    try {
+      await deletePurchaseOrder(po.id);
       toast.success('Pedido eliminado');
-      if (selected?.id === id) setSelected(null);
+      setSelected(null);
       load();
     } catch {
       toast.error('Error al eliminar');
     }
   };
 
-  const handleArrive = async (id) => {
-    if (!await confirm('¿Marcar este pedido como llegado? El stock del inventario se actualizará automáticamente.', 'Confirmar')) return;
-    try {
-      await arrivePurchaseOrder(id);
-      toast.success('Pedido marcado como llegado. El inventario fue actualizado.');
-      if (selected?.id === id) setSelected(null);
-      load();
-    } catch {
-      toast.error('Error al procesar la llegada');
-    }
-  };
-
-  const handleScanTracking = async () => {
-    setScanning(true);
-    const tid = toast.loading('Consultando tracking en parcelsapp.com… (puede tardar varios minutos)');
-    try {
-      const res = await scanTracking();
-      const { scanned, updated, errors } = res.data;
-      toast.dismiss(tid);
-      toast.success(`Tracking actualizado: ${scanned} pedidos revisados, ${updated} actualizados${errors ? `, ${errors} errores` : ''}`);
-      load();
-    } catch {
-      toast.dismiss(tid);
-      toast.error('Error al actualizar tracking. ¿Está el servicio activo?');
-    } finally {
-      setScanning(false);
-    }
-  };
-
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <div>
-          <h2 className="tf-page-title mb-0">Pedidos de Compra</h2>
-          <p className="text-sm text-gunmetal mt-1">Tracking de compras en Amazon, Delbex y otros</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleScanTracking}
-            disabled={scanning}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#2A2F38] text-steel hover:text-tech-white hover:border-[#363C47] transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Consulta parcelsapp.com para todos los pedidos activos"
-          >
-            {scanning
-              ? <Loader size={14} className="animate-spin" />
-              : <RefreshCw size={14} />}
-            Actualizar tracking
-          </button>
-          <button onClick={openCreate} className="tf-btn-primary gap-2" style={{ backgroundColor: '#3B82F6', borderColor: '#3B82F6' }}>
-            <Plus size={18} /> Nuevo pedido
-          </button>
-        </div>
-      </div>
-
-      {/* Tabla de pedidos */}
-      <div className="tf-table-wrap">
-        <table className="w-full min-w-[600px]">
-          <thead className="tf-thead border-b">
-            <tr>
-              <th className="tf-th">N°</th>
-              <th className="tf-th">Proveedor</th>
-              <th className="tf-th hidden sm:table-cell">Tracking</th>
-              <th className="tf-th hidden md:table-cell">Llegada est.</th>
-              <th className="tf-th">Estado</th>
-              <th className="tf-th-right">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr><td colSpan={6} className="px-5 py-12 text-center text-gunmetal">Cargando...</td></tr>
-            )}
-            {!loading && orders.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-5 py-12 text-center text-gunmetal">
-                  No hay pedidos registrados.{' '}
-                  <button onClick={openCreate} className="text-blue-400 hover:underline">Registrar el primero</button>
-                </td>
-              </tr>
-            )}
-            {orders.map((order) => (
-              <tr key={order.id} className="tf-tr">
-                <td className="tf-td text-gunmetal font-mono text-sm">#{String(order.id).padStart(3, '0')}</td>
-                <td className="tf-td">
-                  <p className="font-medium text-tech-white">{order.supplier}</p>
-                  {order.items?.length > 0 && (
-                    <p className="text-xs text-gunmetal mt-0.5 truncate max-w-[200px]">
-                      {order.items.map((it) => it.name).join(' · ')}
-                    </p>
-                  )}
-                </td>
-                <td className="tf-td hidden sm:table-cell">
-                  {order.tracking_number
-                    ? <span className="font-mono text-sm text-blue-400">{order.tracking_number}</span>
-                    : <span className="text-gunmetal">—</span>}
-                </td>
-                <td className="tf-td hidden md:table-cell text-steel text-sm">{fmt(order.estimated_arrival)}</td>
-                <td className="tf-td"><StatusBadge status={order.status} /></td>
-                <td className="tf-td-right">
-                  <div className="flex items-center justify-end gap-1">
-                    <button onClick={() => setSelected(order)} className="tf-btn-ghost p-1.5" title="Ver detalle">
-                      <Eye size={14} />
-                    </button>
-                    {order.status !== 'llegado' && order.status !== 'cancelado' && (
-                      <>
-                        <button
-                          onClick={() => openEdit(order)}
-                          className="tf-btn-ghost p-1.5 text-blue-400 hover:text-blue-300"
-                          title="Editar pedido"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleArrive(order.id)}
-                          className="tf-btn-ghost p-1.5 text-green-400 hover:text-green-300"
-                          title="Marcar como llegado"
-                        >
-                          <PackageCheck size={14} />
-                        </button>
-                      </>
-                    )}
-                    <button onClick={() => handleDelete(order.id)} className="tf-btn-danger p-1.5" title="Eliminar">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
+    <div className="flex flex-col min-h-screen bg-forge-black">
+      <PurchasesHeader
+        purchases={purchases}
+        onNew={openCreate}
+        onScan={onScan}
+        scanning={scanning}
+      />
+      <PurchasesFilters
+        purchases={purchases}
+        statusFilter={statusFilter}
+        onStatus={setStatusFilter}
+        query={query}
+        onQuery={setQuery}
+      />
+      <main className="flex-1 px-5 py-4 overflow-y-auto">
+        {loading ? (
+          <p className="py-16 text-center text-gunmetal text-sm">Cargando pedidos…</p>
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            icon={ShoppingCart}
+            accent={APP_ACCENT}
+            title={purchases.length === 0 ? 'Sin pedidos de compra' : 'Sin resultados'}
+            hint={
+              purchases.length === 0
+                ? 'Crea uno para empezar a llevar control de las compras a tus proveedores.'
+                : 'Ajusta los filtros o limpia la búsqueda.'
+            }
+            action={
+              purchases.length === 0 ? (
+                <button
+                  type="button"
+                  onClick={openCreate}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold"
+                  style={{ background: APP_ACCENT, color: '#0A1014' }}
+                >
+                  <Plus size={12} /> Crear orden
+                </button>
+              ) : null
+            }
+          />
+        ) : (
+          <div className="flex flex-col gap-2">
+            {filtered.map((p) => (
+              <POCard key={p.id} po={p} onClick={setSelected} />
             ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Modal de detalle */}
-      {selected && (
-        <div className="tf-modal-overlay">
-          <div className="tf-modal max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <p className="text-xs text-gunmetal">Pedido #{String(selected.id).padStart(3, '0')}</p>
-                <h3 className="tf-section-title mb-0">{selected.supplier}</h3>
-              </div>
-              <button onClick={() => setSelected(null)} className="tf-btn-ghost"><X size={20} /></button>
-            </div>
-
-            <div className="space-y-3 mb-4">
-              <div className="flex flex-wrap gap-3 text-sm">
-                <StatusBadge status={selected.status} />
-                {selected.carrier && <span className="text-steel">{selected.carrier}</span>}
-              </div>
-              {selected.tracking_number && (
-                <div className="bg-[#0A0E16] rounded-lg px-3 py-2">
-                  <p className="text-xs text-gunmetal mb-0.5">Número de tracking</p>
-                  <p className="font-mono text-blue-400 font-medium">{selected.tracking_number}</p>
-                  {selected.tracking_checked_at && (
-                    <p className="text-xs text-gunmetal mt-1">
-                      Última consulta: {new Date(selected.tracking_checked_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}
-                    </p>
-                  )}
-                </div>
-              )}
-              {selected.tracking_data && (() => {
-                try {
-                  const data = JSON.parse(selected.tracking_data);
-                  const events = data.events || data.checkpoints || data.states || [];
-                  const rawText = data.raw_text;
-                  if (events.length > 0) {
-                    return (
-                      <div>
-                        <p className="text-xs text-gunmetal font-medium uppercase tracking-wider mb-2">Eventos de tracking</p>
-                        <div className="space-y-2 max-h-48 overflow-y-auto">
-                          {events.slice(0, 10).map((ev, i) => (
-                            <div key={i} className="flex gap-2 text-xs">
-                              <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 shrink-0" />
-                              <div>
-                                <p className="text-tech-white">{ev.description || ev.message || ev.title || ev.status || JSON.stringify(ev)}</p>
-                                {(ev.date || ev.time || ev.timestamp) && (
-                                  <p className="text-gunmetal">{ev.date || ev.time || ev.timestamp}</p>
-                                )}
-                                {ev.location && <p className="text-gunmetal">{ev.location}</p>}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  }
-                  if (rawText) {
-                    return (
-                      <div>
-                        <p className="text-xs text-gunmetal font-medium uppercase tracking-wider mb-2">Info de tracking</p>
-                        <pre className="text-xs text-steel bg-[#0A0E16] rounded-lg p-3 max-h-40 overflow-y-auto whitespace-pre-wrap">{rawText.slice(0, 1500)}</pre>
-                      </div>
-                    );
-                  }
-                } catch { /* JSON inválido, ignorar */ }
-                return null;
-              })()}
-              <div className="flex gap-4 text-xs text-gunmetal">
-                <span>Creado: <span className="text-tech-white">{fmt(selected.created_at)}</span></span>
-                {selected.estimated_arrival && (
-                  <span>Llegada est.: <span className="text-blue-400">{fmt(selected.estimated_arrival)}</span></span>
-                )}
-                {selected.arrived_at && (
-                  <span>Llegó: <span className="text-green-400">{fmt(selected.arrived_at)}</span></span>
-                )}
-              </div>
-            </div>
-
-            {/* Ítems del pedido */}
-            <h4 className="text-sm font-semibold text-steel mb-2">Ítems del pedido</h4>
-            <div className="overflow-x-auto mb-4">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-dark-border">
-                    <th className="tf-th text-left py-2">Ítem</th>
-                    <th className="tf-th-right py-2">Cant.</th>
-                    <th className="tf-th-right py-2">Costo unit.</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(selected.items || []).map((it, i) => (
-                    <tr key={i} className="border-b border-dark-border/40">
-                      <td className="tf-td py-2">
-                        {it.name}
-                        {it.inventory_item_id && (
-                          <span className="ml-1 text-xs text-blue-400">(vinculado)</span>
-                        )}
-                      </td>
-                      <td className="tf-td-right py-2 text-steel">{formatQuantity(it.quantity)}</td>
-                      <td className="tf-td-right py-2 text-steel">
-                        {parseFloat(it.unit_cost) > 0 ? `$ ${parseFloat(it.unit_cost).toFixed(2)}` : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {selected.notes && (
-              <p className="text-xs text-gunmetal mb-4">Notas: {selected.notes}</p>
-            )}
-
-            {selected.status !== 'llegado' && selected.status !== 'cancelado' && (
-              <div className="flex gap-3">
-                <button
-                  onClick={() => openEdit(selected)}
-                  className="flex-1 tf-btn-ghost gap-2 text-blue-400 border border-blue-500/30 hover:border-blue-400"
-                >
-                  <Pencil size={16} /> Editar pedido
-                </button>
-                <button
-                  onClick={() => { handleArrive(selected.id); setSelected(null); }}
-                  className="flex-1 tf-btn-primary gap-2"
-                  style={{ backgroundColor: '#22c55e', borderColor: '#22c55e' }}
-                >
-                  <PackageCheck size={16} /> Marcar llegado
-                </button>
-              </div>
-            )}
           </div>
-        </div>
+        )}
+      </main>
+
+      {/* Detail drawer / sheet */}
+      {!isMobile ? (
+        <DetailDrawer
+          open={!!selected}
+          onClose={() => setSelected(null)}
+          eyebrow={selected ? `Pedido · PO-${String(selected.id).padStart(4, '0')}` : ''}
+          title={selected?.supplier || ''}
+          width={520}
+        >
+          {selected && (
+            <PODrawerBody
+              po={selected}
+              onEdit={() => openEdit(selected)}
+              onArrive={() => handleArrive(selected)}
+              onDelete={() => handleDelete(selected)}
+            />
+          )}
+        </DetailDrawer>
+      ) : (
+        <MobileSheet open={!!selected} onClose={() => setSelected(null)} title={selected?.supplier || ''}>
+          {selected && (
+            <PODrawerBody
+              po={selected}
+              onEdit={() => openEdit(selected)}
+              onArrive={() => handleArrive(selected)}
+              onDelete={() => handleDelete(selected)}
+            />
+          )}
+        </MobileSheet>
       )}
 
-      {/* Modal nuevo pedido */}
-      {modalOpen && (
-        <div className="tf-modal-overlay">
-          <div className="tf-modal max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="tf-section-title mb-0 flex items-center gap-2">
-                {editingOrder
-                  ? <><Pencil size={20} className="text-blue-400" /> Editar pedido #{String(editingOrder.id).padStart(3, '0')}</>
-                  : <><ShoppingCart size={20} className="text-blue-400" /> Nuevo pedido de compra</>
-                }
-              </h3>
-              <button onClick={() => setModalOpen(false)} className="tf-btn-ghost"><X size={20} /></button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Datos del pedido */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="tf-label">Proveedor *</label>
-                  <input name="supplier" value={form.supplier} onChange={handleFormChange}
-                    required className="tf-input" placeholder="Amazon, Delbex, AliExpress..." />
-                </div>
-                <div>
-                  <label className="tf-label">Transportista</label>
-                  <input name="carrier" value={form.carrier} onChange={handleFormChange}
-                    className="tf-input" placeholder="UPS, FedEx, DHL, USPS..." />
-                </div>
-                <div>
-                  <label className="tf-label">Número de tracking</label>
-                  <input name="tracking_number" value={form.tracking_number} onChange={handleFormChange}
-                    className="tf-input font-mono" placeholder="Ej: 1Z999AA10123456784" />
-                </div>
-                <div>
-                  <label className="tf-label">Llegada estimada</label>
-                  <input name="estimated_arrival" type="date" value={form.estimated_arrival}
-                    onChange={handleFormChange} className="tf-input" />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="tf-label">Notas del pedido</label>
-                  <textarea name="notes" value={form.notes} onChange={handleFormChange}
-                    rows={2} className="tf-input" placeholder="Observaciones del pedido..." />
-                </div>
-              </div>
-
-              {/* Ítems del pedido */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-sm font-semibold text-steel">Ítems comprados</h4>
-                  <button type="button" onClick={addFormItem} className="tf-btn-ghost text-sm gap-1">
-                    <Plus size={14} /> Agregar ítem
-                  </button>
-                </div>
-
-                {/* Encabezados (sm+) */}
-                <div className="hidden sm:grid grid-cols-12 gap-2 text-xs text-gunmetal font-medium px-1 mb-1">
-                  <span className="col-span-4">Nombre del ítem</span>
-                  <span className="col-span-3">Ítem de inventario (opcional)</span>
-                  <span className="col-span-2 text-right">Cantidad</span>
-                  <span className="col-span-2 text-right">Costo unit. USD</span>
-                  <span className="col-span-1"></span>
-                </div>
-
-                <div className="space-y-2">
-                  {formItems.map((it, idx) => (
-                    <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                      <div className="col-span-12 sm:col-span-4">
-                        <input
-                          value={it.name}
-                          onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
-                          className="tf-input text-sm" placeholder="Nombre del producto" required />
-                      </div>
-                      <div className="col-span-12 sm:col-span-3">
-                        <select
-                          value={it.inventory_item_id}
-                          onChange={(e) => handleItemChange(idx, 'inventory_item_id', e.target.value)}
-                          className="tf-input text-sm"
-                        >
-                          <option value="">Sin vincular</option>
-                          {Object.entries(
-                            inventoryItems.reduce((acc, inv) => {
-                              const cat = inv.category || 'Sin categoría';
-                              (acc[cat] = acc[cat] || []).push(inv);
-                              return acc;
-                            }, {})
-                          ).map(([category, items]) => (
-                            <optgroup key={category} label={category}>
-                              {items.map((inv) => (
-                                <option key={inv.id} value={inv.id}>{inv.name}</option>
-                              ))}
-                            </optgroup>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="col-span-5 sm:col-span-2">
-                        <input
-                          type="number" min="1" step="1" value={it.quantity}
-                          onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
-                          className="tf-input text-sm text-right" placeholder="1" required />
-                      </div>
-                      <div className="col-span-6 sm:col-span-2">
-                        <input
-                          type="number" min="0" step="0.01" value={it.unit_cost}
-                          onChange={(e) => handleItemChange(idx, 'unit_cost', e.target.value)}
-                          className="tf-input text-sm text-right" placeholder="0.00" />
-                      </div>
-                      <div className="col-span-1 flex justify-end">
-                        <button type="button" onClick={() => removeFormItem(idx)}
-                          disabled={formItems.length === 1}
-                          className="tf-btn-danger p-1 disabled:opacity-30">
-                          <X size={12} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-gunmetal mt-2">
-                  💡 Vincula un ítem al inventario para que el stock se actualice automáticamente cuando el pedido llegue.
-                </p>
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setModalOpen(false)}
-                  className="flex-1 px-4 py-2 rounded-lg border border-[#2A2F38] text-steel hover:text-tech-white transition-colors text-sm">
-                  Cancelar
-                </button>
-                <button type="submit" disabled={saving}
-                  className="flex-1 tf-btn-primary" style={{ backgroundColor: '#3B82F6', borderColor: '#3B82F6' }}>
-                  {saving ? 'Guardando...' : editingOrder ? 'Guardar cambios' : 'Registrar pedido'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {/* New / edit drawer / sheet */}
+      {!isMobile ? (
+        <DetailDrawer
+          open={formMode !== null}
+          onClose={() => { setFormMode(null); setEditingInitial(null); }}
+          eyebrow={formMode === 'edit' ? `Editar · PO-${String(editingInitial?.id).padStart(4, '0')}` : 'Nuevo pedido'}
+          title={formMode === 'edit' ? 'Editar orden de compra' : 'Crear orden de compra'}
+          width={560}
+        >
+          {formMode !== null && (
+            <NewPOForm
+              initial={editingInitial}
+              inventoryItems={inventoryItems}
+              onSave={handleSave}
+              onCancel={() => { setFormMode(null); setEditingInitial(null); }}
+              mode={formMode}
+              saving={saving}
+            />
+          )}
+        </DetailDrawer>
+      ) : (
+        <MobileSheet
+          open={formMode !== null}
+          onClose={() => { setFormMode(null); setEditingInitial(null); }}
+          title={formMode === 'edit' ? 'Editar pedido' : 'Nuevo pedido'}
+        >
+          {formMode !== null && (
+            <NewPOForm
+              initial={editingInitial}
+              inventoryItems={inventoryItems}
+              onSave={handleSave}
+              onCancel={() => { setFormMode(null); setEditingInitial(null); }}
+              mode={formMode}
+              saving={saving}
+            />
+          )}
+        </MobileSheet>
       )}
     </div>
   );
