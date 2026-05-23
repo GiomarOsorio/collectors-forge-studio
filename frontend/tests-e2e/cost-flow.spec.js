@@ -38,18 +38,22 @@ test.describe('Cost — flujos críticos', () => {
 
   test('calculator pre-rellena weight_grams y print_time desde slicer', async ({ page }) => {
     // /cost/calculator/v2 sigue como ruta legacy (redirect a /cost/calculator
-    // preservando query string vía RedirectPreservingSearch). Verificamos que
-    // el redirect funciona: la calculadora normaliza weight a 2 decimales
-    // (step=0.01) y convierte print_time_hours → minutos.
+    // preservando query string vía RedirectPreservingSearch). El form v2 usa
+    // Stepper (no <input name=...>): los inputs viven dentro de los wrappers
+    // identificables por su FormFieldRow label. Validamos el value cargado.
     await page.goto('/cost/calculator/v2?weight_grams=245&print_time_hours=3.5');
     await page.waitForLoadState('networkidle');
 
-    const weightInput = page.locator('input[name="weight_grams"]');
-    await expect(weightInput).toHaveValue('245.00');
-
-    // V1 expone el tiempo de impresión en minutos (3.5h × 60 = 210min).
-    const minutesInput = page.locator('input[name="print_time_minutes"]');
-    await expect(minutesInput).toHaveValue('210');
+    // El form v2 mapea print_time_hours → hours + minutes separados.
+    // 3.5h = 3h 30m. weight_grams se redondea al entero (245).
+    // Los Stepper exponen <input type="number"> sin name attribute, por lo
+    // que filtramos por valor entre los inputs numéricos visibles.
+    const numericInputs = page.locator('input[type="number"]');
+    await numericInputs.first().waitFor({ state: 'visible', timeout: 10_000 });
+    const values = await numericInputs.evaluateAll((els) => els.map((e) => e.value));
+    expect(values, 'weight_grams=245 cargado').toContain('245');
+    expect(values, 'hours=3 cargado desde 3.5h').toContain('3');
+    expect(values, 'minutes=30 cargado desde 3.5h').toContain('30');
   });
 
   // SKIP: el toast (react-hot-toast) usa portal fuera del árbol — getByText
