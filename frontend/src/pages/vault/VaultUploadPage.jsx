@@ -222,8 +222,20 @@ export default function VaultUploadPage() {
         source_platform: m.source_platform ?? prev.source_platform,
         creator_name:    m.creator_name    ?? prev.creator_name,
         creator_url:     m.creator_url     ?? prev.creator_url,
+        // Issue #71 — fallback al link para weight/time/material si el
+        // parser local del .gcode.3mf no los encuentra. Persistimos en
+        // form para incluirlos en el `metadata` del upload POST.
+        link_weight_g:     m.weight_g       ?? prev.link_weight_g,
+        link_time_seconds: m.time_seconds   ?? prev.link_time_seconds,
+        link_filament_type: m.filament_type ?? prev.link_filament_type,
       }));
-      toast.success('Metadata obtenida correctamente');
+      const extra = [m.weight_g && 'peso', m.time_seconds && 'tiempo', m.filament_type && 'material']
+        .filter(Boolean).join('/');
+      toast.success(
+        extra
+          ? `Metadata obtenida (+ ${extra} como fallback)`
+          : 'Metadata obtenida correctamente',
+      );
     } catch {
       toast.error('No se pudo obtener la metadata de esa URL');
     } finally {
@@ -290,6 +302,11 @@ export default function VaultUploadPage() {
       creator_name:    form.creator_name.trim() || null,
       creator_url:     form.creator_url.trim() || null,
       tags:            tagsArr,
+      // Issue #71 — fallback al link. Backend usa estos campos como
+      // respaldo si el parser local del .gcode.3mf no encuentra los datos.
+      weight_g:        form.link_weight_g ?? null,
+      time_seconds:    form.link_time_seconds ?? null,
+      filament_type:   form.link_filament_type ?? null,
     };
 
     setUploading(true);
