@@ -144,6 +144,10 @@ async def _fetch_makerworld(url: str) -> Optional[dict]:
         "source_platform": "makerworld",
         "creator_name": None,
         "creator_url": None,
+        # Issue #71 — fallback al link para datos del plate (best-effort)
+        "weight_g": None,
+        "time_seconds": None,
+        "filament_type": None,
     }
 
     async with httpx.AsyncClient() as client:
@@ -160,9 +164,44 @@ async def _fetch_makerworld(url: str) -> Optional[dict]:
                 )
                 result["thumbnail_url"] = _mw_thumbnail(data)
                 result["creator_name"], result["creator_url"] = _mw_creator(data)
+                # Datos de print profile — MakerWorld los expone en varios
+                # campos según la respuesta; probamos los más comunes.
+                instances = data.get("instances") or data.get("designInstances") or []
+                profile = instances[0] if instances else (
+                    data.get("defaultDesignProfile") or data.get("printProfile") or {}
+                )
+                if profile:
+                    weight = (
+                        profile.get("weight")
+                        or profile.get("estimatedWeight")
+                        or profile.get("filamentWeight")
+                    )
+                    if weight:
+                        try:
+                            result["weight_g"] = float(weight)
+                        except (TypeError, ValueError):
+                            pass
+                    duration = (
+                        profile.get("duration")
+                        or profile.get("printTime")
+                        or profile.get("estimatedTime")
+                    )
+                    if duration:
+                        try:
+                            result["time_seconds"] = int(duration)
+                        except (TypeError, ValueError):
+                            pass
+                    filaments = profile.get("filaments") or []
+                    if filaments and isinstance(filaments, list):
+                        fil = filaments[0]
+                        if isinstance(fil, dict):
+                            result["filament_type"] = (
+                                fil.get("type") or fil.get("material")
+                            )
                 logger.debug(
-                    "MakerWorld API: name=%s thumb=%s creator=%s",
+                    "MakerWorld API: name=%s thumb=%s creator=%s w=%s t=%s f=%s",
                     result["name"], result["thumbnail_url"], result["creator_name"],
+                    result["weight_g"], result["time_seconds"], result["filament_type"],
                 )
         except Exception as exc:
             logger.debug("MakerWorld API metadata excepción: %s", exc)
@@ -322,6 +361,12 @@ async def fetch_metadata(url: str) -> dict:
             "creator_name": None,
             "creator_url": None,
         }
+
+    # Garantizar campos del plate (issue #71) — todos opcionales, None si
+    # el fetcher no los pudo extraer.
+    result.setdefault("weight_g", None)
+    result.setdefault("time_seconds", None)
+    result.setdefault("filament_type", None)
 
     # Garantizar que source_url está presente en la respuesta
     result["source_url"] = url

@@ -134,3 +134,8 @@ class VaultMetadataResponse(BaseModel):
     source_platform: Optional[str] = None
     creator_name: Optional[str] = None
     creator_url: Optional[str] = None
+    # Issue #71 — fallback al link cuando el parser local del .gcode.3mf
+    # no encuentra estos datos. Best-effort scraping de MakerWorld/Printables.
+    weight_g: Optional[float] = None
+    time_seconds: Optional[int] = None
+    filament_type: Optional[str] = None

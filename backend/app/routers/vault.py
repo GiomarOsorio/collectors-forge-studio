@@ -186,17 +186,22 @@ def _sync_active_plate_cache(model: ModelFile, active: Optional[ModelFilePlate])
     Sincroniza los campos cache `sliced_*` + `thumbnail_key` del ModelFile
     desde un ModelFilePlate. Issue #68 — queue/calc leen `sliced_*`
     directamente, así que mantener el cache evita queries extra.
+
+    Issue #71: si el plate no tiene un dato (None) pero el cache YA tiene
+    un valor (ej. fallback del link), NO lo sobrescribimos con None.
+    Esto preserva fallback metadata cuando el parser falla pero el link
+    sí los provee.
     """
     if active is None:
-        model.sliced_weight_g = None
-        model.sliced_time_seconds = None
-        model.sliced_filament_type = None
-        model.sliced_printer_model = None
         return
-    model.sliced_weight_g = active.weight_g
-    model.sliced_time_seconds = active.time_seconds
-    model.sliced_filament_type = active.filament_type
-    model.sliced_printer_model = active.printer_model
+    if active.weight_g is not None:
+        model.sliced_weight_g = active.weight_g
+    if active.time_seconds is not None:
+        model.sliced_time_seconds = active.time_seconds
+    if active.filament_type is not None:
+        model.sliced_filament_type = active.filament_type
+    if active.printer_model is not None:
+        model.sliced_printer_model = active.printer_model
 
 
 async def _persist_plates_from_print_file(
@@ -509,6 +514,21 @@ async def upload_vault_file(
         _parse_sliced_from_print_file(print_bytes) if print_bytes is not None else {}
     )
 
+    # Issue #71 — fallback al link cuando el parser local del .gcode.3mf
+    # no encuentra weight/time/filament_type. Si el user dio meta con esos
+    # campos (probable que vinieron de /fetch-metadata del frontend), los
+    # usamos como respaldo en los `sliced_*` cache.
+    meta_weight = meta_dict.get("weight_g")
+    meta_time = meta_dict.get("time_seconds")
+    meta_filament = meta_dict.get("filament_type")
+    sliced_weight = sliced.get("sliced_weight_g") or (
+        Decimal(str(meta_weight)) if meta_weight else None
+    )
+    sliced_time = sliced.get("sliced_time_seconds") or (
+        int(meta_time) if meta_time else None
+    )
+    sliced_filament = sliced.get("sliced_filament_type") or meta_filament
+
     # Guardar en BD.
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     model = ModelFile(
@@ -519,10 +539,10 @@ async def upload_vault_file(
         print_file_key=print_key,
         print_file_name=print_name,
         print_file_size=print_size if print_file else None,
-        sliced_weight_g=sliced.get("sliced_weight_g"),
-        sliced_time_seconds=sliced.get("sliced_time_seconds"),
+        sliced_weight_g=sliced_weight,
+        sliced_time_seconds=sliced_time,
         sliced_printer_model=sliced.get("sliced_printer_model"),
-        sliced_filament_type=sliced.get("sliced_filament_type"),
+        sliced_filament_type=sliced_filament,
         name=name,
         description=meta_dict.get("description"),
         thumbnail_url=meta_dict.get("thumbnail_url"),
