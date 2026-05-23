@@ -60,10 +60,12 @@ import {
 import MobileAppHeader from '../../components/MobileAppHeader';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import {
+  arrivePurchaseOrder,
   createInventoryItem,
   createPurchaseOrder,
   getInventoryItems,
   getPurchaseOrders,
+  scanTracking,
   updateInventoryItem,
   updatePurchaseOrder,
 } from '../../services/api';
@@ -941,16 +943,16 @@ function PurchaseCard({ po, onClick }) {
             </StatusPill>
           </div>
           <p className="text-sm font-semibold text-tech-white truncate">
-            {po.supplier_name || po.vendor || 'Proveedor sin nombre'}
+            {po.supplier || 'Proveedor sin nombre'}
           </p>
           <p className="mono text-[10.5px] text-gunmetal mt-0.5 truncate">
             {itemsCount} ítem{itemsCount === 1 ? '' : 's'}
-            {po.order_date ? ` · ${String(po.order_date).split('T')[0]}` : ''}
-            {po.expected_arrival ? ` · llega ${String(po.expected_arrival).split('T')[0]}` : po.eta ? ` · ${po.eta}` : ''}
+            {po.created_at ? ` · ${String(po.created_at).split('T')[0]}` : ''}
+            {po.estimated_arrival ? ` · llega ${String(po.estimated_arrival).split('T')[0]}` : ''}
           </p>
         </div>
         <span className="mono text-base font-semibold text-forge-teal whitespace-nowrap shrink-0">
-          {fmtCOP(po.total || po.total_amount)}
+          {fmtCOP(poTotal(po))}
         </span>
       </div>
       {Array.isArray(po.items) && po.items.length > 0 && (
@@ -1000,10 +1002,10 @@ function PurchaseRow({ po, onClick }) {
             {badge.label}
           </StatusPill>
         </div>
-        <p className="text-sm font-semibold text-tech-white truncate">{po.supplier_name || po.vendor || 'Proveedor'}</p>
+        <p className="text-sm font-semibold text-tech-white truncate">{po.supplier || 'Proveedor'}</p>
         <p className="mono text-[10px] text-gunmetal mt-0.5">PO-{String(po.id).padStart(4, '0')}</p>
       </div>
-      <span className="mono text-sm text-tech-white whitespace-nowrap shrink-0">{fmtCOP(po.total || po.total_amount)}</span>
+      <span className="mono text-sm text-tech-white whitespace-nowrap shrink-0">{fmtCOP(poTotal(po))}</span>
       <ChevronRight size={14} className="text-gunmetal-dim shrink-0" />
     </button>
   );
@@ -1023,12 +1025,12 @@ function PurchaseDrawerBody({ po }) {
           <span className="mono text-[10px] text-gunmetal">PO-{String(po.id).padStart(4, '0')}</span>
         </div>
         <h2 className="text-lg font-semibold text-tech-white truncate">
-          {po.supplier_name || po.vendor || 'Proveedor sin nombre'}
+          {po.supplier || 'Proveedor sin nombre'}
         </h2>
-        {(po.order_date || po.expected_arrival) && (
+        {(po.created_at || po.estimated_arrival) && (
           <p className="mono text-[11.5px] text-gunmetal mt-0.5">
-            {po.order_date ? `Pedido ${String(po.order_date).split('T')[0]}` : ''}
-            {po.expected_arrival ? ` · llega ${String(po.expected_arrival).split('T')[0]}` : ''}
+            {po.created_at ? `Pedido ${String(po.created_at).split('T')[0]}` : ''}
+            {po.estimated_arrival ? ` · llega ${String(po.estimated_arrival).split('T')[0]}` : ''}
           </p>
         )}
       </div>
@@ -1036,7 +1038,7 @@ function PurchaseDrawerBody({ po }) {
       <div className="grid grid-cols-2 gap-2">
         <Card className="p-3">
           <span className="lbl-eyebrow text-[9px]">Total</span>
-          <p className="mono text-base font-semibold text-forge-teal mt-0.5">{fmtCOP(po.total || po.total_amount)}</p>
+          <p className="mono text-base font-semibold text-forge-teal mt-0.5">{fmtCOP(poTotal(po))}</p>
         </Card>
         <Card className="p-3">
           <span className="lbl-eyebrow text-[9px]">Ítems</span>
@@ -1046,12 +1048,56 @@ function PurchaseDrawerBody({ po }) {
           <Card className="p-3 col-span-2">
             <span className="lbl-eyebrow text-[9px]">Tracking</span>
             <p className="mono text-sm text-tech-white mt-0.5 break-all">{po.tracking_number}</p>
-            {po.tracking_carrier && (
-              <p className="mono text-[11px] text-gunmetal">{po.tracking_carrier}</p>
+            {po.carrier && (
+              <p className="mono text-[11px] text-gunmetal">{po.carrier}</p>
+            )}
+            {po.tracking_checked_at && (
+              <p className="mono text-[10px] text-gunmetal-dim mt-1">
+                Última consulta: {new Date(po.tracking_checked_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}
+              </p>
             )}
           </Card>
         )}
       </div>
+
+      {/* Eventos de tracking parseados desde el scraper del microservicio tracker */}
+      {po.tracking_data && (() => {
+        try {
+          const data = JSON.parse(po.tracking_data);
+          const events = data.events || data.checkpoints || data.states || [];
+          const rawText = data.raw_text;
+          if (events.length > 0) {
+            return (
+              <div>
+                <span className="lbl-eyebrow text-[9px]">Eventos de tracking</span>
+                <ul className="mt-2 flex flex-col gap-1.5 max-h-48 overflow-y-auto">
+                  {events.slice(0, 10).map((ev, i) => (
+                    <li key={i} className="flex gap-2 px-3 py-2 rounded-md bg-[var(--color-surf-card)] border border-[var(--color-border-soft)]">
+                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm text-tech-white">{ev.description || ev.message || ev.title || ev.status}</p>
+                        {(ev.date || ev.time || ev.timestamp) && (
+                          <p className="mono text-[11px] text-gunmetal">{ev.date || ev.time || ev.timestamp}</p>
+                        )}
+                        {ev.location && <p className="mono text-[11px] text-gunmetal">{ev.location}</p>}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          }
+          if (rawText) {
+            return (
+              <Card className="p-3">
+                <span className="lbl-eyebrow text-[9px]">Info de tracking</span>
+                <pre className="mono text-[11px] text-steel mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap">{rawText.slice(0, 1500)}</pre>
+              </Card>
+            );
+          }
+        } catch { /* JSON inválido, ignorar */ }
+        return null;
+      })()}
 
       {items.length > 0 && (
         <div>
@@ -2232,6 +2278,21 @@ const PO_STATUS_OPTIONS = [
   { value: 'cancelado',   label: 'Cancelado',  tone: 'danger'   },
 ];
 
+/**
+ * Calcula el total de una orden de compra sumando quantity × unit_cost
+ * de todos sus ítems. Backend no persiste un total — se computa siempre.
+ *
+ * @param {{ items?: Array<{ quantity?: number|string, unit_cost?: number|string }> }} po
+ * @returns {number}
+ */
+function poTotal(po) {
+  if (!po || !Array.isArray(po.items)) return 0;
+  return po.items.reduce(
+    (sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.unit_cost) || 0),
+    0,
+  );
+}
+
 function emptyPOForm() {
   return {
     supplier: '',
@@ -2361,6 +2422,14 @@ function PurchaseOrderFormDrawer({ open, onClose, mode = 'create', initial, onSa
     if (!validate()) return;
     setSaving(true);
     try {
+      // Detectar transición pendiente/en_transito → llegado.
+      // Stock se suma vía POST /arrive (endpoint dedicado). PUT con
+      // status=llegado NO dispara la lógica de inventario.
+      const isLlegadoTransition =
+        mode === 'edit'
+        && form.status === 'llegado'
+        && initial?.status !== 'llegado';
+
       const payload = {
         supplier: form.supplier.trim(),
         carrier: form.carrier.trim() || null,
@@ -2375,16 +2444,25 @@ function PurchaseOrderFormDrawer({ open, onClose, mode = 'create', initial, onSa
           notes: it.notes?.trim() || null,
         })),
       };
-      // Status solo en update (Create siempre arranca en 'pendiente' backend)
-      if (mode === 'edit') payload.status = form.status;
+      // Status solo en update (Create siempre arranca en 'pendiente' backend).
+      // En transición a llegado lo omitimos del PUT — lo aplica /arrive.
+      if (mode === 'edit' && !isLlegadoTransition) payload.status = form.status;
 
-      const res = mode === 'edit'
-        ? await updatePurchaseOrder(initial.id, payload)
-        : await createPurchaseOrder(payload);
+      let res;
+      if (mode === 'edit') {
+        res = await updatePurchaseOrder(initial.id, payload);
+        if (isLlegadoTransition) {
+          res = await arrivePurchaseOrder(initial.id);
+        }
+      } else {
+        res = await createPurchaseOrder(payload);
+      }
       toast.success(
-        mode === 'edit'
-          ? `Orden de ${payload.supplier} actualizada`
-          : `Orden de ${payload.supplier} creada`,
+        isLlegadoTransition
+          ? `Orden de ${payload.supplier} marcada como llegada. Stock actualizado.`
+          : mode === 'edit'
+            ? `Orden de ${payload.supplier} actualizada`
+            : `Orden de ${payload.supplier} creada`,
       );
       onSaved?.(res.data);
       onClose?.();
@@ -2399,7 +2477,7 @@ function PurchaseOrderFormDrawer({ open, onClose, mode = 'create', initial, onSa
   const body = (
     <div className="flex flex-col gap-3">
       <p className="text-[12px] text-gunmetal">
-        Los campos marcados con <span className="text-rose-400">*</span> son obligatorios. La orden empieza en estado <span className="text-amber-400">Pendiente</span>; al marcar como <span className="text-emerald-300">Llegado</span> se descuenta del stock cualquier ítem vinculado a inventario.
+        Los campos marcados con <span className="text-rose-400">*</span> son obligatorios. La orden empieza en estado <span className="text-amber-400">Pendiente</span>; al marcar como <span className="text-emerald-300">Llegado</span> se suma al inventario la cantidad de cada ítem vinculado.
       </p>
 
       <FormSectionTitle>Proveedor</FormSectionTitle>
@@ -2641,6 +2719,7 @@ export default function InventoryPage() {
   const [poFormOpen, setPoFormOpen] = useState(false);
   const [poFormMode, setPoFormMode] = useState('create');
   const [editingPoRaw, setEditingPoRaw] = useState(null);
+  const [scanningTracking, setScanningTracking] = useState(false);
   // Drawer/sheet state — un slot por tipo para no mezclar bodies.
   const [selected, setSelected] = useState(null);            // filamento
   const [selectedItem, setSelectedItem] = useState(null);    // insumo / herramienta / consumible
@@ -2801,14 +2880,14 @@ export default function InventoryPage() {
     let arr = q
       ? purchases.filter(
           (p) =>
-            (p.supplier_name || p.vendor || '').toLowerCase().includes(q) ||
+            (p.supplier || '').toLowerCase().includes(q) ||
             (p.tracking_number || '').toLowerCase().includes(q) ||
             (p.status || '').toLowerCase().includes(q) ||
             String(p.id).includes(q),
         )
       : [...purchases];
     return arr.sort(
-      (a, b) => new Date(b.order_date || b.created_at || 0).getTime() - new Date(a.order_date || a.created_at || 0).getTime(),
+      (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
     );
   }, [purchases, query]);
 
@@ -3351,6 +3430,32 @@ export default function InventoryPage() {
               )}
             </div>
             <span className="flex-1" />
+            <button
+              type="button"
+              onClick={async () => {
+                setScanningTracking(true);
+                const tid = toast.loading('Consultando tracking…');
+                try {
+                  const res = await scanTracking();
+                  const { scanned = 0, updated = 0, errors = 0 } = res.data || {};
+                  toast.dismiss(tid);
+                  toast.success(`Tracking actualizado: ${scanned} revisados, ${updated} actualizados${errors ? `, ${errors} errores` : ''}`);
+                  const poRes = await getPurchaseOrders();
+                  setPurchases(poRes.data || []);
+                } catch {
+                  toast.dismiss(tid);
+                  toast.error('No se pudo actualizar tracking (servicio inactivo?)');
+                } finally {
+                  setScanningTracking(false);
+                }
+              }}
+              disabled={scanningTracking}
+              className="inline-flex items-center gap-1.5 text-[11px] text-steel hover:text-tech-white px-2.5 py-1.5 rounded-md border border-[var(--color-border-soft)] disabled:opacity-50"
+              title="Consulta parcelsapp.com para todos los pedidos activos"
+            >
+              <RefreshCw size={12} className={scanningTracking ? 'animate-spin' : ''} />
+              Actualizar tracking
+            </button>
             <span className="mono text-[11px] text-gunmetal">
               {filteredPurchases.length} de {purchases.length} pedidos
             </span>
