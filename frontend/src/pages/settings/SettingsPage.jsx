@@ -21,6 +21,7 @@ import {
   ChevronUp,
   Eye,
   EyeOff,
+  Globe,
   Pencil,
   Save,
   Settings as SettingsIcon,
@@ -29,6 +30,8 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { SUPPORTED_LANGS, setLanguage } from '../../i18n';
 import toast from 'react-hot-toast';
 import {
   Button,
@@ -410,6 +413,72 @@ function UserRow({ u, currentUserId, expanded, onToggle, onSaved }) {
  * Drawer/sheet con la lista de usuarios. Solo admin. Cada fila expande
  * inline para editar rol + contraseña.
  */
+/**
+ * Drawer simple para elegir idioma de la interfaz (issue #56).
+ * Persiste vía `setLanguage` que escribe a localStorage + i18n.changeLanguage.
+ */
+function LanguageDrawer({ open, currentCode, onClose, isMobile }) {
+  const { t } = useTranslation();
+  const Body = (
+    <div className="p-5 flex flex-col gap-3">
+      <p className="text-[12.5px] text-steel leading-relaxed">
+        {t('settings.language.description')}
+      </p>
+      <div className="flex flex-col gap-2">
+        {SUPPORTED_LANGS.map((lang) => {
+          const active = lang.code === currentCode;
+          return (
+            <button
+              key={lang.code}
+              type="button"
+              onClick={() => {
+                setLanguage(lang.code);
+                onClose();
+              }}
+              className="flex items-center gap-3 px-3.5 py-3 rounded-lg text-left transition-colors"
+              style={{
+                background: active
+                  ? 'color-mix(in oklab, var(--color-forge-teal) 12%, transparent)'
+                  : 'var(--color-surf-card-2)',
+                border: active
+                  ? '1px solid color-mix(in oklab, var(--color-forge-teal) 36%, transparent)'
+                  : '1px solid var(--color-border)',
+              }}
+            >
+              <span className="text-[20px]">{lang.flag}</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13.5px] font-semibold text-tech-white">
+                  {lang.label}
+                </div>
+                <div className="mono text-[10px] text-gunmetal mt-0.5 uppercase tracking-wider">
+                  {lang.code}
+                </div>
+              </div>
+              {active && (
+                <CheckCircle2 size={16} className="text-forge-teal shrink-0" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+  return isMobile ? (
+    <MobileSheet open={open} onClose={onClose} title={t('settings.language.title')}>
+      {Body}
+    </MobileSheet>
+  ) : (
+    <DetailDrawer
+      open={open}
+      onClose={onClose}
+      eyebrow="Settings"
+      title={t('settings.language.title')}
+    >
+      {Body}
+    </DetailDrawer>
+  );
+}
+
 function UsersDrawer({ open, users, currentUserId, onClose, onChanged, isMobile }) {
   const [expandedId, setExpandedId] = useState(null);
 
@@ -509,6 +578,10 @@ export default function SettingsPage() {
   }, [isAdmin]);
 
   const badge = useMemo(() => roleBadge(user?.role), [user?.role]);
+  const { t, i18n } = useTranslation();
+  const [languageOpen, setLanguageOpen] = useState(false);
+  const currentLang = SUPPORTED_LANGS.find((l) => l.code === i18n.language)
+    || SUPPORTED_LANGS[0];
 
   const sections = useMemo(() => {
     const out = [
@@ -520,6 +593,16 @@ export default function SettingsPage() {
         status: user?.email || '—',
         complete: !!(user?.username && user?.email),
         onClick: () => setAccountOpen(true),
+        visible: true,
+      },
+      {
+        id: 'language',
+        icon: Globe,
+        title: t('settings.language.title'),
+        desc: t('settings.language.description'),
+        status: `${currentLang.flag} ${currentLang.label}`,
+        complete: true,
+        onClick: () => setLanguageOpen(true),
         visible: true,
       },
       {
@@ -550,7 +633,7 @@ export default function SettingsPage() {
       },
     ];
     return out.filter((s) => s.visible);
-  }, [user, isAdmin, users, loadingUsers]);
+  }, [user, isAdmin, users, loadingUsers, t, currentLang]);
 
   const KPIs = (
     <div className="flex flex-wrap gap-3 px-6 pt-4 pb-2">
@@ -664,6 +747,12 @@ export default function SettingsPage() {
           isMobile={isMobile}
         />
       )}
+      <LanguageDrawer
+        open={languageOpen}
+        currentCode={i18n.language}
+        onClose={() => setLanguageOpen(false)}
+        isMobile={isMobile}
+      />
     </>
   );
 

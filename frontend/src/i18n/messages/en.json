@@ -1,0 +1,48 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "loading": "Loading…",
+    "search": "Search",
+    "filter": "Filter",
+    "back": "Back",
+    "close": "Close",
+    "confirm": "Confirm",
+    "yes": "Yes",
+    "no": "No",
+    "required": "Required",
+    "optional": "Optional"
+  },
+  "nav": {
+    "home": "Home",
+    "cost": "Cost",
+    "inventory": "Inventory",
+    "slicer": "Slicer",
+    "queue": "Queue",
+    "maintenance": "Maintenance",
+    "vault": "Vault",
+    "company": "Company",
+    "settings": "Settings"
+  },
+  "settings": {
+    "title": "Settings",
+    "tabs": {
+      "account": "Account",
+      "users": "Users",
+      "language": "Language"
+    },
+    "language": {
+      "title": "Interface language",
+      "description": "Pick the language used across the app. Applies instantly.",
+      "current": "Current language"
+    }
+  },
+  "auth": {
+    "logout": "Log out",
+    "login": "Sign in",
+    "bypassDev": "Bypass dev (local development only)"
+  }
+}
