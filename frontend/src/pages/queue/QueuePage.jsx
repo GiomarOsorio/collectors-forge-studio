@@ -22,6 +22,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  FileBox,
   FileText,
   ListOrdered,
   Pause,
@@ -467,22 +468,30 @@ function VaultPickerRow({ model, selected, onSelect }) {
   const time = model.sliced_time_seconds;
   const timeLabel =
     time != null ? `${(time / 3600).toFixed(1)}h` : '—';
+  const ready = !!model.is_print_ready;
   return (
     <button
       type="button"
-      onClick={() => onSelect(model)}
+      onClick={() => {
+        if (!ready) {
+          toast.error('Sube el .gcode.3mf laminado antes de encolar este modelo');
+          return;
+        }
+        onSelect(model);
+      }}
+      aria-disabled={!ready}
       className={`w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors ${
         selected
           ? 'bg-teal-500/10 border border-teal-500/40'
           : 'border border-transparent hover:bg-[var(--color-surf-hover)]/40'
-      }`}
+      } ${ready ? '' : 'opacity-50 cursor-not-allowed'}`}
     >
       <div
         className="w-12 h-12 rounded-md overflow-hidden bg-[var(--color-surf-sidebar)] flex items-center justify-center shrink-0"
         style={{ border: '1px solid var(--color-border-soft)' }}
       >
         {thumb ? (
-          <img src={thumb} alt={model.name} className="w-full h-full object-cover" />
+          <img src={thumb} alt={model.name} className={`w-full h-full object-cover ${ready ? '' : 'grayscale'}`} />
         ) : (
           <Archive size={18} className="text-gunmetal" />
         )}
@@ -497,9 +506,11 @@ function VaultPickerRow({ model, selected, onSelect }) {
           {model.sliced_filament_type ? ` · ${model.sliced_filament_type}` : ''}
         </p>
       </div>
-      {model.is_print_ready ? (
+      {ready ? (
         <StatusPill tone="done" icon={Printer}>Listo</StatusPill>
-      ) : null}
+      ) : (
+        <StatusPill tone="neutral" icon={FileBox}>Solo .3mf</StatusPill>
+      )}
     </button>
   );
 }
@@ -544,7 +555,10 @@ function VaultPickerDrawer({ open, onClose, onAdded, printers, filaments, isMobi
       notes: '',
     });
     setLoadingModels(true);
-    getVaultFiles({ print_ready_only: true, page_size: 100 })
+    // Issue #62: mostrar TODOS los modelos (no solo print_ready). Los
+    // no-laminados quedan grayed-out + disabled con badge "Solo .3mf",
+    // así el usuario ve que existen y entiende qué falta para encolar.
+    getVaultFiles({ page_size: 100 })
       .then((res) => {
         const data = res.data;
         setModels(Array.isArray(data) ? data : data?.items || []);
@@ -607,10 +621,10 @@ function VaultPickerDrawer({ open, onClose, onAdded, printers, filaments, isMobi
         <EmptyState
           icon={Archive}
           accent={ACCENT}
-          title={models.length === 0 ? 'Sin modelos laminados' : 'Sin resultados'}
+          title={models.length === 0 ? 'Sin modelos en el Vault' : 'Sin resultados'}
           hint={
             models.length === 0
-              ? 'Sube un .gcode.3mf al Vault para encolar modelos directamente desde aquí.'
+              ? 'Sube un modelo al Vault (.3mf editable o .gcode.3mf laminado) para empezar.'
               : 'Cambia el filtro o limpia la búsqueda.'
           }
           action={
