@@ -613,8 +613,12 @@ function CalcBreakdown({ result, form, exchangeRate }) {
   const failureCOP = toCOP(result.failure_cost);
   const subtotalCOP = toCOP(result.subtotal);
   const marginCOP = toCOP(result.margin_amount);
-  const perUnitCOP = Number(result.total_per_unit_cop ?? toCOP(result.total_per_unit));
   const finalCOP = Number(result.total_price_cop ?? toCOP(result.total_price));
+  // perUnit derivado de final / quantity garantiza consistencia. El backend
+  // expone `total_per_unit_cop` pero el factor +15% del modo reprint solo
+  // se aplica a total_price_cop, no a total_per_unit_cop → divergencia.
+  const qty = Number(form.quantity) || 1;
+  const perUnitCOP = finalCOP / qty;
   const isReprint = form.mode === 'reprint';
   // Mode 'reprint' (default): aplicamos +15% adicional sobre subtotal. El
   // backend devuelve también failure_cost si settings.failure_rate_percent
@@ -821,7 +825,7 @@ function CalcForm({ form, setField, filaments, printers, supplies, consumables, 
         ) : (
           <>
             {form.additional_filaments_ids.map((fid, idx) => (
-              <div key={idx} className="grid gap-1.5 items-start" style={{ gridTemplateColumns: 'minmax(0,1fr) 120px 28px' }}>
+              <div key={idx} className="grid gap-1.5 items-start" style={{ gridTemplateColumns: 'minmax(0,1fr) 140px 32px' }}>
                 <FilamentSelect
                   items={filaments}
                   value={fid}
@@ -836,7 +840,7 @@ function CalcForm({ form, setField, filaments, printers, supplies, consumables, 
                 <button
                   type="button"
                   onClick={() => removeExtra(idx)}
-                  className="w-7 h-9 rounded-md border border-[var(--color-border-strong)] text-gunmetal inline-flex items-center justify-center hover:text-rose-400 hover:border-rose-400/40"
+                  className="w-8 h-[38px] rounded-md border border-[var(--color-border-strong)] text-gunmetal inline-flex items-center justify-center hover:text-rose-400 hover:border-rose-400/40"
                   aria-label="Quitar filamento"
                 >
                   <X size={12} />
@@ -869,7 +873,7 @@ function CalcForm({ form, setField, filaments, printers, supplies, consumables, 
         ) : (
           <>
             {form.supplies.map((s, idx) => (
-              <div key={idx} className="grid gap-1.5 items-start" style={{ gridTemplateColumns: 'minmax(0,1fr) 90px 28px' }}>
+              <div key={idx} className="grid gap-1.5 items-start" style={{ gridTemplateColumns: 'minmax(0,1fr) 140px 32px' }}>
                 <select
                   value={s.inventory_item_id}
                   onChange={(e) => updateSupply(idx, 'inventory_item_id', e.target.value ? Number(e.target.value) : '')}
@@ -894,7 +898,7 @@ function CalcForm({ form, setField, filaments, printers, supplies, consumables, 
                 <button
                   type="button"
                   onClick={() => removeSupply(idx)}
-                  className="w-7 h-9 rounded-md border border-[var(--color-border-strong)] text-gunmetal inline-flex items-center justify-center hover:text-rose-400 hover:border-rose-400/40"
+                  className="w-8 h-[38px] rounded-md border border-[var(--color-border-strong)] text-gunmetal inline-flex items-center justify-center hover:text-rose-400 hover:border-rose-400/40"
                   aria-label="Quitar insumo"
                 >
                   <X size={12} />
@@ -1219,7 +1223,9 @@ export default function CalculatorPage() {
       let data = res.data;
       if (form.mode === 'reprint') {
         const factor = 1.15;
-        const fields = ['total_price', 'total_price_cop', 'unit_price', 'unit_price_cop'];
+        // Backend response field names (QuoteCostBreakdown):
+        // total_price, total_price_cop, total_per_unit, total_per_unit_cop.
+        const fields = ['total_price', 'total_price_cop', 'total_per_unit', 'total_per_unit_cop'];
         data = { ...data };
         fields.forEach((k) => {
           if (data[k] != null) data[k] = Number(data[k]) * factor;
