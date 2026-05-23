@@ -723,8 +723,9 @@ class TestPreviewTemplate:
             _clear_overrides()
         assert r.status_code == 404
 
-    async def test_preview_template_invalido_retorna_500(self):
-        """Template que falla al renderizar → 500."""
+    async def test_preview_template_invalido_retorna_422(self):
+        """Template que falla al renderizar → 422 (PR #94: error del template,
+        no del servidor → status apropiado para que el frontend muestre detail)."""
         tpl = _fake_template(template_id=8, content="{% if sin_cerrar")
         resultado_error = {
             "ok": False,
@@ -750,7 +751,8 @@ class TestPreviewTemplate:
                     r = await c.get("/api/company/templates/8/preview")
         finally:
             _clear_overrides()
-        assert r.status_code == 500
+        assert r.status_code == 422
+        assert "Error de sintaxis Liquid" in r.json()["detail"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────

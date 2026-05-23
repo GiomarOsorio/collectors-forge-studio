@@ -349,8 +349,13 @@ async def preview_template(
             detail="Tiempo de renderizado agotado (máx. 30 s). Simplifica el template.",
         )
     if not result["ok"]:
+        # Errores de validación / renderizado son problema del template,
+        # no del servidor — 422 para que el frontend muestre el detail.
+        logger.warning(
+            "Preview template %s falló: %s", template_id, "; ".join(result["errors"])
+        )
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Error al renderizar template: {'; '.join(result['errors'])}",
         )
 
