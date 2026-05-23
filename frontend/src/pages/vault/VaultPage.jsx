@@ -198,7 +198,11 @@ function VaultDrawerBody({ file }) {
         className="h-48 rounded-lg overflow-hidden bg-[var(--color-surf-sidebar)] flex items-center justify-center border border-[var(--color-border)]"
       >
         {thumb ? (
-          <img src={thumb} alt={file.name} className="w-full h-full object-cover" />
+          // object-contain + object-center: el modelo siempre se ve completo
+          // y centrado aunque el container cambie de ancho (sidebar abriendo).
+          // Issue #72 — el bug previo era object-cover que recortaba y movía
+          // el "centro visible" cuando cambiaba el ancho del drawer.
+          <img src={thumb} alt={file.name} className="w-full h-full object-contain object-center" />
         ) : (
           <Archive size={50} style={{ color: `${ACCENT}55` }} />
         )}
