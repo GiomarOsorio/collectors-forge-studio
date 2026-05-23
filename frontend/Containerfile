@@ -33,14 +33,16 @@ RUN echo "── frontend package.json version ──" && \
 RUN npm ci --ignore-scripts
 
 # Verifica que las deps críticas estén realmente instaladas.
-RUN npm ls @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities react-router-dom \
+RUN npm ls @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities react-router-dom axios react-i18next i18next \
     || (echo "ERROR: deps faltantes tras npm ci." && exit 1)
 
-# Verifica que Node puede RESOLVER (no solo listar) @dnd-kit/core.
+# Verifica que Node puede RESOLVER (no solo listar) los packages críticos.
 # Si npm ls dice OK pero node no lo resuelve, el path/exports del
 # package está roto.
 RUN node -e "console.log('resolved:', require.resolve('@dnd-kit/core'))" \
     || (echo "ERROR: Node no resuelve @dnd-kit/core." && exit 1)
+RUN node -e "console.log('resolved:', require.resolve('axios'))" \
+    || (echo "ERROR: Node no resuelve axios. Build de Vite/Rollup va a fallar." && exit 1)
 
 # Print de los archivos del dist + del package.json del module para
 # descartar issues con exports/main.
