@@ -1,444 +1,1036 @@
 /**
- * @file Pagina principal de la calculadora de costos de impresion 3D.
+ * @file Calculadora de costos v2 (port del design Claude Design).
  *
- * Contiene el formulario para ingresar los parametros de una pieza
- * (filamento del inventario, impresora, peso, tiempos, cantidad, margen) y
- * muestra el desglose completo de costos calculado por el backend.
- * Permite guardar la cotizacion en el historial.
+ * Layout 3-col desktop (form scroll · resultado sticky · breakdown) y
+ * vertical + sticky footer + bottom-sheet en mobile. El cálculo es
+ * reactivo: cada cambio dispara `calculateQuote` debounced 300 ms (#61).
  *
- * Los filamentos se obtienen del inventario (category="Filamento") usando
- * inventory_item_id. Los insumos tambien provienen del inventario (cualquier
- * categoria distinta a "Filamento").
+ * Resuelve issues:
+ *   #60 — tab Calculadora renderiza el componente (route ya conectada)
+ *   #61 — sin botón "Calcular": reactivo con debounce 300ms
+ *   #75 — banner + modal warning si tarifa eléctrica no es del mes actual
+ *   #76 — FilamentSelect filtra `excludeIds` y muestra `locked` grayed-out
+ *         (mismo comportamiento en selector principal y multi-material)
+ *   #77 — botón "Reimprimir esta pieza" +15% adicional por fallos
+ *
+ * Sub-componentes module-level (anti-pattern §0.12: no helpers internos
+ * en form para evitar pérdida de foco).
  *
  * @module pages/CalculatorPage
  */
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import {
+  Calculator, Save, AlertTriangle, RotateCcw, Loader2, Plus, X, Trash2,
+  Clock, Cpu, Zap, Droplet, TrendingUp, ArrowUpRight, History, FileText,
+  Check, Settings as SettingsIcon, AlertCircle,
+} from 'lucide-react';
 import {
   getInventoryFilaments,
   getInventoryItems,
   getPrinters,
   getSettings,
+  getElectricityTariffs,
   calculateQuote,
   createQuote,
 } from '../services/api';
-import toast from 'react-hot-toast';
-import { Calculator, Save, Plus, Trash2, AlertTriangle, RotateCcw, Loader2 } from 'lucide-react';
-import { formatQuantity } from '../utils/format';
+import { MobileSheet, StatusPill } from '../components/ui';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { useIsMobile } from '../hooks/useMediaQuery';
+import { isKwhTariffStale, formatTariffPeriod, currentTariffPeriod } from '../utils/tariff';
+import { fmtCOP, fmtUSD } from '../utils/inventoryAdapter';
+
+const ACCENT = '#2DD4BF';        // forge-teal — app Cost
+const AMBER = '#FBBF24';         // warning
+const REPRINT_TONE = '#FB923C';  // orange — reprint chip
+
+// ─── Module-level sub-componentes (anti-pattern §0.12) ─────────────────────
+
+function FormSection({ title, children, accent }) {
+  return (
+    <section className="mb-4">
+      <h3 className="mono mb-2 text-[10.5px] uppercase tracking-[0.16em] text-steel whitespace-nowrap">
+        {title}
+      </h3>
+      <div className={`flex flex-col gap-2 ${accent ? '' : ''}`}>{children}</div>
+    </section>
+  );
+}
+
+function FormFieldRow({ label, required, hint, error, children }) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-1">
+        <label className="mono text-[9.5px] uppercase tracking-[0.12em] text-gunmetal">
+          {label} {required && <span className="text-rose-400">*</span>}
+        </label>
+        {error && <span className="text-[10.5px] font-medium text-rose-400 whitespace-nowrap">{error}</span>}
+      </div>
+      {children}
+      {hint && !error && (
+        <div className="mono mt-0.5 text-[9.5px] text-gunmetal-dim">{hint}</div>
+      )}
+    </div>
+  );
+}
+
+const FORM_INPUT_CLS =
+  'w-full bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-3 py-2 text-[13px] text-tech-white outline-none focus:border-forge-teal/60';
+
+function FormInput({ value, onChange, type = 'text', placeholder, mono, suffix, min, max, step }) {
+  const className = `${FORM_INPUT_CLS} ${mono ? 'mono' : ''}`;
+  if (suffix) {
+    return (
+      <div className="flex items-stretch bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md overflow-hidden focus-within:border-forge-teal/60">
+        <input
+          type={type} value={value ?? ''} placeholder={placeholder}
+          min={min} max={max} step={step}
+          onChange={(e) => onChange && onChange(type === 'number' ? Number(e.target.value) : e.target.value)}
+          className={`flex-1 bg-transparent border-0 px-3 py-2 text-[13px] text-tech-white outline-none ${mono ? 'mono' : ''}`}
+        />
+        <span className="mono px-3 self-center text-[11px] text-gunmetal border-l border-[var(--color-border)] flex items-center">
+          {suffix}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <input
+      type={type} value={value ?? ''} placeholder={placeholder}
+      min={min} max={max} step={step}
+      onChange={(e) => onChange && onChange(type === 'number' ? Number(e.target.value) : e.target.value)}
+      className={className}
+    />
+  );
+}
+
+function Stepper({ value, onChange, suffix, min = 0, max = 99999, step = 1 }) {
+  const dec = () => onChange(Math.max(min, (Number(value) || 0) - step));
+  const inc = () => onChange(Math.min(max, (Number(value) || 0) + step));
+  return (
+    <div className="flex items-stretch bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md overflow-hidden focus-within:border-forge-teal/60">
+      <button type="button" onClick={dec} className="w-8 bg-[var(--color-surf-card-2)] border-r border-[var(--color-border)] text-steel font-semibold text-base hover:text-tech-white">−</button>
+      <input
+        type="number" value={value ?? 0}
+        onChange={(e) => onChange(Number(e.target.value))}
+        min={min} max={max} step={step}
+        className="flex-1 bg-transparent border-0 outline-0 text-tech-white mono text-center text-[13px] font-semibold"
+      />
+      {suffix && (
+        <span className="mono px-2 self-center text-[10.5px] text-gunmetal">{suffix}</span>
+      )}
+      <button type="button" onClick={inc} className="w-8 bg-[var(--color-surf-card-2)] border-l border-[var(--color-border)] text-steel font-semibold text-base hover:text-tech-white">+</button>
+    </div>
+  );
+}
+
+function FormChips({ value, onChange, options }) {
+  return (
+    <div className="inline-flex gap-0.5 p-0.5 bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md">
+      {options.map((o) => {
+        const active = value === o.id;
+        const tone = o.tone || ACCENT;
+        return (
+          <button
+            key={o.id}
+            type="button"
+            onClick={() => onChange(o.id)}
+            aria-pressed={active}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded text-[11.5px] font-medium whitespace-nowrap transition-colors"
+            style={{
+              background: active ? `color-mix(in oklab, ${tone} 16%, transparent)` : 'transparent',
+              color: active ? tone : 'var(--color-steel)',
+            }}
+          >
+            {o.icon && <o.icon size={11} />}
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 /**
- * Componente de la pagina de calculadora de costos.
- *
- * @description Pagina principal de la aplicacion. Presenta un formulario
- * de dos columnas donde el usuario ingresa los datos de la pieza a imprimir
- * y visualiza el desglose de costos resultante.
- *
- * Al montarse, carga en paralelo los filamentos del inventario, impresoras
- * y configuracion del usuario para prellenar los selectores del formulario.
- * Los filamentos son items de inventario con category="Filamento".
- * Los insumos son items de inventario con cualquier otra categoria.
- *
- * El flujo de uso es:
- * 1. Completar los datos de la pieza (nombre, filamento, impresora, peso, tiempos)
- * 2. Presionar "Calcular Costo" para obtener el desglose
- * 3. Opcionalmente guardar la cotizacion en el historial
- *
- * @returns {JSX.Element} Formulario de calculadora y panel de resultados
+ * FilamentSelect — selector con bloqueados grayed-out (issue #76).
+ * Mismo componente para principal y adicionales. `excludeIds` filtra los
+ * ya elegidos en multi-material para no duplicar.
  */
+function FilamentSelect({ items, value, onChange, excludeIds = [] }) {
+  const list = items.filter((f) => !excludeIds.includes(f.id));
+  if (list.length === 0) {
+    return (
+      <div className="text-[12px] text-gunmetal italic px-2 py-3">
+        Sin filamentos disponibles. Agrega uno en /inventory.
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1 max-h-60 overflow-y-auto p-1 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-lg">
+      {list.map((f) => {
+        const locked = f.is_active === false || f.is_archived === true;
+        const active = String(value) === String(f.id);
+        const colorHex = f.filament_color_hex || f.color_hex || '#94A0AE';
+        const remaining = Number(f.quantity || 0);
+        return (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => !locked && onChange(f.id)}
+            aria-disabled={locked}
+            aria-pressed={active}
+            className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-left transition-colors"
+            style={{
+              background: active ? `color-mix(in oklab, ${ACCENT} 12%, transparent)` : 'transparent',
+              border: active ? `1px solid color-mix(in oklab, ${ACCENT} 30%, transparent)` : '1px solid transparent',
+              opacity: locked ? 0.5 : 1,
+              cursor: locked ? 'not-allowed' : 'pointer',
+            }}
+            title={locked ? 'Filamento bloqueado o archivado' : undefined}
+          >
+            <span
+              className="w-5 h-5 rounded-full shrink-0 border border-black/30"
+              style={{
+                background: `radial-gradient(circle at 30% 28%, ${colorHex}ee, ${colorHex})`,
+                filter: locked ? 'grayscale(60%)' : 'none',
+              }}
+            />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[12px] font-medium text-tech-white truncate">
+                  {f.name}
+                </span>
+                {locked && (
+                  <AlertCircle size={10} className="text-gunmetal shrink-0" />
+                )}
+              </div>
+              <div className="mono text-[9.5px] text-gunmetal mt-0.5">
+                {f.id} · {f.filament_type || f.material || '—'} · {formatGrams(remaining)}
+              </div>
+            </div>
+            {f.price_per_kg != null && (
+              <span className="mono text-[11px] text-steel whitespace-nowrap shrink-0">
+                {fmtUSD(Number(f.price_per_kg))}/kg
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function formatGrams(g) {
+  if (g >= 1000) return `${(g / 1000).toFixed(2)} kg`;
+  return `${Math.round(g)} g`;
+}
+
+function StaleTariffBanner({ onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11.5px] font-medium animate-pulse-soft"
+      style={{
+        background: `color-mix(in oklab, ${AMBER} 12%, transparent)`,
+        border: `1px solid color-mix(in oklab, ${AMBER} 36%, transparent)`,
+        color: AMBER,
+      }}
+    >
+      <AlertTriangle size={12} />
+      Tarifa eléctrica desactualizada
+    </button>
+  );
+}
+
+function StaleTariffModal({ open, onClose, tariffPeriod, currentRate }) {
+  if (!open) return null;
+  const tariffLabel = formatTariffPeriod(tariffPeriod);
+  const currentLabel = formatTariffPeriod(currentTariffPeriod());
+  return (
+    <>
+      <div
+        onClick={onClose}
+        className="fixed inset-0 z-[90] backdrop-blur-sm"
+        style={{ background: 'rgba(6, 9, 18, 0.66)' }}
+      />
+      <div
+        role="dialog"
+        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[91] w-[min(480px,calc(100vw-32px))] p-6 rounded-2xl shadow-2xl"
+        style={{
+          background: 'var(--color-surf-card)',
+          border: `1px solid color-mix(in oklab, ${AMBER} 28%, var(--color-border-strong))`,
+        }}
+      >
+        <div
+          className="w-14 h-14 rounded-2xl inline-flex items-center justify-center mb-3.5"
+          style={{
+            background: `color-mix(in oklab, ${AMBER} 14%, transparent)`,
+            border: `1px solid color-mix(in oklab, ${AMBER} 30%, transparent)`,
+            color: AMBER,
+          }}
+        >
+          <AlertTriangle size={26} />
+        </div>
+        <h2 className="m-0 mb-2 text-[18px] font-semibold text-tech-white tracking-tight">
+          Tarifa eléctrica desactualizada
+        </h2>
+        <p className="m-0 text-[13px] leading-[1.55] text-steel">
+          La tarifa configurada es de{' '}
+          <span className="mono font-semibold" style={{ color: AMBER }}>{tariffLabel}</span>.
+          No corresponde al mes actual{' '}
+          (<span className="mono text-tech-white font-semibold">{currentLabel}</span>).
+          Actualízala en Settings antes de generar una cotización.
+        </p>
+        {currentRate != null && (
+          <div className="mt-3.5 p-3 flex items-center gap-2.5 rounded-lg" style={{ background: 'var(--color-surf-card-2)', border: '1px solid var(--color-border)' }}>
+            <span className="mono text-[10.5px] text-gunmetal">EPM kWh</span>
+            <span className="mono text-[14px] font-semibold text-tech-white">
+              {fmtCOP(currentRate)}/kWh
+            </span>
+            <span
+              className="ml-auto mono px-2 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider"
+              style={{
+                background: `color-mix(in oklab, ${AMBER} 10%, transparent)`,
+                border: `1px solid color-mix(in oklab, ${AMBER} 25%, transparent)`,
+                color: AMBER,
+              }}
+            >
+              {tariffLabel}
+            </span>
+          </div>
+        )}
+        <div className="mt-5 flex gap-2 justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12.5px] font-medium text-steel border border-[var(--color-border-strong)] hover:text-tech-white"
+          >
+            Ignorar y continuar
+          </button>
+          <a
+            href="/cost/settings"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12.5px] font-semibold"
+            style={{ background: AMBER, color: '#231803' }}
+          >
+            <SettingsIcon size={12} /> Ir a settings
+          </a>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Header ─────────────────────────────────────────────────────────────────
+
+function CalcHeader({ isStale, onOpenStaleModal }) {
+  return (
+    <header className="flex items-center gap-3.5 px-5 py-3.5 border-b border-[var(--color-border-soft)] bg-forge-black">
+      <div
+        className="w-9 h-9 rounded-lg shrink-0 inline-flex items-center justify-center"
+        style={{
+          background: `color-mix(in oklab, ${ACCENT} 14%, transparent)`,
+          border: `1px solid color-mix(in oklab, ${ACCENT} 32%, transparent)`,
+          color: ACCENT,
+        }}
+      >
+        <Calculator size={17} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="mono inline-flex items-center gap-1.5 text-[9.5px] uppercase tracking-[0.14em] text-gunmetal">
+          <span className="w-1.5 h-1.5 rounded-full" style={{ background: ACCENT }} />
+          Cost · Calculadora
+        </div>
+        <h1 className="m-0 text-[18px] font-semibold text-tech-white tracking-tight whitespace-nowrap">
+          Cotizar pieza
+        </h1>
+      </div>
+      {isStale && (
+        <StaleTariffBanner onClick={onOpenStaleModal} />
+      )}
+    </header>
+  );
+}
+
+// ─── Result column ─────────────────────────────────────────────────────────
+
+function ResultStat({ icon: Icon, label, value, sub }) {
+  return (
+    <div className="p-3 rounded-lg bg-[var(--color-surf-card)] border border-[var(--color-border)]">
+      <div className="mono flex items-center gap-1 text-[9px] uppercase tracking-[0.12em] text-gunmetal">
+        <Icon size={10} /> {label}
+      </div>
+      <div className="mono mt-0.5 text-[15px] font-semibold text-tech-white whitespace-nowrap">
+        {value}
+      </div>
+      {sub && <div className="mono mt-0.5 text-[10px] text-gunmetal-dim">{sub}</div>}
+    </div>
+  );
+}
+
+function CalcResult({ result, form, calcLoading, calcError, onReprint, onGenerateQuote, savingQuote }) {
+  const hasResult = result && !calcError;
+  return (
+    <div
+      className="p-5 border-r border-[var(--color-border-soft)] flex flex-col gap-3.5 overflow-y-auto"
+      style={{
+        background: `linear-gradient(180deg, color-mix(in oklab, ${ACCENT} 4%, var(--color-forge-black)), var(--color-forge-black))`,
+      }}
+    >
+      <header>
+        <div className="mono inline-flex items-center gap-1.5 text-[9.5px] uppercase tracking-[0.14em] text-gunmetal">
+          <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: ACCENT }} />
+          Resultado · {form.quantity || 1} {form.quantity === 1 ? 'unidad' : 'unidades'}
+        </div>
+        <div className="mt-0.5 text-[13px] font-semibold text-tech-white truncate">
+          {form.piece_name || 'Pieza sin nombre'}
+        </div>
+      </header>
+
+      <div
+        className="relative p-4 rounded-2xl overflow-hidden"
+        style={{
+          background: 'var(--color-surf-card)',
+          border: `1px solid color-mix(in oklab, ${ACCENT} 22%, var(--color-border))`,
+        }}
+      >
+        <div
+          className="absolute -top-7 -right-5 w-32 h-32 rounded-full pointer-events-none"
+          style={{ background: `radial-gradient(circle, color-mix(in oklab, ${ACCENT} 18%, transparent), transparent 70%)` }}
+        />
+        <div className="mono relative text-[9.5px] uppercase tracking-[0.14em] text-gunmetal mb-1.5">
+          Total cotización
+        </div>
+        {calcLoading && !hasResult ? (
+          <div className="text-[13px] text-gunmetal">Calculando…</div>
+        ) : calcError ? (
+          <div className="text-[13px] text-rose-400">{calcError}</div>
+        ) : hasResult ? (
+          <>
+            <div className="relative flex items-baseline gap-1.5">
+              <span className="mono text-[32px] font-semibold text-tech-white -tracking-wide">
+                {fmtCOP(Number(result.total_price_cop ?? result.total_price ?? 0))}
+              </span>
+              <span className="mono text-[12px] text-gunmetal">COP</span>
+            </div>
+            <div className="mono relative mt-2 text-[11px] text-steel">
+              {fmtCOP(Number(result.unit_price_cop ?? result.unit_price ?? result.total_price_cop ?? 0))}{' '}
+              <span className="text-gunmetal-dim">por unidad</span>
+            </div>
+            {form.mode === 'reprint' && (
+              <div
+                className="mt-2.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[10.5px] mono"
+                style={{
+                  background: `color-mix(in oklab, ${REPRINT_TONE} 12%, transparent)`,
+                  border: `1px solid color-mix(in oklab, ${REPRINT_TONE} 28%, transparent)`,
+                  color: REPRINT_TONE,
+                }}
+              >
+                <AlertCircle size={11} /> Reimpresión por fallos (+15%)
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="text-[13px] text-gunmetal">Completa el form para ver el total.</div>
+        )}
+      </div>
+
+      {hasResult && (
+        <div className="grid grid-cols-2 gap-1.5">
+          <ResultStat
+            icon={Clock}
+            label="Tiempo"
+            value={`${(Number(result.print_time_hours) || 0).toFixed(2)} h`}
+          />
+          <ResultStat
+            icon={Zap}
+            label="Energía"
+            value={`${((Number(result.electricity_kwh) || 0)).toFixed(2)} kWh`}
+            sub={fmtCOP(Number(result.electricity_cost_cop) || 0)}
+          />
+          <ResultStat
+            icon={Droplet}
+            label="Material"
+            value={`${form.weight_grams || 0} g`}
+            sub={fmtUSD(Number(result.material_cost_usd) || 0)}
+          />
+          <ResultStat
+            icon={TrendingUp}
+            label="Margen"
+            value={`${form.margin_percent || 0}%`}
+            sub={fmtCOP(Number(result.margin_amount_cop) || 0)}
+          />
+        </div>
+      )}
+
+      <div className="mt-auto flex flex-col gap-2">
+        <button
+          type="button"
+          onClick={onGenerateQuote}
+          disabled={!hasResult || savingQuote}
+          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-3 rounded-lg text-[13px] font-semibold disabled:opacity-50"
+          style={{ background: ACCENT, color: '#0A1014', border: 0 }}
+        >
+          {savingQuote ? <Loader2 size={13} className="animate-spin" /> : <ArrowUpRight size={13} />}
+          {savingQuote ? 'Guardando…' : 'Guardar en historial'}
+        </button>
+        <button
+          type="button"
+          onClick={onReprint}
+          disabled={!hasResult}
+          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-lg text-[12.5px] font-medium disabled:opacity-50"
+          style={{
+            background: form.mode === 'reprint' ? `color-mix(in oklab, ${REPRINT_TONE} 16%, transparent)` : 'var(--color-surf-card-2)',
+            border: `1px solid ${form.mode === 'reprint' ? `color-mix(in oklab, ${REPRINT_TONE} 40%, transparent)` : 'var(--color-border-strong)'}`,
+            color: form.mode === 'reprint' ? REPRINT_TONE : 'var(--color-steel)',
+          }}
+        >
+          <RotateCcw size={12} />
+          {form.mode === 'reprint' ? 'Reimpresión aplicada' : 'Reimprimir esta pieza (+15%)'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Breakdown column ──────────────────────────────────────────────────────
+
+function BreakLine({ label, valueCOP, valueUSD, hint, icon: Icon, tone, last }) {
+  return (
+    <div
+      className="flex items-center gap-2.5 px-3 py-2.5"
+      style={{ borderBottom: last ? 0 : '1px solid var(--color-border-soft)' }}
+    >
+      <span
+        className="w-7 h-7 rounded-md shrink-0 inline-flex items-center justify-center"
+        style={{
+          background: `color-mix(in oklab, ${tone} 14%, transparent)`,
+          border: `1px solid color-mix(in oklab, ${tone} 28%, transparent)`,
+          color: tone,
+        }}
+      >
+        <Icon size={12} />
+      </span>
+      <div className="flex-1 min-w-0">
+        <div className="text-[12px] font-medium text-tech-white">{label}</div>
+        {hint && <div className="mono text-[9.5px] text-gunmetal-dim mt-0.5">{hint}</div>}
+      </div>
+      <div className="text-right">
+        <div className="mono text-[12.5px] font-semibold text-tech-white">{fmtCOP(valueCOP)}</div>
+        {valueUSD != null && (
+          <div className="mono text-[9.5px] text-gunmetal mt-0.5">{fmtUSD(valueUSD)}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SubtotalLine({ label, value, highlight, bold }) {
+  return (
+    <div className="flex items-baseline justify-between px-1 py-1">
+      <span
+        className={`${bold ? 'font-semibold text-[13px]' : 'font-medium text-[12px]'} ${highlight || bold ? 'text-tech-white' : 'text-steel'}`}
+      >
+        {label}
+      </span>
+      <span
+        className={`mono ${bold ? 'text-[17px]' : 'text-[14px]'} font-semibold ${highlight ? 'text-forge-teal' : 'text-tech-white'}`}
+      >
+        {fmtCOP(value)}
+      </span>
+    </div>
+  );
+}
+
+function CalcBreakdown({ result, form, exchangeRate }) {
+  if (!result) {
+    return (
+      <div className="p-5 bg-[var(--color-surf-sidebar)] overflow-y-auto">
+        <div className="mono text-[9.5px] uppercase tracking-[0.14em] text-gunmetal">Desglose</div>
+        <p className="mt-3 text-[12px] text-gunmetal">
+          Una vez completes el form, acá aparecerá el desglose de cada componente del costo.
+        </p>
+      </div>
+    );
+  }
+  const materialCOP = Number(result.material_cost_cop ?? (result.material_cost_usd || 0) * (exchangeRate || 0));
+  const materialUSD = Number(result.material_cost_usd ?? 0);
+  const machineCOP = Number(result.machine_cost_cop ?? result.depreciation_cost_cop ?? 0);
+  const energyCOP = Number(result.electricity_cost_cop ?? 0);
+  const laborCOP = Number(result.labor_cost_cop ?? 0);
+  const subtotalCOP = Number(result.subtotal_cop ?? result.cost_before_margin_cop ?? (materialCOP + machineCOP + energyCOP + laborCOP));
+  const marginCOP = Number(result.margin_amount_cop ?? 0);
+  const ivaCOP = Number(result.iva_cop ?? 0);
+  const perUnitCOP = Number(result.unit_price_cop ?? result.total_price_cop ?? 0);
+  const finalCOP = Number(result.total_price_cop ?? result.total_price ?? 0);
+  const isReprint = form.mode === 'reprint';
+  const reprintCOP = isReprint ? subtotalCOP * 0.15 : 0;
+
+  return (
+    <div className="p-5 bg-[var(--color-surf-sidebar)] flex flex-col gap-3.5 overflow-y-auto">
+      <header>
+        <div className="mono text-[9.5px] uppercase tracking-[0.14em] text-gunmetal">
+          Desglose · 1 unidad
+        </div>
+        <div className="mt-0.5 text-[13px] font-semibold text-tech-white">
+          Cómo se compone el precio
+        </div>
+      </header>
+
+      <div className="rounded-lg overflow-hidden border border-[var(--color-border)] bg-[var(--color-surf-card)]">
+        <BreakLine label="Material" icon={Droplet} tone="#3B82F6" valueCOP={materialCOP} valueUSD={materialUSD} hint={`${form.weight_grams || 0}g · principal + multi-material`} />
+        <BreakLine label="Máquina" icon={Cpu} tone="#A78BFA" valueCOP={machineCOP} hint="Amortización por hora" />
+        <BreakLine label="Energía" icon={Zap} tone={AMBER} valueCOP={energyCOP} hint="Watts × horas × tarifa kWh" />
+        <BreakLine label="Trabajo" icon={Calculator} tone="#34D399" valueCOP={laborCOP} last hint="Prep + post-procesamiento" />
+      </div>
+
+      <SubtotalLine label="Subtotal antes de margen" value={subtotalCOP} />
+
+      {reprintCOP > 0 && (
+        <div
+          className="px-3 py-2.5 rounded-lg flex items-center gap-2.5"
+          style={{
+            background: `color-mix(in oklab, ${REPRINT_TONE} 8%, transparent)`,
+            border: `1px solid color-mix(in oklab, ${REPRINT_TONE} 25%, transparent)`,
+          }}
+        >
+          <AlertCircle size={13} style={{ color: REPRINT_TONE }} />
+          <span className="flex-1 text-[12px] font-medium text-tech-white">
+            Reimpresión por fallos (+15%)
+          </span>
+          <span className="mono text-[13px] font-semibold text-tech-white">
+            {fmtCOP(reprintCOP)}
+          </span>
+        </div>
+      )}
+
+      <div className="rounded-lg overflow-hidden border border-[var(--color-border)] bg-[var(--color-surf-card)]">
+        <BreakLine label={`Margen (${form.margin_percent || 0}%)`} icon={TrendingUp} tone={ACCENT} valueCOP={marginCOP} hint="Ganancia operativa" last={ivaCOP === 0} />
+        {ivaCOP > 0 && (
+          <BreakLine label="IVA (19%)" icon={Calculator} tone="#6366F1" valueCOP={ivaCOP} hint="Aplicado al subtotal con margen" last />
+        )}
+      </div>
+
+      <SubtotalLine label="Total por unidad" value={perUnitCOP} highlight />
+      <SubtotalLine label={`Total × ${form.quantity || 1} ${form.quantity === 1 ? 'unidad' : 'unidades'}`} value={finalCOP} bold />
+
+      {result.usd_to_cop_rate != null && (
+        <div className="px-3 py-2 rounded-lg flex items-center gap-2 text-[10.5px] text-gunmetal" style={{ background: 'var(--color-surf-card-2)', border: '1px solid var(--color-border-soft)' }}>
+          <ArrowUpRight size={11} />
+          <span className="mono">USD → COP @ {Number(result.usd_to_cop_rate).toLocaleString('es-CO')}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Form column ───────────────────────────────────────────────────────────
+
+const MODE_OPTIONS = [
+  { id: 'standard', label: 'Estándar', icon: Check },
+  { id: 'reprint',  label: 'Reimpresión +15%', icon: RotateCcw, tone: REPRINT_TONE },
+];
+
+function CalcForm({ form, setField, filaments, printers, errors }) {
+  const printerOpts = printers.map((p) => ({ id: p.id, label: `${p.brand || ''} ${p.model || p.name}`.trim(), aside: `${p.watts || '?'}W` }));
+  const addExtra = () => {
+    const ids = form.additional_filaments_ids || [];
+    const grams = form.additional_filaments_grams || [];
+    setField('additional_filaments_ids', [...ids, '']);
+    setField('additional_filaments_grams', [...grams, 0]);
+  };
+  const removeExtra = (idx) => {
+    const ids = [...(form.additional_filaments_ids || [])];
+    const grams = [...(form.additional_filaments_grams || [])];
+    ids.splice(idx, 1);
+    grams.splice(idx, 1);
+    setField('additional_filaments_ids', ids);
+    setField('additional_filaments_grams', grams);
+  };
+  const updateExtraId = (idx, v) => {
+    const next = [...(form.additional_filaments_ids || [])];
+    next[idx] = v;
+    setField('additional_filaments_ids', next);
+  };
+  const updateExtraGrams = (idx, v) => {
+    const next = [...(form.additional_filaments_grams || [])];
+    next[idx] = v;
+    setField('additional_filaments_grams', next);
+  };
+
+  return (
+    <div className="p-5 border-r border-[var(--color-border-soft)] flex flex-col gap-1 overflow-y-auto">
+      <FormSection title="Pieza">
+        <FormFieldRow label="Nombre" required error={errors.piece_name}>
+          <FormInput value={form.piece_name} onChange={(v) => setField('piece_name', v)} placeholder="ej. Minifig dragon v3" />
+        </FormFieldRow>
+        <FormFieldRow label="Cantidad de unidades">
+          <Stepper value={form.quantity} onChange={(v) => setField('quantity', v)} min={1} max={999} suffix="u" />
+        </FormFieldRow>
+      </FormSection>
+
+      <FormSection title="Tiempo de impresión">
+        <div className="grid grid-cols-2 gap-2">
+          <FormFieldRow label="Horas" required error={errors.hours}>
+            <Stepper value={form.hours} onChange={(v) => setField('hours', v)} min={0} max={48} suffix="h" />
+          </FormFieldRow>
+          <FormFieldRow label="Minutos">
+            <Stepper value={form.minutes} onChange={(v) => setField('minutes', v)} min={0} max={59} step={5} suffix="m" />
+          </FormFieldRow>
+        </div>
+      </FormSection>
+
+      <FormSection title="Impresora">
+        <FormFieldRow label="Equipo asignado" required hint="Determina watts y amortización" error={errors.printer_id}>
+          <select
+            value={form.printer_id || ''}
+            onChange={(e) => setField('printer_id', e.target.value ? Number(e.target.value) : '')}
+            className={FORM_INPUT_CLS}
+          >
+            <option value="">Selecciona…</option>
+            {printerOpts.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label} · {p.aside}
+              </option>
+            ))}
+          </select>
+        </FormFieldRow>
+      </FormSection>
+
+      <FormSection title="Filamento principal">
+        <FormFieldRow label="Spool" required error={errors.inventory_item_id}>
+          <FilamentSelect
+            items={filaments}
+            value={form.inventory_item_id}
+            onChange={(v) => setField('inventory_item_id', v)}
+          />
+        </FormFieldRow>
+        <FormFieldRow label="Gramos consumidos" required error={errors.weight_grams}>
+          <Stepper value={form.weight_grams} onChange={(v) => setField('weight_grams', v)} min={1} max={10000} step={5} suffix="g" />
+        </FormFieldRow>
+      </FormSection>
+
+      <FormSection title="Filamentos adicionales (multi-material)">
+        {(form.additional_filaments_ids || []).length === 0 ? (
+          <button
+            type="button"
+            onClick={addExtra}
+            className="px-3 py-2.5 rounded-lg text-[12px] text-steel border border-dashed border-[var(--color-border-strong)] inline-flex items-center justify-center gap-1.5 hover:text-tech-white"
+          >
+            <Plus size={12} /> Agregar filamento adicional
+          </button>
+        ) : (
+          <>
+            {form.additional_filaments_ids.map((fid, idx) => (
+              <div key={idx} className="grid gap-1.5 items-start" style={{ gridTemplateColumns: 'minmax(0,1fr) 120px 28px' }}>
+                <FilamentSelect
+                  items={filaments}
+                  value={fid}
+                  onChange={(v) => updateExtraId(idx, v)}
+                  excludeIds={[form.inventory_item_id, ...form.additional_filaments_ids.filter((_, i) => i !== idx)].filter(Boolean)}
+                />
+                <Stepper
+                  value={(form.additional_filaments_grams || [])[idx] || 0}
+                  onChange={(v) => updateExtraGrams(idx, v)}
+                  step={5} max={10000} suffix="g"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeExtra(idx)}
+                  className="w-7 h-9 rounded-md border border-[var(--color-border-strong)] text-gunmetal inline-flex items-center justify-center hover:text-rose-400 hover:border-rose-400/40"
+                  aria-label="Quitar filamento"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+            {form.additional_filaments_ids.length < 4 && (
+              <button
+                type="button"
+                onClick={addExtra}
+                className="self-start px-3 py-1.5 rounded-md text-[11.5px] text-steel border border-dashed border-[var(--color-border-strong)] inline-flex items-center gap-1.5 hover:text-tech-white"
+              >
+                <Plus size={11} /> Agregar otro
+              </button>
+            )}
+          </>
+        )}
+      </FormSection>
+
+      <FormSection title="Modo de cálculo">
+        <FormFieldRow label="Tipo">
+          <FormChips value={form.mode} onChange={(v) => setField('mode', v)} options={MODE_OPTIONS} />
+        </FormFieldRow>
+        <div className="grid grid-cols-2 gap-2">
+          <FormFieldRow label="Margen" hint="Default desde Settings">
+            <Stepper value={form.margin_percent} onChange={(v) => setField('margin_percent', v)} min={0} max={150} step={1} suffix="%" />
+          </FormFieldRow>
+          <FormFieldRow label="IVA" hint="Incluir en total">
+            <button
+              type="button"
+              onClick={() => setField('include_iva', !form.include_iva)}
+              className="flex items-center gap-2.5 px-3 py-2 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surf-card)] text-tech-white text-[12.5px] font-medium"
+            >
+              <span
+                className="w-[18px] h-[18px] rounded inline-flex items-center justify-center"
+                style={{
+                  background: form.include_iva ? ACCENT : 'transparent',
+                  border: `1.5px solid ${form.include_iva ? ACCENT : 'var(--color-border-strong)'}`,
+                  color: '#0A1014',
+                }}
+              >
+                {form.include_iva && <Check size={11} />}
+              </span>
+              Aplicar 19%
+            </button>
+          </FormFieldRow>
+        </div>
+      </FormSection>
+
+      <FormSection title="Notas">
+        <textarea
+          value={form.description || ''}
+          onChange={(e) => setField('description', e.target.value)}
+          placeholder="Detalles internos sobre esta pieza, modificaciones, postproceso…"
+          rows={3}
+          className={`${FORM_INPUT_CLS} resize-y min-h-[70px] leading-relaxed`}
+        />
+      </FormSection>
+    </div>
+  );
+}
+
+// ─── Main page ─────────────────────────────────────────────────────────────
+
+const DEFAULT_FORM = {
+  piece_name: '',
+  description: '',
+  inventory_item_id: '',
+  printer_id: '',
+  weight_grams: 0,
+  hours: 0,
+  minutes: 0,
+  quantity: 1,
+  margin_percent: 35,
+  include_iva: false,
+  mode: 'standard',
+  additional_filaments_ids: [],
+  additional_filaments_grams: [],
+};
+
 export default function CalculatorPage() {
   const [searchParams] = useSearchParams();
-  /** @type {[Array, Function]} Lista de items de inventario tipo Filamento */
+  const isMobile = useIsMobile();
+
+  // Datos catálogo
   const [filaments, setFilaments] = useState([]);
-  /** @type {[Array, Function]} Lista de impresoras disponibles del usuario */
   const [printers, setPrinters] = useState([]);
-  /** @type {[Object|null, Function]} Configuracion de la aplicacion (tarifas, margenes) */
-  const [settings, setSettings] = useState(null);
-  /**
-   * @type {[Array, Function]} Catalogo de insumos (items de inventario que no son Filamento ni Consumible)
-   */
-  const [supplies, setSupplies] = useState([]);
-  /**
-   * @type {[Array, Function]} Consumibles del inventario (desgaste por horas de impresión)
-   */
-  const [consumables, setConsumables] = useState([]);
-  /**
-   * @type {[Array, Function]} IDs de consumibles seleccionados para esta cotización
-   */
-  const [selectedConsumables, setSelectedConsumables] = useState([]);
-  /**
-   * @type {[Array, Function]} Insumos seleccionados para esta cotizacion
-   * Cada elemento: {inventory_item_id: string, quantity: number}
-   */
-  const [selectedSupplies, setSelectedSupplies] = useState([]);
-  /**
-   * @type {[Array, Function]} Filamentos adicionales para pieza multicolor
-   * Cada elemento: {inventory_item_id: string, weight_grams: number}
-   */
-  const [additionalFilaments, setAdditionalFilaments] = useState([]);
-  /** @type {[Object|null, Function]} Resultado del calculo de costos devuelto por el backend */
-  const [result, setResult] = useState(null);
-  /** @type {[boolean, Function]} Estado de carga durante el calculo */
-  const [loading, setLoading] = useState(false);
-  /** @type {[boolean, Function]} Estado de carga durante el guardado */
-  const [saving, setSaving] = useState(false);
-  /** @type {[boolean, Function]} Carga inicial de datos (filamentos, impresoras, config) */
+  const [tariffPeriod, setTariffPeriod] = useState(null); // 'YYYY-MM' o null
+  const [tariffRateCOP, setTariffRateCOP] = useState(null);
   const [initialLoading, setInitialLoading] = useState(true);
 
-  /**
-   * Estado del formulario con los parametros de la pieza a cotizar.
-   * Los valores se almacenan como strings para compatibilidad con los inputs HTML.
-   * inventory_item_id referencia el item de inventario (filamento) seleccionado.
-   */
-  const [form, setForm] = useState({
-    piece_name: '',
-    description: '',
-    inventory_item_id: '',
-    printer_id: '',
-    weight_grams: '',
-    print_time_minutes: '',
-    preparation_time_minutes: '0',
-    post_processing_time_minutes: '0',
-    quantity: '1',
-    margin_percent: '',
-    color_changes: '0',
-  });
+  // Form
+  const [form, setForm] = useState(DEFAULT_FORM);
+  const setField = (k, v) => setForm((cur) => ({ ...cur, [k]: v }));
 
-  // Patrones para auto-seleccionar consumibles por defecto al cargar.
-  // Match case-insensitive por substring del nombre del item.
-  const DEFAULT_CONSUMABLE_PATTERNS = [
-    'bambu lab placa pei',
-    'filament cutter',
-    'hottend socks',
-    'ptfe',
-  ];
-  // Patrones que identifican una boquilla (única opción manual del dropdown).
-  const NOZZLE_PATTERNS = ['boquilla', 'nozzle'];
-
-  /**
-   * Decide si un consumible coincide con cualquiera de los patrones dados.
-   * @param {Object} item - Item de inventario
-   * @param {string[]} patterns - Substrings a buscar en el nombre (lowercase)
-   * @returns {boolean}
-   */
-  const matchesAny = (item, patterns) => {
-    const name = (item.name || '').toLowerCase();
-    return patterns.some((p) => name.includes(p));
-  };
-
-  /**
-   * Estado temporal para el insumo que se esta por agregar a la cotizacion.
-   * Se resetea a valores vacios tras cada llamada a addSupply.
-   * @type {[{inventory_item_id: string, quantity: number}, Function]}
-   */
-  const [supplyToAdd, setSupplyToAdd] = useState({ inventory_item_id: '', quantity: 1 });
-  /**
-   * Estado temporal para el filamento adicional que se esta por agregar.
-   * Se resetea a valores vacios tras cada llamada a addFilament.
-   * @type {[{inventory_item_id: string, weight_grams: string}, Function]}
-   */
-  const [filamentToAdd, setFilamentToAdd] = useState({ inventory_item_id: '', weight_grams: '' });
-  const [consumableToAdd, setConsumableToAdd] = useState('');
-
-  /**
-   * Genera la etiqueta de nombre para un item de inventario tipo Filamento.
-   * Usa los campos especificos de filamento si existen, de lo contrario usa item.name.
-   *
-   * @param {Object} item - Item de inventario
-   * @returns {string} Etiqueta legible para mostrar en el selector
-   */
-  const filamentLabel = (item) => {
-    const brand = item.filament_brand || '';
-    const type = item.filament_type || '';
-    const color = item.filament_color || item.name;
-    if (brand || type) {
-      return `${brand} ${type} - ${color}`.trim();
-    }
-    return item.name;
-  };
-
-  // Carga inicial: obtiene filamentos del inventario, todos los items (para insumos),
-  // impresoras y configuracion en paralelo.
-  // Preselecciona el primer filamento y la primera impresora si existen,
-  // y establece el margen de ganancia por defecto segun la configuracion.
-  // Si hay URL params provenientes del Slicer (?weight_grams, ?print_time_hours,
-  // ?filament_type), los aplica tras cargar los datos.
+  // Stale tariff (issue #75)
+  const isStale = tariffPeriod ? isKwhTariffStale(tariffPeriod) : false;
+  const [staleModalOpen, setStaleModalOpen] = useState(false);
   useEffect(() => {
-    Promise.all([getInventoryFilaments(), getInventoryItems(), getPrinters(), getSettings()])
-      .then(([fRes, allRes, pRes, sRes]) => {
+    if (isStale) setStaleModalOpen(true);
+  }, [isStale]);
+
+  // Reactive calc (issue #61) — debounce 300ms
+  const debouncedForm = useDebouncedValue(form, 300);
+  const [result, setResult] = useState(null);
+  const [calcLoading, setCalcLoading] = useState(false);
+  const [calcError, setCalcError] = useState(null);
+
+  // Breakdown sheet mobile
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
+
+  // Saving quote
+  const [savingQuote, setSavingQuote] = useState(false);
+
+  // ── Load catálogo ────────────────────────────────────────────────────────
+  useEffect(() => {
+    Promise.all([
+      getInventoryFilaments(),
+      getInventoryItems(),
+      getPrinters(),
+      getSettings(),
+      getElectricityTariffs().catch(() => ({ data: [] })),
+    ])
+      .then(([fRes, _allRes, pRes, sRes, tariffsRes]) => {
         const filamentItems = [...fRes.data].sort((a, b) => a.name.localeCompare(b.name, 'es'));
-        // Los insumos son items que NO son Filamento ni Consumible (los consumibles son automáticos)
-        const supplyItems = allRes.data
-          .filter((i) => i.category !== 'Filamento' && i.category !== 'Consumible')
-          .sort((a, b) => (a.category || '').localeCompare(b.category || '', 'es') || a.name.localeCompare(b.name, 'es'));
-        const consumableItems = allRes.data
-          .filter((i) => i.category === 'Consumible' && i.useful_life_hours > 0 && i.unit_cost_cal)
-          .sort((a, b) => a.name.localeCompare(b.name, 'es'));
         const sortedPrinters = [...pRes.data].sort((a, b) => a.name.localeCompare(b.name, 'es'));
-
         setFilaments(filamentItems);
-        setSupplies(supplyItems);
-        setConsumables(consumableItems);
         setPrinters(sortedPrinters);
-        setSettings(sRes.data);
-
-        // Auto-seleccionar consumibles por defecto (placa PEI, cutter, socks, PTFE).
-        // El usuario solo elige manualmente la boquilla.
-        const defaultsAuto = consumableItems.filter((c) =>
-          matchesAny(c, DEFAULT_CONSUMABLE_PATTERNS),
-        );
-        if (defaultsAuto.length > 0) setSelectedConsumables(defaultsAuto);
-
-        // Valores base: primera impresora, primer filamento, margen por defecto
-        const updates = { margin_percent: sRes.data.default_margin_percent };
-        if (sortedPrinters.length > 0) updates.printer_id = sortedPrinters[0].id;
-        if (filamentItems.length > 0) updates.inventory_item_id = filamentItems[0].id;
-
-        // Aplicar URL params del Slicer si están presentes
-        const weightGrams = searchParams.get('weight_grams');
-        const printTimeHours = searchParams.get('print_time_hours');
-        const filamentType = searchParams.get('filament_type');
-        const inventoryItemId = searchParams.get('inventory_item_id');
-
-        if (weightGrams) updates.weight_grams = parseFloat(weightGrams).toFixed(2);
-        if (printTimeHours) {
-          updates.print_time_minutes = Math.round(parseFloat(printTimeHours) * 60).toString();
+        // Tariff actual: primer item de listElectricityTariffs (ordenado desc)
+        const tariffs = tariffsRes.data || [];
+        if (tariffs.length > 0) {
+          const latest = tariffs[0];
+          const y = latest.year;
+          const m = String(latest.month).padStart(2, '0');
+          setTariffPeriod(`${y}-${m}`);
+          // El estrato 4 es típico residencial; cae a primer estrato disponible
+          const estr = latest.estrato_4 || latest.estrato_3 || Object.values(latest)[3];
+          if (typeof estr === 'object' && estr?.cop_per_kwh) {
+            setTariffRateCOP(Number(estr.cop_per_kwh));
+          }
+        } else {
+          setTariffPeriod(currentTariffPeriod());
         }
+        // Defaults: primera impresora, primer filamento, margen settings
+        setForm((cur) => ({
+          ...cur,
+          margin_percent: Number(sRes.data.default_margin_percent || 35),
+          printer_id: sortedPrinters[0]?.id || '',
+          inventory_item_id: filamentItems[0]?.id || '',
+        }));
 
-        const colorChanges = searchParams.get('color_changes');
-        if (colorChanges) updates.color_changes = String(parseInt(colorChanges) || 0);
-
-        // ID directo del inventario (viene del modal de mapeo)
-        if (inventoryItemId && filamentItems.some((f) => f.id === parseInt(inventoryItemId))) {
-          updates.inventory_item_id = parseInt(inventoryItemId);
-        } else if (filamentType && filamentItems.length > 0) {
-          // Fallback: match por tipo de filamento
-          const match = filamentItems.find(
-            (item) =>
-              (item.filament_type || '').toLowerCase() === filamentType.toLowerCase() ||
-              item.name.toLowerCase().includes(filamentType.toLowerCase()),
-          );
-          if (match) updates.inventory_item_id = match.id;
+        // Slicer URL params
+        const wg = searchParams.get('weight_grams');
+        const ph = searchParams.get('print_time_hours');
+        const itemId = searchParams.get('inventory_item_id');
+        const updates = {};
+        if (wg) updates.weight_grams = Number(parseFloat(wg).toFixed(0));
+        if (ph) {
+          const totalMin = parseFloat(ph) * 60;
+          updates.hours = Math.floor(totalMin / 60);
+          updates.minutes = Math.round(totalMin % 60);
         }
-
-        setForm((prev) => ({ ...prev, ...updates }));
-
-        // Filamentos adicionales: primero buscar extra_id_N (IDs directos del modal)
+        if (itemId && filamentItems.some((f) => f.id === Number(itemId))) {
+          updates.inventory_item_id = Number(itemId);
+        }
         const extras = [];
-        for (let i = 1; i <= 10; i++) {
+        const extraGrams = [];
+        for (let i = 1; i <= 4; i++) {
           const eId = searchParams.get(`extra_id_${i}`);
-          const eWeight = searchParams.get(`extra_weight_${i}`);
-          if (eId && eWeight && filamentItems.some((f) => f.id === parseInt(eId))) {
-            extras.push({
-              inventory_item_id: parseInt(eId),
-              weight_grams: parseFloat(eWeight),
-            });
-          } else if (!eId) {
-            break;
+          const eW = searchParams.get(`extra_weight_${i}`);
+          if (eId && eW && filamentItems.some((f) => f.id === Number(eId))) {
+            extras.push(Number(eId));
+            extraGrams.push(Number(parseFloat(eW).toFixed(0)));
           }
         }
-        if (extras.length > 0) setAdditionalFilaments(extras);
-
-        if (weightGrams || printTimeHours) {
-          toast.success('Datos del Slicer cargados en la calculadora');
+        if (extras.length > 0) {
+          updates.additional_filaments_ids = extras;
+          updates.additional_filaments_grams = extraGrams;
+        }
+        if (Object.keys(updates).length > 0) {
+          setForm((cur) => ({ ...cur, ...updates }));
+          if (wg || ph) toast.success('Datos del Slicer cargados');
         }
       })
-      .catch(() => toast.error('Error cargando datos'))
+      .catch(() => toast.error('Error cargando catálogo'))
       .finally(() => setInitialLoading(false));
-  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /**
-   * Actualiza un campo del formulario cuando el usuario modifica un input.
-   * Usa el atributo 'name' del elemento para identificar el campo.
-   *
-   * @param {React.ChangeEvent<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>} e - Evento de cambio
-   */
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+  // ── Build calc payload + reactive call ──────────────────────────────────
+  const buildPayload = (f) => {
+    const additional = (f.additional_filaments_ids || [])
+      .map((id, i) => ({
+        inventory_item_id: id,
+        weight_grams: Number((f.additional_filaments_grams || [])[i] || 0),
+      }))
+      .filter((x) => x.inventory_item_id && x.weight_grams > 0);
+    return {
+      piece_name: f.piece_name || 'Pieza',
+      description: f.description || null,
+      client_name: 'Interno',
+      inventory_item_id: f.inventory_item_id,
+      printer_id: Number(f.printer_id),
+      weight_grams: Number(f.weight_grams) || 0,
+      print_time_hours: (Number(f.hours) || 0) + (Number(f.minutes) || 0) / 60,
+      preparation_time_hours: 0,
+      post_processing_time_hours: 0.25,
+      quantity: Number(f.quantity) || 1,
+      margin_percent: Number(f.margin_percent) || 0,
+      color_changes: 0,
+      supplies: [],
+      additional_filaments: additional,
+      consumable_ids: [],
+      // Reimpresión: cargamos el +15% como un margen extra ad-hoc
+      // (backend no tiene flag específico; emulamos)
+      ...(f.mode === 'reprint' ? { extra_failure_percent: 15 } : {}),
+    };
   };
 
-  /**
-   * Construye el payload para enviar al backend a partir del estado del formulario.
-   * Convierte los valores string del formulario a los tipos numericos que espera la API.
-   * Los campos opcionales (description, client_name) se envian como null si estan vacios.
-   *
-   * Usa inventory_item_id para el filamento principal (en lugar de filament_id legacy).
-   * Insumos: [{inventory_item_id, quantity}]
-   * Filamentos adicionales: [{inventory_item_id, weight_grams}]
-   *
-   * @returns {Object} Objeto con los datos de la cotizacion en formato esperado por la API
-   */
-  const buildPayload = () => ({
-    piece_name: form.piece_name,
-    description: form.description || null,
-    client_name: 'Interno',
-    inventory_item_id: form.inventory_item_id,
-    printer_id: parseInt(form.printer_id),
-    weight_grams: parseFloat(form.weight_grams),
-    print_time_hours: (parseFloat(form.print_time_minutes) || 0) / 60,
-    preparation_time_hours: (parseFloat(form.preparation_time_minutes) || 0) / 60,
-    post_processing_time_hours: (parseFloat(form.post_processing_time_minutes) || 0) / 60,
-    quantity: parseInt(form.quantity) || 1,
-    margin_percent: parseFloat(form.margin_percent),
-    color_changes: parseInt(form.color_changes) || 0,
-    supplies: selectedSupplies,
-    additional_filaments: additionalFilaments,
-    consumable_ids: selectedConsumables.map((c) => c.id),
-  });
+  // Validación mínima para disparar calc (todos required presentes)
+  const canCalc = (f) =>
+    !!f.inventory_item_id &&
+    !!f.printer_id &&
+    Number(f.weight_grams) > 0 &&
+    (Number(f.hours) > 0 || Number(f.minutes) > 0);
 
-  /**
-   * Agrega el insumo seleccionado en supplyToAdd al listado de insumos de la cotizacion.
-   * Si el insumo ya existe en la lista, incrementa su cantidad en lugar de duplicarlo.
-   * No hace nada si inventory_item_id esta vacio. Resetea supplyToAdd tras agregar.
-   *
-   * @returns {void}
-   */
-  const addSupply = () => {
-    if (!supplyToAdd.inventory_item_id) return;
-    const id = parseInt(supplyToAdd.inventory_item_id);
-    const qty = Math.max(1, parseInt(supplyToAdd.quantity) || 1);
-    const existing = selectedSupplies.find((s) => s.inventory_item_id === id);
-    if (existing) {
-      setSelectedSupplies(
-        selectedSupplies.map((s) =>
-          s.inventory_item_id === id ? { ...s, quantity: s.quantity + qty } : s
-        )
-      );
-    } else {
-      setSelectedSupplies([...selectedSupplies, { inventory_item_id: id, quantity: qty }]);
-    }
-    setSupplyToAdd({ inventory_item_id: '', quantity: 1 });
-  };
-
-  /**
-   * Elimina un insumo del listado de insumos seleccionados para la cotizacion.
-   *
-   * @param {string} inventory_item_id - UUID del item de inventario a eliminar
-   * @returns {void}
-   */
-  const removeSupply = (inventory_item_id) =>
-    setSelectedSupplies(selectedSupplies.filter((s) => s.inventory_item_id !== inventory_item_id));
-
-  /**
-   * Agrega el filamento seleccionado en filamentToAdd al listado de filamentos
-   * adicionales (para piezas multicolor). No hace nada si falta inventory_item_id
-   * o weight_grams. Resetea filamentToAdd tras agregar.
-   *
-   * @returns {void}
-   */
-  const addFilament = () => {
-    if (!filamentToAdd.inventory_item_id || !filamentToAdd.weight_grams) return;
-    setAdditionalFilaments([
-      ...additionalFilaments,
-      {
-        inventory_item_id: parseInt(filamentToAdd.inventory_item_id),
-        weight_grams: parseFloat(filamentToAdd.weight_grams),
-      },
-    ]);
-    setFilamentToAdd({ inventory_item_id: '', weight_grams: '' });
-  };
-
-  /**
-   * Elimina un filamento adicional del listado por su posicion en el arreglo.
-   *
-   * @param {number} index - Indice del filamento a eliminar en additionalFilaments
-   * @returns {void}
-   */
-  const removeFilament = (index) =>
-    setAdditionalFilaments(additionalFilaments.filter((_, i) => i !== index));
-
-  const addConsumable = () => {
-    if (!consumableToAdd) return;
-    const id = parseInt(consumableToAdd);
-    if (selectedConsumables.some((c) => c.id === id)) return;
-    const item = consumables.find((c) => c.id === id);
-    if (item) setSelectedConsumables([...selectedConsumables, item]);
-    setConsumableToAdd('');
-  };
-
-  const removeConsumable = (id) =>
-    setSelectedConsumables(selectedConsumables.filter((c) => c.id !== id));
-
-  /**
-   * Maneja el envio del formulario para calcular los costos.
-   * Valida que se haya seleccionado filamento (del inventario) e impresora antes de enviar.
-   * El resultado se almacena en el estado 'result' para mostrarlo en el panel derecho.
-   *
-   * @param {React.FormEvent<HTMLFormElement>} e - Evento del formulario
-   */
-  const handleCalculate = async (e) => {
-    e.preventDefault();
-    if (!form.inventory_item_id || !form.printer_id) {
-      toast.error('Debes tener al menos un filamento en inventario y una impresora');
+  useEffect(() => {
+    if (initialLoading) return;
+    if (!canCalc(debouncedForm)) {
+      setResult(null);
+      setCalcError(null);
       return;
     }
-    setLoading(true);
-    try {
-      const res = await calculateQuote(buildPayload());
-      setResult(res.data);
-    } catch {
-      toast.error('Error al calcular');
-    } finally {
-      setLoading(false);
+    let cancelled = false;
+    setCalcLoading(true);
+    setCalcError(null);
+    calculateQuote(buildPayload(debouncedForm))
+      .then((res) => {
+        if (cancelled) return;
+        let data = res.data;
+        // Aplicar 15% reimpresión sobre total si mode=reprint
+        if (debouncedForm.mode === 'reprint') {
+          const factor = 1.15;
+          const fields = ['total_price', 'total_price_cop', 'unit_price', 'unit_price_cop'];
+          data = { ...data };
+          fields.forEach((k) => {
+            if (data[k] != null) data[k] = Number(data[k]) * factor;
+          });
+        }
+        setResult(data);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setCalcError(err?.response?.data?.detail || 'Error en el cálculo');
+        setResult(null);
+      })
+      .finally(() => !cancelled && setCalcLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedForm, initialLoading]);
+
+  // ── Validation errors (display) ─────────────────────────────────────────
+  const errors = useMemo(() => {
+    const e = {};
+    if (!form.piece_name) e.piece_name = 'Requerido';
+    if (!form.inventory_item_id) e.inventory_item_id = 'Selecciona uno';
+    if (!form.printer_id) e.printer_id = 'Selecciona';
+    if (Number(form.hours) === 0 && Number(form.minutes) === 0) e.hours = '> 0';
+    if (Number(form.weight_grams) <= 0) e.weight_grams = '> 0';
+    return e;
+  }, [form]);
+
+  const onReprint = () => setField('mode', form.mode === 'reprint' ? 'standard' : 'reprint');
+
+  const onGenerateQuote = async () => {
+    if (!canCalc(form) || !result) {
+      toast.error('Completa los datos antes de guardar');
+      return;
     }
-  };
-
-  /**
-   * Limpia el formulario, los insumos y el resultado, volviendo al estado inicial.
-   * Conserva filamento, impresora y margen por defecto para mayor comodidad.
-   */
-  const handleClear = () => {
-    setForm({
-      piece_name: '',
-      description: '',
-      inventory_item_id: '',
-      printer_id: printers.length > 0 ? printers[0].id : '',
-      weight_grams: '',
-      print_time_minutes: '',
-      preparation_time_minutes: '0',
-      post_processing_time_minutes: '0',
-      quantity: '1',
-      margin_percent: settings?.default_margin_percent ?? '',
-      color_changes: '0',
-    });
-    setSelectedSupplies([]);
-    setAdditionalFilaments([]);
-    // Restaurar defaults de consumibles (placa PEI, cutter, socks, PTFE).
-    setSelectedConsumables(
-      consumables.filter((c) => matchesAny(c, DEFAULT_CONSUMABLE_PATTERNS)),
-    );
-    setResult(null);
-  };
-
-  /**
-   * Guarda la cotizacion actual en el historial del backend.
-   * Envia los mismos datos del formulario al endpoint de creacion de cotizaciones.
-   * Usa inventory_item_id para referenciar el filamento principal.
-   */
-  const handleSave = async () => {
-    setSaving(true);
+    setSavingQuote(true);
     try {
-      const payload = buildPayload();
-      // Incluir la tasa USD/COP ya calculada para que el backend
-      // guarde exactamente lo que el usuario vio (A-05).
-      if (result?.usd_to_cop_rate) {
-        payload.usd_to_cop_rate = result.usd_to_cop_rate;
-      }
+      const payload = buildPayload(form);
+      if (result.usd_to_cop_rate != null) payload.usd_to_cop_rate = result.usd_to_cop_rate;
       await createQuote(payload);
-      toast.success('Cotización guardada en el historial');
-    } catch {
-      toast.error('Error al guardar');
+      toast.success('Cotización guardada en historial');
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Error al guardar');
     } finally {
-      setSaving(false);
+      setSavingQuote(false);
     }
   };
-
-  // Filamento actualmente seleccionado (para mostrar advertencia de stock bajo)
-  const selectedFilament = filaments.find((f) => f.id === parseInt(form.inventory_item_id, 10));
-  const filamentLowStock =
-    selectedFilament &&
-    parseFloat(selectedFilament.min_quantity) > 0 &&
-    parseFloat(selectedFilament.quantity) < parseFloat(selectedFilament.min_quantity);
 
   if (initialLoading) {
     return (
@@ -449,608 +1041,99 @@ export default function CalculatorPage() {
     );
   }
 
-  return (
-    <div>
-      <h2 className="tf-page-title">Calculadora de Costos</h2>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Formulario */}
-        <form onSubmit={handleCalculate} className="tf-card p-6 space-y-5">
-
-          {/* — Sección: Pieza — */}
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-xs font-semibold text-gunmetal uppercase tracking-wider">Pieza</span>
-              <div className="flex-1 h-px bg-[#222630]" />
+  // ── Mobile shell ────────────────────────────────────────────────────────
+  if (isMobile) {
+    return (
+      <div className="flex flex-col min-h-screen bg-forge-black">
+        <CalcHeader isStale={isStale} onOpenStaleModal={() => setStaleModalOpen(true)} />
+        <main className="flex-1 pb-28 overflow-y-auto">
+          <CalcForm form={form} setField={setField} filaments={filaments} printers={printers} errors={errors} />
+        </main>
+        <div
+          className="fixed bottom-0 inset-x-0 z-30 px-4 py-3 border-t flex items-center gap-2"
+          style={{ background: 'var(--color-surf-sidebar)', borderColor: 'var(--color-border-soft)' }}
+        >
+          <div className="flex-1 min-w-0">
+            <div className="mono text-[9px] uppercase tracking-wider text-gunmetal">Total</div>
+            <div className="mono text-[18px] font-semibold text-tech-white truncate">
+              {result ? fmtCOP(Number(result.total_price_cop ?? result.total_price ?? 0)) : '—'}
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="col-span-1 sm:col-span-2">
-                <label className="tf-label">Nombre de la pieza *</label>
-                <input
-                  name="piece_name"
-                  value={form.piece_name}
-                  onChange={handleChange}
-                  required
-                  className="tf-input"
-                />
-              </div>
-              <div>
-                <label className="tf-label">Cantidad</label>
-                <input
-                  name="quantity"
-                  type="number"
-                  min="1"
-                  value={form.quantity}
-                  onChange={handleChange}
-                  className="tf-input"
-                />
-              </div>
-              <div className="col-span-1 sm:col-span-2">
-                <label className="tf-label">Descripción</label>
-                <textarea
-                  name="description"
-                  value={form.description}
-                  onChange={handleChange}
-                  rows={2}
-                  className="tf-input"
-                />
-              </div>
-            </div>
+            {form.mode === 'reprint' && (
+              <span className="mono text-[9px]" style={{ color: REPRINT_TONE }}>+15% reimpresión</span>
+            )}
           </div>
-
-          {/* — Sección: Material & equipo — */}
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-xs font-semibold text-gunmetal uppercase tracking-wider">Material &amp; equipo</span>
-              <div className="flex-1 h-px bg-[#222630]" />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="tf-label">Filamento *</label>
-                {filaments.length === 0 ? (
-                  <div className="tf-input flex items-center gap-2 text-orange-400 text-sm">
-                    <AlertTriangle size={14} className="shrink-0" />
-                    <span>
-                      Sin filamentos en inventario.{' '}
-                      <a href="/inventory/stock" className="underline hover:text-orange-300">
-                        Ir a Inventario → Stock
-                      </a>{' '}
-                      para registrar uno.
-                    </span>
-                  </div>
-                ) : (
-                  <>
-                    <select
-                      name="inventory_item_id"
-                      value={form.inventory_item_id}
-                      onChange={handleChange}
-                      required
-                      className="tf-input"
-                    >
-                      <option value="">Seleccionar...</option>
-                      {filaments.map((f) => {
-                        const sinStock =
-                          parseFloat(f.quantity) === 0 && parseFloat(f.min_quantity) > 0;
-                        return (
-                          <option key={f.id} value={f.id} disabled={sinStock}>
-                            {filamentLabel(f)}
-                            {sinStock ? ' (Sin stock)' : ''}
-                          </option>
-                        );
-                      })}
-                    </select>
-                    {filamentLowStock && (
-                      <div className="mt-1 flex items-center gap-1.5 text-xs text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 rounded px-2 py-1">
-                        <AlertTriangle size={12} />
-                        Stock bajo — solo{' '}
-                        {formatQuantity(selectedFilament.quantity)}{' '}
-                        {selectedFilament.unit} disponible
-                      </div>
-                    )}
-                    {selectedFilament && (
-                      <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
-                        <div className="bg-[#0A0E16] border border-[#222630] rounded px-2 py-1.5">
-                          <p className="text-gunmetal uppercase tracking-wider">Stock</p>
-                          <p className="text-tech-white font-medium mt-0.5">
-                            {formatQuantity(selectedFilament.quantity)} {selectedFilament.unit}
-                          </p>
-                        </div>
-                        <div className="bg-[#0A0E16] border border-[#222630] rounded px-2 py-1.5">
-                          <p className="text-gunmetal uppercase tracking-wider">Tipo · color</p>
-                          <p className="text-tech-white font-medium mt-0.5 truncate">
-                            {selectedFilament.filament_type || '—'}
-                            {selectedFilament.filament_color ? ` · ${selectedFilament.filament_color}` : ''}
-                          </p>
-                        </div>
-                        <div className="bg-[#0A0E16] border border-[#222630] rounded px-2 py-1.5">
-                          <p className="text-gunmetal uppercase tracking-wider">Costo / g</p>
-                          <p className="text-forge-teal font-medium mt-0.5">
-                            {(() => {
-                              const perKg = Number(selectedFilament.price_per_kg ?? selectedFilament.unit_cost ?? 0);
-                              const perG = perKg / 1000;
-                              return perG > 0 ? `$${perG.toFixed(2)}` : '—';
-                            })()}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-              <div>
-                <label className="tf-label">Impresora *</label>
-                <select
-                  name="printer_id"
-                  value={form.printer_id}
-                  onChange={handleChange}
-                  required
-                  className="tf-input"
-                >
-                  <option value="">Seleccionar...</option>
-                  {printers.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="tf-label">Peso filamento (g) *</label>
-                <input
-                  name="weight_grams"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.weight_grams}
-                  onChange={handleChange}
-                  required
-                  className="tf-input"
-                />
-              </div>
-              <div>
-                <label className="tf-label">Margen de ganancia (%)</label>
-                <input
-                  name="margin_percent"
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  value={form.margin_percent}
-                  onChange={handleChange}
-                  className="tf-input"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* — Sección: Tiempos — */}
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-xs font-semibold text-gunmetal uppercase tracking-wider">Tiempos</span>
-              <div className="flex-1 h-px bg-[#222630]" />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <label className="tf-label">Impresión (min) *</label>
-                <input
-                  name="print_time_minutes"
-                  type="number"
-                  step="1"
-                  min="0"
-                  value={form.print_time_minutes}
-                  onChange={handleChange}
-                  required
-                  className="tf-input"
-                />
-              </div>
-              <div>
-                <label className="tf-label">Preparación (min)</label>
-                <input
-                  name="preparation_time_minutes"
-                  type="number"
-                  step="1"
-                  min="0"
-                  value={form.preparation_time_minutes}
-                  onChange={handleChange}
-                  className="tf-input"
-                />
-              </div>
-              <div>
-                <label className="tf-label">Post-procesado (min)</label>
-                <input
-                  name="post_processing_time_minutes"
-                  type="number"
-                  step="1"
-                  min="0"
-                  value={form.post_processing_time_minutes}
-                  onChange={handleChange}
-                  className="tf-input"
-                />
-              </div>
-              <div>
-                <label className="tf-label">Cambios de color</label>
-                <input
-                  name="color_changes"
-                  type="number"
-                  step="1"
-                  min="0"
-                  value={form.color_changes}
-                  onChange={handleChange}
-                  className="tf-input"
-                />
-                <p className="text-xs text-gunmetal mt-1">
-                  +3 min c/u (purga). Suma{' '}
-                  {((parseInt(form.color_changes) || 0) * 3).toLocaleString('es-CO')} min al
-                  tiempo efectivo.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* — Sección: Adicionales — */}
-          {filaments.length > 0 && (
-            <>
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-xs font-semibold text-gunmetal uppercase tracking-wider">Filamentos adicionales</span>
-                  <span className="text-xs text-gunmetal">(multicolor)</span>
-                  <div className="flex-1 h-px bg-[#222630]" />
-                </div>
-                {additionalFilaments.map((af, i) => {
-                  const f = filaments.find((x) => x.id === af.inventory_item_id);
-                  return (
-                    <div
-                      key={i}
-                      className="flex items-center gap-2 mb-1 text-sm bg-[#0A0E16] border border-[#222630] px-3 py-1.5 rounded-lg"
-                    >
-                      <span className="flex-1 text-steel">
-                        {f ? filamentLabel(f) : af.inventory_item_id}
-                      </span>
-                      <span className="text-gunmetal">{af.weight_grams} g</span>
-                      <button
-                        type="button"
-                        onClick={() => removeFilament(i)}
-                        className="text-gunmetal hover:text-red-400 ml-1 transition-colors"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  );
-                })}
-                <div className="flex flex-wrap gap-2 mt-1">
-                  <select
-                    value={filamentToAdd.inventory_item_id}
-                    onChange={(e) =>
-                      setFilamentToAdd({ ...filamentToAdd, inventory_item_id: e.target.value })
-                    }
-                    className="tf-input flex-1"
-                  >
-                    <option value="">Filamento...</option>
-                    {filaments.map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {filamentLabel(f)}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="g"
-                    value={filamentToAdd.weight_grams}
-                    onChange={(e) =>
-                      setFilamentToAdd({ ...filamentToAdd, weight_grams: e.target.value })
-                    }
-                    className="tf-input w-full sm:w-20"
-                  />
-                  <button
-                    type="button"
-                    onClick={addFilament}
-                    className="tf-btn-secondary px-3 py-1.5 text-sm"
-                  >
-                    <Plus size={14} /> Añadir
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Insumos adicionales del inventario */}
-          {supplies.length > 0 && (
-            <>
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-xs font-semibold text-gunmetal uppercase tracking-wider">Insumos adicionales</span>
-                  <div className="flex-1 h-px bg-[#222630]" />
-                </div>
-                {selectedSupplies.map((si) => {
-                  const sup = supplies.find((x) => x.id === si.inventory_item_id);
-                  const price = sup
-                    ? (sup.price_per_unit ?? sup.unit_cost ?? 0)
-                    : 0;
-                  return (
-                    <div
-                      key={si.inventory_item_id}
-                      className="flex items-center gap-2 mb-1 text-sm bg-[#0A0E16] border border-[#222630] px-3 py-1.5 rounded-lg"
-                    >
-                      <span className="flex-1 text-steel">{sup ? sup.name : si.inventory_item_id}</span>
-                      <span className="text-gunmetal">
-                        {si.quantity} {sup?.unit || ''}
-                      </span>
-                      {sup && (
-                        <span className="text-forge-teal font-mono text-xs">
-                          ${(price * si.quantity).toFixed(4)}
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => removeSupply(si.inventory_item_id)}
-                        className="text-gunmetal hover:text-red-400 ml-1 transition-colors"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  );
-                })}
-                <div className="flex flex-wrap gap-2 mt-1">
-                  <select
-                    value={supplyToAdd.inventory_item_id}
-                    onChange={(e) =>
-                      setSupplyToAdd({ ...supplyToAdd, inventory_item_id: e.target.value })
-                    }
-                    className="tf-input flex-1"
-                  >
-                    <option value="">Insumo...</option>
-                    {Object.entries(
-                      supplies.reduce((acc, s) => {
-                        const cat = s.category || 'Sin categoría';
-                        (acc[cat] = acc[cat] || []).push(s);
-                        return acc;
-                      }, {})
-                    ).map(([category, items]) => (
-                      <optgroup key={category} label={category}>
-                        {items.map((s) => {
-                          const price = s.price_per_unit ?? s.unit_cost ?? 0;
-                          return (
-                            <option key={s.id} value={s.id}>
-                              {s.name} — ${parseFloat(price).toFixed(4)}/{s.unit}
-                            </option>
-                          );
-                        })}
-                      </optgroup>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    step="1"
-                    min="1"
-                    placeholder="Cant."
-                    value={supplyToAdd.quantity}
-                    onChange={(e) =>
-                      setSupplyToAdd({ ...supplyToAdd, quantity: e.target.value })
-                    }
-                    className="tf-input w-full sm:w-20"
-                  />
-                  <button
-                    type="button"
-                    onClick={addSupply}
-                    className="tf-btn-primary px-3 py-1.5 text-sm"
-                  >
-                    <Plus size={14} /> Añadir
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Consumibles del inventario (desgaste por tiempo de impresión) */}
-          {consumables.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs font-semibold text-gunmetal uppercase tracking-wider">Consumibles</span>
-                <span className="text-xs text-gunmetal">(desgaste por horas)</span>
-                <div className="flex-1 h-px bg-[#222630]" />
-              </div>
-              {selectedConsumables.map((c) => {
-                const printHours = (parseFloat(form.print_time_minutes) || 0) / 60;
-                const wear = printHours > 0
-                  ? (parseFloat(c.unit_cost_cal) / parseFloat(c.useful_life_hours)) * printHours
-                  : null;
-                return (
-                  <div
-                    key={c.id}
-                    className="flex items-center gap-2 mb-1 text-sm bg-[#0A0E16] border border-[#222630] px-3 py-1.5 rounded-lg"
-                  >
-                    <span className="flex-1 text-steel">{c.name}</span>
-                    <span className="text-gunmetal text-xs">{c.useful_life_hours}h vida útil</span>
-                    {wear !== null && (
-                      <span className="text-amber-400 font-mono text-xs">
-                        ${wear.toFixed(4)}
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => removeConsumable(c.id)}
-                      className="text-gunmetal hover:text-red-400 ml-1 transition-colors"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                );
-              })}
-              <div className="flex flex-wrap gap-2 mt-1">
-                <select
-                  value={consumableToAdd}
-                  onChange={(e) => setConsumableToAdd(e.target.value)}
-                  className="tf-input flex-1"
-                >
-                  <option value="">Boquilla...</option>
-                  {consumables
-                    .filter(
-                      (c) =>
-                        matchesAny(c, NOZZLE_PATTERNS) &&
-                        !selectedConsumables.some((sc) => sc.id === c.id),
-                    )
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} — {c.useful_life_hours}h vida útil
-                      </option>
-                    ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={addConsumable}
-                  className="tf-btn-secondary px-3 py-1.5 text-sm"
-                >
-                  <Plus size={14} /> Añadir
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-3 mt-4">
-            <button
-              type="submit"
-              disabled={loading}
-              className="tf-btn-primary flex-1 py-3 text-base"
-            >
-              {loading ? <Loader2 size={20} className="animate-spin" /> : <Calculator size={20} />}
-              {loading ? 'Calculando...' : 'Calcular Costo'}
-            </button>
-            <button
-              type="button"
-              onClick={handleClear}
-              className="tf-btn-ghost px-4 py-3 text-sm"
-              title="Limpiar formulario"
-            >
-              <RotateCcw size={16} />
-              Limpiar
-            </button>
-          </div>
-        </form>
-
-        {/* Panel de resultados */}
-        <div className="space-y-6">
-          {result ? (
-            <div className="tf-card p-6">
-              <h3 className="tf-section-title mb-4">Desglose de Costos</h3>
-              {result.quantity > 1 && (
-                <p className="text-xs text-forge-teal bg-forge-teal/10 border border-forge-teal/20 rounded px-2 py-1 mb-3">
-                  Costos calculados para el trabajo completo ({result.quantity} piezas en la placa)
-                </p>
-              )}
-              <div className="space-y-3">
-                <CostRow label="Material" value={result.material_cost} />
-                <CostRow label="Electricidad" value={result.electricity_cost} />
-                <CostRow label="Depreciación equipo" value={result.depreciation_cost} />
-                <CostRow label="Mano de obra" value={result.labor_cost} />
-                <CostRow label="Absorción de fallos" value={result.failure_cost} />
-                {result.consumables_wear_cost > 0 && (
-                  <CostRow label="Desgaste consumibles" value={result.consumables_wear_cost} />
-                )}
-                {result.supplies_cost > 0 && (
-                  <CostRow label="Insumos adicionales" value={result.supplies_cost} />
-                )}
-                <hr className="tf-hr" />
-                <CostRow label="Subtotal" value={result.subtotal} bold />
-                <CostRow label={`Margen (${result.margin_percent}%)`} value={result.margin_amount} />
-                <hr className="tf-hr" />
-                <CostRow label="Total cotización" value={result.total_price} bold highlight />
-                {result.quantity > 1 && (
-                  <CostRow
-                    label={`Precio por pieza (÷${result.quantity})`}
-                    value={result.total_per_unit}
-                    bold
-                  />
-                )}
-              </div>
-              {result.supplies_detail && result.supplies_detail.length > 0 && (
-                <div className="mt-3 p-3 bg-[#0A0E16] border border-[#2A2F38] rounded-lg">
-                  <p className="text-forge-teal text-xs font-semibold mb-1">Desglose de insumos</p>
-                  {result.supplies_detail.map((sd, i) => (
-                    <div key={i} className="flex justify-between text-xs text-steel mt-0.5">
-                      <span>
-                        {sd.name} × {sd.quantity} {sd.unit}
-                      </span>
-                      <span>$ {sd.subtotal.toFixed(4)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {result.usd_to_cop_rate && (
-                <div className="mt-4 p-3 bg-[#0A2530] border border-forge-teal/20 rounded-lg">
-                  <p className="text-forge-teal text-xs font-semibold mb-1">
-                    Equivalente en Pesos Colombianos
-                  </p>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-steel">Total cotización</span>
-                    <span className="font-bold text-tech-white">
-                      $ {result.total_price_cop?.toLocaleString('es-CO')} COP
-                    </span>
-                  </div>
-                  {result.quantity > 1 && (
-                    <div className="flex justify-between text-sm mt-1">
-                      <span className="text-steel">
-                        Precio por pieza (÷{result.quantity})
-                      </span>
-                      <span className="font-bold text-tech-white">
-                        $ {result.total_per_unit_cop?.toLocaleString('es-CO')} COP
-                      </span>
-                    </div>
-                  )}
-                  <p className="text-gunmetal text-xs mt-2">
-                    Tasa usada: 1 USD = {result.usd_to_cop_rate?.toLocaleString('es-CO')} COP
-                  </p>
-                </div>
-              )}
-              <p className="text-xs text-gunmetal mt-4">* Precios sin IVA</p>
-
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="tf-btn-primary w-full py-3 text-base mt-4"
-              >
-                {saving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
-                {saving ? 'Guardando...' : 'Guardar costo de impresión'}
-              </button>
-            </div>
-          ) : (
-            <div className="tf-card p-12 text-center">
-              <Calculator size={48} className="mx-auto mb-4 text-gunmetal opacity-30" />
-              <p className="text-gunmetal">
-                Completa el formulario y presiona "Calcular Costo"
-              </p>
-            </div>
-          )}
+          <button
+            type="button"
+            onClick={() => setBreakdownOpen(true)}
+            disabled={!result}
+            className="px-3 py-2 rounded-md border border-[var(--color-border-strong)] text-steel text-[11px] disabled:opacity-50"
+          >
+            Desglose
+          </button>
+          <button
+            type="button"
+            onClick={onReprint}
+            disabled={!result}
+            className="px-3 py-2 rounded-md text-[11px] font-medium disabled:opacity-50"
+            style={{
+              background: form.mode === 'reprint' ? `color-mix(in oklab, ${REPRINT_TONE} 16%, transparent)` : 'var(--color-surf-card-2)',
+              border: `1px solid ${form.mode === 'reprint' ? `color-mix(in oklab, ${REPRINT_TONE} 40%, transparent)` : 'var(--color-border-strong)'}`,
+              color: form.mode === 'reprint' ? REPRINT_TONE : 'var(--color-steel)',
+            }}
+          >
+            <RotateCcw size={11} className="inline-block mr-1" />
+            +15%
+          </button>
+          <button
+            type="button"
+            onClick={onGenerateQuote}
+            disabled={!result || savingQuote}
+            className="px-3 py-2 rounded-md text-[11.5px] font-semibold disabled:opacity-50"
+            style={{ background: ACCENT, color: '#0A1014' }}
+          >
+            {savingQuote ? '…' : <Save size={12} className="inline-block mr-1" />}
+            Guardar
+          </button>
         </div>
+        <MobileSheet open={breakdownOpen} onClose={() => setBreakdownOpen(false)} title="Desglose">
+          <CalcBreakdown result={result} form={form} exchangeRate={result?.usd_to_cop_rate} />
+        </MobileSheet>
+        <StaleTariffModal
+          open={staleModalOpen}
+          onClose={() => setStaleModalOpen(false)}
+          tariffPeriod={tariffPeriod}
+          currentRate={tariffRateCOP}
+        />
       </div>
-    </div>
-  );
-}
+    );
+  }
 
-/**
- * Componente auxiliar que renderiza una fila del desglose de costos.
- * Muestra una etiqueta a la izquierda y un valor monetario a la derecha.
- *
- * @param {Object} props
- * @param {string} props.label - Texto descriptivo del concepto de costo
- * @param {number} props.value - Valor numerico del costo a mostrar
- * @param {boolean} [props.bold] - Si es true, aplica estilo en negrita
- * @param {boolean} [props.highlight] - Si es true, destaca la fila con fondo verde (usado para el total)
- * @returns {JSX.Element} Fila con etiqueta y valor formateado como moneda
- */
-function CostRow({ label, value, bold, highlight }) {
+  // ── Desktop shell ────────────────────────────────────────────────────────
   return (
-    <div
-      className={`tf-cost-row ${highlight ? 'bg-forge-teal/10 -mx-2 px-2 py-2 rounded-lg' : ''}`}
-    >
-      <span className={bold ? 'font-semibold text-tech-white' : 'text-steel'}>{label}</span>
-      <span
-        className={`${bold ? 'font-bold' : ''} ${
-          highlight ? 'text-forge-teal text-xl' : 'text-tech-white'
-        }`}
+    <div className="flex flex-col min-h-screen bg-forge-black">
+      <CalcHeader isStale={isStale} onOpenStaleModal={() => setStaleModalOpen(true)} />
+      <div
+        className="flex-1 min-h-0 grid"
+        style={{ gridTemplateColumns: 'minmax(420px, 1.2fr) minmax(320px, 1fr) minmax(320px, 1fr)' }}
       >
-        $ {value.toFixed(2)}
-      </span>
+        <CalcForm form={form} setField={setField} filaments={filaments} printers={printers} errors={errors} />
+        <CalcResult
+          result={result}
+          form={form}
+          calcLoading={calcLoading}
+          calcError={calcError}
+          onReprint={onReprint}
+          onGenerateQuote={onGenerateQuote}
+          savingQuote={savingQuote}
+        />
+        <CalcBreakdown result={result} form={form} exchangeRate={result?.usd_to_cop_rate} />
+      </div>
+      <StaleTariffModal
+        open={staleModalOpen}
+        onClose={() => setStaleModalOpen(false)}
+        tariffPeriod={tariffPeriod}
+        currentRate={tariffRateCOP}
+      />
     </div>
   );
 }
