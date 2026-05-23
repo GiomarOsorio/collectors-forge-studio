@@ -634,7 +634,7 @@ function FilamentMappingDialog({ open, onClose, job, onConfirm }) {
 
   // Slots = filaments del primer plate (si multi-plate, requiere selección).
   // Caso single-plate: el array filaments del plate 0 es el set completo.
-  const plate0 = (job?.plates || [])[0];
+  const plate0 = (job?.plates_data || [])[0];
   const slots = Array.isArray(plate0?.filaments) && plate0.filaments.length > 0
     ? plate0.filaments
     : (job?.filament_type
@@ -805,23 +805,12 @@ function JobDrawerFooter({ job, onDelete, onClose }) {
   const navigate = useNavigate();
   const [mappingOpen, setMappingOpen] = useState(false);
   if (!job) return null;
-  const hasMultipleSlots = (job.plates?.[0]?.filaments?.length || 0) > 1;
-  // Issue #74: si hay multi-material o el user quiere mapear, abrir el dialog.
-  // Si el job es single sin filaments definidos, fallback al flujo legacy
-  // (solo weight + time + type heurístico).
-  const useInCalculator = () => {
-    if (hasMultipleSlots || (job.plates?.[0]?.filaments?.length || 0) > 0) {
-      setMappingOpen(true);
-      return;
-    }
-    const w = job.filament_weight_g;
-    const t = (job.print_time_seconds || 0) / 3600;
-    const params = new URLSearchParams();
-    if (w) params.set('weight_grams', String(w));
-    if (t) params.set('print_time_hours', String(t));
-    if (job.filament_type) params.set('filament_type', job.filament_type);
-    navigate(`/cost/calculator?${params.toString()}`);
-  };
+  // Issue #74 — SIEMPRE abrir dialog para que user pueda mapear cualquier
+  // filamento del slicer a uno específico del inventario. Para
+  // single-filament sin slots definidos el dialog muestra 1 slot
+  // sintético basado en job.filament_type + job.filament_weight_g, lo que
+  // sigue permitiendo elegir el filamento real (ej. "PLA" → "PLA Negro").
+  const useInCalculator = () => setMappingOpen(true);
   return (
     <>
       <Button variant="primary" icon={Calculator} onClick={useInCalculator} className="flex-1 justify-center">
