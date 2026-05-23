@@ -58,6 +58,10 @@ class ClientQuote(Base):
     include_iva: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     iva_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, server_default=text("19.00"))
 
+    # Costo de envío en COP (siempre moneda canónica). Default 0.
+    # Se suma al subtotal antes del cálculo de IVA. Ver design v2.
+    shipping_cop: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, server_default=text("0"))
+
     # Notas opcionales
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 

@@ -393,16 +393,28 @@ def _build_cot_context(
         })
 
     subtotal_val = float(client_quote.subtotal) * usd_rate
+    # shipping_cop defensivo: None (legacy), Decimal real, o MagicMock (tests
+    # sin attr setup). MagicMock.__float__ retorna 1.0 por default → corrompe
+    # cálculos. Solo aceptamos tipos numéricos reales.
+    raw_shipping = getattr(client_quote, "shipping_cop", None)
+    if isinstance(raw_shipping, (int, float, Decimal)) and not isinstance(raw_shipping, bool):
+        try:
+            shipping_val = float(raw_shipping)
+        except (TypeError, ValueError):
+            shipping_val = 0.0
+    else:
+        shipping_val = 0.0
+    base_total = subtotal_val + shipping_val
     include_iva  = bool(getattr(client_quote, "include_iva", False))
     iva_percent  = float(getattr(client_quote, "iva_percent", Decimal("19.00")))
 
     if include_iva:
-        iva_amount = subtotal_val * iva_percent / 100
+        iva_amount = base_total * iva_percent / 100
         iva_str    = _fmt_cop(iva_amount)
-        total_val  = subtotal_val + iva_amount
+        total_val  = base_total + iva_amount
     else:
         iva_str   = "No Aplica"
-        total_val = subtotal_val
+        total_val = base_total
 
     palette_dict, colors_list = _build_palette(company)
 
@@ -427,6 +439,8 @@ def _build_cot_context(
         "notes":          client_quote.notes or "",
         "items":          items_ctx,
         "subtotal_fmt":   _fmt_cop(subtotal_val),
+        "shipping_fmt":   _fmt_cop(shipping_val) if shipping_val else "",
+        "shipping_cop":   shipping_val,
         "iva_str":        iva_str,
         "total_fmt":      _fmt_cop(total_val),
         "include_iva":    include_iva,
