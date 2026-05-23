@@ -586,17 +586,19 @@ def generate_client_quote_pdf(
     R1 = cols[2]
     R2 = cols[3]
     subtotal_val = float(client_quote.subtotal) * usd_rate
+    shipping_val = float(getattr(client_quote, "shipping_cop", 0) or 0)
+    base_total = subtotal_val + shipping_val
     include_iva  = bool(getattr(client_quote, "include_iva", False))
     iva_percent  = float(getattr(client_quote, "iva_percent", Decimal("19.00")))
 
     if include_iva:
-        iva_amount = subtotal_val * iva_percent / 100
+        iva_amount = base_total * iva_percent / 100
         iva_str    = _fmt_cop(iva_amount)
-        total_val  = subtotal_val + iva_amount
+        total_val  = base_total + iva_amount
         total_str  = _fmt_cop(total_val)
     else:
         iva_str   = "No Aplica"
-        total_str = _fmt_cop(subtotal_val)
+        total_str = _fmt_cop(base_total)
 
     elements.append(_build_totals(L, R1, R2, _fmt_cop(subtotal_val), st, iva_str, total_str, c))
     elements.append(Spacer(1, 24))

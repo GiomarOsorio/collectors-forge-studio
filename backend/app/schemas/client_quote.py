@@ -56,6 +56,7 @@ class ClientQuoteCreate(BaseModel):
     items: List[ClientQuoteLineItem] = Field(min_length=1)
     include_iva: bool = False
     iva_percent: DecimalAsFloat = Field(default=Decimal("19.00"), ge=0, le=100)
+    shipping_cop: DecimalAsFloat = Field(default=Decimal("0"), ge=0)
     notes: Optional[str] = None
 
     @model_validator(mode="after")
@@ -94,6 +95,7 @@ class ClientQuoteResponse(BaseModel):
     subtotal: DecimalAsFloat
     include_iva: bool
     iva_percent: DecimalAsFloat
+    shipping_cop: DecimalAsFloat = Decimal("0")
     notes: Optional[str]
     created_at: datetime
     updated_at: Optional[datetime] = None
