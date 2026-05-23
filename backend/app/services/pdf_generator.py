@@ -586,7 +586,13 @@ def generate_client_quote_pdf(
     R1 = cols[2]
     R2 = cols[3]
     subtotal_val = float(client_quote.subtotal) * usd_rate
-    shipping_val = float(getattr(client_quote, "shipping_cop", 0) or 0)
+    # shipping_cop puede ser None (migración pendiente en pruebas) o MagicMock
+    # en tests legacy — convertir defensivamente.
+    raw_shipping = getattr(client_quote, "shipping_cop", None)
+    try:
+        shipping_val = float(raw_shipping) if raw_shipping is not None else 0.0
+    except (TypeError, ValueError):
+        shipping_val = 0.0
     base_total = subtotal_val + shipping_val
     include_iva  = bool(getattr(client_quote, "include_iva", False))
     iva_percent  = float(getattr(client_quote, "iva_percent", Decimal("19.00")))
