@@ -39,6 +39,7 @@ import {
   Scissors,
   Search,
   ShoppingCart,
+  Trash2,
   Truck,
   TrendingUp,
   Upload,
@@ -58,10 +59,12 @@ import {
   Swatch,
 } from '../../components/ui';
 import MobileAppHeader from '../../components/MobileAppHeader';
+import { useConfirm } from '../../components/ConfirmDialog';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import {
   arrivePurchaseOrder,
   createInventoryItem,
+  deleteInventoryItem,
   createPurchaseOrder,
   getInventoryItems,
   getPurchaseOrders,
@@ -504,7 +507,7 @@ function FilamentTable({ items, onRowClick }) {
 
 // ─── Drawer body ─────────────────────────────────────────────────────────────
 
-function FilamentDrawerBody({ f, onReassign, onAddToPurchase }) {
+function FilamentDrawerBody({ f, onReassign, onAddToPurchase, onDelete }) {
   if (!f) return null;
   const level = stockLevel(f);
   const p = fillPercent(f);
@@ -617,6 +620,17 @@ function FilamentDrawerBody({ f, onReassign, onAddToPurchase }) {
         >
           <RefreshCw size={13} /> Reasignar batch
         </button>
+        {onDelete && (
+          <button
+            type="button"
+            onClick={() => onDelete(f)}
+            className="btn btn-sm justify-center text-rose-400 border border-rose-400/30 hover:bg-rose-400/10"
+            title="Eliminar filamento"
+            aria-label="Eliminar filamento"
+          >
+            <Trash2 size={13} />
+          </button>
+        )}
       </div>
 
       {/* Historial reciente — placeholder hasta endpoint real (quotes/queue) */}
@@ -801,7 +815,7 @@ function InventoryItemRow({ item, onClick }) {
   );
 }
 
-function InventoryItemDrawerBody({ item }) {
+function InventoryItemDrawerBody({ item, onDelete }) {
   if (!item) return null;
   const meta = categoryMeta(item.category);
   const Icon = meta.icon;
@@ -891,6 +905,18 @@ function InventoryItemDrawerBody({ item }) {
 
       {/* "Editar en vista clásica" eliminado — ahora la edición vive en el
           ItemFormDrawer accesible vía el ícono Pencil del header del view drawer. */}
+
+      {onDelete && (
+        <div className="flex gap-2 pt-2 border-t border-[var(--color-border-soft)]">
+          <button
+            type="button"
+            onClick={() => onDelete(item)}
+            className="btn btn-sm justify-center w-full text-rose-400 border border-rose-400/30 hover:bg-rose-400/10"
+          >
+            <Trash2 size={13} /> Eliminar {meta.label.toLowerCase()}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -2700,6 +2726,7 @@ function PurchaseOrderFormDrawer({ open, onClose, mode = 'create', initial, onSa
 export default function InventoryPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const confirm = useConfirm();
   // El AppLayout expone `openSidebar` para que el header mobile pueda
   // abrir el drawer (replica el `onMenu` del design).
   const { openSidebar } = useOutletContext() || {};
@@ -2776,6 +2803,44 @@ export default function InventoryPage() {
       cancelled = true;
     };
   }, []);
+
+  /**
+   * Eliminar un item de inventario (filamento, insumo, herramienta, consumible).
+   * Backend `DELETE /api/inventory/items/{id}`. Cierra el drawer + actualiza
+   * el estado local sin re-fetch completo. Issue #80.
+   *
+   * @param {{ id: number, name?: string, colorName?: string, category?: string }} item
+   * @param {'filament' | 'item'} kind - cuál slot del estado actualizar
+   */
+  const handleDeleteItem = async (item, kind) => {
+    if (!item?.id) return;
+    const label = item.colorName || item.name || `#${item.id}`;
+    const ok = await confirm(`¿Eliminar "${label}"? Esta acción no se puede deshacer.`, 'Eliminar');
+    if (!ok) return;
+    try {
+      await deleteInventoryItem(item.id);
+      // Quitar del estado local
+      if (kind === 'filament') {
+        setFilaments((cur) => cur.filter((f) => f.id !== item.id));
+        setFilamentsRawById((cur) => {
+          const next = { ...cur };
+          delete next[item.id];
+          return next;
+        });
+        setSelected(null);
+      } else {
+        const cat = item.category;
+        if (cat === 'Insumo') setSupplies((cur) => cur.filter((i) => i.id !== item.id));
+        else if (cat === 'Herramienta') setTools((cur) => cur.filter((i) => i.id !== item.id));
+        else if (cat === 'Consumible') setConsumables((cur) => cur.filter((i) => i.id !== item.id));
+        setSelectedItem(null);
+      }
+      toast.success(`"${label}" eliminado`);
+    } catch (err) {
+      const detail = err?.response?.data?.detail;
+      toast.error(detail || 'No se pudo eliminar el item');
+    }
+  };
 
   // Filtrado + sorting de filamentos
   const filteredFilaments = useMemo(() => {
@@ -3174,6 +3239,7 @@ export default function InventoryPage() {
               setSelected(null);
               setTab('compras');
             }}
+            onDelete={(filament) => handleDeleteItem(filament, 'filament')}
           />
         </MobileSheet>
         <MobileSheet
@@ -3192,7 +3258,7 @@ export default function InventoryPage() {
               : undefined
           }
         >
-          <InventoryItemDrawerBody item={selectedItem} />
+          <InventoryItemDrawerBody item={selectedItem} onDelete={(it) => handleDeleteItem(it, 'item')} />
         </MobileSheet>
         <MobileSheet
           open={!!selectedPurchase}
@@ -3648,6 +3714,7 @@ export default function InventoryPage() {
             setSelected(null);
             setTab('compras');
           }}
+          onDelete={(filament) => handleDeleteItem(filament, 'filament')}
         />
       </DetailDrawer>
       <DetailDrawer
@@ -3666,7 +3733,7 @@ export default function InventoryPage() {
             : undefined
         }
       >
-        <InventoryItemDrawerBody item={selectedItem} />
+        <InventoryItemDrawerBody item={selectedItem} onDelete={(it) => handleDeleteItem(it, 'item')} />
       </DetailDrawer>
       <DetailDrawer
         open={!!selectedPurchase}
