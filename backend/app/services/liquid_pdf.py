@@ -393,11 +393,16 @@ def _build_cot_context(
         })
 
     subtotal_val = float(client_quote.subtotal) * usd_rate
-    # shipping_cop defensivo: None (legacy) o MagicMock (tests sin attr setup)
+    # shipping_cop defensivo: None (legacy), Decimal real, o MagicMock (tests
+    # sin attr setup). MagicMock.__float__ retorna 1.0 por default → corrompe
+    # cálculos. Solo aceptamos tipos numéricos reales.
     raw_shipping = getattr(client_quote, "shipping_cop", None)
-    try:
-        shipping_val = float(raw_shipping) if raw_shipping is not None else 0.0
-    except (TypeError, ValueError):
+    if isinstance(raw_shipping, (int, float, Decimal)) and not isinstance(raw_shipping, bool):
+        try:
+            shipping_val = float(raw_shipping)
+        except (TypeError, ValueError):
+            shipping_val = 0.0
+    else:
         shipping_val = 0.0
     base_total = subtotal_val + shipping_val
     include_iva  = bool(getattr(client_quote, "include_iva", False))
