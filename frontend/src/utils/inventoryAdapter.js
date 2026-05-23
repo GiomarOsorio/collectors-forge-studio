@@ -30,6 +30,7 @@ export function mapToFilament(item) {
     rawId: `ITEM-${String(item.id).padStart(4, '0')}`,
     name: item.name,
     material: materialId,
+    subtype: item.filament_subtype || '',
     vendor: item.filament_brand || '—',
     batch: item.batch || '',
     color: normalizeHex(item.color_hex),

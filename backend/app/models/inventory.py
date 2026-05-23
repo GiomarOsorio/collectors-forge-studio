@@ -80,6 +80,8 @@ class InventoryItem(Base):
     price_per_kg: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 4), nullable=True)
     filament_brand: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     filament_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)   # PLA, PETG, ABS...
+    # Subtipo dentro del material: Silk, Matte, Basic, CF, 95A, Wood... Issue #59.
+    filament_subtype: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     filament_color: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     # Campos visuales agregados con la UI inspirada en Claude Design.
     # `batch`: código de lote del proveedor (ej. "A-2611").

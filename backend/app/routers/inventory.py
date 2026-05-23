@@ -138,6 +138,7 @@ async def create_inventory_item(
         price_per_kg=data.price_per_kg,
         filament_brand=data.filament_brand,
         filament_type=data.filament_type,
+        filament_subtype=data.filament_subtype,
         filament_color=data.filament_color,
         # Campos visuales (Claude Design)
         batch=data.batch,

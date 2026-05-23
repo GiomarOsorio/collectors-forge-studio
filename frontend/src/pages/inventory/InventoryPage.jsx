@@ -339,21 +339,34 @@ function lastUsedFromDate(iso) {
 function FilamentCard({ f, onClick }) {
   const level = stockLevel(f);
   const p = fillPercent(f);
+  // Issue #59: cuando el filamento está crítico, borde amarillo en TODO
+  // el card (mismo patrón visual del círculo del swatch). El nivel BAJO
+  // recibe acento más suave para diferenciar visualmente del CRÍTICO.
+  const criticalBorder = level === 'critical'
+    ? 'ring-1 ring-amber-400/60 border-amber-400/40'
+    : level === 'low'
+      ? 'ring-1 ring-amber-400/25 border-amber-400/25'
+      : '';
   return (
     <Card
       as="button"
       interactive
       onClick={() => onClick(f)}
-      className="relative flex flex-col gap-3 p-3.5 text-left w-full"
+      className={`relative flex flex-col gap-3 p-3.5 text-left w-full ${criticalBorder}`}
     >
       {/* Top: swatch + meta */}
       <div className="flex gap-3 items-start">
         <Swatch color={f.color} size={48} level={level} />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 mb-0.5">
+          <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
             <span className="mono text-[9.5px] px-1.5 py-px rounded-sm bg-white/5 border border-[var(--color-border)] text-steel tracking-wider">
               {f.material}
             </span>
+            {f.subtype && (
+              <span className="mono text-[9.5px] px-1.5 py-px rounded-sm bg-white/5 border border-[var(--color-border-soft)] text-gunmetal tracking-wider">
+                {f.subtype}
+              </span>
+            )}
             {level !== 'ok' && (
               <span className="mono inline-flex items-center gap-0.5 text-[9.5px] px-1.5 py-px rounded-sm bg-amber-400/10 border border-amber-400/30 text-amber-400 tracking-wider">
                 <AlertTriangle size={9} />
@@ -527,10 +540,15 @@ function FilamentDrawerBody({ f, onReassign, onAddToPurchase, onDelete }) {
       <div className="flex items-center gap-3.5">
         <Swatch color={f.color} size={64} level={level} />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 mb-1">
+          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
             <span className="mono text-[10px] px-1.5 py-0.5 rounded-sm bg-white/5 border border-[var(--color-border)] text-steel tracking-wider">
               {f.material}
             </span>
+            {f.subtype && (
+              <span className="mono text-[10px] px-1.5 py-0.5 rounded-sm bg-white/5 border border-[var(--color-border-soft)] text-gunmetal tracking-wider">
+                {f.subtype}
+              </span>
+            )}
             {level !== 'ok' && (
               <span className={`mono inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm bg-amber-400/10 border border-amber-400/30 text-amber-400 tracking-wider ${level === 'critical' ? 'pulse-soft' : ''}`}>
                 <AlertTriangle size={10} />
@@ -1523,6 +1541,7 @@ function emptyFilamentForm() {
     color_name: '',
     color_hex: '#3B82F6',
     filament_type: 'PLA',
+    filament_subtype: '',
     filament_brand: '',
     batch: '',
     weight_per_roll: 1000,
@@ -1552,6 +1571,7 @@ function filamentToForm(raw) {
     color_name: raw?.color_name || '',
     color_hex: raw?.color_hex || '#3B82F6',
     filament_type: raw?.filament_type || 'PLA',
+    filament_subtype: raw?.filament_subtype || '',
     filament_brand: raw?.filament_brand || '',
     batch: raw?.batch || '',
     weight_per_roll: Number(raw?.weight_per_roll) || 1000,
@@ -1640,6 +1660,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
         quantity: Number(form.quantity),
         weight_per_roll: Number(form.weight_per_roll),
         filament_type: form.filament_type,
+        filament_subtype: form.filament_subtype.trim() || null,
         filament_brand: form.filament_brand.trim() || null,
         batch: form.batch.trim() || null,
         color_name: form.color_name.trim(),
@@ -1709,6 +1730,26 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
               <option key={m.id} value={m.id}>{m.name}</option>
             ))}
           </select>
+        </FormFieldRow>
+        <FormFieldRow label="Subtipo" hint="Silk, Matte, Basic, CF, 95A…">
+          <input
+            value={form.filament_subtype}
+            onChange={(e) => update('filament_subtype', e.target.value)}
+            placeholder="ej. Silk"
+            list="filament-subtypes"
+            className={FORM_INPUT_CLS}
+          />
+          <datalist id="filament-subtypes">
+            <option value="Basic" />
+            <option value="Silk" />
+            <option value="Matte" />
+            <option value="Wood" />
+            <option value="Glow" />
+            <option value="CF" />
+            <option value="Translucent" />
+            <option value="95A" />
+            <option value="85A" />
+          </datalist>
         </FormFieldRow>
         <FormFieldRow label="Color (hex)">
           <div className="flex items-center gap-2">

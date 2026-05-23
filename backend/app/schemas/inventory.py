@@ -55,6 +55,7 @@ class InventoryItemCreate(BaseModel):
     price_per_kg: Optional[Decimal] = None
     filament_brand: Optional[str] = Field(default=None, max_length=100)
     filament_type: Optional[str] = Field(default=None, max_length=50)
+    filament_subtype: Optional[str] = Field(default=None, max_length=50)
     filament_color: Optional[str] = Field(default=None, max_length=50)
     # Campos visuales agregados con la UI inspirada en Claude Design
     batch: Optional[str] = Field(default=None, max_length=50)
@@ -108,6 +109,7 @@ class InventoryItemUpdate(BaseModel):
     price_per_kg: Optional[Decimal] = None
     filament_brand: Optional[str] = Field(default=None, max_length=100)
     filament_type: Optional[str] = Field(default=None, max_length=50)
+    filament_subtype: Optional[str] = Field(default=None, max_length=50)
     filament_color: Optional[str] = Field(default=None, max_length=50)
     # Campos visuales agregados con la UI inspirada en Claude Design
     batch: Optional[str] = Field(default=None, max_length=50)
@@ -167,6 +169,7 @@ class InventoryItemResponse(BaseModel):
     price_per_kg: Optional[DecimalAsFloat] = None
     filament_brand: Optional[str] = None
     filament_type: Optional[str] = None
+    filament_subtype: Optional[str] = None
     filament_color: Optional[str] = None
     # Campos visuales agregados con la UI inspirada en Claude Design
     batch: Optional[str] = None
@@ -243,6 +246,7 @@ class InventoryItemExport(BaseModel):
     price_per_kg: Optional[DecimalAsFloat] = None
     filament_brand: Optional[str] = None
     filament_type: Optional[str] = None
+    filament_subtype: Optional[str] = None
     filament_color: Optional[str] = None
     batch: Optional[str] = None
     location: Optional[str] = None
