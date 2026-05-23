@@ -15,6 +15,7 @@
 
 import { Suspense, useState } from 'react';
 import { Outlet } from 'react-router-dom';
+import { Menu } from 'lucide-react';
 import Breadcrumb from './Breadcrumb';
 import MobileBottomNav from './MobileBottomNav';
 import StudioSidebar from './StudioSidebar';
@@ -47,10 +48,24 @@ export default function AppLayout() {
   if (isMobile) {
     return (
       <div className="min-h-screen bg-forge-black flex flex-col">
-        {/* Sidebar como drawer mobile — solo abre cuando la página dispara
-            el botón menú vía useOutletContext().openSidebar(). */}
+        {/* Sidebar como drawer mobile — abre via FAB hamburger global o
+            desde el botón menú de páginas que lo dispararon ellas mismas. */}
         <StudioSidebar open={sidebarOpen} onClose={closeSidebar} />
-        <main className="flex-1 overflow-y-auto overflow-x-hidden pb-20">
+
+        {/* Issue #53 — hamburger global flotante, garantiza acceso al menú
+            en TODAS las pages (incluyendo las V1 que no proveen su propio
+            MobileAppHeader). Posición fija top-left con padding seguro
+            sobre el contenido. */}
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(true)}
+          aria-label="Abrir menú"
+          className="fixed top-3 left-3 z-40 w-10 h-10 rounded-lg inline-flex items-center justify-center bg-[var(--color-surf-card)]/95 backdrop-blur border border-[var(--color-border-strong)] text-tech-white shadow-lg hover:bg-[var(--color-surf-hover)] transition-colors"
+        >
+          <Menu size={18} />
+        </button>
+
+        <main className="flex-1 overflow-y-auto overflow-x-hidden pb-20 pt-2 px-3">
           <Suspense fallback={<PageFallback />}>
             <Outlet context={outletContext} />
           </Suspense>
