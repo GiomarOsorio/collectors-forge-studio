@@ -1,0 +1,48 @@
+{
+  "common": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "create": "Crear",
+    "loading": "Cargando…",
+    "search": "Buscar",
+    "filter": "Filtrar",
+    "back": "Volver",
+    "close": "Cerrar",
+    "confirm": "Confirmar",
+    "yes": "Sí",
+    "no": "No",
+    "required": "Requerido",
+    "optional": "Opcional"
+  },
+  "nav": {
+    "home": "Inicio",
+    "cost": "Cost",
+    "inventory": "Inventario",
+    "slicer": "Slicer",
+    "queue": "Cola",
+    "maintenance": "Mantenimiento",
+    "vault": "Vault",
+    "company": "Compañía",
+    "settings": "Configuración"
+  },
+  "settings": {
+    "title": "Configuración",
+    "tabs": {
+      "account": "Cuenta",
+      "users": "Usuarios",
+      "language": "Idioma"
+    },
+    "language": {
+      "title": "Idioma de la interfaz",
+      "description": "Elige el idioma de los textos de la aplicación. Se aplica al instante.",
+      "current": "Idioma actual"
+    }
+  },
+  "auth": {
+    "logout": "Cerrar sesión",
+    "login": "Iniciar sesión",
+    "bypassDev": "Bypass dev (solo desarrollo local)"
+  }
+}
