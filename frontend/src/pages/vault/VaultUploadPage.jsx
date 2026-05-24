@@ -18,7 +18,7 @@
  * @module pages/vault/VaultUploadPage
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -164,7 +164,9 @@ export default function VaultUploadPage() {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [done, setDone] = useState(false);
-  const lastUpload = useRef(null);
+  // `lastUpload` se renderiza en la success view, por eso va como state
+  // (no ref): los refs no deben leerse durante render — react-hooks/refs.
+  const [lastUpload, setLastUpload] = useState(null);
 
   // En edit-mode, cargar el modelo existente y pre-llenar el formulario.
   useEffect(() => {
@@ -334,7 +336,7 @@ export default function VaultUploadPage() {
           latest = r.data;
         }
 
-        lastUpload.current = latest;
+        setLastUpload(latest);
         setDone(true);
         toast.success('Modelo actualizado');
       } else {
@@ -347,7 +349,7 @@ export default function VaultUploadPage() {
         const res = await uploadVaultFile(formData, (evt) => {
           if (evt.total) setProgress(Math.round((evt.loaded / evt.total) * 100));
         });
-        lastUpload.current = res.data;
+        setLastUpload(res.data);
         setDone(true);
         toast.success('Modelo subido correctamente');
       }
@@ -384,12 +386,12 @@ export default function VaultUploadPage() {
     setUrlInput('');
     setProgress(0);
     setDone(false);
-    lastUpload.current = null;
+    setLastUpload(null);
   };
 
   // ── Success view (compartida mobile + desktop) ───────────────────────────
   if (done) {
-    const uploaded = lastUpload.current;
+    const uploaded = lastUpload;
     return (
       <div className="flex flex-col min-h-screen -m-4 md:-m-6 xl:-m-8">
         {isMobile && (
