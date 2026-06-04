@@ -37,6 +37,10 @@ export default defineConfig({
       '@dnd-kit/sortable': path.resolve(__dirname, 'node_modules/@dnd-kit/sortable/dist/index.js'),
       '@dnd-kit/utilities': path.resolve(__dirname, 'node_modules/@dnd-kit/utilities/dist/index.js'),
       '@dnd-kit/accessibility': path.resolve(__dirname, 'node_modules/@dnd-kit/accessibility/dist/index.js'),
+      // void-elements CJS sin exports field; html-parse-stringify (dep de
+      // react-i18next) lo importa desde su ESM bundle — Rollup 7 no lo
+      // resuelve sin alias explícito (mismo patrón que @dnd-kit).
+      'void-elements': path.resolve(__dirname, 'node_modules/void-elements/index.js'),
     },
   },
   server: {
@@ -68,7 +72,7 @@ export default defineConfig({
   },
   // Pre-bundle @dnd-kit en dev también — defensivo, mantiene paridad.
   optimizeDeps: {
-    include: ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
+    include: ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities', 'void-elements'],
   },
   test: {
     environment: 'jsdom',
