@@ -556,7 +556,11 @@ async def upload_vault_file(
     )
     db.add(model)
     await db.commit()
-    await db.refresh(model)
+    # Re-fetch con selectinload para evitar lazy load en async session (MissingGreenlet).
+    result = await db.execute(
+        select(ModelFile).options(selectinload(ModelFile.plates)).where(ModelFile.id == model.id)
+    )
+    model = result.scalar_one()
 
     # Issue #68 — persistir TODOS los plates del print_file. Sincroniza
     # `sliced_*` + `thumbnail_key` desde el plate activo (default 0) y
@@ -578,7 +582,10 @@ async def upload_vault_file(
                 logger.warning("No se pudo guardar thumbnail source de %s: %s", model.id, exc)
 
     await db.commit()
-    await db.refresh(model)
+    result = await db.execute(
+        select(ModelFile).options(selectinload(ModelFile.plates)).where(ModelFile.id == model.id)
+    )
+    model = result.scalar_one()
     return _to_response(model, current_user.username)
 
 
