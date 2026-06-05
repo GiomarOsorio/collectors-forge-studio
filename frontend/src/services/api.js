@@ -463,6 +463,13 @@ export const getElectricityTariff = () => api.get('/settings/electricity-tariff'
  */
 export const getElectricityTariffs = () => api.get('/settings/electricity-tariffs');
 
+/**
+ * Fuerza un re-scrape inmediato de la tarifa EPM ignorando el caché de 24h (solo admin).
+ *
+ * @returns {Promise<import('axios').AxiosResponse>} Respuesta con available y datos actualizados
+ */
+export const refreshElectricityTariff = () => api.post('/settings/electricity-tariff/refresh');
+
 // ============================================================================
 // Inventario - Ítems de stock
 // ============================================================================

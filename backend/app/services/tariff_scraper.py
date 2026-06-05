@@ -40,17 +40,20 @@ _cache: Optional[Dict] = None
 _CACHE_TTL = 86400  # 24 horas
 
 
-async def get_epm_estrato4_tariff() -> Optional[Dict]:
+async def get_epm_estrato4_tariff(force: bool = False) -> Optional[Dict]:
     """
     Obtiene las tarifas de electricidad EPM para todos los estratos con factor ×2.
 
     Flujo de ejecución:
-    1. Devuelve el caché si tiene menos de 24 horas.
+    1. Devuelve el caché si tiene menos de 24 horas (salvo force=True).
     2. Scraping de la página EPM para encontrar el PDF del mes más reciente.
     3. Descarga y parsea el PDF con pdfplumber.
     4. Extrae las tarifas de los 6 estratos residenciales en COP/kWh.
     5. Aplica el multiplicador ×2 a cada una.
     6. Convierte a USD/kWh usando la tasa de cambio actual.
+
+    Args:
+        force: Si True, ignora el caché y hace scraping inmediato.
 
     Returns:
         dict con las claves:
@@ -67,8 +70,8 @@ async def get_epm_estrato4_tariff() -> Optional[Dict]:
     """
     global _cache
 
-    # Devolver caché si está vigente
-    if _cache is not None and time.time() - _cache["ts"] < _CACHE_TTL:
+    # Devolver caché si está vigente (a menos que se pida forzar actualización)
+    if not force and _cache is not None and time.time() - _cache["ts"] < _CACHE_TTL:
         return _cache["data"]
 
     try:
