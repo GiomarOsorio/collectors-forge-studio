@@ -16,9 +16,9 @@
  */
 
 import { useState, useEffect } from 'react';
-import { getSettings, updateSettings, getExchangeRate, getElectricityTariff, getElectricityTariffs, updateSettings as applySettings } from '../services/api';
+import { getSettings, updateSettings, getExchangeRate, getElectricityTariff, getElectricityTariffs, updateSettings as applySettings, refreshElectricityTariff } from '../services/api';
 import toast from 'react-hot-toast';
-import { Save, Zap, AlertTriangle } from 'lucide-react';
+import { Save, Zap, AlertTriangle, RefreshCw } from 'lucide-react';
 
 /**
  * Formatea una fecha ISO como "hace X días/horas" en español.
@@ -77,6 +77,8 @@ export default function SettingsPage() {
    * @type {[number, Function]}
    */
   const [selectedMonthIdx, setSelectedMonthIdx] = useState(0);
+  /** @type {[boolean, Function]} Loading del botón de actualización manual EPM */
+  const [refreshing, setRefreshing] = useState(false);
 
   // Carga en paralelo: configuracion, tasa USD/COP, tarifa EPM actual y historial de tarifas.
   useEffect(() => {
@@ -117,6 +119,29 @@ export default function SettingsPage() {
       toast.success(`Tarifa EPM ${source.month_label} · Estrato ${selectedEstrato} aplicada: ${newRate} USD/kWh`);
     } catch {
       toast.error('Error al aplicar la tarifa');
+    }
+  };
+
+  /**
+   * Fuerza re-scrape inmediato de EPM ignorando el caché de 24h y recarga el historial.
+   */
+  const handleRefreshEpmTariff = async () => {
+    setRefreshing(true);
+    try {
+      const res = await refreshElectricityTariff();
+      if (res.data.available) {
+        const hRes = await getElectricityTariffs();
+        setTariffHistory(hRes.data);
+        setSelectedMonthIdx(0);
+        if (res.data.available) setEpmTariff(res.data);
+        toast.success(`Tarifa EPM actualizada: ${res.data.month_label}`);
+      } else {
+        toast.error(res.data.message || 'No se pudo obtener la tarifa EPM');
+      }
+    } catch {
+      toast.error('Error al actualizar la tarifa EPM');
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -313,23 +338,33 @@ export default function SettingsPage() {
                 const age = relativeAge(source?.scraped_at);
                 const stale = age && age.days > 35;
                 return (
-                  <div className="mt-2 flex items-center justify-between gap-2">
-                    <p className="text-xs text-forge-teal/60">
-                      Fuente: epm.com.co — actualización automática cada 24h
-                    </p>
-                    {age && (
-                      <span
-                        className={
-                          stale
-                            ? 'text-xs flex items-center gap-1 text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 rounded px-2 py-0.5'
-                            : 'text-xs text-forge-teal/60'
-                        }
-                        title={source?.scraped_at}
-                      >
-                        {stale && <AlertTriangle size={11} />}
-                        Última: {age.label}
-                      </span>
-                    )}
+                  <div className="mt-2 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs text-forge-teal/60">
+                        Fuente: epm.com.co — actualización automática cada 24h
+                      </p>
+                      {age && (
+                        <span
+                          className={
+                            stale
+                              ? 'text-xs flex items-center gap-1 text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 rounded px-2 py-0.5'
+                              : 'text-xs text-forge-teal/60'
+                          }
+                          title={source?.scraped_at}
+                        >
+                          {stale && <AlertTriangle size={11} />}
+                          Última: {age.label}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      onClick={handleRefreshEpmTariff}
+                      disabled={refreshing}
+                      className="w-full flex items-center justify-center gap-2 text-xs text-forge-teal/70 hover:text-forge-teal border border-forge-teal/20 hover:border-forge-teal/40 rounded-lg py-1.5 transition-colors disabled:opacity-40"
+                    >
+                      <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+                      {refreshing ? 'Actualizando desde EPM…' : 'Actualizar ahora'}
+                    </button>
                   </div>
                 );
               })()}

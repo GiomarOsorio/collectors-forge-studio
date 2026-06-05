@@ -123,6 +123,29 @@ async def get_electricity_tariff(
     return {"available": True, **data}
 
 
+@router.post("/electricity-tariff/refresh")
+@limiter.limit("3/minute")
+async def refresh_electricity_tariff(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """
+    Fuerza un re-scrape inmediato de la tarifa EPM, ignorando el caché de 24h.
+
+    Solo admins. Rate-limited a 3/min para evitar saturar el portal EPM.
+
+    Returns:
+        dict con los datos actualizados o mensaje de error.
+    """
+    data = await get_epm_estrato4_tariff(force=True)
+    if not data:
+        return {"available": False, "message": "No se pudo obtener la tarifa EPM en este momento"}
+
+    inserted = await persist_tariffs(db, data)
+    return {"available": True, "new_records": inserted, **data}
+
+
 @router.get("/electricity-tariffs")
 async def list_electricity_tariffs(
     db: AsyncSession = Depends(get_db),
