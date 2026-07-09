@@ -43,7 +43,6 @@ const ROUTES = [
   { match: /\/api\/maintenance\/logs\/?(\?.*)?$/,     body: EMPTY_LIST },
   { match: /\/api\/quotes\/?(\?.*)?$/,                body: EMPTY_LIST },
   { match: /\/api\/client-quotes\/?(\?.*)?$/,         body: EMPTY_LIST },
-  { match: /\/api\/slicer\/jobs(\?.*)?$/,             body: EMPTY_LIST },
   { match: /\/api\/vault\/stats$/,                    body: EMPTY_STATS },
   { match: /\/api\/vault\/?(\?.*)?$/,                 body: EMPTY_PAGINATED },
   { match: /\/api\/company\/templates\/?(\?.*)?$/,    body: EMPTY_LIST },

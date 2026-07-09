@@ -299,7 +299,7 @@ function VaultDrawerBody({ file, onActivePlateChange }) {
             <p className="mono text-[10.5px] text-gunmetal mt-0.5">
               {file.print_file_size != null
                 ? `${fmtBytes(file.print_file_size)} · listo para imprimir`
-                : 'Lamina en Slicer y vuelve a subir'}
+                : 'Lamina con tu slicer y vuelve a subir'}
             </p>
           </div>
         </Card>

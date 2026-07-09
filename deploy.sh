@@ -152,31 +152,26 @@ fi
 echo "→ Habilitando linger para servicios persistentes..."
 loginctl enable-linger "$(whoami)" 2>/dev/null || true
 
-echo "→ Construyendo imágenes de la aplicación..."
-podman build -t cfs-backend -f "$DEPLOY_PATH/backend/Containerfile" "$DEPLOY_PATH/backend/"
-
-# Frontend: protocolo extremo de cache-bust. El podman de este server ha
-# mostrado ignorar `--no-cache` en algunas ocasiones — el build termina
-# con un node_modules incompleto (`@dnd-kit/core` no resuelve en vite
-# build pese a estar en package-lock.json).
+echo "→ Construyendo imagen de la aplicación..."
+# Protocolo extremo de cache-bust. El podman de este server ha mostrado
+# ignorar `--no-cache` en algunas ocasiones — el build termina con un
+# node_modules incompleto (`@dnd-kit/core` no resuelve en vite build pese
+# a estar en package-lock.json).
 #
 # Combinamos 3 medidas:
-#   1. `podman rmi -f cfs-frontend` borra la imagen tag (rompe el reuse
-#      del COPY layer cacheado contra la imagen previa).
+#   1. `podman rmi -f cfs-app` borra la imagen tag (rompe el reuse del
+#      COPY layer cacheado contra la imagen previa).
 #   2. `podman image prune -f --filter label=stage=cfs-frontend-build`
-#      borra layers intermedios huérfanos (require LABEL en el Containerfile).
+#      borra layers intermedios huérfanos del stage node (require LABEL
+#      en el Containerfile).
 #   3. `podman build --no-cache --pull=always` fuerza rebuild + base
 #      image fresh de docker.io.
 #
 # Si después de esto sigue fallando: `podman system prune -af` manual.
-echo "→ Frontend: borrando imagen previa + build fresh..."
-podman rmi -f cfs-frontend 2>/dev/null || true
+podman rmi -f cfs-app 2>/dev/null || true
 podman image prune -f --filter label=stage=cfs-frontend-build 2>/dev/null || true
-podman build --no-cache --pull=always -t cfs-frontend \
-    -f "$DEPLOY_PATH/frontend/Containerfile" "$DEPLOY_PATH/frontend/"
-
-podman build -t cfs-slicer -f "$DEPLOY_PATH/slicer/Containerfile" "$DEPLOY_PATH/slicer/"
-podman build -t cfs-tracker -f "$DEPLOY_PATH/tracker/Containerfile" "$DEPLOY_PATH/tracker/"
+podman build --no-cache --pull=always -t cfs-app \
+    -f "$DEPLOY_PATH/Containerfile" "$DEPLOY_PATH"
 
 echo "→ Descargando imagen de PostgreSQL..."
 podman pull docker.io/postgres:16-alpine
@@ -197,7 +192,6 @@ rm -f "$QUADLET_DIR"/calculator3d-*.container \
 cp "$DEPLOY_PATH/quadlet/cfs.network" "$QUADLET_DIR/"
 cp "$DEPLOY_PATH/quadlet/cfs-data.volume" "$QUADLET_DIR/"
 cp "$DEPLOY_PATH/quadlet/cfs-pgdata.volume" "$QUADLET_DIR/"
-cp "$DEPLOY_PATH/quadlet/cfs-slicer-jobs.volume" "$QUADLET_DIR/"
 
 # Copiar contenedores sustituyendo __DEPLOY_PATH__ y __ENV_FILE__
 for f in "$DEPLOY_PATH"/quadlet/*.container; do
@@ -234,7 +228,7 @@ podman run --rm \
     --env-file "$ENV_FILE" \
     -e ALGORITHM=HS256 \
     -e ACCESS_TOKEN_EXPIRE_MINUTES=1440 \
-    localhost/cfs-backend:latest \
+    localhost/cfs-app:latest \
     alembic upgrade head
 if [ $? -ne 0 ]; then
     echo "ERROR: alembic upgrade head falló. Abortando deploy."
@@ -243,7 +237,7 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "→ Parando servicios cfs-* en ejecución..."
-for svc in cfs-frontend cfs-backend cfs-slicer cfs-tracker; do
+for svc in cfs-app; do
     systemctl --user stop "$svc" 2>/dev/null || true
     podman stop "$svc"   2>/dev/null || true
     podman rm   "$svc"   2>/dev/null || true
@@ -273,18 +267,18 @@ for i in $(seq 1 20); do
     fi
 done
 
-echo "→ Iniciando backend, slicer, tracker y frontend..."
-systemctl --user start cfs-slicer cfs-backend cfs-tracker cfs-frontend
+echo "→ Iniciando la app..."
+systemctl --user start cfs-app
 
-echo "→ Verificando que el backend responde (máx. 30s)..."
+echo "→ Verificando que la app responde (máx. 30s)..."
 for i in $(seq 1 15); do
-    if curl -sf http://localhost:8000/api/health > /dev/null 2>&1; then
-        echo "  Backend listo."
+    if curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then
+        echo "  App lista."
         break
     fi
     if [ "$i" -eq 15 ]; then
-        echo "AVISO: El backend no respondió en 30 segundos."
-        echo "  Revisa los logs: journalctl --user -u cfs-backend -n 50"
+        echo "AVISO: La app no respondió en 30 segundos."
+        echo "  Revisa los logs: journalctl --user -u cfs-app -n 50"
     fi
     echo "  Esperando... ($i/15)"
     sleep 2
@@ -293,17 +287,12 @@ done
 echo ""
 echo "=== Deploy completo ==="
 echo "  App local:  http://localhost:3000"
-echo "  App pública: https://3d.turtlenode.dev (vía cloudflared en service-deployments)"
+echo "  App pública: https://cfs.turtlenode.dev (vía cloudflared en service-deployments)"
 
 echo ""
 echo "Comandos útiles:"
 echo "  systemctl --user status cfs-postgres        # Estado PostgreSQL"
-echo "  systemctl --user status cfs-backend         # Estado backend"
-echo "  systemctl --user status cfs-slicer          # Estado OrcaSlicer"
-echo "  systemctl --user status cfs-tracker         # Estado tracker"
-echo "  systemctl --user status cfs-frontend        # Estado frontend"
-echo "  journalctl --user -u cfs-backend -f         # Logs backend"
-echo "  journalctl --user -u cfs-slicer -f          # Logs OrcaSlicer"
-echo "  journalctl --user -u cfs-tracker -f         # Logs tracker"
+echo "  systemctl --user status cfs-app             # Estado app"
+echo "  journalctl --user -u cfs-app -f             # Logs app"
 echo "  podman exec -it cfs-postgres psql -U $PG_USER $PG_DB  # Shell PG"
 echo "  podman ps                                             # Ver contenedores"

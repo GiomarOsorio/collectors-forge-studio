@@ -1,7 +1,6 @@
 /**
- * @file E2E del flujo crítico de Cost: navegar a calculadora, ver datos
- * cargados desde slicer (pre-fill por query params), revisar drawer de
- * cotización.
+ * @file E2E del flujo crítico de Cost: navegar a calculadora, cambiar
+ * entre tabs, revisar drawer de cotización.
  *
  * @module tests-e2e/cost-flow.spec
  */
@@ -34,26 +33,6 @@ test.describe('Cost — flujos críticos', () => {
       await histTab.click();
       // El tab activo cambia el contenido (search placeholder distinto)
     }
-  });
-
-  test('calculator pre-rellena weight_grams y print_time desde slicer', async ({ page }) => {
-    // /cost/calculator/v2 sigue como ruta legacy (redirect a /cost/calculator
-    // preservando query string vía RedirectPreservingSearch). El form v2 usa
-    // Stepper (no <input name=...>): los inputs viven dentro de los wrappers
-    // identificables por su FormFieldRow label. Validamos el value cargado.
-    await page.goto('/cost/calculator/v2?weight_grams=245&print_time_hours=3.5');
-    await page.waitForLoadState('networkidle');
-
-    // El form v2 mapea print_time_hours → hours + minutes separados.
-    // 3.5h = 3h 30m. weight_grams se redondea al entero (245).
-    // Los Stepper exponen <input type="number"> sin name attribute, por lo
-    // que filtramos por valor entre los inputs numéricos visibles.
-    const numericInputs = page.locator('input[type="number"]');
-    await numericInputs.first().waitFor({ state: 'visible', timeout: 10_000 });
-    const values = await numericInputs.evaluateAll((els) => els.map((e) => e.value));
-    expect(values, 'weight_grams=245 cargado').toContain('245');
-    expect(values, 'hours=3 cargado desde 3.5h').toContain('3');
-    expect(values, 'minutes=30 cargado desde 3.5h').toContain('30');
   });
 
   // SKIP: el toast (react-hot-toast) usa portal fuera del árbol — getByText

@@ -16,11 +16,14 @@ import logging
 import time
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from slowapi import _rate_limit_exceeded_handler
@@ -33,7 +36,7 @@ from app.limiter import limiter
 from app.models import Company, AppSettings, Printer
 from app.routers import (
     auth, printers, settings as settings_router, quotes,
-    client_quotes, inventory, purchase_orders, slicer, printed_items,
+    client_quotes, inventory, purchase_orders, printed_items,
 )
 from app.routers.company import router as company_router
 from app.routers.company_templates import router as company_templates_router
@@ -43,7 +46,6 @@ from app.routers.queue import router as queue_router
 from app.routers.inventory_categories import router as inventory_categories_router
 from app.routers.vault import router as vault_router
 from app.routers.oidc import router as oidc_router
-from app.routers.slicer import cleanup_old_slicer_files
 from app.services.thumbnail_extractor import extract_plate_png, save_thumbnail
 from app.services.vault_storage import download_file, ensure_bucket
 from app.services.tariff_scraper import refresh_if_stale
@@ -51,22 +53,11 @@ from app.services.tariff_scraper import refresh_if_stale
 # UUID fijo de la empresa por defecto — coincide con la migración f4a1b9c2d8e7
 DEFAULT_COMPANY_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
-
-async def _periodic_slicer_cleanup() -> None:
-    """
-    Tarea de fondo que elimina archivos slicer antiguos cada 24 horas.
-
-    Corre en bucle infinito mientras la aplicación está activa. Se cancela
-    limpiamente al apagar el servidor (CancelledError en el await).
-    """
-    while True:
-        try:
-            await asyncio.sleep(24 * 3600)
-            await cleanup_old_slicer_files()
-        except asyncio.CancelledError:
-            break
-        except Exception as e:
-            logger.error("Error en tarea de limpieza de slicer: %s", e)
+# Build de Vite copiado por el Containerfile a app/spa/ (index.html + assets/).
+# OJO: NO "app/static/" — ese directorio ya existe y lo usa pdf_generator.py
+# para el logo/fuentes de ReportLab (Path(__file__).parent.parent / "static").
+# Un mismo nombre pisaría logo.png con el del build de Vite.
+SPA_DIR = Path(__file__).parent / "spa"
 
 
 async def _backfill_vault_thumbnails() -> None:
@@ -162,9 +153,6 @@ async def lifespan(app: FastAPI):
     await ensure_bucket()
     # Backfill de thumbnails embebidos en .3mf — idempotente, no-op si todo está al día.
     asyncio.create_task(_backfill_vault_thumbnails())
-    # Ejecutar limpieza de slicer al inicio y luego cada 24h en background
-    await cleanup_old_slicer_files()
-    cleanup_task = asyncio.create_task(_periodic_slicer_cleanup())
     # Refresco condicional de tarifa EPM al inicio + cada 24h (gating en BD)
     try:
         async with async_session() as db:
@@ -173,13 +161,11 @@ async def lifespan(app: FastAPI):
         logger.error("Refresh inicial de tarifa EPM falló: %s", e)
     tariff_task = asyncio.create_task(_periodic_tariff_refresh())
     yield
-    cleanup_task.cancel()
     tariff_task.cancel()
-    for task in (cleanup_task, tariff_task):
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+    try:
+        await tariff_task
+    except asyncio.CancelledError:
+        pass
 
 
 # Instancia principal de la aplicación FastAPI con metadatos para la documentación
@@ -206,13 +192,14 @@ app.add_middleware(
     max_age=600,  # 10 minutos, suficiente para completar el flujo OIDC
 )
 
-# CORS: permite el frontend local (Vite/CRA) y el dominio de producción
+# CORS: permite el dev server de Vite y el dominio de producción. Ya no
+# incluye localhost:3000 — el frontend dejó de correr standalone en ese
+# puerto, FastAPI sirve el SPA directo desde el mismo origen.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
-        "http://localhost:3000",
-        "https://3d.turtlenode.dev",
+        "https://cfs.turtlenode.dev",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -220,6 +207,34 @@ app.add_middleware(
 )
 
 _audit_logger = logging.getLogger("audit")
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    """
+    Headers de seguridad HTTP — antes los ponía nginx (frontend/nginx.conf),
+    ahora que FastAPI sirve el SPA directo (sin nginx de por medio) hay que
+    agregarlos acá para no perder la protección.
+
+    CSP: script-src incluye 'unsafe-inline' porque Cloudflare (Rocket Loader /
+    Bot Fight Mode) inyecta sus propios scripts inline (utils.js, etc.) que no
+    podemos controlar. data-cfasync="false" en nuestros <script> (vite.config.js)
+    impide que Rocket Loader reescriba nuestros módulos ES, que es lo que
+    causaba React error #130. connect-src incluye el dominio de producción.
+    """
+    response = await call_next(request)
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; "
+        "connect-src 'self' https://cfs.turtlenode.dev;"
+    )
+    return response
 
 
 @app.middleware("http")
@@ -259,7 +274,6 @@ app.include_router(quotes.router)
 app.include_router(client_quotes.router)
 app.include_router(inventory.router)
 app.include_router(purchase_orders.router)
-app.include_router(slicer.router)
 app.include_router(printed_items.router)
 app.include_router(company_router)
 app.include_router(company_templates_router)
@@ -269,10 +283,23 @@ app.include_router(queue_router)
 app.include_router(inventory_categories_router)
 app.include_router(vault_router)
 
-# NOTA: el mount de `/static` fue removido. Thumbnails de Vault, logos de
-# empresa e imágenes de impresiones ahora viven en MinIO y se sirven vía
-# endpoints proxy dedicados (`GET /api/vault/{id}/thumbnail`,
-# `GET /api/company/logo`, `GET /api/inventory/prints/{id}/image`).
+# NOTA: el mount clásico de `/static` para binarios subidos por el usuario
+# (thumbnails de Vault, logos de empresa, imágenes de impresiones) no existe
+# — esos viven en MinIO y se sirven vía endpoints proxy dedicados
+# (`GET /api/vault/{id}/thumbnail`, `GET /api/company/logo`,
+# `GET /api/inventory/prints/{id}/image`). El mount de acá es otra cosa:
+# el build de Vite (JS/CSS con nombre hasheado) que el Containerfile copia
+# a app/spa/. Se sirve bajo /assets; el catch-all SPA más abajo cubre el
+# resto de rutas del frontend.
+#
+# app/spa/ solo existe DENTRO del container (lo copia el Containerfile en
+# build time) — en dev local (uvicorn corriendo directo desde backend/, sin
+# Containerfile) y en tests no existe, porque el frontend se sirve aparte
+# con `npm run dev` (vite.config.js ya proxea /api → localhost:8000). Sin
+# este guard, StaticFiles revienta en el import con RuntimeError apenas se
+# importa app.main fuera del container.
+if (SPA_DIR / "assets").is_dir():
+    app.mount("/assets", StaticFiles(directory=SPA_DIR / "assets"), name="spa-assets")
 
 
 @app.get("/api/health")
@@ -341,6 +368,35 @@ async def health_check_full():
     body = {"status": "ok" if all_ok else "degraded", "checks": checks}
     code = http_status.HTTP_200_OK if all_ok else http_status.HTTP_503_SERVICE_UNAVAILABLE
     return JSONResponse(content=body, status_code=code)
+
+
+# Catch-all del SPA — DEBE ir después de todos los routers y endpoints de
+# arriba: Starlette matchea rutas en orden de registro, así que cualquier
+# /api/* ya matcheó su endpoint real antes de llegar acá. Sirve archivos
+# sueltos del build (favicon, logo) si existen, y si no hace fallback a
+# index.html para que React Router resuelva la ruta client-side
+# (ej. /inventory/purchases, que no existe como archivo).
+# methods=["GET", "HEAD"]: nginx respondía HEAD sin problema (try_files no
+# distingue método); FastAPI no agrega HEAD automático a una ruta GET.
+#
+# Sin build (dev local / tests, ver guard del mount de /assets arriba):
+# devuelve 404 en vez de FileResponse a un index.html que no existe — el
+# frontend en dev corre aparte con `npm run dev`, este catch-all solo tiene
+# sentido dentro del container con el build de Vite ya copiado.
+@app.api_route("/{full_path:path}", methods=["GET", "HEAD"])
+async def serve_spa(full_path: str):
+    if full_path.startswith("api/"):
+        raise HTTPException(status_code=404)
+    index_file = SPA_DIR / "index.html"
+    if not index_file.is_file():
+        raise HTTPException(status_code=404)
+    if full_path:
+        # resolve() + is_relative_to() evita path traversal (../../etc/passwd)
+        # — a diferencia de StaticFiles, este catch-all arma el path a mano.
+        candidate = (SPA_DIR / full_path).resolve()
+        if candidate.is_relative_to(SPA_DIR.resolve()) and candidate.is_file():
+            return FileResponse(candidate)
+    return FileResponse(index_file)
 
 
 async def create_default_data():

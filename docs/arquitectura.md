@@ -25,49 +25,36 @@ Collector's Forge Studio es una plataforma multi-aplicación para gestión de un
               ───────────────┼───────────────────────────
               Red: cfs (bridge)
                              │
-                    ┌────────▼────────┐
-                    │    Frontend      │
-                    │  React + Nginx   │
-                    │   cfs-frontend   │
-                    │   :80 (3000)     │
-                    └────────┬────────┘
-                          /api/*
-              ───────────────┼─────────────────
-                             │
               ┌──────────────▼─────────────────┐
-              │            Backend              │
-              │          FastAPI                │
-              │         cfs-backend             │
-              │            :8000                │
+              │              App                │
+              │      FastAPI + SPA (Vite)       │
+              │            cfs-app              │
+              │         :8000 (3000)            │
               │                                 │
+              │  • Sirve el build de Vite       │
+              │    (StaticFiles + fallback SPA) │
               │  • Routers (Auth, Quotes, etc.) │
               │  • Calculator (Decimal engine)  │
               │  • PDF Generator (ReportLab)    │
               │  • Liquid PDF (WeasyPrint)      │
               │  • Exchange Rate (open.er-api)  │
               │  • Tariff Scraper (EPM PDF)     │
-              └──────┬───────────┬─────────────┘
-                     │           │
-         ┌───────────▼──┐    ┌───▼──────────┐
-         │  PostgreSQL  │    │    Slicer      │
-         │      16       │    │  OrcaSlicer   │
-         │  cfs-postgres │    │  cfs-slicer   │
-         │     :5432     │    │     :8001     │
-         └───────────────┘    └──────┬────────┘
-                                     │ volumen compartido
-                             ┌────────▼────────┐
-                             │   slicer_jobs/  │
-                             │  (Podman volume) │
-                             └─────────────────┘
+              └──────────────┬──────────────────┘
+                              │
+                     ┌────────▼────────┐
+                     │   PostgreSQL     │
+                     │       16         │
+                     │  cfs-postgres    │
+                     │      :5432       │
+                     └──────────────────┘
 ```
 
-**Tracker** (microservicio auxiliar):
-```
-cfs-tracker (:8002)
-  └─ Escanea tracking de pedidos cada N minutos
-  └─ Escribe estado en PostgreSQL (purchase_orders)
-  └─ Accedido por backend: POST /inventory/purchases/scan-tracking
-```
+Un solo container sirve API y frontend — FastAPI monta el build de Vite
+(`/assets/*` vía `StaticFiles`) y hace fallback a `index.html` para
+cualquier ruta que no empiece con `/api/*`, así React Router resuelve el
+routing client-side (ej. `/inventory/purchases`). Sin nginx de por medio;
+los headers de seguridad que antes ponía nginx (CSP, HSTS, etc.) los agrega
+un middleware de FastAPI (`backend/app/main.py`).
 
 ---
 
@@ -79,7 +66,6 @@ Cada "app" es una sección de la SPA React con su propio layout y rutas:
 |-----|-------|-----------|-------------|
 | Cost | `#2DD4BF` | `/cost/` | Calculadora de costos de impresión |
 | Inventario | `#3B82F6` | `/inventory/` | Inventario y pedidos de compra |
-| Slicer | `#F59E0B` | `/slicer/` | Laminado STL / extracción G-code |
 | Mantenimiento | `#8B5CF6` | `/maintenance/` | Registro de mantenimiento |
 | Queue | `#14B8A6` | `/queue/` | Cola de impresión |
 | Vault | `#F43F5E` | `/vault/` | Biblioteca de modelos `.3mf` / `.gcode.3mf` |
@@ -97,7 +83,7 @@ Las rutas legacy `/xxx/v2` siguen funcionando como redirects de cortesía vía `
 ```
 collectors-forge-studio/
 ├── .github/
-│   └── workflows/deploy.yml          # CI/CD: tests → deploy
+│   └── workflows/ci.yml               # CI: lint + tests + e2e (sin deploy)
 │
 ├── backend/                          # Servicio API principal
 │   ├── app/
@@ -122,7 +108,6 @@ collectors-forge-studio/
 │   │   │   ├── client_quote.py       # ClientQuote (multi-producto, COT-XXXX)
 │   │   │   ├── settings.py           # AppSettings (por empresa)
 │   │   │   ├── electricity_tariff.py # Historial tarifas EPM por mes/estrato
-│   │   │   ├── slicing_job.py        # SlicingJob (STL/gcode procesados)
 │   │   │   ├── maintenance.py        # MaintenancePrinter/Log/LogItem
 │   │   │   └── queue.py              # PrintQueueItem (cola de impresión)
 │   │   │
@@ -137,8 +122,7 @@ collectors-forge-studio/
 │   │   │   ├── purchase_order.py     # PurchaseOrder + tracking fields
 │   │   │   ├── printed_item.py       # PrintedItem CRUD + sell
 │   │   │   ├── maintenance.py        # Log + summary schemas
-│   │   │   ├── queue.py              # QueueItem + status update
-│   │   │   └── slicer.py             # SlicingJob schemas
+│   │   │   └── queue.py              # QueueItem + status update
 │   │   │
 │   │   ├── routers/                  # Endpoints FastAPI
 │   │   │   ├── auth.py               # GET /auth/me, POST /auth/logout (blacklist JWT)
@@ -156,7 +140,6 @@ collectors-forge-studio/
 │   │   │   ├── quotes.py             # /quotes/ cálculo + historial + PDF
 │   │   │   ├── client_quotes.py      # /client-quotes/ + PDF (Liquid/ReportLab)
 │   │   │   ├── settings.py           # /settings/ + exchange-rate + tariff
-│   │   │   ├── slicer.py             # /slicer/upload-gcode + stl + makerworld
 │   │   │   ├── maintenance.py        # /maintenance/logs/ + /summary/
 │   │   │   └── queue.py              # /queue/ cola activa + history
 │   │   │
@@ -172,13 +155,16 @@ collectors-forge-studio/
 │   │   │   ├── slicer_parser.py      # Parse .gcode/.3mf (pdfplumber)
 │   │   │   └── makerworld_fetcher.py # Scraping API + HTML MakerWorld
 │   │   │
-│   │   └── static/                   # Archivos estáticos servidos por FastAPI
-│   │       ├── logo.png              # Logo por defecto
-│   │       ├── fonts/                # Fuentes para ReportLab
-│   │       │   ├── TrajanPro-Bold.otf
-│   │       │   └── TrajanPro-Regular.ttf
-│   │       └── companies/            # Logos de la empresa (UUID como nombre)
-│   │           └── {uuid}.{ext}
+│   │   ├── static/                   # Assets internos leídos por el backend (NO por HTTP)
+│   │   │   ├── logo.png              # Logo por defecto para el fallback ReportLab
+│   │   │   └── fonts/                # Fuentes para ReportLab
+│   │   │       ├── TrajanPro-Bold.otf
+│   │   │       └── TrajanPro-Regular.ttf
+│   │   │
+│   │   └── spa/                      # Build de Vite copiado por el Containerfile
+│   │       ├── index.html            # Servido para "/" y como fallback SPA
+│   │       ├── vite.svg, logo.png    # Assets sueltos de frontend/public/
+│   │       └── assets/               # JS/CSS hasheados, montados en /assets (StaticFiles)
 │   │
 │   ├── alembic/                      # Migraciones de base de datos
 │   │   ├── env.py                    # Configuración Alembic async
@@ -192,14 +178,12 @@ collectors-forge-studio/
 │   │   ├── test_manual_quote.py      # Cotizaciones manuales
 │   │   ├── test_integration_http.py  # 21 tests HTTP con httpx
 │   │   ├── test_queue.py             # Cola de impresión
-│   │   ├── test_slicer_parser.py     # Parser G-code
-│   │   ├── test_slicer_router_helpers.py
+│   │   ├── test_slicer_parser.py     # Parser G-code (usado por Vault)
 │   │   ├── test_exchange_rate.py
 │   │   ├── test_tariff_scraper.py
 │   │   ├── test_makerworld_fetcher.py
 │   │   └── test_printed_item_schemas.py
 │   │
-│   ├── Containerfile                 # Imagen Python 3.11-slim + WeasyPrint deps
 │   ├── requirements.txt
 │   ├── alembic.ini
 │   ├── pytest.ini
@@ -227,7 +211,6 @@ collectors-forge-studio/
 │   │   │   ├── HoverCard.jsx         # Hover cards reutilizables
 │   │   │   ├── SkeletonLoader.jsx    # Skeletons compartidos
 │   │   │   ├── ModelViewer3D.jsx     # Visor 3D de modelos STL
-│   │   │   ├── slicer/               # Componentes específicos del Slicer
 │   │   │   ├── widgets/              # Widgets del dashboard (LowStock, etc.)
 │   │   │   └── ui/                   # Primitives compartidos (Button, Card, KPI,
 │   │   │                              # StatusPill, DetailDrawer, MobileSheet, EmptyState,
@@ -265,8 +248,6 @@ collectors-forge-studio/
 │   │   │   │   └── QueuePage.jsx                # Tabs Activa / Historial + VaultPicker
 │   │   │   ├── settings/
 │   │   │   │   └── SettingsPage.jsx             # Cuenta + Usuarios (admin) vía drawers
-│   │   │   ├── slicer/
-│   │   │   │   └── SlicerPage.jsx               # Tabs Subir / Historial + drawer detalle
 │   │   │   └── vault/
 │   │   │       ├── VaultPage.jsx                # Galería .3mf / .gcode.3mf
 │   │   │       └── VaultUploadPage.jsx          # Dual upload (admin)
@@ -277,32 +258,19 @@ collectors-forge-studio/
 │   │   └── utils/
 │   │       └── apiError.js           # Helper para extraer mensaje de error de Axios
 │   │
-│   ├── nginx.conf                    # Config Nginx (proxy API, SPA fallback, headers)
-│   ├── Containerfile                 # Multi-stage: Node build → Nginx serve
-│   ├── vite.config.js                # Vite + proxy /api → localhost:8000
+│   ├── vite.config.js                # Vite + proxy /api → localhost:8000 (dev)
 │   └── package.json
-│
-├── slicer/                           # Microservicio OrcaSlicer
-│   ├── app.py                        # FastAPI pequeño: /slice, /health, /cli-help
-│   ├── Containerfile                 # Ubuntu 24.04 + OrcaSlicer AppImage
-│   └── requirements.txt
-│
-├── tracker/                          # Microservicio de tracking de pedidos
-│   ├── app.py                        # Escanea tracking URLs y actualiza DB
-│   ├── Containerfile
-│   └── requirements.txt
 │
 ├── quadlet/                          # Definiciones systemd (Podman Quadlet)
 │   ├── cfs.network
 │   ├── cfs-data.volume
 │   ├── cfs-pgdata.volume
-│   ├── cfs-slicer-jobs.volume
 │   ├── cfs-postgres.container
-│   ├── cfs-backend.container
-│   ├── cfs-frontend.container
-│   ├── cfs-slicer.container
+│   ├── cfs-app.container             # FastAPI + SPA fusionados (backend+frontend)
 │   └── cfs-tunnel.container
 │
+├── Containerfile                     # Multi-stage: Node build (frontend) → Python (backend + SPA)
+├── .containerignore
 ├── deploy.sh                         # Script de despliegue completo
 ├── podman-compose.yml                # Alternativa a Quadlet (desarrollo/staging)
 └── .env.example                      # Plantilla de variables de entorno
@@ -337,7 +305,6 @@ Company (UUID PK — singleton)
 | `ClientQuote` | `client_quotes` | Cotización multi-producto para cliente (COT-XXXX) |
 | `AppSettings` | `app_settings` | Config global singleton (tarifas, margen) |
 | `ElectricityTariff` | `electricity_tariffs` | Historial tarifas EPM por mes/estrato |
-| `SlicingJob` | `slicing_jobs` | Trabajo de laminado STL/G-code |
 | `MaintenancePrinter` | `maintenance_printers` | Impresora registrada para mantenimiento |
 | `MaintenanceLog` | `maintenance_logs` | Registro de mantenimiento con items usados |
 | `PrintQueueItem` | `print_queue` | Item en cola de impresión (pending/printing/done/cancelled) |
@@ -468,11 +435,8 @@ Todos los contenedores se comunican en la red `cfs` (bridge). Los nombres de con
 
 | Hostname interno | Puerto | Quién lo usa |
 |---|---|---|
-| `cfs-postgres` | `5432` | backend, tracker |
-| `cfs-backend` | `8000` | frontend (nginx proxy) |
-| `cfs-slicer` | `8001` | backend (POST /slicer/*) |
-| `cfs-tracker` | `8002` | backend (POST /scan-tracking) |
-| `cfs-frontend` | `80` | cloudflared tunnel |
+| `cfs-postgres` | `5432` | `cfs-app` |
+| `cfs-app` | `8000` | cloudflared tunnel (API + SPA en el mismo proceso) |
 
 ---
 
@@ -481,7 +445,6 @@ Todos los contenedores se comunican en la red `cfs` (bridge). Los nombres de con
 | Volumen | Montaje | Contenido |
 |---|---|---|
 | `cfs-pgdata` | `/var/lib/postgresql/data` | Datos PostgreSQL |
-| `cfs-slicer-jobs` | `/slicer_jobs` | Archivos STL/G-code temporales |
 
 > **Nota:** Los binarios de la app (thumbnails del Vault, logo de
 > empresa, imágenes de PrintedItem, archivos del Vault `.3mf`) **no se
@@ -497,31 +460,34 @@ Todos los contenedores se comunican en la red `cfs` (bridge). Los nombres de con
 
 ## CI/CD
 
+`.github/workflows/ci.yml` — solo CI (lint + tests + e2e), sin deploy. Corre
+en push/PR a `main` y `develop`, en el runner self-hosted:
+
 ```
-git push → main   (o workflow_dispatch manual desde GitHub Actions UI)
+push/PR → main o develop
       │
       ▼
-GitHub Actions (self-hosted)
+GitHub Actions (self-hosted, ci.yml)
       │
-      ├─ Setup Python 3.11
-      ├─ pip install requirements.txt
-      ├─ alembic upgrade head (PostgreSQL CI)
-      ├─ pytest --cov --cov-fail-under=80
-      └─ Upload coverage.xml artifact
+      ├─ Lint (ESLint + py_compile)
+      ├─ Tests Backend (pytest --cov, Postgres real vía podman)
+      ├─ Tests Frontend (Vitest)
+      └─ E2E + Visual (Playwright — solo en PR/workflow_dispatch)
+```
+
+**No hay deploy automático vía GitHub Actions** — el deploy corre aparte,
+manual, con `./deploy.sh` en el servidor:
+
+```
+./deploy.sh
       │
-      ▼ (solo si tests pasan Y es push a main)
-Self-hosted runner (Linux PC)
-      │
-      ├─ git pull origin main
-      └─ ./deploy.sh
-            │
-            ├─ podman build (backend, frontend, slicer)
-            ├─ podman pull postgres:16-alpine
-            ├─ Instalar Quadlets → systemctl daemon-reload
-            ├─ systemctl restart cfs-postgres
-            ├─ Esperar PostgreSQL ready (pg_isready)
-            ├─ podman run --rm → alembic upgrade head
-            ├─ systemctl restart backend, slicer, frontend
-            ├─ Verificar /api/health
-            └─ systemctl restart cfs-tunnel
+      ├─ podman build (imagen única cfs-app: Node build frontend → Python + SPA)
+      ├─ podman pull postgres:16-alpine
+      ├─ Instalar Quadlets → systemctl daemon-reload
+      ├─ systemctl restart cfs-postgres
+      ├─ Esperar PostgreSQL ready (pg_isready)
+      ├─ podman run --rm → alembic upgrade head
+      ├─ systemctl restart cfs-app
+      ├─ Verificar /api/health (puerto 3000, publicado)
+      └─ systemctl restart cfs-tunnel
 ```

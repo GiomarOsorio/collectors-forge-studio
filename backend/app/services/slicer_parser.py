@@ -17,10 +17,54 @@ Formatos soportados:
 import re
 import xml.etree.ElementTree as ET
 import zipfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
 
-from app.schemas.slicer import PlateFilament, PlateResult, SliceResult
+
+@dataclass
+class SliceResult:
+    """
+    Resultado interno de parsear un archivo .gcode o .3mf.
+
+    Contiene todos los metadatos extraídos del encabezado del G-code
+    generado, usados para poblar los campos `sliced_*` del Vault.
+    """
+    print_time_seconds: Optional[int] = None
+    filament_weight_g: Optional[float] = None
+    filament_type: Optional[str] = None
+    layer_height_mm: Optional[float] = None
+    nozzle_temp: Optional[int] = None
+    bed_temp: Optional[int] = None
+
+
+@dataclass
+class PlateFilament:
+    """Filamento usado en una placa específica."""
+    filament_type: str = ""
+    colour_hex: str = ""
+    weight_g: float = 0.0
+    length_m: float = 0.0
+
+
+@dataclass
+class PlateResult:
+    """
+    Resultado de parsear una placa individual de un .3mf multi-placa.
+
+    Contiene los datos específicos de cada placa: tiempo, filamentos usados,
+    objetos incluidos, temperaturas y dimensiones.
+    """
+    plate_number: int = 1
+    print_time_seconds: Optional[int] = None
+    filament_weight_g: Optional[float] = None
+    filament_type: Optional[str] = None
+    layer_height_mm: Optional[float] = None
+    nozzle_temp: Optional[int] = None
+    bed_temp: Optional[int] = None
+    color_changes: int = 0
+    filaments: Optional[List["PlateFilament"]] = None
+    objects: Optional[List[str]] = None
 
 
 # Densidades de filamento en g/cm3 para conversión longitud→gramos

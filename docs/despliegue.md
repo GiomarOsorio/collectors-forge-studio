@@ -74,7 +74,7 @@ Crear los siguientes secretos en Infisical — **proyecto `homelab`**, environme
 | `OIDC_ISSUER` | URL issuer Authentik |
 | `OIDC_CLIENT_ID` | Client ID de Authentik |
 | `OIDC_CLIENT_SECRET` | Client Secret de Authentik |
-| `OIDC_REDIRECT_URI` | `https://3d.turtlenode.dev/api/auth/oidc/callback` |
+| `OIDC_REDIRECT_URI` | `https://cfs.turtlenode.dev/api/auth/oidc/callback` |
 | `MINIO_BUCKET` | Nombre del bucket (opcional, default `cfs-models`) |
 | `VAULT_QUOTA_GB` | Cuota Vault en GB (opcional, default `50`) |
 
@@ -95,6 +95,33 @@ Crear una Machine Identity en Infisical para el deploy:
 Luego en GitHub: **Settings → Secrets → Actions**, agregar solo:
 - `INFISICAL_CLIENT_ID`
 - `INFISICAL_CLIENT_SECRET`
+
+#### Publish a registry (CI, job `docker-publish` en `ci.yml`)
+
+⚠️ **Pendiente manual antes de que este job funcione.** Corre en cada push
+a `develop`/`main` que pasa lint+tests, y publica la imagen `cfs-app` a un
+registry propio (patrón portado de bambuddy-cfs). Necesita que la misma
+Machine Identity `collectorsforge-deploy` tenga acceso de lectura a estos
+paths adicionales en Infisical (además de `/collectorsforge` y `/minio`):
+
+| Nombre en Infisical | Path | Descripción |
+|---|---|---|
+| `REGISTRY_URL` | `/Registry` | Host del registry propio (con o sin esquema) |
+| `REGISTRY_USER` | `/Registry` | Usuario del registry |
+| `REGISTRY_PASS` | `/Registry` | Password/token del registry |
+| `N8N_WEBHOOK_URL` | `/n8n` | (Opcional) URL del webhook de notificación |
+| `N8N_WEBHOOK_KEY` | `/n8n` | (Opcional) Private key PEM para firmar el JWT del webhook |
+
+Si `/Registry` no existe o la Machine Identity no tiene acceso, el job
+falla al pedir `REGISTRY_URL`/`REGISTRY_USER`/`REGISTRY_PASS` — no rompe el
+resto del CI (lint/tests/e2e ya corrieron antes y quedan en verde). El
+notify a n8n es best-effort: si `N8N_WEBHOOK_URL`/`N8N_WEBHOOK_KEY` no
+están, se salta sin fallar el publish.
+
+Tags publicados: `dev-<shortsha>`/`dev-latest` (push a `develop`),
+`prod-<shortsha>`/`prod-latest` (push a `main`). El publish es aparte de
+`deploy.sh` — `deploy.sh` sigue buildeando la imagen localmente en el
+servidor como hoy, no hace `pull` del registry.
 
 #### Opción B — Archivo manual (sin Infisical)
 
@@ -131,7 +158,7 @@ OIDC_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 OIDC_CLIENT_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 # Redirect URI — debe coincidir exactamente con la configurada en Authentik
-OIDC_REDIRECT_URI=https://3d.turtlenode.dev/api/auth/oidc/callback
+OIDC_REDIRECT_URI=https://cfs.turtlenode.dev/api/auth/oidc/callback
 
 # Nota: el Cloudflare Tunnel lo gestiona service-deployments.
 # No hay TUNNEL_TOKEN en este archivo.
@@ -161,20 +188,20 @@ cd ~/collectors-forge-studio
 El script realiza automáticamente:
 1. Valida que `SECRET_KEY` y `POSTGRES_PASSWORD` estén definidas
 2. Habilita `loginctl linger` para que los servicios sobrevivan logout
-3. Construye imágenes: backend, frontend, slicer
+3. Construye la imagen de la app (FastAPI sirve la API + el SPA compilado, sin nginx)
 4. Descarga `postgres:16-alpine`
 5. Instala los Quadlets en `~/.config/containers/systemd/`
 6. Recarga systemd y arranca PostgreSQL
 7. Espera que PostgreSQL esté listo (hasta 60 s)
 8. Ejecuta `alembic upgrade head` en un contenedor temporal
-9. Arranca backend, slicer y frontend
+9. Arranca la app
 10. Verifica que `/api/health` responde
 
 **Salida esperada al final:**
 ```
 === Deploy completo ===
   App local:  http://localhost:3000
-  App pública: https://3d.turtlenode.dev (vía cloudflared en service-deployments)
+  App pública: https://cfs.turtlenode.dev (vía cloudflared en service-deployments)
 ```
 
 ### 1.5 Verificar que todo está corriendo
@@ -182,15 +209,13 @@ El script realiza automáticamente:
 ```bash
 # Ver servicios activos
 systemctl --user status cfs-postgres
-systemctl --user status cfs-backend
-systemctl --user status cfs-frontend
-systemctl --user status cfs-slicer
+systemctl --user status cfs-app
 
 # Ver todos los contenedores
 podman ps
 
-# Verificar backend directamente
-curl http://localhost:8000/api/health
+# Verificar la app directamente
+curl http://localhost:3000/api/health
 # {"status":"ok","app":"Collector's Forge Studio"}
 ```
 
@@ -298,7 +323,7 @@ Collector's Forge Studio usa OIDC con PKCE para autenticación. No hay login loc
 | Client type | `Confidential` |
 | Client ID | (se genera automáticamente — copiar) |
 | Client Secret | (se genera automáticamente — copiar) |
-| Redirect URIs | `https://3d.turtlenode.dev/api/auth/oidc/callback` |
+| Redirect URIs | `https://cfs.turtlenode.dev/api/auth/oidc/callback` |
 | Signing Key | `authentik Self-signed Certificate` |
 | Scopes | `openid`, `profile`, `email` |
 
@@ -335,12 +360,12 @@ Con los valores obtenidos de Authentik, completar en `~/CollectorsForgeENV`:
 OIDC_ISSUER=https://auth.tudominio.com/application/o/collectorsforge/
 OIDC_CLIENT_ID=<client-id-de-authentik>
 OIDC_CLIENT_SECRET=<client-secret-de-authentik>
-OIDC_REDIRECT_URI=https://3d.turtlenode.dev/api/auth/oidc/callback
+OIDC_REDIRECT_URI=https://cfs.turtlenode.dev/api/auth/oidc/callback
 ```
 
-Reiniciar el backend para aplicar:
+Reiniciar la app para aplicar:
 ```bash
-systemctl --user restart cfs-backend
+systemctl --user restart cfs-app
 ```
 
 ### 4.5 Primer login
@@ -351,7 +376,14 @@ El **primer usuario** que inicie sesión vía OIDC recibe automáticamente rol `
 
 ## 5. Configurar Cloudflare Tunnel
 
-El tunnel lo gestiona el repo **`service-deployments`** — no este repo. El contenedor `cloudflared` en `service-deployments` ya está en la red `cfs` y puede alcanzar `cfs-frontend:80` directamente.
+El tunnel lo gestiona el repo **`service-deployments`** — no este repo. El contenedor `cloudflared` en `service-deployments` ya está en la red `cfs` y puede alcanzar el container de la app directamente.
+
+> ⚠️ **Pendiente manual tras la fusión backend+frontend en un solo container**:
+> el tunnel apuntaba a `cfs-frontend:80` (nginx). Ese container ya no existe —
+> ahora es `cfs-app:8000` (FastAPI sirve la API y el SPA). Hay que actualizar
+> el **Public Hostname** en el dashboard de Cloudflare (sección 5.1 de abajo)
+> de `cfs-frontend:80` a `cfs-app:8000`. Este repo no toca `service-deployments`
+> — el cambio es manual, en ese otro repo/dashboard.
 
 ### 5.1 Configurar el public hostname en Cloudflare
 
@@ -362,7 +394,7 @@ En el dashboard [one.dash.cloudflare.com](https://one.dash.cloudflare.com) → *
 | Subdomain | `3d` |
 | Domain | `turtlenode.dev` |
 | Type | `HTTP` |
-| URL | `cfs-frontend:80` |
+| URL | `cfs-app:8000` |
 
 ### 5.2 Redesplegar cloudflared (service-deployments)
 
@@ -380,7 +412,7 @@ Esto instala `cfs.network` (desde `shared/`) + el quadlet `cloudflared.container
 Con Authentik ya en uso, Cloudflare Access es redundante. Si igual se desea una capa adicional:
 
 1. **Access → Applications → Add an application → Self-hosted**
-2. Application domain: `3d.turtlenode.dev`
+2. Application domain: `cfs.turtlenode.dev`
 3. Política: solo tu email o dominio
 
 ---
@@ -390,10 +422,8 @@ Con Authentik ya en uso, Cloudflare Access es redundante. Si igual se desea una 
 ### Reiniciar un servicio individual
 
 ```bash
-systemctl --user restart cfs-backend
-systemctl --user restart cfs-frontend
+systemctl --user restart cfs-app
 systemctl --user restart cfs-postgres
-systemctl --user restart cfs-slicer
 ```
 
 > Para reiniciar el tunnel: `cd ~/service-deployments && ./deploy.sh cloudflared`
@@ -403,38 +433,31 @@ systemctl --user restart cfs-slicer
 ```bash
 systemctl --user restart \
   cfs-postgres \
-  cfs-backend \
-  cfs-slicer \
-  cfs-frontend
+  cfs-app
 ```
 
 ### Detener todo el stack
 
 ```bash
 systemctl --user stop \
-  cfs-frontend \
-  cfs-slicer \
-  cfs-backend \
+  cfs-app \
   cfs-postgres
 ```
 
 ### Ver logs en tiempo real
 
 ```bash
-# Backend
-journalctl --user -u cfs-backend -f
+# App
+journalctl --user -u cfs-app -f
 
 # PostgreSQL
 journalctl --user -u cfs-postgres -f
 
-# Slicer
-journalctl --user -u cfs-slicer -f
-
 # Tunnel (corre en service-deployments)
 journalctl --user -u cloudflared -f
 
-# Últimas 100 líneas del backend
-journalctl --user -u cfs-backend -n 100
+# Últimas 100 líneas de la app
+journalctl --user -u cfs-app -n 100
 ```
 
 ---
@@ -464,18 +487,18 @@ podman exec cfs-postgres \
 ### Aplicar migraciones manualmente
 
 ```bash
-# Ejecutar en el contenedor backend existente
-podman exec cfs-backend \
+# Ejecutar en el contenedor de la app existente
+podman exec cfs-app \
   alembic upgrade head
 
-# O en un contenedor temporal (más seguro si backend no está corriendo)
+# O en un contenedor temporal (más seguro si la app no está corriendo)
 source ~/CollectorsForgeENV
 podman run --rm \
   --network cfs \
   --env-file ~/CollectorsForgeENV \
   -e ALGORITHM=HS256 \
   -e ACCESS_TOKEN_EXPIRE_MINUTES=1440 \
-  localhost/cfs-backend:latest \
+  localhost/cfs-app:latest \
   alembic upgrade head
 ```
 
@@ -557,13 +580,13 @@ git checkout <commit-hash>
 
 ```bash
 # Ver historial de migraciones
-podman exec cfs-backend alembic history
+podman exec cfs-app alembic history
 
 # Bajar una migración
-podman exec cfs-backend alembic downgrade -1
+podman exec cfs-app alembic downgrade -1
 
 # Bajar a una versión específica
-podman exec cfs-backend alembic downgrade f7a8b9c0d1e2
+podman exec cfs-app alembic downgrade f7a8b9c0d1e2
 ```
 
 > **Importante:** Hacer un backup de la BD antes de cualquier downgrade. Algunas migraciones eliminan columnas y el rollback puede perder datos.
@@ -638,10 +661,10 @@ ssh turtleStorage-destino "mc mirror ~/migration-backup/cfs-models/ cfs-local/cf
 
 ## 10. Diagnóstico de problemas comunes
 
-### El backend no inicia
+### La app no inicia
 
 ```bash
-journalctl --user -u cfs-backend -n 50
+journalctl --user -u cfs-app -n 50
 
 # Causas frecuentes:
 # - PostgreSQL no está listo aún (esperar y reintentar)
@@ -658,7 +681,7 @@ podman exec cfs-postgres \
   -c "SELECT * FROM alembic_version;"
 
 # Ver migraciones disponibles
-podman exec cfs-backend alembic history
+podman exec cfs-app alembic history
 
 # Si la BD está corrupta, restaurar desde backup y reintentar
 ```
@@ -676,7 +699,7 @@ cd ~/service-deployments && ./deploy.sh cloudflared
 
 # Causas frecuentes:
 # - cloudflared no está en la red cfs → redesplegar service-deployments
-# - cfs-frontend no está corriendo → systemctl --user restart cfs-frontend
+# - cfs-app no está corriendo → systemctl --user restart cfs-app
 # - TUNNEL_TOKEN inválido → renovar en Cloudflare dashboard y actualizar en Infisical (homelab/prod/)
 ```
 
@@ -697,7 +720,7 @@ sudo ./svc.sh install && sudo ./svc.sh start
 
 Si se necesita limpiar todos los usuarios (ej: migrar de auth local a OIDC), hay FK que bloquean `DELETE FROM users`. Ver procedimiento completo en [docs/base-de-datos.md](base-de-datos.md#borrar-todos-los-usuarios-migración-de-auth).
 
-Tablas que referencian `users`: `app_settings`, `client_quotes`, `quotes`, `slicing_jobs`, `model_files`. Nullear cada una por separado antes de borrar.
+Tablas que referencian `users`: `app_settings`, `client_quotes`, `quotes`, `model_files`. Nullear cada una por separado antes de borrar.
 
 ---
 
@@ -833,9 +856,9 @@ MINIO_BUCKET=cfs-models
 VAULT_QUOTA_GB=100
 ```
 
-Luego reiniciar el backend para que tome los nuevos valores:
+Luego reiniciar la app para que tome los nuevos valores:
 ```bash
-systemctl --user restart cfs-backend
+systemctl --user restart cfs-app
 ```
 
 ### 10.8 Gestión del servicio

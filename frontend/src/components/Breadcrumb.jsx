@@ -26,7 +26,6 @@ const SEGMENT_LABELS = {
   queue:       'Cola',
   maintenance: 'Mantenimiento',
   company:     'Compañía',
-  slicer:      'Slicer',
   settings:    'Configuración',
   vault:       'Vault',
   /* Cost */
@@ -52,7 +51,6 @@ const SEGMENT_LABELS = {
   profile:     'Perfil',
   branding:    'Marca & Colores',
   templates:   'Templates PDF',
-  /* Slicer */
   upload:      'Subir modelo',
   /* Settings */
   account:     'Cuenta',

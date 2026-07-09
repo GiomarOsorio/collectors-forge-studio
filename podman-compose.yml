@@ -19,10 +19,10 @@ services:
       timeout: 5s
       retries: 5
 
-  backend:
-    container_name: cfs-backend
+  app:
+    container_name: cfs-app
     build:
-      context: ./backend
+      context: .
       dockerfile: Containerfile
     depends_on:
       postgres:
@@ -35,58 +35,8 @@ services:
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@cfs.local}
-      - TRACKER_URL=http://tracker:8002
-    volumes:
-      - slicer_jobs:/slicer_jobs
-    restart: unless-stopped
-    networks:
-      - cfs
-
-  tracker:
-    container_name: cfs-tracker
-    build:
-      context: ./tracker
-      dockerfile: Containerfile
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://collectorsforge:${POSTGRES_PASSWORD}@postgres:5432/collectorsforge
-      - SCAN_INTERVAL_MINUTES=${SCAN_INTERVAL_MINUTES:-300}
-    restart: unless-stopped
-    networks:
-      - cfs
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  slicer:
-    container_name: cfs-slicer
-    build:
-      context: ./slicer
-      dockerfile: Containerfile
-    volumes:
-      - slicer_jobs:/slicer_jobs
-    networks:
-      - cfs
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  frontend:
-    container_name: cfs-frontend
-    build:
-      context: ./frontend
-      dockerfile: Containerfile
     ports:
-      - "3000:80"
-    depends_on:
-      - backend
+      - "3000:8000"
     restart: unless-stopped
     networks:
       - cfs
@@ -98,7 +48,7 @@ services:
     environment:
       - TUNNEL_TOKEN=${TUNNEL_TOKEN}
     depends_on:
-      - frontend
+      - app
     restart: unless-stopped
     networks:
       - cfs
@@ -109,4 +59,3 @@ networks:
 
 volumes:
   cfs-pgdata:
-  slicer_jobs:
