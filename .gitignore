@@ -37,6 +37,9 @@ yarn-error.log*
 # Vite
 frontend/dist/
 
+# Build de Vite copiado al container (solo existe dentro de la imagen, ver Containerfile)
+backend/app/spa/
+
 # OS
 .DS_Store
 Thumbs.db

@@ -1,11 +1,12 @@
 [Unit]
-Description=Collector's Forge Studio - Backend (FastAPI)
+Description=Collector's Forge Studio - App (FastAPI + SPA)
 After=network-online.target cfs-postgres.service
 Requires=cfs-postgres.service
 
 [Container]
-ContainerName=cfs-backend
-Image=localhost/cfs-backend:latest
+ContainerName=cfs-app
+Image=localhost/cfs-app:latest
+PublishPort=3000:8000
 Network=cfs.network
 # DATABASE_URL y demás variables vienen del .env (sin hardcodear SQLite aquí)
 EnvironmentFile=__ENV_FILE__
@@ -16,7 +17,7 @@ Environment=ACCESS_TOKEN_EXPIRE_MINUTES=1440
 Restart=always
 RestartSec=5
 TimeoutStartSec=120
-# Sin límite de reinicios: permite que el backend reintente hasta que PG esté listo
+# Sin límite de reinicios: permite que la app reintente hasta que PG esté listo
 StartLimitIntervalSec=0
 
 [Install]

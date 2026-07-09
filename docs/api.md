@@ -1,6 +1,6 @@
 # Referencia de API — Collector's Forge Studio
 
-Base URL: `https://3d.turtlenode.dev/api` (producción) · `http://localhost:8000/api` (local)
+Base URL: `https://cfs.turtlenode.dev/api` (producción) · `http://localhost:8000/api` (local)
 
 Todos los endpoints protegidos requieren el header:
 ```
