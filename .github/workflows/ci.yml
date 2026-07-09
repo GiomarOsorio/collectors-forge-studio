@@ -183,3 +183,160 @@ jobs:
           name: playwright-report
           path: frontend/playwright-report/
           retention-days: 14
+
+  # ============================================================================
+  # Publish (develop + main) — builda la imagen cfs-app (Containerfile en la
+  # raíz, ver PR fusión backend+frontend) y la publica al registry propio.
+  # Solo corre en push (nunca PR), solo si lint+tests pasaron, solo en el
+  # runner self-hosted (necesita red al registry privado). Tag scheme
+  # env-prefijado — el registry no tiene noción de "qué rama publicó esto"
+  # una vez el tag ya está pusheado, así que el prefijo lo resuelve:
+  #   develop → dev-<shortsha>,  dev-latest
+  #   main    → prod-<shortsha>, prod-latest
+  #
+  # e2e-frontend NO está en `needs` porque solo corre en pull_request/
+  # workflow_dispatch (ver su `if:` más arriba) — en un push normal a
+  # develop/main ese job ni se dispara, así que no puede ser una dependencia
+  # dura de un job que sí corre en push.
+  #
+  # Patrón adaptado de bambuddy-cfs (mismo proyecto Infisical `homelab`,
+  # mismos secrets ya usados por deploy.sh): login Infisical → jalar
+  # credenciales del registry desde /Registry → build + push con podman →
+  # notify best-effort a n8n (JWT RS256 firmado con openssl, no rompe el
+  # publish si n8n no está configurado — la imagen ya quedó publicada).
+  # ============================================================================
+
+  docker-publish:
+    name: Publish Docker Image
+    runs-on: self-hosted
+    if: github.actor == github.repository_owner && github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
+    needs:
+      - lint
+      - test-backend
+      - test-frontend
+    env:
+      INFISICAL_CLIENT_ID: ${{ secrets.INFISICAL_CLIENT_ID }}
+      INFISICAL_CLIENT_SECRET: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+      INFISICAL_URL: ${{ secrets.INFISICAL_URL || 'http://127.0.0.1:8080' }}
+      INFISICAL_PROJECT_SLUG: ${{ secrets.INFISICAL_PROJECT_SLUG || 'homelab' }}
+      INFISICAL_ENV: ${{ secrets.INFISICAL_ENV || 'prod' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build y push al registry self-hosted
+        run: |
+          set -e
+          INFISICAL_URL="${INFISICAL_URL:-http://127.0.0.1:8080}"
+          INFISICAL_PROJECT="${INFISICAL_PROJECT_SLUG:-homelab}"
+          INFISICAL_ENV="${INFISICAL_ENV:-prod}"
+
+          if [ -z "$INFISICAL_CLIENT_ID" ] || [ -z "$INFISICAL_CLIENT_SECRET" ]; then
+            echo "ERROR: INFISICAL_CLIENT_ID / INFISICAL_CLIENT_SECRET no configurados en los secrets del repo." >&2
+            exit 1
+          fi
+
+          echo "→ Login Infisical (${INFISICAL_URL})..."
+          TOKEN=$(curl -s -X POST \
+              --connect-timeout 10 --max-time 30 \
+              "${INFISICAL_URL}/api/v1/auth/universal-auth/login" \
+              -H "Content-Type: application/x-www-form-urlencoded" \
+              --data-urlencode "clientId=${INFISICAL_CLIENT_ID}" \
+              --data-urlencode "clientSecret=${INFISICAL_CLIENT_SECRET}" \
+              | python3 -c "import sys,json; print(json.load(sys.stdin)['accessToken'])")
+
+          # $1 = nombre del secreto, $2 = secretPath (default /Registry)
+          get_secret() {
+              curl -s --get \
+                  --connect-timeout 10 --max-time 30 \
+                  -H "Authorization: Bearer ${TOKEN}" \
+                  --data-urlencode "workspaceSlug=${INFISICAL_PROJECT}" \
+                  --data-urlencode "environment=${INFISICAL_ENV}" \
+                  --data-urlencode "secretPath=${2:-/Registry}" \
+                  "${INFISICAL_URL}/api/v3/secrets/raw/$1" \
+                  | python3 -c "import sys,json; print(json.load(sys.stdin)['secret']['secretValue'])"
+          }
+
+          echo "→ Obteniendo credenciales del registry desde Infisical..."
+          REGISTRY_URL=$(get_secret REGISTRY_URL)
+          REGISTRY_USER=$(get_secret REGISTRY_USER)
+          REGISTRY_PASS=$(get_secret REGISTRY_PASS)
+          echo "::add-mask::${REGISTRY_USER}"
+          echo "::add-mask::${REGISTRY_PASS}"
+
+          # Webhook n8n (path compartido /n8n). Best-effort: si no están, el
+          # notify se salta más abajo sin romper el build. La private key PEM se enmascara.
+          N8N_WEBHOOK_URL=$(get_secret N8N_WEBHOOK_URL /n8n 2>/dev/null || echo "")
+          N8N_WEBHOOK_KEY=$(get_secret N8N_WEBHOOK_KEY /n8n 2>/dev/null || echo "")
+          [ -n "$N8N_WEBHOOK_KEY" ] && echo "::add-mask::${N8N_WEBHOOK_KEY}"
+
+          # REGISTRY_URL puede venir con o sin esquema — `podman login`/tags
+          # de imagen quieren solo host[:puerto].
+          REGISTRY_HOST="${REGISTRY_URL#https://}"
+          REGISTRY_HOST="${REGISTRY_HOST#http://}"
+          REGISTRY_HOST="${REGISTRY_HOST%/}"
+
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          IMAGE="${REGISTRY_HOST}/cfs-app"
+
+          # Prefijo de ambiente según la rama que disparó el push. `main` es
+          # la rama prod de este repo (no un mirror de upstream como en
+          # bambuddy) — cualquier push ahí es una promoción real a prod.
+          if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            ENV_PREFIX="prod"
+          else
+            ENV_PREFIX="dev"
+          fi
+
+          SHA_TAG="${ENV_PREFIX}-${SHORT_SHA}"
+          LATEST_TAG="${ENV_PREFIX}-latest"
+
+          echo "→ Login en ${REGISTRY_HOST}..."
+          echo "${REGISTRY_PASS}" | podman login "${REGISTRY_HOST}" -u "${REGISTRY_USER}" --password-stdin
+
+          echo "→ Build ${IMAGE}:${SHA_TAG} (+ ${LATEST_TAG})..."
+          podman build -t "${IMAGE}:${SHA_TAG}" -t "${IMAGE}:${LATEST_TAG}" -f Containerfile .
+
+          echo "→ Push..."
+          podman push "${IMAGE}:${SHA_TAG}"
+          podman push "${IMAGE}:${LATEST_TAG}"
+
+          podman logout "${REGISTRY_HOST}"
+
+          echo ""
+          echo "=== Publicado ==="
+          echo "  ${IMAGE}:${SHA_TAG}"
+          echo "  ${IMAGE}:${LATEST_TAG}"
+
+          # ── Notificar a n8n (evento: imagen construida) ─────────────────────
+          # POST al webhook con servicio/env/tag en el body JSON (n8n los expone
+          # en {{ $json.body }}). Firma un JWT RS256 con la clave privada PEM
+          # (N8N_WEBHOOK_KEY) usando solo openssl — sin instalar pyjwt en el
+          # runner. n8n valida con la public key en la credencial JWT Auth del
+          # nodo Webhook. El notify es best-effort: si falla no tumba el build
+          # (la imagen ya está publicada).
+          if [ -n "${N8N_WEBHOOK_URL}" ] && [ -n "${N8N_WEBHOOK_KEY}" ]; then
+            echo "→ Notificando a n8n..."
+            b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+            now=$(date +%s)
+            jwt_header=$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)
+            jwt_payload=$(printf '{"iat":%s,"exp":%s}' "$now" "$((now + 300))" | b64url)
+            jwt_signing="${jwt_header}.${jwt_payload}"
+            jwt_sig=$(printf '%s' "$jwt_signing" \
+              | openssl dgst -sha256 -sign <(printf '%s' "${N8N_WEBHOOK_KEY}") -binary \
+              | b64url)
+            JWT="${jwt_signing}.${jwt_sig}"
+
+            # -A: User-Agent explícito no-bot. n8n con "Ignore Bots" activo
+            # rechaza el User-Agent por defecto de curl (isbot lo marca) → 403.
+            if curl -sf --max-time 15 -X POST "${N8N_WEBHOOK_URL}" \
+                 -A "cfs-ci" \
+                 -H "Authorization: Bearer ${JWT}" \
+                 -H "Content-Type: application/json" \
+                 -d "{\"servicio\":\"cfs-app\",\"env\":\"${ENV_PREFIX}\",\"tag\":\"${SHA_TAG}\"}"; then
+              echo "  ✓ n8n notificado (servicio=cfs-app env=${ENV_PREFIX} tag=${SHA_TAG})"
+            else
+              echo "  ⚠ notify a n8n falló (no-fatal) — imagen ya publicada."
+            fi
+          else
+            echo "→ N8N_WEBHOOK_URL / N8N_WEBHOOK_KEY no configurados — skip notify."
+          fi

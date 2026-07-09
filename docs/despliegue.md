@@ -96,6 +96,33 @@ Luego en GitHub: **Settings → Secrets → Actions**, agregar solo:
 - `INFISICAL_CLIENT_ID`
 - `INFISICAL_CLIENT_SECRET`
 
+#### Publish a registry (CI, job `docker-publish` en `ci.yml`)
+
+⚠️ **Pendiente manual antes de que este job funcione.** Corre en cada push
+a `develop`/`main` que pasa lint+tests, y publica la imagen `cfs-app` a un
+registry propio (patrón portado de bambuddy-cfs). Necesita que la misma
+Machine Identity `collectorsforge-deploy` tenga acceso de lectura a estos
+paths adicionales en Infisical (además de `/collectorsforge` y `/minio`):
+
+| Nombre en Infisical | Path | Descripción |
+|---|---|---|
+| `REGISTRY_URL` | `/Registry` | Host del registry propio (con o sin esquema) |
+| `REGISTRY_USER` | `/Registry` | Usuario del registry |
+| `REGISTRY_PASS` | `/Registry` | Password/token del registry |
+| `N8N_WEBHOOK_URL` | `/n8n` | (Opcional) URL del webhook de notificación |
+| `N8N_WEBHOOK_KEY` | `/n8n` | (Opcional) Private key PEM para firmar el JWT del webhook |
+
+Si `/Registry` no existe o la Machine Identity no tiene acceso, el job
+falla al pedir `REGISTRY_URL`/`REGISTRY_USER`/`REGISTRY_PASS` — no rompe el
+resto del CI (lint/tests/e2e ya corrieron antes y quedan en verde). El
+notify a n8n es best-effort: si `N8N_WEBHOOK_URL`/`N8N_WEBHOOK_KEY` no
+están, se salta sin fallar el publish.
+
+Tags publicados: `dev-<shortsha>`/`dev-latest` (push a `develop`),
+`prod-<shortsha>`/`prod-latest` (push a `main`). El publish es aparte de
+`deploy.sh` — `deploy.sh` sigue buildeando la imagen localmente en el
+servidor como hoy, no hace `pull` del registry.
+
 #### Opción B — Archivo manual (sin Infisical)
 
 El script `deploy.sh` busca el archivo de variables en:
