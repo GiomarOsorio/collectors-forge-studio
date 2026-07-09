@@ -20,7 +20,6 @@ Exportaciones:
     InventoryCategory:   Modelo de categoría de inventario configurable por empresa.
     PurchaseOrder:       Modelo de orden de compra a proveedores.
     PurchaseOrderItem:   Modelo de línea de ítem de una orden de compra.
-    SlicingJob:          Modelo de trabajo de laminado 3D (OrcaSlicer / Bambu Studio).
     PrintedItem:         Modelo de ítem de impresión 3D del catálogo de productos.
 """
 
@@ -37,7 +36,6 @@ from app.models.electricity_tariff import ElectricityTariff
 from app.models.inventory import InventoryItem
 from app.models.inventory_category import InventoryCategory
 from app.models.purchase_order import PurchaseOrder, PurchaseOrderItem
-from app.models.slicing_job import SlicingJob
 from app.models.printed_item import PrintedItem
 from app.models.maintenance import MaintenanceLog, MaintenanceLogItem
 from app.models.queue import PrintQueueItem
@@ -47,7 +45,7 @@ __all__ = [
     "Company", "CompanyTemplate", "User", "Filament", "Printer", "AppSettings",
     "Quote", "ClientQuote", "Supply", "ElectricityTariff",
     "InventoryItem", "InventoryCategory", "PurchaseOrder", "PurchaseOrderItem",
-    "SlicingJob", "PrintedItem",
+    "PrintedItem",
     "MaintenanceLog", "MaintenanceLogItem",
     "PrintQueueItem",
     "ModelFile", "ModelFilePlate",

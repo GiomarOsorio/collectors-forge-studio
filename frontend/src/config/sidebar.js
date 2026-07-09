@@ -14,7 +14,6 @@ import {
   Building2,
   Calculator,
   Clock,
-  Cpu,
   FileEdit,
   FileText,
   Layers,
@@ -77,16 +76,6 @@ export const SIDEBAR_APPS = [
       { to: '/inventory/purchases', icon: ShoppingCart,   label: 'Pedidos' },
       { to: '/inventory/prints',    icon: Printer,        label: 'Disponible para venta' },
       { to: '/inventory/io',        icon: ArrowLeftRight, label: 'Importar / Exportar' },
-    ],
-  },
-  {
-    id: 'slicer',
-    name: 'Slicer',
-    icon: Cpu,
-    color: '#F59E0B',
-    activeClass: 'bg-amber-400/15 text-amber-400',
-    items: [
-      { to: '/slicer', icon: Layers, label: 'Slicer', end: true },
     ],
   },
   {

@@ -1,15 +1,14 @@
-name: CI / Deploy
+name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
     # Si TODOS los archivos cambiados son .md, GitHub omite el workflow
-    # entero (incluyendo deploy). PRs / pushes con mezcla md + código
-    # siguen corriendo normal.
+    # entero. PRs / pushes con mezcla md + código siguen corriendo normal.
     paths-ignore:
       - '**/*.md'
   pull_request:
-    branches: [main]
+    branches: [main, develop]
     paths-ignore:
       - '**/*.md'
   workflow_dispatch:
@@ -184,28 +183,3 @@ jobs:
           name: playwright-report
           path: frontend/playwright-report/
           retention-days: 14
-
-  # ── Deploy a Laptop (solo si lint + backend + frontend pasan) ────────────
-  deploy:
-    name: Deploy to Laptop
-    runs-on: self-hosted
-    needs: [lint, test-backend, test-frontend]
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && needs.lint.result == 'success' && needs.test-backend.result == 'success' && needs.test-frontend.result == 'success'
-
-    env:
-      INFISICAL_CLIENT_ID: ${{ secrets.INFISICAL_CLIENT_ID }}
-      INFISICAL_CLIENT_SECRET: ${{ secrets.INFISICAL_CLIENT_SECRET }}
-      INFISICAL_PROJECT_SLUG: ${{ secrets.INFISICAL_PROJECT_SLUG || 'homelab' }}
-      INFISICAL_URL: ${{ secrets.INFISICAL_URL || 'http://127.0.0.1:8080' }}
-      INFISICAL_SECRET_PATH: ${{ secrets.INFISICAL_SECRET_PATH || '/collectorsforge' }}
-
-    steps:
-      - name: Pull latest changes
-        run: |
-          cd $HOME/collectors-forge-studio
-          git pull origin main
-
-      - name: Deploy (secretos vía Infisical)
-        run: |
-          cd $HOME/collectors-forge-studio
-          ./deploy.sh

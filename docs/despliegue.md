@@ -161,13 +161,13 @@ cd ~/collectors-forge-studio
 El script realiza automáticamente:
 1. Valida que `SECRET_KEY` y `POSTGRES_PASSWORD` estén definidas
 2. Habilita `loginctl linger` para que los servicios sobrevivan logout
-3. Construye imágenes: backend, frontend, slicer
+3. Construye imágenes: backend, frontend
 4. Descarga `postgres:16-alpine`
 5. Instala los Quadlets en `~/.config/containers/systemd/`
 6. Recarga systemd y arranca PostgreSQL
 7. Espera que PostgreSQL esté listo (hasta 60 s)
 8. Ejecuta `alembic upgrade head` en un contenedor temporal
-9. Arranca backend, slicer y frontend
+9. Arranca backend y frontend
 10. Verifica que `/api/health` responde
 
 **Salida esperada al final:**
@@ -184,7 +184,6 @@ El script realiza automáticamente:
 systemctl --user status cfs-postgres
 systemctl --user status cfs-backend
 systemctl --user status cfs-frontend
-systemctl --user status cfs-slicer
 
 # Ver todos los contenedores
 podman ps
@@ -393,7 +392,6 @@ Con Authentik ya en uso, Cloudflare Access es redundante. Si igual se desea una 
 systemctl --user restart cfs-backend
 systemctl --user restart cfs-frontend
 systemctl --user restart cfs-postgres
-systemctl --user restart cfs-slicer
 ```
 
 > Para reiniciar el tunnel: `cd ~/service-deployments && ./deploy.sh cloudflared`
@@ -404,7 +402,6 @@ systemctl --user restart cfs-slicer
 systemctl --user restart \
   cfs-postgres \
   cfs-backend \
-  cfs-slicer \
   cfs-frontend
 ```
 
@@ -413,7 +410,6 @@ systemctl --user restart \
 ```bash
 systemctl --user stop \
   cfs-frontend \
-  cfs-slicer \
   cfs-backend \
   cfs-postgres
 ```
@@ -426,9 +422,6 @@ journalctl --user -u cfs-backend -f
 
 # PostgreSQL
 journalctl --user -u cfs-postgres -f
-
-# Slicer
-journalctl --user -u cfs-slicer -f
 
 # Tunnel (corre en service-deployments)
 journalctl --user -u cloudflared -f
@@ -697,7 +690,7 @@ sudo ./svc.sh install && sudo ./svc.sh start
 
 Si se necesita limpiar todos los usuarios (ej: migrar de auth local a OIDC), hay FK que bloquean `DELETE FROM users`. Ver procedimiento completo en [docs/base-de-datos.md](base-de-datos.md#borrar-todos-los-usuarios-migración-de-auth).
 
-Tablas que referencian `users`: `app_settings`, `client_quotes`, `quotes`, `slicing_jobs`, `model_files`. Nullear cada una por separado antes de borrar.
+Tablas que referencian `users`: `app_settings`, `client_quotes`, `quotes`, `model_files`. Nullear cada una por separado antes de borrar.
 
 ---
 

@@ -2,7 +2,7 @@
  * @file Tests del componente MobileBottomNav (Claude Design port).
  *
  * Verifica que:
- *  - Renderiza los 5 ítems esperados (Costos / Inventario / Cola / Slicer / Mantto)
+ *  - Renderiza los 4 ítems esperados (Costos / Inventario / Cola / Mantto)
  *  - Cada ítem es un enlace navegable a `/<app>`
  *  - El ítem cuya ruta coincide con `location` recibe estilo active
  *  - El badge sale cuando `useBadges` retorna count > 0
@@ -34,12 +34,11 @@ describe('MobileBottomNav — design fidelity', () => {
     useBadges.mockReturnValue({ pendingQueue: 0, lowStock: 0, overdueMaintenance: 0 });
   });
 
-  it('renderiza los 5 ítems del design (Costos / Inventario / Cola / Slicer / Mantto)', () => {
+  it('renderiza los 4 ítems del design (Costos / Inventario / Cola / Mantto)', () => {
     renderNav();
     expect(screen.getByText('Costos')).toBeInTheDocument();
     expect(screen.getByText('Inventario')).toBeInTheDocument();
     expect(screen.getByText('Cola')).toBeInTheDocument();
-    expect(screen.getByText('Slicer')).toBeInTheDocument();
     expect(screen.getByText('Mantto')).toBeInTheDocument();
   });
 
@@ -48,7 +47,6 @@ describe('MobileBottomNav — design fidelity', () => {
     expect(screen.getByText('Costos').closest('a')).toHaveAttribute('href', '/cost');
     expect(screen.getByText('Inventario').closest('a')).toHaveAttribute('href', '/inventory');
     expect(screen.getByText('Cola').closest('a')).toHaveAttribute('href', '/queue');
-    expect(screen.getByText('Slicer').closest('a')).toHaveAttribute('href', '/slicer');
     expect(screen.getByText('Mantto').closest('a')).toHaveAttribute('href', '/maintenance');
   });
 

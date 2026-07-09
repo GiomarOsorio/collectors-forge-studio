@@ -20,7 +20,7 @@ import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   Truck, Plus, Download, Search, Check, X, ChevronRight, Clock,
-  Building2, Edit, Box, ShoppingCart, RefreshCw, Pencil, Loader,
+  Building2, Edit, Box, ShoppingCart, Pencil, Loader,
   Trash2, Package,
 } from 'lucide-react';
 import {
@@ -30,7 +30,6 @@ import {
   deletePurchaseOrder,
   arrivePurchaseOrder,
   getInventoryItems,
-  scanTracking,
 } from '../../services/api';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useIsMobile } from '../../hooks/useMediaQuery';
@@ -54,7 +53,7 @@ const poTotal = (po) => {
 
 // ─── Header + KPI strip ──────────────────────────────────────────────────
 
-function PurchasesHeader({ purchases, onNew, onScan, scanning }) {
+function PurchasesHeader({ purchases, onNew }) {
   const open = purchases.filter((p) => p.status === 'pendiente' || p.status === 'en_transito');
   const onRoute = open.reduce((s, p) => s + poTotal(p), 0);
   const vendors = new Set(purchases.map((p) => p.supplier).filter(Boolean)).size;
@@ -81,16 +80,6 @@ function PurchasesHeader({ purchases, onNew, onScan, scanning }) {
             Compras a proveedores
           </h1>
         </div>
-        <button
-          type="button"
-          onClick={onScan}
-          disabled={scanning}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] text-steel border border-[var(--color-border-strong)] hover:text-tech-white disabled:opacity-50"
-          title="Consulta parcelsapp.com para todos los pedidos activos"
-        >
-          {scanning ? <Loader size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-          Tracking
-        </button>
         <button
           type="button"
           onClick={onNew}
@@ -718,7 +707,6 @@ export default function InventoryPurchasesPage() {
   const [purchases, setPurchases] = useState([]);
   const [inventoryItems, setInventoryItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [scanning, setScanning] = useState(false);
 
   const [statusFilter, setStatusFilter] = useState('all');
   const [query, setQuery] = useState('');
@@ -763,23 +751,6 @@ export default function InventoryPurchasesPage() {
       new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
     );
   }, [purchases, statusFilter, query]);
-
-  const onScan = async () => {
-    setScanning(true);
-    const tid = toast.loading('Consultando tracking…');
-    try {
-      const res = await scanTracking();
-      const { scanned = 0, updated = 0, errors = 0 } = res.data || {};
-      toast.dismiss(tid);
-      toast.success(`Tracking: ${scanned} revisados, ${updated} actualizados${errors ? `, ${errors} errores` : ''}`);
-      load();
-    } catch {
-      toast.dismiss(tid);
-      toast.error('No se pudo actualizar tracking');
-    } finally {
-      setScanning(false);
-    }
-  };
 
   const openCreate = () => {
     setEditingInitial(null);
@@ -883,8 +854,6 @@ export default function InventoryPurchasesPage() {
       <PurchasesHeader
         purchases={purchases}
         onNew={openCreate}
-        onScan={onScan}
-        scanning={scanning}
       />
       <PurchasesFilters
         purchases={purchases}

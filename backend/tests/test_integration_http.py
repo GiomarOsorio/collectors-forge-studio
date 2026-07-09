@@ -114,15 +114,6 @@ class TestAuthRequired:
             _clear_overrides()
         assert r.status_code == 401
 
-    async def test_slicer_jobs_sin_token(self):
-        _set_overrides({get_db: _fake_db_empty})
-        try:
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-                r = await c.get("/api/slicer/jobs")
-        finally:
-            _clear_overrides()
-        assert r.status_code == 401
-
     async def test_settings_sin_token(self):
         _set_overrides({get_db: _fake_db_empty})
         try:

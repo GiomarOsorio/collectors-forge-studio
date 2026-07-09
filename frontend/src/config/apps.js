@@ -7,7 +7,7 @@
  * @module config/apps
  */
 
-import { Archive, Building2, Calculator, Package, Cpu, Wrench, ListOrdered } from 'lucide-react';
+import { Archive, Building2, Calculator, Package, Wrench, ListOrdered } from 'lucide-react';
 
 /**
  * @typedef {Object} AppDefinition
@@ -41,16 +41,6 @@ export const APPS = [
     icon: Package,
     route: '/inventory',
     color: '#3B82F6',
-    badge: null,
-  },
-  {
-    id: 'slicer',
-    name: 'Slicer',
-    shortDescription: 'Laminar modelos y calcular tiempos',
-    description: 'Lamina modelos STL con OrcaSlicer o sube archivos .gcode/.3mf. Histórico con badges de status y "usar en calculadora".',
-    icon: Cpu,
-    route: '/slicer',
-    color: '#F59E0B',
     badge: null,
   },
   {

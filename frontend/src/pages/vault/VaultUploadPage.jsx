@@ -11,7 +11,7 @@
  *
  * Al menos uno de los dos slots tiene que estar presente. Si solo se
  * sube `.3mf` editable, "Agregar a cola" estará deshabilitado (con tooltip
- * "lamina primero en Slicer y vuelve a subir").
+ * "lamina primero con tu slicer y vuelve a subir").
  *
  * Los no-admins son redirigidos a /vault al montar el componente.
  *

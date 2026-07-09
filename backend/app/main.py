@@ -33,7 +33,7 @@ from app.limiter import limiter
 from app.models import Company, AppSettings, Printer
 from app.routers import (
     auth, printers, settings as settings_router, quotes,
-    client_quotes, inventory, purchase_orders, slicer, printed_items,
+    client_quotes, inventory, purchase_orders, printed_items,
 )
 from app.routers.company import router as company_router
 from app.routers.company_templates import router as company_templates_router
@@ -43,30 +43,12 @@ from app.routers.queue import router as queue_router
 from app.routers.inventory_categories import router as inventory_categories_router
 from app.routers.vault import router as vault_router
 from app.routers.oidc import router as oidc_router
-from app.routers.slicer import cleanup_old_slicer_files
 from app.services.thumbnail_extractor import extract_plate_png, save_thumbnail
 from app.services.vault_storage import download_file, ensure_bucket
 from app.services.tariff_scraper import refresh_if_stale
 
 # UUID fijo de la empresa por defecto — coincide con la migración f4a1b9c2d8e7
 DEFAULT_COMPANY_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
-
-
-async def _periodic_slicer_cleanup() -> None:
-    """
-    Tarea de fondo que elimina archivos slicer antiguos cada 24 horas.
-
-    Corre en bucle infinito mientras la aplicación está activa. Se cancela
-    limpiamente al apagar el servidor (CancelledError en el await).
-    """
-    while True:
-        try:
-            await asyncio.sleep(24 * 3600)
-            await cleanup_old_slicer_files()
-        except asyncio.CancelledError:
-            break
-        except Exception as e:
-            logger.error("Error en tarea de limpieza de slicer: %s", e)
 
 
 async def _backfill_vault_thumbnails() -> None:
@@ -162,9 +144,6 @@ async def lifespan(app: FastAPI):
     await ensure_bucket()
     # Backfill de thumbnails embebidos en .3mf — idempotente, no-op si todo está al día.
     asyncio.create_task(_backfill_vault_thumbnails())
-    # Ejecutar limpieza de slicer al inicio y luego cada 24h en background
-    await cleanup_old_slicer_files()
-    cleanup_task = asyncio.create_task(_periodic_slicer_cleanup())
     # Refresco condicional de tarifa EPM al inicio + cada 24h (gating en BD)
     try:
         async with async_session() as db:
@@ -173,13 +152,11 @@ async def lifespan(app: FastAPI):
         logger.error("Refresh inicial de tarifa EPM falló: %s", e)
     tariff_task = asyncio.create_task(_periodic_tariff_refresh())
     yield
-    cleanup_task.cancel()
     tariff_task.cancel()
-    for task in (cleanup_task, tariff_task):
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+    try:
+        await tariff_task
+    except asyncio.CancelledError:
+        pass
 
 
 # Instancia principal de la aplicación FastAPI con metadatos para la documentación
@@ -259,7 +236,6 @@ app.include_router(quotes.router)
 app.include_router(client_quotes.router)
 app.include_router(inventory.router)
 app.include_router(purchase_orders.router)
-app.include_router(slicer.router)
 app.include_router(printed_items.router)
 app.include_router(company_router)
 app.include_router(company_templates_router)

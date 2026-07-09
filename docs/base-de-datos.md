@@ -33,13 +33,13 @@ Las migraciones están en `backend/alembic/versions/`. Se aplican con `alembic u
 | `f4a1b9c2d8e7` | `f4a1b9c2d8e7_add_company_id.py` | Multi-tenant: tabla `companies` (UUID PK), company_id en todas las entidades. Empresa por defecto UUID `000...0001` |
 | `a7b8c9d0e1f2` | `a7b8c9d0e1f2_add_client_quotes.py` | Tabla `client_quotes`: cotizaciones multi-producto COT-XXXX |
 | `b1c2d3e4f5a6` | `b1c2d3e4f5a6_add_inventory.py` | Tabla `inventory_items` (stock unificado) y `purchase_orders` / `purchase_order_items` |
-| `b2c3d4e5f6a7` | `b2c3d4e5f6a7_add_tracking_data_to_purchase_orders.py` | Campos de tracking en purchase_orders: tracking_number, carrier, status, tracking_url, etc. |
+| `b2c3d4e5f6a7` | `b2c3d4e5f6a7_add_tracking_data_to_purchase_orders.py` | Agrega `tracking_data`/`tracking_checked_at` en `purchase_orders` (eliminadas en `t4u5v6w7x8y9` al quitar el microservicio tracker) |
 | `c2d3e4f5a6b7` | `c2d3e4f5a6b7_merge_filaments_supplies_to_inventory.py` | Migra filamentos e insumos a `inventory_items`; quotes pasan a referenciar `inventory_item_id` |
 | `c3d4e5f6a7b8` | `c3d4e5f6a7b8_add_maintenance.py` | Tablas `maintenance_printers`, `maintenance_logs`, `maintenance_log_items` |
 | `c3d5e7f9a1b3` | `c3d5e7f9a1b3_float_to_numeric.py` | Columnas de precio cambiadas de Float a Numeric(12,4) para precisión Decimal |
 | `c4d5e6f7a8b9` | `c4d5e6f7a8b9_maintenance_use_printers.py` | maintenance_printers referencia a tabla `printers` en lugar de tener nombre propio |
 | `d1e2f3a4b5c6` | `d1e2f3a4b5c6_add_printed_items.py` | Tabla `printed_items`: impresiones 3D con foto, precio y stock |
-| `d3e4f5a6b7c8` | `d3e4f5a6b7c8_add_slicing_jobs.py` | Tabla `slicing_jobs`: trabajos de laminado STL/G-code |
+| `d3e4f5a6b7c8` | `d3e4f5a6b7c8_add_slicing_jobs.py` | Tabla `slicing_jobs`: trabajos de laminado STL/G-code (eliminada en `t4u5v6w7x8y9` al quitar el microservicio slicer) |
 | `d5e6f7a8b9c0` | `d5e6f7a8b9c0_add_print_queue.py` | Tabla `print_queue`: cola de impresión con posición y deducción atómica de inventario |
 | `e2f3a4b5c6d7` | `e2f3a4b5c6d7_quotes_jsonb_details.py` | Columna `details` JSONB en `quotes` para desglose completo de costos |
 | `e6f7a8b9c0d1` | `e6f7a8b9c0d1_add_iva_to_client_quotes.py` | Campo `include_iva` (bool) y `usd_rate` en `client_quotes` |
@@ -65,7 +65,8 @@ Las migraciones están en `backend/alembic/versions/`. Se aplican con `alembic u
 | `l6m7n8o9p0q1` | `l6m7n8o9p0q1_drop_printer_maintenance_fields.py` | Limpia campos de mantenimiento embebidos en `printers` |
 | `m7n8o9p0q1r2` | `m7n8o9p0q1r2_vault_dual_files.py` | Slots dual `source_file` + `print_file` en `model_files` |
 | `n8o9p0q1r2s3` | `n8o9p0q1r2s3_queue_vault_link.py` | FK `model_file_id` en `print_queue` |
-| `o9p0q1r2s3t4` | `o9p0q1r2s3t4_rename_storage_columns_to_minio_keys.py` | **Head actual** — Renombra `local_thumbnail_path → thumbnail_key`, `logo_url → logo_key`, `image_url → image_key` (los binarios ahora viven en MinIO, no en `/app/static`). NULLea filas existentes |
+| `o9p0q1r2s3t4` | `o9p0q1r2s3t4_rename_storage_columns_to_minio_keys.py` | Renombra `local_thumbnail_path → thumbnail_key`, `logo_url → logo_key`, `image_url → image_key` (los binarios ahora viven en MinIO, no en `/app/static`). NULLea filas existentes |
+| `t4u5v6w7x8y9` | `t4u5v6w7x8y9_drop_slicer_and_tracker.py` | **Head actual** — Elimina tabla `slicing_jobs` y columnas `tracking_data`/`tracking_checked_at` de `purchase_orders` al quitar los microservicios `slicer` y `tracker` |
 
 **Aplicar todas las migraciones:**
 ```bash
@@ -194,11 +195,8 @@ Stock unificado para filamentos, insumos, herramientas y cualquier material.
 | `status` | VARCHAR(20) | `pending` \| `shipped` \| `arrived` |
 | `total_usd` | NUMERIC(12,4) | Total en USD |
 | `notes` | TEXT | — |
-| `tracking_number` | VARCHAR(200) | Número de rastreo |
+| `tracking_number` | VARCHAR(200) | Número de rastreo (texto libre, ingresado a mano) |
 | `carrier` | VARCHAR(100) | Transportista |
-| `tracking_url` | VARCHAR(500) | URL de seguimiento |
-| `tracking_status` | VARCHAR(100) | Estado del tracking |
-| `tracking_last_update` | TIMESTAMP | Última actualización |
 | `arrived_at` | TIMESTAMP | Fecha de llegada efectiva |
 
 ### `purchase_order_items`
@@ -287,23 +285,6 @@ Singleton — solo hay una fila (se consulta con `LIMIT 1`).
 | `rate_usd_kwh` | NUMERIC(12,4) | Tarifa en USD/kWh |
 | `multiplier` | NUMERIC(8,4) | Factor COP→USD aplicado |
 | `scraped_at` | TIMESTAMP | Cuándo se obtuvo |
-
-### `slicing_jobs`
-
-| Columna | Tipo | Descripción |
-|---|---|---|
-| `id` | UUID PK | — |
-| `status` | VARCHAR(20) | `pending` \| `processing` \| `done` \| `failed` |
-| `source_type` | VARCHAR(20) | `gcode` \| `3mf` \| `stl` \| `makerworld` |
-| `filename` | VARCHAR(500) | Nombre del archivo original |
-| `weight_grams` | NUMERIC(10,2) | Peso del filamento en g |
-| `print_time_hours` | NUMERIC(10,4) | Tiempo de impresión |
-| `filament_type` | VARCHAR(50) | PLA, PETG, etc. |
-| `layer_height` | NUMERIC(6,3) | — |
-| `support_enabled` | BOOLEAN | — |
-| `infill_percent` | INTEGER | — |
-| `error_message` | TEXT | Si falló |
-| `created_at` | TIMESTAMP | — |
 
 ### `maintenance_printers`
 
@@ -454,10 +435,6 @@ podman exec -e PGPASSWORD="$POSTGRES_PASSWORD" cfs-postgres \
 podman exec -e PGPASSWORD="$POSTGRES_PASSWORD" cfs-postgres \
   psql -U "${POSTGRES_USER:-collectorsforge}" -d "${POSTGRES_DB:-collectorsforge}" \
   -c "UPDATE quotes SET user_id = NULL WHERE user_id IS NOT NULL;"
-
-podman exec -e PGPASSWORD="$POSTGRES_PASSWORD" cfs-postgres \
-  psql -U "${POSTGRES_USER:-collectorsforge}" -d "${POSTGRES_DB:-collectorsforge}" \
-  -c "UPDATE slicing_jobs SET user_id = NULL WHERE user_id IS NOT NULL;"
 
 podman exec -e PGPASSWORD="$POSTGRES_PASSWORD" cfs-postgres \
   psql -U "${POSTGRES_USER:-collectorsforge}" -d "${POSTGRES_DB:-collectorsforge}" \
