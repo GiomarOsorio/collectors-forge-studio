@@ -25,21 +25,14 @@ Collector's Forge Studio es una plataforma multi-aplicación para gestión de un
               ───────────────┼───────────────────────────
               Red: cfs (bridge)
                              │
-                    ┌────────▼────────┐
-                    │    Frontend      │
-                    │  React + Nginx   │
-                    │   cfs-frontend   │
-                    │   :80 (3000)     │
-                    └────────┬────────┘
-                          /api/*
-              ───────────────┼─────────────────
-                             │
               ┌──────────────▼─────────────────┐
-              │            Backend              │
-              │          FastAPI                │
-              │         cfs-backend             │
-              │            :8000                │
+              │              App                │
+              │      FastAPI + SPA (Vite)       │
+              │            cfs-app              │
+              │         :8000 (3000)            │
               │                                 │
+              │  • Sirve el build de Vite       │
+              │    (StaticFiles + fallback SPA) │
               │  • Routers (Auth, Quotes, etc.) │
               │  • Calculator (Decimal engine)  │
               │  • PDF Generator (ReportLab)    │
@@ -55,6 +48,13 @@ Collector's Forge Studio es una plataforma multi-aplicación para gestión de un
                      │      :5432       │
                      └──────────────────┘
 ```
+
+Un solo container sirve API y frontend — FastAPI monta el build de Vite
+(`/assets/*` vía `StaticFiles`) y hace fallback a `index.html` para
+cualquier ruta que no empiece con `/api/*`, así React Router resuelve el
+routing client-side (ej. `/inventory/purchases`). Sin nginx de por medio;
+los headers de seguridad que antes ponía nginx (CSP, HSTS, etc.) los agrega
+un middleware de FastAPI (`backend/app/main.py`).
 
 ---
 
@@ -83,7 +83,7 @@ Las rutas legacy `/xxx/v2` siguen funcionando como redirects de cortesía vía `
 ```
 collectors-forge-studio/
 ├── .github/
-│   └── workflows/deploy.yml          # CI/CD: tests → deploy
+│   └── workflows/ci.yml               # CI: lint + tests + e2e (sin deploy)
 │
 ├── backend/                          # Servicio API principal
 │   ├── app/
@@ -155,13 +155,16 @@ collectors-forge-studio/
 │   │   │   ├── slicer_parser.py      # Parse .gcode/.3mf (pdfplumber)
 │   │   │   └── makerworld_fetcher.py # Scraping API + HTML MakerWorld
 │   │   │
-│   │   └── static/                   # Archivos estáticos servidos por FastAPI
-│   │       ├── logo.png              # Logo por defecto
-│   │       ├── fonts/                # Fuentes para ReportLab
-│   │       │   ├── TrajanPro-Bold.otf
-│   │       │   └── TrajanPro-Regular.ttf
-│   │       └── companies/            # Logos de la empresa (UUID como nombre)
-│   │           └── {uuid}.{ext}
+│   │   ├── static/                   # Assets internos leídos por el backend (NO por HTTP)
+│   │   │   ├── logo.png              # Logo por defecto para el fallback ReportLab
+│   │   │   └── fonts/                # Fuentes para ReportLab
+│   │   │       ├── TrajanPro-Bold.otf
+│   │   │       └── TrajanPro-Regular.ttf
+│   │   │
+│   │   └── spa/                      # Build de Vite copiado por el Containerfile
+│   │       ├── index.html            # Servido para "/" y como fallback SPA
+│   │       ├── vite.svg, logo.png    # Assets sueltos de frontend/public/
+│   │       └── assets/               # JS/CSS hasheados, montados en /assets (StaticFiles)
 │   │
 │   ├── alembic/                      # Migraciones de base de datos
 │   │   ├── env.py                    # Configuración Alembic async
@@ -181,7 +184,6 @@ collectors-forge-studio/
 │   │   ├── test_makerworld_fetcher.py
 │   │   └── test_printed_item_schemas.py
 │   │
-│   ├── Containerfile                 # Imagen Python 3.11-slim + WeasyPrint deps
 │   ├── requirements.txt
 │   ├── alembic.ini
 │   ├── pytest.ini
@@ -256,9 +258,7 @@ collectors-forge-studio/
 │   │   └── utils/
 │   │       └── apiError.js           # Helper para extraer mensaje de error de Axios
 │   │
-│   ├── nginx.conf                    # Config Nginx (proxy API, SPA fallback, headers)
-│   ├── Containerfile                 # Multi-stage: Node build → Nginx serve
-│   ├── vite.config.js                # Vite + proxy /api → localhost:8000
+│   ├── vite.config.js                # Vite + proxy /api → localhost:8000 (dev)
 │   └── package.json
 │
 ├── quadlet/                          # Definiciones systemd (Podman Quadlet)
@@ -266,10 +266,11 @@ collectors-forge-studio/
 │   ├── cfs-data.volume
 │   ├── cfs-pgdata.volume
 │   ├── cfs-postgres.container
-│   ├── cfs-backend.container
-│   ├── cfs-frontend.container
+│   ├── cfs-app.container             # FastAPI + SPA fusionados (backend+frontend)
 │   └── cfs-tunnel.container
 │
+├── Containerfile                     # Multi-stage: Node build (frontend) → Python (backend + SPA)
+├── .containerignore
 ├── deploy.sh                         # Script de despliegue completo
 ├── podman-compose.yml                # Alternativa a Quadlet (desarrollo/staging)
 └── .env.example                      # Plantilla de variables de entorno
@@ -434,9 +435,8 @@ Todos los contenedores se comunican en la red `cfs` (bridge). Los nombres de con
 
 | Hostname interno | Puerto | Quién lo usa |
 |---|---|---|
-| `cfs-postgres` | `5432` | backend |
-| `cfs-backend` | `8000` | frontend (nginx proxy) |
-| `cfs-frontend` | `80` | cloudflared tunnel |
+| `cfs-postgres` | `5432` | `cfs-app` |
+| `cfs-app` | `8000` | cloudflared tunnel (API + SPA en el mismo proceso) |
 
 ---
 
@@ -460,31 +460,34 @@ Todos los contenedores se comunican en la red `cfs` (bridge). Los nombres de con
 
 ## CI/CD
 
+`.github/workflows/ci.yml` — solo CI (lint + tests + e2e), sin deploy. Corre
+en push/PR a `main` y `develop`, en el runner self-hosted:
+
 ```
-git push → main   (o workflow_dispatch manual desde GitHub Actions UI)
+push/PR → main o develop
       │
       ▼
-GitHub Actions (self-hosted)
+GitHub Actions (self-hosted, ci.yml)
       │
-      ├─ Setup Python 3.11
-      ├─ pip install requirements.txt
-      ├─ alembic upgrade head (PostgreSQL CI)
-      ├─ pytest --cov --cov-fail-under=80
-      └─ Upload coverage.xml artifact
+      ├─ Lint (ESLint + py_compile)
+      ├─ Tests Backend (pytest --cov, Postgres real vía podman)
+      ├─ Tests Frontend (Vitest)
+      └─ E2E + Visual (Playwright — solo en PR/workflow_dispatch)
+```
+
+**No hay deploy automático vía GitHub Actions** — el deploy corre aparte,
+manual, con `./deploy.sh` en el servidor:
+
+```
+./deploy.sh
       │
-      ▼ (solo si tests pasan Y es push a main)
-Self-hosted runner (Linux PC)
-      │
-      ├─ git pull origin main
-      └─ ./deploy.sh
-            │
-            ├─ podman build (backend, frontend)
-            ├─ podman pull postgres:16-alpine
-            ├─ Instalar Quadlets → systemctl daemon-reload
-            ├─ systemctl restart cfs-postgres
-            ├─ Esperar PostgreSQL ready (pg_isready)
-            ├─ podman run --rm → alembic upgrade head
-            ├─ systemctl restart backend, frontend
-            ├─ Verificar /api/health
-            └─ systemctl restart cfs-tunnel
+      ├─ podman build (imagen única cfs-app: Node build frontend → Python + SPA)
+      ├─ podman pull postgres:16-alpine
+      ├─ Instalar Quadlets → systemctl daemon-reload
+      ├─ systemctl restart cfs-postgres
+      ├─ Esperar PostgreSQL ready (pg_isready)
+      ├─ podman run --rm → alembic upgrade head
+      ├─ systemctl restart cfs-app
+      ├─ Verificar /api/health (puerto 3000, publicado)
+      └─ systemctl restart cfs-tunnel
 ```

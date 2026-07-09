@@ -50,7 +50,7 @@ que lo uses.
 | **Frontend** | React 19 · Vite 7 · TailwindCSS 4 · Axios · React Router DOM |
 | **Auth** | JWT (python-jose) · OIDC/SSO con PKCE (Authlib) |
 | **Contenedores** | Podman 5.x + Quadlet (systemd) — *no Docker* |
-| **Exposición** | Cloudflare Tunnel → `3d.turtlenode.dev` |
+| **Exposición** | Cloudflare Tunnel → `cfs.turtlenode.dev` |
 | **CI/CD** | GitHub Actions (tests en Ubuntu) + self-hosted runner (deploy) |
 
 ---
@@ -84,7 +84,7 @@ nano ~/CollectorsForgeENV
 ./deploy.sh
 ```
 
-La app queda disponible en `https://3d.turtlenode.dev` (con tunnel) o `http://localhost:3000` (sin tunnel).
+La app queda disponible en `https://cfs.turtlenode.dev` (con tunnel) o `http://localhost:3000` (sin tunnel).
 
 Ver **[docs/despliegue.md](docs/despliegue.md)** para la guía completa, incluyendo instalación del self-hosted runner, configuración de Cloudflare, backup y rollback.
 
@@ -169,13 +169,13 @@ openssl rand -hex 32  # usar para SECRET_KEY y SESSION_SECRET_KEY
 
 ```bash
 # Estado de todos los servicios
-systemctl --user status cfs-{postgres,backend,frontend,tunnel}
+systemctl --user status cfs-{postgres,app,tunnel}
 
 # Logs en tiempo real
-journalctl --user -u cfs-backend -f
+journalctl --user -u cfs-app -f
 
-# Reiniciar backend
-systemctl --user restart cfs-backend
+# Reiniciar la app
+systemctl --user restart cfs-app
 
 # Conectar a PostgreSQL
 podman exec -it cfs-postgres psql -U collectorsforge -d collectorsforge
@@ -185,7 +185,7 @@ podman exec cfs-postgres pg_dump -U collectorsforge -Fc collectorsforge \
   > ~/backups/collectorsforge-$(date +%Y%m%d).dump
 
 # Aplicar migraciones manualmente
-podman exec cfs-backend alembic upgrade head
+podman exec cfs-app alembic upgrade head
 
 # Ver todos los contenedores
 podman ps

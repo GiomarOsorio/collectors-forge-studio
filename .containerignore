@@ -1,0 +1,43 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Node (frontend)
+node_modules/
+dist/
+.vite/
+
+# Python (backend)
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+htmlcov/
+.coverage*
+tests/
+
+# Secretos — nunca deben entrar al contenedor
+.env
+.env.*
+!.env.example
+
+# No necesarios en producción
+docs/
+*.md
+.github/
+.claude/
+quadlet/
+tests-e2e/
+podman-compose.yml
+deploy.sh
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+*.log

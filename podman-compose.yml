@@ -19,10 +19,10 @@ services:
       timeout: 5s
       retries: 5
 
-  backend:
-    container_name: cfs-backend
+  app:
+    container_name: cfs-app
     build:
-      context: ./backend
+      context: .
       dockerfile: Containerfile
     depends_on:
       postgres:
@@ -35,19 +35,8 @@ services:
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@cfs.local}
-    restart: unless-stopped
-    networks:
-      - cfs
-
-  frontend:
-    container_name: cfs-frontend
-    build:
-      context: ./frontend
-      dockerfile: Containerfile
     ports:
-      - "3000:80"
-    depends_on:
-      - backend
+      - "3000:8000"
     restart: unless-stopped
     networks:
       - cfs
@@ -59,7 +48,7 @@ services:
     environment:
       - TUNNEL_TOKEN=${TUNNEL_TOKEN}
     depends_on:
-      - frontend
+      - app
     restart: unless-stopped
     networks:
       - cfs
