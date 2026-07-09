@@ -7,7 +7,6 @@ Requires=cfs-postgres.service
 ContainerName=cfs-backend
 Image=localhost/cfs-backend:latest
 Network=cfs.network
-Volume=cfs-slicer-jobs.volume:/slicer_jobs:Z
 # DATABASE_URL y demás variables vienen del .env (sin hardcodear SQLite aquí)
 EnvironmentFile=__ENV_FILE__
 Environment=ALGORITHM=HS256

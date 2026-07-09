@@ -629,9 +629,6 @@ Crea un pedido de compra.
 ### `POST /inventory/purchases/{id}/arrive`
 Marca un pedido como llegado. Actualiza el stock de todos sus ítems automáticamente.
 
-### `POST /inventory/purchases/scan-tracking`
-Lanza escaneo masivo de tracking en el microservicio tracker.
-
 ---
 
 ## Impresiones (Printed Items)
@@ -673,61 +670,6 @@ JWT) — los `<img>` tags del browser no envían el header `Authorization`.
 Registra una venta (decrementa el stock).
 
 **Body:** `{"quantity": 1}`
-
----
-
-## Slicer
-
-### `POST /slicer/upload-gcode`
-Sube un archivo `.gcode` o `.3mf` ya laminado para extraer sus metadatos.
-
-**Body** (`multipart/form-data`): `file: <archivo>`
-
-**Response 200:**
-```json
-{
-  "id": "uuid-job",
-  "status": "done",
-  "weight_grams": 85.3,
-  "print_time_hours": 3.47,
-  "filament_type": "PLA",
-  "layer_height": 0.2,
-  "infill_percent": 15
-}
-```
-
----
-
-### `POST /slicer/upload-stl`
-Envía un STL al microservicio OrcaSlicer para laminarlo.
-
-**Body** (`multipart/form-data`):
-```
-file: archivo.stl
-printer_preset: Bambu Lab P1S 0.4 nozzle
-filament_preset: Bambu PLA Basic @BBL X1C
-config_preset: 0.20mm Standard @BBL X1C
-```
-
-**Response 200:** `SlicingJob` con status `pending` o `processing`. Hacer polling a `GET /slicer/jobs/{id}` hasta que status sea `done`.
-
----
-
-### `POST /slicer/makerworld`
-Obtiene metadatos de un modelo de MakerWorld.
-
-**Body:** `{"url": "https://makerworld.com/models/12345"}`
-
----
-
-### `GET /slicer/jobs`
-Lista los trabajos de laminado de la empresa.
-
-### `GET /slicer/jobs/{id}`
-Obtiene el estado de un trabajo específico.
-
-### `DELETE /slicer/jobs/{id}`
-Elimina un trabajo del historial.
 
 ---
 

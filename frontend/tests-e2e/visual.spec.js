@@ -19,7 +19,6 @@ const PAGES = [
   { path: '/inventory', name: 'inventory' },
   { path: '/cost', name: 'cost' },
   { path: '/cost/calculator/v2', name: 'calculator' },
-  { path: '/slicer', name: 'slicer' },
   { path: '/queue', name: 'queue' },
   { path: '/maintenance', name: 'maintenance' },
   { path: '/vault', name: 'vault' },

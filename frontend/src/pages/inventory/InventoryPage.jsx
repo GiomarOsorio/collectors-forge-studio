@@ -68,7 +68,6 @@ import {
   createPurchaseOrder,
   getInventoryItems,
   getPurchaseOrders,
-  scanTracking,
   updateInventoryItem,
   updatePurchaseOrder,
 } from '../../services/api';
@@ -1095,53 +1094,9 @@ function PurchaseDrawerBody({ po }) {
             {po.carrier && (
               <p className="mono text-[11px] text-gunmetal">{po.carrier}</p>
             )}
-            {po.tracking_checked_at && (
-              <p className="mono text-[10px] text-gunmetal-dim mt-1">
-                Última consulta: {new Date(po.tracking_checked_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}
-              </p>
-            )}
           </Card>
         )}
       </div>
-
-      {/* Eventos de tracking parseados desde el scraper del microservicio tracker */}
-      {po.tracking_data && (() => {
-        try {
-          const data = JSON.parse(po.tracking_data);
-          const events = data.events || data.checkpoints || data.states || [];
-          const rawText = data.raw_text;
-          if (events.length > 0) {
-            return (
-              <div>
-                <span className="lbl-eyebrow text-[9px]">Eventos de tracking</span>
-                <ul className="mt-2 flex flex-col gap-1.5 max-h-48 overflow-y-auto">
-                  {events.slice(0, 10).map((ev, i) => (
-                    <li key={i} className="flex gap-2 px-3 py-2 rounded-md bg-[var(--color-surf-card)] border border-[var(--color-border-soft)]">
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm text-tech-white">{ev.description || ev.message || ev.title || ev.status}</p>
-                        {(ev.date || ev.time || ev.timestamp) && (
-                          <p className="mono text-[11px] text-gunmetal">{ev.date || ev.time || ev.timestamp}</p>
-                        )}
-                        {ev.location && <p className="mono text-[11px] text-gunmetal">{ev.location}</p>}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          }
-          if (rawText) {
-            return (
-              <Card className="p-3">
-                <span className="lbl-eyebrow text-[9px]">Info de tracking</span>
-                <pre className="mono text-[11px] text-steel mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap">{rawText.slice(0, 1500)}</pre>
-              </Card>
-            );
-          }
-        } catch { /* JSON inválido, ignorar */ }
-        return null;
-      })()}
 
       {items.length > 0 && (
         <div>
@@ -2787,7 +2742,6 @@ export default function InventoryPage() {
   const [poFormOpen, setPoFormOpen] = useState(false);
   const [poFormMode, setPoFormMode] = useState('create');
   const [editingPoRaw, setEditingPoRaw] = useState(null);
-  const [scanningTracking, setScanningTracking] = useState(false);
   // Drawer/sheet state — un slot por tipo para no mezclar bodies.
   const [selected, setSelected] = useState(null);            // filamento
   const [selectedItem, setSelectedItem] = useState(null);    // insumo / herramienta / consumible
@@ -3537,32 +3491,6 @@ export default function InventoryPage() {
               )}
             </div>
             <span className="flex-1" />
-            <button
-              type="button"
-              onClick={async () => {
-                setScanningTracking(true);
-                const tid = toast.loading('Consultando tracking…');
-                try {
-                  const res = await scanTracking();
-                  const { scanned = 0, updated = 0, errors = 0 } = res.data || {};
-                  toast.dismiss(tid);
-                  toast.success(`Tracking actualizado: ${scanned} revisados, ${updated} actualizados${errors ? `, ${errors} errores` : ''}`);
-                  const poRes = await getPurchaseOrders();
-                  setPurchases(poRes.data || []);
-                } catch {
-                  toast.dismiss(tid);
-                  toast.error('No se pudo actualizar tracking (servicio inactivo?)');
-                } finally {
-                  setScanningTracking(false);
-                }
-              }}
-              disabled={scanningTracking}
-              className="inline-flex items-center gap-1.5 text-[11px] text-steel hover:text-tech-white px-2.5 py-1.5 rounded-md border border-[var(--color-border-soft)] disabled:opacity-50"
-              title="Consulta parcelsapp.com para todos los pedidos activos"
-            >
-              <RefreshCw size={12} className={scanningTracking ? 'animate-spin' : ''} />
-              Actualizar tracking
-            </button>
             <span className="mono text-[11px] text-gunmetal">
               {filteredPurchases.length} de {purchases.length} pedidos
             </span>

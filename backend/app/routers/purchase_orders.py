@@ -12,16 +12,12 @@ Endpoints:
     PUT    /api/inventory/purchases/{id}          — Actualizar campos de la orden.
     DELETE /api/inventory/purchases/{id}          — Eliminar una orden.
     POST   /api/inventory/purchases/{id}/arrive   — Marcar como llegado y actualizar stock.
-    GET    /api/inventory/purchases/{id}/tracking — Proxy: consultar tracking en parcelsapp.
-    POST   /api/inventory/purchases/scan-tracking  — Proxy: lanzar escaneo masivo de tracking.
 """
 
-import os
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import List
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -306,43 +302,3 @@ async def mark_order_arrived(
 
     # Recargar la orden completa con ítems para la respuesta
     return await _get_company_purchase_order(db, order.id)
-
-
-TRACKER_URL = os.environ.get("TRACKER_URL", "http://tracker:8002")
-
-
-@router.post("/scan-tracking")
-async def scan_tracking(
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Proxy al microservicio tracker para actualizar tracking de todos los pedidos.
-
-    El microservicio tracker lee directamente la base de datos, abre
-    parcelsapp.com con Playwright para cada pedido activo y actualiza
-    el estado y los datos de tracking.
-
-    Args:
-        current_user: Usuario autenticado (cualquier rol puede disparar el escaneo).
-
-    Returns:
-        Resultado del escaneo retornado por el microservicio tracker.
-
-    Raises:
-        HTTPException 503: Si el microservicio tracker no está disponible.
-    """
-    try:
-        async with httpx.AsyncClient(timeout=300) as client:
-            resp = await client.post(f"{TRACKER_URL}/scan")
-            resp.raise_for_status()
-            return resp.json()
-    except httpx.ConnectError:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Servicio de tracking no disponible",
-        )
-    except httpx.HTTPStatusError as exc:
-        raise HTTPException(
-            status_code=exc.response.status_code,
-            detail=exc.response.text,
-        )

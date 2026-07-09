@@ -17,8 +17,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 RUN chown -R appuser:appuser /app
 
-RUN mkdir -p /slicer_jobs && chown appuser:appuser /slicer_jobs
-
 USER appuser
 
 EXPOSE 8000

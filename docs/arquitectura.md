@@ -46,27 +46,14 @@ Collector's Forge Studio es una plataforma multi-aplicación para gestión de un
               │  • Liquid PDF (WeasyPrint)      │
               │  • Exchange Rate (open.er-api)  │
               │  • Tariff Scraper (EPM PDF)     │
-              └──────┬───────────┬─────────────┘
-                     │           │
-         ┌───────────▼──┐    ┌───▼──────────┐
-         │  PostgreSQL  │    │    Slicer      │
-         │      16       │    │  OrcaSlicer   │
-         │  cfs-postgres │    │  cfs-slicer   │
-         │     :5432     │    │     :8001     │
-         └───────────────┘    └──────┬────────┘
-                                     │ volumen compartido
-                             ┌────────▼────────┐
-                             │   slicer_jobs/  │
-                             │  (Podman volume) │
-                             └─────────────────┘
-```
-
-**Tracker** (microservicio auxiliar):
-```
-cfs-tracker (:8002)
-  └─ Escanea tracking de pedidos cada N minutos
-  └─ Escribe estado en PostgreSQL (purchase_orders)
-  └─ Accedido por backend: POST /inventory/purchases/scan-tracking
+              └──────────────┬──────────────────┘
+                              │
+                     ┌────────▼────────┐
+                     │   PostgreSQL     │
+                     │       16         │
+                     │  cfs-postgres    │
+                     │      :5432       │
+                     └──────────────────┘
 ```
 
 ---
@@ -79,7 +66,6 @@ Cada "app" es una sección de la SPA React con su propio layout y rutas:
 |-----|-------|-----------|-------------|
 | Cost | `#2DD4BF` | `/cost/` | Calculadora de costos de impresión |
 | Inventario | `#3B82F6` | `/inventory/` | Inventario y pedidos de compra |
-| Slicer | `#F59E0B` | `/slicer/` | Laminado STL / extracción G-code |
 | Mantenimiento | `#8B5CF6` | `/maintenance/` | Registro de mantenimiento |
 | Queue | `#14B8A6` | `/queue/` | Cola de impresión |
 | Vault | `#F43F5E` | `/vault/` | Biblioteca de modelos `.3mf` / `.gcode.3mf` |
@@ -122,7 +108,6 @@ collectors-forge-studio/
 │   │   │   ├── client_quote.py       # ClientQuote (multi-producto, COT-XXXX)
 │   │   │   ├── settings.py           # AppSettings (por empresa)
 │   │   │   ├── electricity_tariff.py # Historial tarifas EPM por mes/estrato
-│   │   │   ├── slicing_job.py        # SlicingJob (STL/gcode procesados)
 │   │   │   ├── maintenance.py        # MaintenancePrinter/Log/LogItem
 │   │   │   └── queue.py              # PrintQueueItem (cola de impresión)
 │   │   │
@@ -137,8 +122,7 @@ collectors-forge-studio/
 │   │   │   ├── purchase_order.py     # PurchaseOrder + tracking fields
 │   │   │   ├── printed_item.py       # PrintedItem CRUD + sell
 │   │   │   ├── maintenance.py        # Log + summary schemas
-│   │   │   ├── queue.py              # QueueItem + status update
-│   │   │   └── slicer.py             # SlicingJob schemas
+│   │   │   └── queue.py              # QueueItem + status update
 │   │   │
 │   │   ├── routers/                  # Endpoints FastAPI
 │   │   │   ├── auth.py               # GET /auth/me, POST /auth/logout (blacklist JWT)
@@ -156,7 +140,6 @@ collectors-forge-studio/
 │   │   │   ├── quotes.py             # /quotes/ cálculo + historial + PDF
 │   │   │   ├── client_quotes.py      # /client-quotes/ + PDF (Liquid/ReportLab)
 │   │   │   ├── settings.py           # /settings/ + exchange-rate + tariff
-│   │   │   ├── slicer.py             # /slicer/upload-gcode + stl + makerworld
 │   │   │   ├── maintenance.py        # /maintenance/logs/ + /summary/
 │   │   │   └── queue.py              # /queue/ cola activa + history
 │   │   │
@@ -192,8 +175,7 @@ collectors-forge-studio/
 │   │   ├── test_manual_quote.py      # Cotizaciones manuales
 │   │   ├── test_integration_http.py  # 21 tests HTTP con httpx
 │   │   ├── test_queue.py             # Cola de impresión
-│   │   ├── test_slicer_parser.py     # Parser G-code
-│   │   ├── test_slicer_router_helpers.py
+│   │   ├── test_slicer_parser.py     # Parser G-code (usado por Vault)
 │   │   ├── test_exchange_rate.py
 │   │   ├── test_tariff_scraper.py
 │   │   ├── test_makerworld_fetcher.py
@@ -227,7 +209,6 @@ collectors-forge-studio/
 │   │   │   ├── HoverCard.jsx         # Hover cards reutilizables
 │   │   │   ├── SkeletonLoader.jsx    # Skeletons compartidos
 │   │   │   ├── ModelViewer3D.jsx     # Visor 3D de modelos STL
-│   │   │   ├── slicer/               # Componentes específicos del Slicer
 │   │   │   ├── widgets/              # Widgets del dashboard (LowStock, etc.)
 │   │   │   └── ui/                   # Primitives compartidos (Button, Card, KPI,
 │   │   │                              # StatusPill, DetailDrawer, MobileSheet, EmptyState,
@@ -265,8 +246,6 @@ collectors-forge-studio/
 │   │   │   │   └── QueuePage.jsx                # Tabs Activa / Historial + VaultPicker
 │   │   │   ├── settings/
 │   │   │   │   └── SettingsPage.jsx             # Cuenta + Usuarios (admin) vía drawers
-│   │   │   ├── slicer/
-│   │   │   │   └── SlicerPage.jsx               # Tabs Subir / Historial + drawer detalle
 │   │   │   └── vault/
 │   │   │       ├── VaultPage.jsx                # Galería .3mf / .gcode.3mf
 │   │   │       └── VaultUploadPage.jsx          # Dual upload (admin)
@@ -282,25 +261,13 @@ collectors-forge-studio/
 │   ├── vite.config.js                # Vite + proxy /api → localhost:8000
 │   └── package.json
 │
-├── slicer/                           # Microservicio OrcaSlicer
-│   ├── app.py                        # FastAPI pequeño: /slice, /health, /cli-help
-│   ├── Containerfile                 # Ubuntu 24.04 + OrcaSlicer AppImage
-│   └── requirements.txt
-│
-├── tracker/                          # Microservicio de tracking de pedidos
-│   ├── app.py                        # Escanea tracking URLs y actualiza DB
-│   ├── Containerfile
-│   └── requirements.txt
-│
 ├── quadlet/                          # Definiciones systemd (Podman Quadlet)
 │   ├── cfs.network
 │   ├── cfs-data.volume
 │   ├── cfs-pgdata.volume
-│   ├── cfs-slicer-jobs.volume
 │   ├── cfs-postgres.container
 │   ├── cfs-backend.container
 │   ├── cfs-frontend.container
-│   ├── cfs-slicer.container
 │   └── cfs-tunnel.container
 │
 ├── deploy.sh                         # Script de despliegue completo
@@ -337,7 +304,6 @@ Company (UUID PK — singleton)
 | `ClientQuote` | `client_quotes` | Cotización multi-producto para cliente (COT-XXXX) |
 | `AppSettings` | `app_settings` | Config global singleton (tarifas, margen) |
 | `ElectricityTariff` | `electricity_tariffs` | Historial tarifas EPM por mes/estrato |
-| `SlicingJob` | `slicing_jobs` | Trabajo de laminado STL/G-code |
 | `MaintenancePrinter` | `maintenance_printers` | Impresora registrada para mantenimiento |
 | `MaintenanceLog` | `maintenance_logs` | Registro de mantenimiento con items usados |
 | `PrintQueueItem` | `print_queue` | Item en cola de impresión (pending/printing/done/cancelled) |
@@ -468,10 +434,8 @@ Todos los contenedores se comunican en la red `cfs` (bridge). Los nombres de con
 
 | Hostname interno | Puerto | Quién lo usa |
 |---|---|---|
-| `cfs-postgres` | `5432` | backend, tracker |
+| `cfs-postgres` | `5432` | backend |
 | `cfs-backend` | `8000` | frontend (nginx proxy) |
-| `cfs-slicer` | `8001` | backend (POST /slicer/*) |
-| `cfs-tracker` | `8002` | backend (POST /scan-tracking) |
 | `cfs-frontend` | `80` | cloudflared tunnel |
 
 ---
@@ -481,7 +445,6 @@ Todos los contenedores se comunican en la red `cfs` (bridge). Los nombres de con
 | Volumen | Montaje | Contenido |
 |---|---|---|
 | `cfs-pgdata` | `/var/lib/postgresql/data` | Datos PostgreSQL |
-| `cfs-slicer-jobs` | `/slicer_jobs` | Archivos STL/G-code temporales |
 
 > **Nota:** Los binarios de la app (thumbnails del Vault, logo de
 > empresa, imágenes de PrintedItem, archivos del Vault `.3mf`) **no se
@@ -515,13 +478,13 @@ Self-hosted runner (Linux PC)
       ├─ git pull origin main
       └─ ./deploy.sh
             │
-            ├─ podman build (backend, frontend, slicer)
+            ├─ podman build (backend, frontend)
             ├─ podman pull postgres:16-alpine
             ├─ Instalar Quadlets → systemctl daemon-reload
             ├─ systemctl restart cfs-postgres
             ├─ Esperar PostgreSQL ready (pg_isready)
             ├─ podman run --rm → alembic upgrade head
-            ├─ systemctl restart backend, slicer, frontend
+            ├─ systemctl restart backend, frontend
             ├─ Verificar /api/health
             └─ systemctl restart cfs-tunnel
 ```

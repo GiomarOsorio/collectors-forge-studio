@@ -63,14 +63,13 @@ describe('AppLayout — shell mobile (≤lg)', () => {
     useIsMobile.mockReturnValue(true);
   });
 
-  it('renderiza MobileBottomNav con los 5 ítems', () => {
+  it('renderiza MobileBottomNav con los 4 ítems', () => {
     renderLayout();
-    // 'Costos', 'Inventario', 'Cola' y 'Slicer' aparecen tanto en bottom nav
+    // 'Costos', 'Inventario' y 'Cola' aparecen tanto en bottom nav
     // como en la sidebar drawer — basta con verificar que existe al menos uno.
     expect(screen.getAllByText('Costos').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Inventario').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Cola').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Slicer').length).toBeGreaterThan(0);
     // 'Mantto' es solo de la bottom nav (la sidebar dice 'Mantenimiento')
     expect(screen.getByText('Mantto')).toBeInTheDocument();
   });

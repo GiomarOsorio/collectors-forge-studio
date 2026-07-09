@@ -12,15 +12,14 @@
 
 import { useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Calculator, Cpu, ListOrdered, Package, Wrench } from 'lucide-react';
+import { Calculator, ListOrdered, Package, Wrench } from 'lucide-react';
 import { useBadges } from '../hooks/useBadges';
 
-/** Apps fijas que aparecen en la bottom nav (5 slots). */
+/** Apps fijas que aparecen en la bottom nav (4 slots). */
 const ITEMS = [
   { id: 'cost',        label: 'Costos',     icon: Calculator,  to: '/cost',         match: '/cost' },
   { id: 'inventory',   label: 'Inventario', icon: Package,     to: '/inventory',    match: '/inventory' },
   { id: 'queue',       label: 'Cola',       icon: ListOrdered, to: '/queue',        match: '/queue',       badgeKey: 'pendingQueue' },
-  { id: 'slicer',      label: 'Slicer',     icon: Cpu,         to: '/slicer',       match: '/slicer' },
   { id: 'maintenance', label: 'Mantto',     icon: Wrench,      to: '/maintenance',  match: '/maintenance', badgeKey: 'overdueMaintenance', badgeWarn: true },
 ];
 

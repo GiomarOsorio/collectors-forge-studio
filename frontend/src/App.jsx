@@ -31,7 +31,6 @@
  * - /cost/history                → Historial de cotizaciones internas
  * - /cost/settings               → Tarifa eléctrica & ajustes
  * - /settings                    → Settings (Cuenta + Usuarios admin)
- * - /slicer                      → Slicer (Upload / Historial / detalle vía drawer)
  * - /maintenance                 → Mantenimiento (Dashboard + Historial + CRUD)
  * - /queue                       → Cola de impresión (Activa + Historial)
  * - /vault                       → Vault de modelos (.3mf / .gcode.3mf)
@@ -62,7 +61,6 @@ const CostSettingsPage         = lazy(() => import('./pages/CostSettingsPage'));
 const SettingsPage             = lazy(() => import('./pages/settings/SettingsPage'));
 const InventoryPage            = lazy(() => import('./pages/inventory/InventoryPage'));
 const CostPage                 = lazy(() => import('./pages/cost/CostPage'));
-const SlicerPage               = lazy(() => import('./pages/slicer/SlicerPage'));
 const QueuePage                = lazy(() => import('./pages/queue/QueuePage'));
 const MaintenancePage          = lazy(() => import('./pages/maintenance/MaintenancePage'));
 const VaultPage                = lazy(() => import('./pages/vault/VaultPage'));
@@ -106,9 +104,8 @@ function AdminRoute({ children }) {
  * Redirect que preserva los query params del request original.
  *
  * Diferente de `<Navigate to="/x" replace />`: ese descarta el `?foo=bar`
- * de la URL al redirigir. Cuando la ruta destino consume search params
- * (ej. `/cost/calculator?weight_grams=245`), necesitamos conservarlos
- * o el flujo se rompe silenciosamente.
+ * de la URL al redirigir. Cuando la ruta destino consume search params,
+ * necesitamos conservarlos o el flujo se rompe silenciosamente.
  *
  * @param {{ to: string }} props - Path destino sin query.
  */
@@ -193,16 +190,6 @@ function AppRoutes() {
           <Route path="account"  element={<RedirectPreservingSearch to="/settings" />} />
           <Route path="users"    element={<RedirectPreservingSearch to="/settings" />} />
           <Route path="company"  element={<RedirectPreservingSearch to="/company" />} />
-        </Route>
-
-        {/* Slicer — `index` con tabs internos (Upload / Historial) + drawer
-            de detalle. Las URLs legacy redirigen. */}
-        <Route path="/slicer">
-          <Route index           element={<SlicerPage />} />
-          <Route path="v2"       element={<RedirectPreservingSearch to="/slicer" />} />
-          <Route path="upload"   element={<RedirectPreservingSearch to="/slicer" />} />
-          <Route path="history"  element={<RedirectPreservingSearch to="/slicer" />} />
-          <Route path="jobs/:id" element={<RedirectPreservingSearch to="/slicer" />} />
         </Route>
 
         {/* Mantenimiento — `index` con Dashboard + Historial + CRUD logs

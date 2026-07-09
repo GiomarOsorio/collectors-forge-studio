@@ -2,7 +2,7 @@
  * @file DropZone primitive (Claude Design v2 port).
  *
  * Área de drag-drop para upload de archivos. Cambia el border al hover
- * y al drag-over. Usada en Slicer (.3mf/.gcode) y Vault (.stl/.3mf).
+ * y al drag-over. Usada en Vault (.stl/.3mf).
  *
  * Por ahora el componente sólo gestiona el visual + click. El handler
  * de archivos lo provee el caller mediante `onFiles`.

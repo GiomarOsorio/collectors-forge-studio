@@ -30,13 +30,12 @@ test.describe('Inventory mobile — Claude Design fidelity', () => {
     await expect(page.getByRole('button', { name: /filamentos/i }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: /herram\./i }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: /consum\./i }).first()).toBeVisible();
-    // Bottom nav con 5 ítems
+    // Bottom nav con 4 ítems
     const nav = page.getByRole('navigation', { name: /navegación principal/i });
     await expect(nav).toBeVisible();
     await expect(nav.getByText('Costos')).toBeVisible();
     await expect(nav.getByText('Inventario')).toBeVisible();
     await expect(nav.getByText('Cola')).toBeVisible();
-    await expect(nav.getByText('Slicer')).toBeVisible();
     await expect(nav.getByText('Mantto')).toBeVisible();
   });
 

@@ -531,9 +531,6 @@ export const deletePurchaseOrder = (id) => api.delete(`/inventory/purchases/${id
 /** Marca un pedido como llegado y actualiza el stock de inventario. */
 export const arrivePurchaseOrder = (id) => api.post(`/inventory/purchases/${id}/arrive`);
 
-/** Lanza el escaneo masivo de tracking en el microservicio tracker. */
-export const scanTracking = () => api.post('/inventory/purchases/scan-tracking');
-
 // ============================================================
 // Impresiones (Printed Items)
 // ============================================================
@@ -572,61 +569,6 @@ export const uploadPrintedItemImage = (id, file) => {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
 };
-
-// ============================================================
-// Slicer
-// ============================================================
-
-/**
- * Sube un archivo G-code o 3MF ya laminado para extraer sus metadatos.
- *
- * @param {File} file - Archivo .gcode o .3mf
- * @returns {Promise<import('axios').AxiosResponse>} Metadatos del G-code
- */
-export const uploadGcode = (file) => {
-  const formData = new FormData();
-  formData.append('file', file);
-  return api.post('/slicer/upload-gcode', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
-};
-
-/**
- * Sube un archivo STL para laminarlo con OrcaSlicer en el servidor.
- *
- * @param {File} file - Archivo .stl
- * @param {string} printerPreset - Preset de impresora de OrcaSlicer
- * @param {string} filamentPreset - Preset de filamento de OrcaSlicer
- * @param {string} configPreset - Preset de configuracion de OrcaSlicer
- * @returns {Promise<import('axios').AxiosResponse>} Job creado con ID para polling
- */
-export const uploadStl = (file, printerPreset, filamentPreset, configPreset) => {
-  const formData = new FormData();
-  formData.append('file', file);
-  if (printerPreset) formData.append('printer_preset', printerPreset);
-  if (filamentPreset) formData.append('filament_preset', filamentPreset);
-  if (configPreset) formData.append('config_preset', configPreset);
-  return api.post('/slicer/upload-stl', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
-};
-
-/**
- * Obtiene metadatos de un modelo desde una URL de MakerWorld.
- *
- * @param {string} url - URL del modelo en MakerWorld
- * @returns {Promise<import('axios').AxiosResponse>} Job creado con ID para polling
- */
-export const fetchMakerworld = (url) => api.post('/slicer/makerworld', { url });
-
-/** Obtiene la lista de trabajos de laminado del usuario. */
-export const getSlicingJobs = () => api.get('/slicer/jobs');
-
-/** Obtiene un trabajo de laminado por su ID. */
-export const getSlicingJob = (id) => api.get(`/slicer/jobs/${id}`);
-
-/** Elimina un trabajo de laminado por su ID. */
-export const deleteSlicingJob = (id) => api.delete(`/slicer/jobs/${id}`);
 
 // ============================================================================
 // Mantenimiento de impresoras

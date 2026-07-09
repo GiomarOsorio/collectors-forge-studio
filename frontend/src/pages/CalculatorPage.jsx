@@ -20,7 +20,6 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Calculator, Save, AlertTriangle, RotateCcw, Loader2, Plus, X, Trash2,
@@ -1035,7 +1034,6 @@ const matchesAny = (item, patterns) => {
 };
 
 export default function CalculatorPage({ embedded = false } = {}) {
-  const [searchParams] = useSearchParams();
   const isMobile = useIsMobile();
 
   // Datos catálogo
@@ -1122,39 +1120,6 @@ export default function CalculatorPage({ embedded = false } = {}) {
           inventory_item_id: filamentItems[0]?.id || '',
           consumable_ids: defaultConsumables,
         }));
-
-        // Slicer URL params
-        const wg = searchParams.get('weight_grams');
-        const ph = searchParams.get('print_time_hours');
-        const itemId = searchParams.get('inventory_item_id');
-        const updates = {};
-        if (wg) updates.weight_grams = Number(parseFloat(wg).toFixed(0));
-        if (ph) {
-          const totalMin = parseFloat(ph) * 60;
-          updates.hours = Math.floor(totalMin / 60);
-          updates.minutes = Math.round(totalMin % 60);
-        }
-        if (itemId && filamentItems.some((f) => f.id === Number(itemId))) {
-          updates.inventory_item_id = Number(itemId);
-        }
-        const extras = [];
-        const extraGrams = [];
-        for (let i = 1; i <= 4; i++) {
-          const eId = searchParams.get(`extra_id_${i}`);
-          const eW = searchParams.get(`extra_weight_${i}`);
-          if (eId && eW && filamentItems.some((f) => f.id === Number(eId))) {
-            extras.push(Number(eId));
-            extraGrams.push(Number(parseFloat(eW).toFixed(0)));
-          }
-        }
-        if (extras.length > 0) {
-          updates.additional_filaments_ids = extras;
-          updates.additional_filaments_grams = extraGrams;
-        }
-        if (Object.keys(updates).length > 0) {
-          setForm((cur) => ({ ...cur, ...updates }));
-          if (wg || ph) toast.success('Datos del Slicer cargados');
-        }
       })
       .catch(() => toast.error('Error cargando catálogo'))
       .finally(() => setInitialLoading(false));

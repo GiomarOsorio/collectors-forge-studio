@@ -510,8 +510,8 @@ async def add_to_queue_from_vault(
     Agrega un `ModelFile` del Vault a la cola de impresión.
 
     El modelo debe tener un `print_file` (.gcode.3mf) — si solo tiene
-    `source_file` editable, no se puede encolar (lamina primero en Slicer
-    y vuelve a subir).
+    `source_file` editable, no se puede encolar (lamina primero con tu
+    slicer y vuelve a subir el resultado al Vault).
 
     Toma los datos físicos de impresión (peso, tiempo) del `sliced_*` del
     modelo y los **denormaliza** en el item: cambios futuros en el Vault
@@ -532,7 +532,7 @@ async def add_to_queue_from_vault(
     if not model.print_file_key:
         raise HTTPException(
             status_code=400,
-            detail="Este modelo no tiene .gcode.3mf laminado. Lamínalo en Slicer y vuelve a subirlo.",
+            detail="Este modelo no tiene .gcode.3mf laminado. Lamínalo con tu slicer y vuelve a subirlo al Vault.",
         )
 
     # Verificar impresora.

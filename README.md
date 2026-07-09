@@ -34,7 +34,6 @@ que lo uses.
 |---|---|---|---|
 | **Cost** | `/cost/` | `#3FAF4C` | Calculadora de costos — filamentos, impresoras, insumos, margen, PDF |
 | **Archive** | `/inventory/` | `#3B82F6` | Stock unificado, alertas de mínimos, pedidos de compra con tracking |
-| **Slicer** | `/slicer/` | `#F59E0B` | Laminado STL con OrcaSlicer, extracción de .gcode y .3mf |
 | **Mantenimiento** | `/maintenance/` | `#8B5CF6` | Historial de mantenimiento por impresora, descuento automático de inventario |
 | **Queue** | `/queue/` | `#14B8A6` | Cola de impresión con descuento atómico de inventario al marcar como listo |
 | **Compañía** | `/company/` | `#6366F1` | Perfil, paleta de colores PDF y templates Liquid personalizados |
@@ -170,7 +169,7 @@ openssl rand -hex 32  # usar para SECRET_KEY y SESSION_SECRET_KEY
 
 ```bash
 # Estado de todos los servicios
-systemctl --user status cfs-{postgres,backend,frontend,slicer,tunnel}
+systemctl --user status cfs-{postgres,backend,frontend,tunnel}
 
 # Logs en tiempo real
 journalctl --user -u cfs-backend -f

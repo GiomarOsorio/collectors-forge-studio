@@ -175,9 +175,6 @@ podman image prune -f --filter label=stage=cfs-frontend-build 2>/dev/null || tru
 podman build --no-cache --pull=always -t cfs-frontend \
     -f "$DEPLOY_PATH/frontend/Containerfile" "$DEPLOY_PATH/frontend/"
 
-podman build -t cfs-slicer -f "$DEPLOY_PATH/slicer/Containerfile" "$DEPLOY_PATH/slicer/"
-podman build -t cfs-tracker -f "$DEPLOY_PATH/tracker/Containerfile" "$DEPLOY_PATH/tracker/"
-
 echo "→ Descargando imagen de PostgreSQL..."
 podman pull docker.io/postgres:16-alpine
 
@@ -197,7 +194,6 @@ rm -f "$QUADLET_DIR"/calculator3d-*.container \
 cp "$DEPLOY_PATH/quadlet/cfs.network" "$QUADLET_DIR/"
 cp "$DEPLOY_PATH/quadlet/cfs-data.volume" "$QUADLET_DIR/"
 cp "$DEPLOY_PATH/quadlet/cfs-pgdata.volume" "$QUADLET_DIR/"
-cp "$DEPLOY_PATH/quadlet/cfs-slicer-jobs.volume" "$QUADLET_DIR/"
 
 # Copiar contenedores sustituyendo __DEPLOY_PATH__ y __ENV_FILE__
 for f in "$DEPLOY_PATH"/quadlet/*.container; do
@@ -243,7 +239,7 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "→ Parando servicios cfs-* en ejecución..."
-for svc in cfs-frontend cfs-backend cfs-slicer cfs-tracker; do
+for svc in cfs-frontend cfs-backend; do
     systemctl --user stop "$svc" 2>/dev/null || true
     podman stop "$svc"   2>/dev/null || true
     podman rm   "$svc"   2>/dev/null || true
@@ -273,8 +269,8 @@ for i in $(seq 1 20); do
     fi
 done
 
-echo "→ Iniciando backend, slicer, tracker y frontend..."
-systemctl --user start cfs-slicer cfs-backend cfs-tracker cfs-frontend
+echo "→ Iniciando backend y frontend..."
+systemctl --user start cfs-backend cfs-frontend
 
 echo "→ Verificando que el backend responde (máx. 30s)..."
 for i in $(seq 1 15); do
@@ -299,11 +295,7 @@ echo ""
 echo "Comandos útiles:"
 echo "  systemctl --user status cfs-postgres        # Estado PostgreSQL"
 echo "  systemctl --user status cfs-backend         # Estado backend"
-echo "  systemctl --user status cfs-slicer          # Estado OrcaSlicer"
-echo "  systemctl --user status cfs-tracker         # Estado tracker"
 echo "  systemctl --user status cfs-frontend        # Estado frontend"
 echo "  journalctl --user -u cfs-backend -f         # Logs backend"
-echo "  journalctl --user -u cfs-slicer -f          # Logs OrcaSlicer"
-echo "  journalctl --user -u cfs-tracker -f         # Logs tracker"
 echo "  podman exec -it cfs-postgres psql -U $PG_USER $PG_DB  # Shell PG"
 echo "  podman ps                                             # Ver contenedores"
