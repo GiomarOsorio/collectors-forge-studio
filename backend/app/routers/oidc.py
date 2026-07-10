@@ -5,9 +5,11 @@ Implementa el flujo Authorization Code con PKCE (RFC 7636) usando Authlib.
 Compatible con cualquier proveedor OIDC estándar (Authentik, Keycloak, Auth0, etc.).
 
 Endpoints:
-    GET /api/auth/oidc/login     — Inicia el flujo OIDC, redirige al IdP.
-    GET /api/auth/oidc/callback  — Recibe el code, valida, JIT-provisiona y emite JWT local.
-    GET /api/auth/oidc/logout    — Retorna la URL de logout del IdP.
+    GET /api/auth/oidc/login              — Inicia el flujo OIDC, redirige al IdP.
+    GET /api/auth/oidc/callback           — Recibe el code, valida, JIT-provisiona y emite JWT local.
+    GET /api/auth/oidc/logout             — Retorna la URL de logout del IdP.
+    GET /api/auth/oidc/dev-login          — Bypass sin IdP, solo si DEV_LOGIN_ENABLED=true.
+    GET /api/auth/oidc/dev-login-status   — Indica al frontend si el bypass está disponible.
 """
 
 import logging
@@ -176,3 +178,52 @@ async def oidc_logout(current_user: User = Depends(get_current_user)):
             logger.warning("No se pudo obtener end_session_endpoint: %s", exc)
 
     return JSONResponse({"logout_url": logout_url})
+
+
+# Subject fijo para el usuario de bypass — estable entre reinicios/redeploys
+# de cfs-app-dev para no crear un usuario nuevo cada vez.
+_DEV_LOGIN_SUB = "dev-login-bypass"
+
+
+@router.get("/dev-login-status")
+async def dev_login_status():
+    """Indica al frontend si el bypass de dev-login está disponible."""
+    return JSONResponse({"enabled": settings.DEV_LOGIN_ENABLED})
+
+
+@router.get("/dev-login")
+async def dev_login(db: AsyncSession = Depends(get_db)):
+    """
+    Login de bypass exclusivo para el deploy de dev — JIT-provisiona (o
+    reutiliza) un usuario admin fijo y emite JWT local sin pasar por el IdP.
+
+    Solo responde si DEV_LOGIN_ENABLED=true, variable que solo existe en el
+    quadlet de cfs-app-dev (nunca en cfs-app-prod) — ver
+    service-deployments/services/cfs-app/quadlets/cfs-app-dev.container.
+
+    Raises:
+        HTTPException 404: Si DEV_LOGIN_ENABLED no está activo.
+    """
+    if not settings.DEV_LOGIN_ENABLED:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+    result = await db.execute(select(User).where(User.oidc_sub == _DEV_LOGIN_SUB))
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        user = User(
+            username="dev-admin",
+            email="dev-admin@cfs.local",
+            hashed_password=None,
+            oidc_sub=_DEV_LOGIN_SUB,
+            role="admin",
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+    if not user.is_active:
+        return RedirectResponse(url="/login?error=user_inactive")
+
+    access_token = create_access_token(data={"sub": user.username})
+    return RedirectResponse(url=f"/auth/success?token={access_token}")
