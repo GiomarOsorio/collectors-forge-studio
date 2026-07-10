@@ -26,6 +26,7 @@ class PrintQueueItemCreate(BaseModel):
 
     quote_id: int
     notes: Optional[str] = None
+    project_id: Optional[int] = None
 
 
 class PrintQueueItemFromVaultCreate(BaseModel):
@@ -40,6 +41,7 @@ class PrintQueueItemFromVaultCreate(BaseModel):
     filament_id: Optional[int] = None
     quantity: int = Field(default=1, ge=1, le=999)
     notes: Optional[str] = None
+    project_id: Optional[int] = None
 
 
 class QueueQuoteSnapshot(BaseModel):
@@ -83,6 +85,7 @@ class PrintQueueItemResponse(BaseModel):
     id: int
     quote_id: Optional[int]
     vault_model_id: Optional[int] = None
+    project_id: Optional[int] = None
     status: str
     position: int
     started_at: Optional[datetime]
@@ -99,3 +102,9 @@ class PrintQueueStatusUpdate(BaseModel):
     """Payload para cambiar el estado de un ítem de la cola."""
 
     status: str  # 'printing' | 'done' | 'cancelled'
+
+
+class PrintQueueProjectUpdate(BaseModel):
+    """Payload para (re)asignar o quitar el proyecto de un ítem ya encolado."""
+
+    project_id: Optional[int] = None

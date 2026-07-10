@@ -116,6 +116,11 @@ class PrintQueueItem(Base):
         Numeric(10, 4), nullable=True
     )
 
+    # ── Proyecto (agrupador opcional, aplica a items de cualquier fuente) ──
+    project_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     # ── Estado de cola ──────────────────────────────────────────────────────
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default=text("'pending'")

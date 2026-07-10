@@ -10,10 +10,14 @@ Todos los endpoints requieren autenticación JWT. Las operaciones de
 escritura (upload, edit, delete, replace) requieren `role='admin'`.
 
 Endpoints:
-    GET    /api/vault/                       — Listar archivos (paginado, búsqueda)
+    GET    /api/vault/                       — Listar archivos (paginado, búsqueda, filtro por carpeta)
     GET    /api/vault/stats                  — Estadísticas de uso del almacenamiento
     POST   /api/vault/fetch-metadata         — Pre-leer metadata desde URL externa
     POST   /api/vault/upload                 — Subir source_file y/o print_file con metadata (admin)
+    GET    /api/vault/folders                — Listar carpetas (árbol plano + conteo de archivos)
+    POST   /api/vault/folders                — Crear carpeta (admin)
+    PUT    /api/vault/folders/{id}           — Renombrar / mover carpeta (admin)
+    DELETE /api/vault/folders/{id}           — Eliminar carpeta (admin; hijos suben un nivel)
     GET    /api/vault/{id}/download/source   — Descargar el .3mf editable
     GET    /api/vault/{id}/download/print    — Descargar el .gcode.3mf laminado
     PUT    /api/vault/{id}                   — Editar metadata (admin)
@@ -41,6 +45,7 @@ from app.config import settings
 from app.database import get_db
 from app.models.model_file import ModelFile, ModelFilePlate
 from app.models.user import User
+from app.models.vault_folder import VaultFolder
 from app.schemas.vault import (
     ModelFileListResponse,
     ModelFileResponse,
@@ -48,6 +53,11 @@ from app.schemas.vault import (
     VaultMetadataRequest,
     VaultMetadataResponse,
     VaultStatsResponse,
+)
+from app.schemas.vault_folder import (
+    VaultFolderCreate,
+    VaultFolderResponse,
+    VaultFolderUpdate,
 )
 from app.services.auth import get_admin_user, get_current_user
 from app.services.slicer_parser import parse_3mf_all_plates, parse_3mf_file
@@ -156,11 +166,60 @@ def _to_response(model: ModelFile, username: Optional[str]) -> ModelFileResponse
         source_platform=model.source_platform,
         creator_name=model.creator_name,
         creator_url=model.creator_url,
+        folder_id=model.folder_id,
         active_plate_index=model.active_plate_index,
         plates=plates_payload,
         created_at=model.created_at,
         updated_at=model.updated_at,
     )
+
+
+async def _get_folder(db: AsyncSession, folder_id: int) -> VaultFolder:
+    """Obtiene una `VaultFolder` por ID; lanza 404 si no existe."""
+    result = await db.execute(select(VaultFolder).where(VaultFolder.id == folder_id))
+    folder = result.scalar_one_or_none()
+    if not folder:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Carpeta no encontrada",
+        )
+    return folder
+
+
+async def _assert_not_own_descendant(
+    db: AsyncSession, folder_id: int, new_parent_id: Optional[int]
+) -> None:
+    """
+    Evita mover una carpeta dentro de sí misma o de un descendiente propio
+    (crearía un ciclo en el árbol). Recorre ancestros de `new_parent_id`
+    hasta la raíz; si encuentra `folder_id` en el camino, rechaza.
+    """
+    if new_parent_id is None:
+        return
+    if new_parent_id == folder_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Una carpeta no puede ser su propio padre",
+        )
+    current_id = new_parent_id
+    seen = set()
+    while current_id is not None:
+        if current_id in seen:
+            break  # ciclo pre-existente defensivo; no debería pasar
+        seen.add(current_id)
+        result = await db.execute(
+            select(VaultFolder.parent_id).where(VaultFolder.id == current_id)
+        )
+        row = result.first()
+        if row is None:
+            break
+        parent_of_current = row[0]
+        if parent_of_current == folder_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No puedes mover una carpeta dentro de su propia subcarpeta",
+            )
+        current_id = parent_of_current
 
 
 def _parse_all_plates_from_bytes(content: bytes) -> list:
@@ -334,6 +393,14 @@ async def list_vault_files(
         default=False,
         description="Si True, solo retorna modelos con print_file presente",
     ),
+    folder_id: Optional[int] = Query(
+        default=None,
+        description="Filtra por carpeta. Omitido = no filtra por carpeta.",
+    ),
+    root_only: bool = Query(
+        default=False,
+        description="Si True (y folder_id no se envía), solo retorna archivos sin carpeta (raíz).",
+    ),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -342,9 +409,16 @@ async def list_vault_files(
     """
     Lista los archivos del Vault con paginación, búsqueda y filtro
     `print_ready_only` (usado por el picker de Queue para listar solo
-    modelos con `.gcode.3mf` disponibles).
+    modelos con `.gcode.3mf` disponibles). `folder_id` filtra por carpeta
+    específica; `root_only` (sin `folder_id`) filtra solo archivos sin
+    carpeta asignada.
     """
     base_q = select(ModelFile).options(selectinload(ModelFile.plates))
+
+    if folder_id is not None:
+        base_q = base_q.where(ModelFile.folder_id == folder_id)
+    elif root_only:
+        base_q = base_q.where(ModelFile.folder_id.is_(None))
 
     if q:
         # Búsqueda substring case-insensitive sobre name + description + tags.
@@ -408,6 +482,113 @@ async def fetch_vault_metadata(
     """Extrae metadata de un modelo desde su URL pública (MakerWorld, etc.)."""
     data = await fetch_metadata(body.url)
     return VaultMetadataResponse(**{k: v for k, v in data.items() if k != "source_url"})
+
+
+@router.get("/folders", response_model=list[VaultFolderResponse])
+async def list_vault_folders(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Lista todas las carpetas del Vault (plana, con `parent_id`) más el
+    conteo de archivos directos (no recursivo) de cada una. El frontend
+    arma el árbol a partir de `parent_id`.
+    """
+    folders_result = await db.execute(select(VaultFolder).order_by(VaultFolder.name))
+    folders = folders_result.scalars().all()
+
+    counts_result = await db.execute(
+        select(ModelFile.folder_id, func.count())
+        .where(ModelFile.folder_id.is_not(None))
+        .group_by(ModelFile.folder_id)
+    )
+    counts = {row[0]: row[1] for row in counts_result.all()}
+
+    return [
+        VaultFolderResponse(
+            id=f.id,
+            name=f.name,
+            parent_id=f.parent_id,
+            file_count=counts.get(f.id, 0),
+            created_at=f.created_at,
+            updated_at=f.updated_at,
+        )
+        for f in folders
+    ]
+
+
+@router.post("/folders", response_model=VaultFolderResponse, status_code=status.HTTP_201_CREATED)
+async def create_vault_folder(
+    body: VaultFolderCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """Crea una carpeta nueva. Solo admins."""
+    if body.parent_id is not None:
+        await _get_folder(db, body.parent_id)  # 404 si el padre no existe
+    folder = VaultFolder(name=body.name.strip(), parent_id=body.parent_id)
+    db.add(folder)
+    await db.commit()
+    await db.refresh(folder)
+    return VaultFolderResponse(
+        id=folder.id, name=folder.name, parent_id=folder.parent_id,
+        file_count=0, created_at=folder.created_at, updated_at=folder.updated_at,
+    )
+
+
+@router.put("/folders/{folder_id}", response_model=VaultFolderResponse)
+async def update_vault_folder(
+    folder_id: int,
+    body: VaultFolderUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """Renombra y/o mueve (cambia `parent_id`) una carpeta. Solo admins."""
+    folder = await _get_folder(db, folder_id)
+
+    if body.name is not None:
+        folder.name = body.name.strip()
+
+    # `move_to_root=True` es la única forma de poner parent_id=NULL — un
+    # `parent_id` ausente del body no debe tocar nada (patrón consistente
+    # con el resto del PUT de Vault, que usa exclude_unset).
+    if body.move_to_root:
+        folder.parent_id = None
+    elif body.parent_id is not None:
+        await _get_folder(db, body.parent_id)  # 404 si el nuevo padre no existe
+        await _assert_not_own_descendant(db, folder_id, body.parent_id)
+        folder.parent_id = body.parent_id
+
+    folder.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    await db.commit()
+    await db.refresh(folder)
+
+    count_result = await db.execute(
+        select(func.count()).select_from(ModelFile).where(ModelFile.folder_id == folder.id)
+    )
+    return VaultFolderResponse(
+        id=folder.id, name=folder.name, parent_id=folder.parent_id,
+        file_count=count_result.scalar() or 0,
+        created_at=folder.created_at, updated_at=folder.updated_at,
+    )
+
+
+@router.delete("/folders/{folder_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_vault_folder(
+    folder_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """
+    Elimina una carpeta. Solo admins.
+
+    Los archivos directamente dentro quedan en la raíz (`folder_id=NULL`,
+    vía `ondelete=SET NULL`). Las subcarpetas se eliminan en cascada
+    (`ondelete=CASCADE`) — el frontend advierte de esto antes de confirmar.
+    """
+    folder = await _get_folder(db, folder_id)
+    await db.delete(folder)
+    await db.commit()
 
 
 @router.post("/upload", response_model=ModelFileResponse, status_code=status.HTTP_201_CREATED)
@@ -474,6 +655,10 @@ async def upload_vault_file(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="El campo 'name' es requerido",
         )
+
+    folder_id = meta_dict.get("folder_id")
+    if folder_id is not None:
+        await _get_folder(db, folder_id)  # 404 si la carpeta no existe
 
     # Leer ambos archivos en memoria y validar tamaños individuales.
     source_bytes = await source_file.read() if source_file else None
@@ -551,6 +736,7 @@ async def upload_vault_file(
         source_platform=meta_dict.get("source_platform"),
         creator_name=meta_dict.get("creator_name"),
         creator_url=meta_dict.get("creator_url"),
+        folder_id=folder_id,
         created_at=now,
         updated_at=now,
     )
@@ -789,6 +975,8 @@ async def update_vault_file(
     model = await _get_model_file(db, file_id)
 
     update_data = body.model_dump(exclude_unset=True)
+    if update_data.get("folder_id") is not None:
+        await _get_folder(db, update_data["folder_id"])  # 404 si no existe
     for field, value in update_data.items():
         setattr(model, field, value)
 

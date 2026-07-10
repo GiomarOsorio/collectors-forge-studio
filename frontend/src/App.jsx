@@ -65,6 +65,7 @@ const QueuePage                = lazy(() => import('./pages/queue/QueuePage'));
 const MaintenancePage          = lazy(() => import('./pages/maintenance/MaintenancePage'));
 const VaultPage                = lazy(() => import('./pages/vault/VaultPage'));
 const VaultUploadPage          = lazy(() => import('./pages/vault/VaultUploadPage'));
+const ProjectsPage             = lazy(() => import('./pages/projects/ProjectsPage'));
 const CompanyPage              = lazy(() => import('./pages/company/CompanyPage'));
 const CompanyTemplateEditorPage= lazy(() => import('./pages/company/CompanyTemplateEditorPage'));
 const InventoryPurchasesPage   = lazy(() => import('./pages/inventory/InventoryPurchasesPage'));
@@ -234,6 +235,9 @@ function AppRoutes() {
           <Route path="upload"   element={<VaultUploadPage />} />
           <Route path="upload/v2" element={<RedirectPreservingSearch to="/vault/upload" />} />
         </Route>
+
+        {/* Proyectos — agrupador de items de la cola de impresión. */}
+        <Route path="/projects" element={<ProjectsPage />} />
       </Route>
     </Routes>
   );

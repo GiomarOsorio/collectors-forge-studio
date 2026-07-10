@@ -778,5 +778,88 @@ export const replaceVaultPrint = (id, file, onUploadProgress) => {
  */
 export const deleteVaultFile = (id) => api.delete(`/vault/${id}`);
 
+// ── Carpetas del Vault ──────────────────────────────────────────────────────
+
+/** Lista todas las carpetas del Vault (plana, con parent_id + file_count). */
+export const getVaultFolders = () => api.get('/vault/folders');
+
+/**
+ * Crea una carpeta nueva. Solo admins.
+ * @param {{name: string, parent_id?: number|null}} data
+ */
+export const createVaultFolder = (data) => api.post('/vault/folders', data);
+
+/**
+ * Renombra y/o mueve una carpeta. Solo admins.
+ * `move_to_root: true` es la única forma de poner parent_id=null.
+ * @param {number} id
+ * @param {{name?: string, parent_id?: number, move_to_root?: boolean}} data
+ */
+export const updateVaultFolder = (id, data) => api.put(`/vault/folders/${id}`, data);
+
+/** Elimina una carpeta (sus archivos suben a la raíz; subcarpetas se borran en cascada). Solo admins. */
+export const deleteVaultFolder = (id) => api.delete(`/vault/folders/${id}`);
+
+// ============================================================================
+// Filament Profiles — parámetros de slicer por filamento (referencia)
+// ============================================================================
+
+/**
+ * Obtiene el perfil de slicer de un filamento. 404 si no tiene uno guardado
+ * — el caller debe capturar el error y tratarlo como "sin perfil todavía".
+ * @param {number} inventoryItemId
+ */
+export const getFilamentProfile = (inventoryItemId) =>
+  api.get(`/filament-profiles/${inventoryItemId}`);
+
+/**
+ * Crea o actualiza (upsert) el perfil de slicer de un filamento.
+ * @param {number} inventoryItemId
+ * @param {Object} data - Campos de FilamentProfileUpsert
+ */
+export const upsertFilamentProfile = (inventoryItemId, data) =>
+  api.put(`/filament-profiles/${inventoryItemId}`, data);
+
+/** Elimina el perfil de slicer de un filamento. */
+export const deleteFilamentProfile = (inventoryItemId) =>
+  api.delete(`/filament-profiles/${inventoryItemId}`);
+
+// ============================================================================
+// Proyectos — agrupador de ítems de la cola de impresión
+// ============================================================================
+
+/** Lista todos los proyectos con conteo de items de cola por estado. */
+export const getProjects = () => api.get('/projects/');
+
+/**
+ * Crea un proyecto nuevo.
+ * @param {{name: string, client_name?: string, notes?: string}} data
+ */
+export const createProject = (data) => api.post('/projects/', data);
+
+/** Detalle de un proyecto (con progreso agregado). */
+export const getProject = (id) => api.get(`/projects/${id}`);
+
+/** Lista los ítems de cola (cualquier estado) asociados al proyecto. */
+export const getProjectItems = (id) => api.get(`/projects/${id}/items`);
+
+/**
+ * Edita nombre/cliente/estado/notas de un proyecto.
+ * @param {number} id
+ * @param {Object} data - Campos de ProjectUpdate
+ */
+export const updateProject = (id, data) => api.put(`/projects/${id}`, data);
+
+/** Elimina un proyecto (los items de cola quedan sin agrupar). */
+export const deleteProject = (id) => api.delete(`/projects/${id}`);
+
+/**
+ * (Re)asigna o quita (projectId=null) el proyecto de un ítem ya encolado.
+ * @param {number} itemId
+ * @param {number|null} projectId
+ */
+export const assignQueueItemProject = (itemId, projectId) =>
+  api.put(`/queue/${itemId}/project`, { project_id: projectId });
+
 export default api;
 
