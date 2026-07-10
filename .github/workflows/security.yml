@@ -4,23 +4,14 @@ on:
   schedule:
     # Semanal, lunes 6:00 UTC
     - cron: '0 6 * * 1'
-  push:
-    paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - 'Containerfile'
-      - 'backend/requirements.txt'
-      - 'frontend/package*.json'
-      - '.github/workflows/security.yml'
-  pull_request:
-    paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - 'Containerfile'
-      - 'backend/requirements.txt'
-      - 'frontend/package*.json'
-      - '.github/workflows/security.yml'
   workflow_dispatch:
+  workflow_call:
+    # ci.yml llama a este workflow como job reusable (`security-audit`, su
+    # primer job) en cada push/PR a main/develop. Antes este archivo también
+    # tenía sus propios triggers `push`/`pull_request` — eso disparaba DOS
+    # corridas de Security Audit por commit: una standalone, otra anidada en
+    # CI. Se quitaron esos triggers; ahora solo corre a través de la cadena
+    # de ci.yml, más el cron semanal y el dispatch manual de acá.
 
 env:
   PYTHON_VERSION: '3.11'
