@@ -10,7 +10,7 @@ Todos los endpoints requieren autenticación JWT. Las operaciones de
 escritura (upload, edit, delete, replace) requieren `role='admin'`.
 
 Endpoints:
-    GET    /api/vault/                       — Listar archivos (paginado, búsqueda, filtro por carpeta)
+    GET    /api/vault/                       — Listar archivos activos (paginado, búsqueda, filtro por carpeta/tags)
     GET    /api/vault/stats                  — Estadísticas de uso del almacenamiento
     POST   /api/vault/fetch-metadata         — Pre-leer metadata desde URL externa
     POST   /api/vault/upload                 — Subir source_file y/o print_file con metadata (admin)
@@ -18,12 +18,20 @@ Endpoints:
     POST   /api/vault/folders                — Crear carpeta (admin)
     PUT    /api/vault/folders/{id}           — Renombrar / mover carpeta (admin)
     DELETE /api/vault/folders/{id}           — Eliminar carpeta (admin; hijos suben un nivel)
+    GET    /api/vault/tags                   — Listar catálogo de tags (+ conteo de uso)
+    POST   /api/vault/tags                   — Crear tag (admin)
+    PATCH  /api/vault/tags/{id}              — Renombrar tag (admin)
+    DELETE /api/vault/tags/{id}              — Eliminar tag del catálogo (admin; no borra archivos)
+    GET    /api/vault/trash                  — Listar archivos en la papelera
+    POST   /api/vault/trash/{id}/restore     — Restaurar archivo de la papelera (admin)
+    DELETE /api/vault/trash/{id}             — Borrado permanente (bytes MinIO + fila) (admin)
+    DELETE /api/vault/trash                  — Vaciar toda la papelera (admin)
     GET    /api/vault/{id}/download/source   — Descargar el .3mf editable
     GET    /api/vault/{id}/download/print    — Descargar el .gcode.3mf laminado
     PUT    /api/vault/{id}                   — Editar metadata (admin)
     POST   /api/vault/{id}/replace/source    — Reemplazar el .3mf editable (admin)
     POST   /api/vault/{id}/replace/print     — Reemplazar el .gcode.3mf laminado (admin)
-    DELETE /api/vault/{id}                   — Eliminar archivo y objeto(s) MinIO (admin)
+    DELETE /api/vault/{id}                   — Mover a la papelera (soft-delete) (admin)
 """
 
 import json
@@ -37,7 +45,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
-from sqlalchemy import String, cast, func, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -46,6 +54,7 @@ from app.database import get_db
 from app.models.model_file import ModelFile, ModelFilePlate
 from app.models.user import User
 from app.models.vault_folder import VaultFolder
+from app.models.vault_tag import VaultTag, model_file_tags
 from app.schemas.vault import (
     ModelFileListResponse,
     ModelFileResponse,
@@ -59,6 +68,7 @@ from app.schemas.vault_folder import (
     VaultFolderResponse,
     VaultFolderUpdate,
 )
+from app.schemas.vault_tag import VaultTagCreate, VaultTagResponse, VaultTagUpdate
 from app.services.auth import get_admin_user, get_current_user
 from app.services.slicer_parser import parse_3mf_all_plates, parse_3mf_file
 from app.services.thumbnail_extractor import (
@@ -91,10 +101,14 @@ def _ext_ok(filename: str, allowed_suffixes: tuple) -> bool:
 
 
 async def _get_model_file(db: AsyncSession, file_id: int) -> ModelFile:
-    """Obtiene un ModelFile por ID; lanza 404 si no existe. Eager-load plates."""
+    """
+    Obtiene un ModelFile por ID; lanza 404 si no existe. Eager-load
+    plates + tags. No filtra por `deleted_at` — lo usan tanto endpoints
+    normales como restore/purge de la papelera.
+    """
     result = await db.execute(
         select(ModelFile)
-        .options(selectinload(ModelFile.plates))
+        .options(selectinload(ModelFile.plates), selectinload(ModelFile.tags))
         .where(ModelFile.id == file_id)
     )
     model = result.scalar_one_or_none()
@@ -161,7 +175,7 @@ def _to_response(model: ModelFile, username: Optional[str]) -> ModelFileResponse
         description=model.description,
         thumbnail_url=model.thumbnail_url,
         local_thumbnail_url=local_thumbnail_url,
-        tags=model.tags or [],
+        tags=[t.name for t in (model.tags or [])],
         source_url=model.source_url,
         source_platform=model.source_platform,
         creator_name=model.creator_name,
@@ -171,7 +185,34 @@ def _to_response(model: ModelFile, username: Optional[str]) -> ModelFileResponse
         plates=plates_payload,
         created_at=model.created_at,
         updated_at=model.updated_at,
+        deleted_at=model.deleted_at,
     )
+
+
+async def _resolve_tags(db: AsyncSession, names: list) -> list:
+    """
+    Get-or-create de `VaultTag` para una lista de nombres. Dedup
+    case-insensitive dentro de la propia lista (por `name_key`). Retorna
+    los objetos ORM listos para asignar a `ModelFile.tags`.
+    """
+    resolved: list[VaultTag] = []
+    seen_keys: set = set()
+    for raw_name in names or []:
+        name = (raw_name or "").strip()
+        if not name:
+            continue
+        key = name.lower()
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        result = await db.execute(select(VaultTag).where(VaultTag.name_key == key))
+        tag = result.scalar_one_or_none()
+        if tag is None:
+            tag = VaultTag(name=name, name_key=key)
+            db.add(tag)
+            await db.flush()  # asigna id antes de usarlo en la relación M2M
+        resolved.append(tag)
+    return resolved
 
 
 async def _get_folder(db: AsyncSession, folder_id: int) -> VaultFolder:
@@ -401,37 +442,55 @@ async def list_vault_files(
         default=False,
         description="Si True (y folder_id no se envía), solo retorna archivos sin carpeta (raíz).",
     ),
+    tag_ids: Optional[str] = Query(
+        default=None,
+        description="IDs de tags separados por coma. AND entre todos (el archivo debe tener TODOS).",
+    ),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Lista los archivos del Vault con paginación, búsqueda y filtro
-    `print_ready_only` (usado por el picker de Queue para listar solo
-    modelos con `.gcode.3mf` disponibles). `folder_id` filtra por carpeta
-    específica; `root_only` (sin `folder_id`) filtra solo archivos sin
-    carpeta asignada.
+    Lista los archivos ACTIVOS del Vault (excluye los que están en la
+    papelera) con paginación, búsqueda y filtro `print_ready_only` (usado
+    por el picker de Queue para listar solo modelos con `.gcode.3mf`
+    disponibles). `folder_id` filtra por carpeta específica; `root_only`
+    (sin `folder_id`) filtra solo archivos sin carpeta asignada.
+    `tag_ids` filtra por tags con semántica AND (debe tener todos los
+    tags dados, no solo alguno).
     """
-    base_q = select(ModelFile).options(selectinload(ModelFile.plates))
+    base_q = (
+        select(ModelFile)
+        .options(selectinload(ModelFile.plates), selectinload(ModelFile.tags))
+        .where(ModelFile.deleted_at.is_(None))
+    )
 
     if folder_id is not None:
         base_q = base_q.where(ModelFile.folder_id == folder_id)
     elif root_only:
         base_q = base_q.where(ModelFile.folder_id.is_(None))
 
+    if tag_ids:
+        try:
+            parsed_tag_ids = [int(t) for t in tag_ids.split(",") if t.strip()]
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="tag_ids debe ser una lista de enteros separados por coma",
+            )
+        for tid in parsed_tag_ids:
+            base_q = base_q.where(ModelFile.tags.any(VaultTag.id == tid))
+
     if q:
-        # Búsqueda substring case-insensitive sobre name + description + tags.
-        # `tags` es JSONB; el cast a String genera la representación textual
-        # `["tag1","tag2"]` sobre la que aplicamos ilike — acepta falsos
-        # positivos por substring (ej. "ta" matchea "[\"tag\"]") pero es
-        # suficiente para Vault de uso personal.
+        # Búsqueda substring case-insensitive sobre name + description +
+        # nombre de tag (vía EXISTS sobre la relación M2M).
         pat = f"%{q}%"
         base_q = base_q.where(
             or_(
                 ModelFile.name.ilike(pat),
                 ModelFile.description.ilike(pat),
-                cast(ModelFile.tags, String).ilike(pat),
+                ModelFile.tags.any(VaultTag.name.ilike(pat)),
             )
         )
     if print_ready_only:
@@ -499,7 +558,7 @@ async def list_vault_folders(
 
     counts_result = await db.execute(
         select(ModelFile.folder_id, func.count())
-        .where(ModelFile.folder_id.is_not(None))
+        .where(ModelFile.folder_id.is_not(None), ModelFile.deleted_at.is_(None))
         .group_by(ModelFile.folder_id)
     )
     counts = {row[0]: row[1] for row in counts_result.all()}
@@ -564,7 +623,9 @@ async def update_vault_folder(
     await db.refresh(folder)
 
     count_result = await db.execute(
-        select(func.count()).select_from(ModelFile).where(ModelFile.folder_id == folder.id)
+        select(func.count()).select_from(ModelFile).where(
+            ModelFile.folder_id == folder.id, ModelFile.deleted_at.is_(None)
+        )
     )
     return VaultFolderResponse(
         id=folder.id, name=folder.name, parent_id=folder.parent_id,
@@ -589,6 +650,232 @@ async def delete_vault_folder(
     folder = await _get_folder(db, folder_id)
     await db.delete(folder)
     await db.commit()
+
+
+# ─── Tags ───────────────────────────────────────────────────────────────────
+
+@router.get("/tags", response_model=list[VaultTagResponse])
+async def list_vault_tags(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Lista el catálogo de tags con el conteo de archivos activos que usan cada uno."""
+    tags_result = await db.execute(select(VaultTag).order_by(VaultTag.name))
+    tags = tags_result.scalars().all()
+
+    counts_result = await db.execute(
+        select(model_file_tags.c.tag_id, func.count())
+        .select_from(model_file_tags)
+        .join(ModelFile, ModelFile.id == model_file_tags.c.model_file_id)
+        .where(ModelFile.deleted_at.is_(None))
+        .group_by(model_file_tags.c.tag_id)
+    )
+    counts = {row[0]: row[1] for row in counts_result.all()}
+
+    return [
+        VaultTagResponse(id=t.id, name=t.name, file_count=counts.get(t.id, 0), created_at=t.created_at)
+        for t in tags
+    ]
+
+
+@router.post("/tags", response_model=VaultTagResponse, status_code=status.HTTP_201_CREATED)
+async def create_vault_tag(
+    body: VaultTagCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """Crea un tag nuevo en el catálogo. Solo admins."""
+    name = body.name.strip()
+    key = name.lower()
+    existing = await db.execute(select(VaultTag).where(VaultTag.name_key == key))
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ya existe un tag con ese nombre",
+        )
+    tag = VaultTag(name=name, name_key=key)
+    db.add(tag)
+    await db.commit()
+    await db.refresh(tag)
+    return VaultTagResponse(id=tag.id, name=tag.name, file_count=0, created_at=tag.created_at)
+
+
+@router.patch("/tags/{tag_id}", response_model=VaultTagResponse)
+async def rename_vault_tag(
+    tag_id: int,
+    body: VaultTagUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """Renombra un tag existente (aplica a todos los archivos que lo usan). Solo admins."""
+    result = await db.execute(select(VaultTag).where(VaultTag.id == tag_id))
+    tag = result.scalar_one_or_none()
+    if not tag:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag no encontrado")
+
+    name = body.name.strip()
+    key = name.lower()
+    if key != tag.name_key:
+        dup = await db.execute(
+            select(VaultTag).where(VaultTag.name_key == key, VaultTag.id != tag_id)
+        )
+        if dup.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Ya existe un tag con ese nombre",
+            )
+    tag.name = name
+    tag.name_key = key
+    await db.commit()
+    await db.refresh(tag)
+
+    count_result = await db.execute(
+        select(func.count())
+        .select_from(model_file_tags)
+        .join(ModelFile, ModelFile.id == model_file_tags.c.model_file_id)
+        .where(model_file_tags.c.tag_id == tag_id, ModelFile.deleted_at.is_(None))
+    )
+    return VaultTagResponse(
+        id=tag.id, name=tag.name, file_count=count_result.scalar() or 0, created_at=tag.created_at
+    )
+
+
+@router.delete("/tags/{tag_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_vault_tag(
+    tag_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """
+    Elimina un tag del catálogo. Solo admins.
+
+    Borra solo las asociaciones (cascade en `model_file_tags`) — los
+    archivos que lo tenían asignado no se tocan, solo pierden esa etiqueta.
+    """
+    result = await db.execute(select(VaultTag).where(VaultTag.id == tag_id))
+    tag = result.scalar_one_or_none()
+    if not tag:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag no encontrado")
+    await db.delete(tag)
+    await db.commit()
+
+
+# ─── Papelera ───────────────────────────────────────────────────────────────
+
+@router.get("/trash", response_model=ModelFileListResponse)
+async def list_vault_trash(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Lista los archivos en la papelera, más recientemente eliminados primero."""
+    base_q = (
+        select(ModelFile)
+        .options(selectinload(ModelFile.plates), selectinload(ModelFile.tags))
+        .where(ModelFile.deleted_at.is_not(None))
+    )
+
+    count_result = await db.execute(select(func.count()).select_from(base_q.subquery()))
+    total = count_result.scalar() or 0
+
+    offset = (page - 1) * page_size
+    items_result = await db.execute(
+        base_q.order_by(ModelFile.deleted_at.desc()).offset(offset).limit(page_size)
+    )
+    models = items_result.scalars().all()
+
+    uploader_ids = {m.uploaded_by for m in models if m.uploaded_by is not None}
+    usernames: dict = {}
+    if uploader_ids:
+        users_result = await db.execute(
+            select(User.id, User.username).where(User.id.in_(uploader_ids))
+        )
+        usernames = {row.id: row.username for row in users_result}
+
+    return ModelFileListResponse(
+        items=[_to_response(m, usernames.get(m.uploaded_by)) for m in models],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.post("/trash/{file_id}/restore", response_model=ModelFileResponse)
+async def restore_vault_file(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """Restaura un archivo de la papelera. Solo admins."""
+    model = await _get_model_file(db, file_id)
+    if model.deleted_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Este archivo no está en la papelera",
+        )
+    model.deleted_at = None
+    model.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    await db.commit()
+    await db.refresh(model)
+
+    username = None
+    if model.uploaded_by:
+        u_result = await db.execute(select(User.username).where(User.id == model.uploaded_by))
+        username = u_result.scalar_one_or_none()
+    return _to_response(model, username)
+
+
+@router.delete("/trash/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def purge_vault_file(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """
+    Borrado permanente: elimina los objetos en MinIO (fuente, laminado,
+    thumbnails) y la fila en BD. Solo admins. Solo se puede purgar un
+    archivo que ya está en la papelera — evita un borrado permanente
+    accidental de un archivo activo vía este endpoint.
+    """
+    model = await _get_model_file(db, file_id)
+    if model.deleted_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Este archivo no está en la papelera — muévelo a la papelera primero",
+        )
+
+    if model.source_file_key:
+        await delete_file(model.source_file_key)
+    if model.print_file_key:
+        await delete_file(model.print_file_key)
+
+    await db.delete(model)
+    await db.commit()
+    await delete_thumbnail(model.id)
+
+
+@router.delete("/trash", status_code=status.HTTP_204_NO_CONTENT)
+async def empty_vault_trash(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """Vacía toda la papelera — borrado permanente de todos los archivos en ella. Solo admins."""
+    result = await db.execute(
+        select(ModelFile).where(ModelFile.deleted_at.is_not(None))
+    )
+    models = result.scalars().all()
+
+    for model in models:
+        if model.source_file_key:
+            await delete_file(model.source_file_key)
+        if model.print_file_key:
+            await delete_file(model.print_file_key)
+        await db.delete(model)
+    await db.commit()
+
+    for model in models:
+        await delete_thumbnail(model.id)
 
 
 @router.post("/upload", response_model=ModelFileResponse, status_code=status.HTTP_201_CREATED)
@@ -714,6 +1001,10 @@ async def upload_vault_file(
     )
     sliced_filament = sliced.get("sliced_filament_type") or meta_filament
 
+    # Resolver tags (get-or-create) ANTES de construir el modelo — la
+    # relación M2M necesita los VaultTag ya con id asignado.
+    resolved_tags = await _resolve_tags(db, meta_dict.get("tags") or [])
+
     # Guardar en BD.
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     model = ModelFile(
@@ -731,7 +1022,7 @@ async def upload_vault_file(
         name=name,
         description=meta_dict.get("description"),
         thumbnail_url=meta_dict.get("thumbnail_url"),
-        tags=meta_dict.get("tags") or [],
+        tags=resolved_tags,
         source_url=meta_dict.get("source_url"),
         source_platform=meta_dict.get("source_platform"),
         creator_name=meta_dict.get("creator_name"),
@@ -977,8 +1268,13 @@ async def update_vault_file(
     update_data = body.model_dump(exclude_unset=True)
     if update_data.get("folder_id") is not None:
         await _get_folder(db, update_data["folder_id"])  # 404 si no existe
+    # `tags` no es una columna directa desde el JSONB→relacional — se
+    # resuelve aparte (get-or-create + reemplaza la relación M2M completa).
+    tag_names = update_data.pop("tags", None)
     for field, value in update_data.items():
         setattr(model, field, value)
+    if tag_names is not None:
+        model.tags = await _resolve_tags(db, tag_names)
 
     model.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
@@ -1130,16 +1426,11 @@ async def delete_vault_file(
     current_user: User = Depends(get_admin_user),
 ):
     """
-    Elimina el archivo del Vault: borra ambos objetos en MinIO (si existen)
-    y el registro en BD. Solo admins.
+    Mueve el archivo del Vault a la papelera (soft-delete). Solo admins.
+
+    No borra bytes de MinIO ni la fila — eso solo pasa en el borrado
+    permanente (`DELETE /api/vault/trash/{id}`), una vez ya está acá.
     """
     model = await _get_model_file(db, file_id)
-
-    if model.source_file_key:
-        await delete_file(model.source_file_key)
-    if model.print_file_key:
-        await delete_file(model.print_file_key)
-
-    await db.delete(model)
+    model.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
-    await delete_thumbnail(model.id)

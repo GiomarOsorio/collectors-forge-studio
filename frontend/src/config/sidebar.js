@@ -24,6 +24,7 @@ import {
   Printer,
   Settings,
   ShoppingCart,
+  Trash,
   Upload,
   Wrench,
 } from 'lucide-react';
@@ -110,6 +111,7 @@ export const SIDEBAR_APPS = [
     items: [
       { to: '/vault',        icon: Archive, label: 'Galería', end: true },
       { to: '/vault/upload', icon: Upload,  label: 'Subir modelo', adminOnly: true },
+      { to: '/vault/trash',  icon: Trash,   label: 'Papelera' },
     ],
   },
   {

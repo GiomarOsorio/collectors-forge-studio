@@ -105,6 +105,9 @@ class ModelFileResponse(BaseModel):
 
     created_at: datetime
     updated_at: datetime
+    # NULL = activo. Con fecha = está en la papelera (usado por la vista
+    # de papelera para mostrar "eliminado el X").
+    deleted_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 

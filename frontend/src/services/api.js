@@ -773,10 +773,39 @@ export const replaceVaultPrint = (id, file, onUploadProgress) => {
 };
 
 /**
- * Elimina un archivo del Vault y su objeto en MinIO (solo admins).
+ * Mueve un archivo del Vault a la papelera (soft-delete, solo admins).
+ * Los bytes en MinIO no se borran — eso pasa recién en `purgeVaultFile`.
  * @param {number} id - ID del archivo
  */
 export const deleteVaultFile = (id) => api.delete(`/vault/${id}`);
+
+// ── Tags del Vault ───────────────────────────────────────────────────────────
+
+/** Lista el catálogo de tags del Vault (con conteo de archivos activos). */
+export const getVaultTags = () => api.get('/vault/tags');
+
+/** Crea un tag nuevo en el catálogo (solo admins). */
+export const createVaultTag = (name) => api.post('/vault/tags', { name });
+
+/** Renombra un tag existente — aplica a todos los archivos que lo usan (solo admins). */
+export const updateVaultTag = (id, name) => api.patch(`/vault/tags/${id}`, { name });
+
+/** Elimina un tag del catálogo (no borra los archivos, solo la etiqueta) (solo admins). */
+export const deleteVaultTag = (id) => api.delete(`/vault/tags/${id}`);
+
+// ── Papelera del Vault ───────────────────────────────────────────────────────
+
+/** Lista los archivos en la papelera (paginado). */
+export const getVaultTrash = (params) => api.get('/vault/trash', { params });
+
+/** Restaura un archivo de la papelera (solo admins). */
+export const restoreVaultFile = (id) => api.post(`/vault/trash/${id}/restore`);
+
+/** Borrado permanente: bytes de MinIO + fila. Solo si ya está en la papelera (solo admins). */
+export const purgeVaultFile = (id) => api.delete(`/vault/trash/${id}`);
+
+/** Vacía toda la papelera — borrado permanente de todo lo que hay en ella (solo admins). */
+export const emptyVaultTrash = () => api.delete('/vault/trash');
 
 // ── Carpetas del Vault ──────────────────────────────────────────────────────
 
