@@ -126,9 +126,16 @@ jobs:
         id: pip-audit
         working-directory: backend
         run: |
+          # PYSEC-2025-183 (GHSA-65pc-fj4g-8rjx): disputed by PyJWT maintainers —
+          # "key length is chosen by the application", no fix exists or will exist.
+          # PyJWT 2.11+ added an opt-in `enforce_minimum_key_length` option, but
+          # turning it on blindly could reject an already-deployed SECRET_KEY if
+          # it's short — not done here without confirming the prod key first.
+          # Tracked as a manual follow-up, not silently ignored forever.
           pip-audit --desc on --format json --output pip-audit-results.json \
+            --ignore-vuln PYSEC-2025-183 \
             || echo "vulnerabilities_found=true" >> $GITHUB_OUTPUT
-          pip-audit --desc on || true
+          pip-audit --desc on --ignore-vuln PYSEC-2025-183 || true
 
       - name: Upload audit results
         if: always()
