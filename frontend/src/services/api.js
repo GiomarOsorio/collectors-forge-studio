@@ -90,6 +90,14 @@ export const login = (username, password) => {
 export const getMe = () => api.get('/auth/me');
 
 /**
+ * Indica si el backend tiene habilitado el bypass de login de dev
+ * (DEV_LOGIN_ENABLED — solo true en el deploy de cfs-app-dev, nunca en prod).
+ *
+ * @returns {Promise<import('axios').AxiosResponse>} Respuesta con { enabled: boolean }
+ */
+export const getDevLoginStatus = () => api.get('/auth/oidc/dev-login-status');
+
+/**
  * Registra un nuevo usuario en el sistema.
  *
  * @param {Object} data - Datos del nuevo usuario

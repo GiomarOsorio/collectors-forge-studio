@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     OIDC_REDIRECT_URI: str = ""       # https://3d.turtledev.dev/api/auth/oidc/callback
     SESSION_SECRET_KEY: str = ""      # clave para SessionMiddleware; usa SECRET_KEY si está vacía
 
+    # Bypass de login exclusivo para el deploy de dev (nunca seteado en prod)
+    # — el redirect_uri de OIDC en dev coincide con el de prod (Infisical solo
+    # tiene el environment "prod" poblado, ver service-deployments/deploy.sh),
+    # así que el flujo OIDC real no funciona ahí. Ver routers/oidc.py.
+    DEV_LOGIN_ENABLED: bool = False
+
     # MinIO (Vault)
     MINIO_ENDPOINT: str = "http://cfs-minio:9000"
     MINIO_ACCESS_KEY: str = "minioadmin"
