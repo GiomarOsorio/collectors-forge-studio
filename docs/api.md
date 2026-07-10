@@ -955,7 +955,10 @@ Elimina el archivo de MinIO y el registro en DB.
 ## Health Check
 
 ### `GET /api/health`
-Verifica que la API está funcionando.
+Verifica que el proceso de la API está arriba y respondiendo. No toca la
+base de datos ni MinIO — siempre responde 200 si el proceso vive, aunque
+sus dependencias estén caídas. Útil como liveness check básico, no como
+señal de "todo funciona".
 
 **Response 200:**
 ```json
@@ -964,6 +967,50 @@ Verifica que la API está funcionando.
   "app": "Collector's Forge Studio"
 }
 ```
+
+### `GET /api/health/full`
+Health check completo — verifica Postgres, MinIO y la versión de Alembic
+aplicada. Pensado para monitores externos (Uptime Kuma, etc.) que necesitan
+saber si el servicio está *realmente* sano, no solo si el proceso responde.
+No requiere autenticación.
+
+**Response 200 (`status: ok`)** — Postgres y MinIO respondieron bien:
+```json
+{
+  "status": "ok",
+  "checks": {
+    "db": "ok",
+    "minio": "ok",
+    "alembic": "5f3a2b1c9d0e"
+  }
+}
+```
+
+**Response 503 (`status: degraded`)** — si Postgres o MinIO fallan, el
+código HTTP baja a 503 y el campo del check que falló trae
+`"error: <NombreDeLaExcepción>"` en vez de `"ok"`:
+```json
+{
+  "status": "degraded",
+  "checks": {
+    "db": "error: OperationalError",
+    "minio": "ok",
+    "alembic": "5f3a2b1c9d0e"
+  }
+}
+```
+
+- `db`: `"ok"` o `"error: <ExceptionType>"` — `SELECT 1` contra Postgres.
+- `minio`: `"ok"` o `"error: <ExceptionType>"` — `head_bucket` contra el bucket configurado.
+- `alembic`: la revisión actual aplicada (string), o `"error: <ExceptionType>"` si no se pudo leer la tabla `alembic_version`.
+- `status` es `"degraded"` si `db` o `minio` fallan (`alembic` no baja el status, es informativo).
+
+**Monitoreo con Uptime Kuma:** un monitor HTTP simple a este endpoint
+(esperando 200) solo distingue "sano" de "degradado", sin decir cuál
+falló. Para alertas que sí indiquen el componente exacto, usar 3 monitores
+tipo **Json Query** (Kuma ≥1.21) apuntando todos a `/api/health/full`, cada
+uno evaluando `checks.db`, `checks.minio` y `checks.alembic` contra `"ok"`
+respectivamente.
 
 ---
 
