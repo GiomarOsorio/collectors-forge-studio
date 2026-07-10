@@ -24,6 +24,8 @@ import {
   Plus,
   Printer,
   Search,
+  Tag,
+  Trash,
   Trash2,
   Upload,
   X,
@@ -44,16 +46,20 @@ import { useAuth } from '../../context/AuthContext';
 import { useConfirm } from '../../components/ConfirmDialog';
 import {
   createVaultFolder,
+  createVaultTag,
   deleteVaultFile,
   deleteVaultFolder,
+  deleteVaultTag,
   setActiveVaultPlate,
   downloadVaultPrint,
   downloadVaultSource,
   getVaultFiles,
   getVaultFolders,
   getVaultStats,
+  getVaultTags,
   updateVaultFile,
   updateVaultFolder,
+  updateVaultTag,
 } from '../../services/api';
 import { getThumbnail } from '../../utils/thumbnail';
 
@@ -245,6 +251,81 @@ function FolderNameModal({ mode, initialName, onCancel, onSave }) {
           <button onClick={submit} className="tf-btn-primary" disabled={!name.trim()}>
             {mode === 'rename' ? 'Guardar' : 'Crear'}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Modal de gestión del catálogo de tags — crear nuevo, renombrar y
+ * eliminar. Cada fila existente es rename-inline (blur/Enter para
+ * guardar) + botón eliminar; arriba un input para crear uno nuevo.
+ */
+function TagsManageModal({ tags, onClose, onCreate, onRename, onDelete }) {
+  const [newName, setNewName] = useState('');
+  const [drafts, setDrafts] = useState({}); // { [tagId]: draftName }
+
+  const submitCreate = () => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    onCreate(trimmed);
+    setNewName('');
+  };
+
+  const submitRename = (tag) => {
+    const draft = (drafts[tag.id] ?? tag.name).trim();
+    if (!draft || draft === tag.name) return;
+    onRename(tag.id, draft);
+  };
+
+  return (
+    <div className="tf-modal-overlay" style={{ zIndex: 9999 }}>
+      <div className="tf-modal max-w-sm">
+        <p className="text-tech-white text-sm font-semibold mb-3">Gestionar tags</p>
+
+        <div className="flex gap-2 mb-4">
+          <input
+            autoFocus
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && submitCreate()}
+            placeholder="Nuevo tag…"
+            className="flex-1 bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm focus:outline-none focus:border-rose-500"
+          />
+          <button onClick={submitCreate} className="tf-btn-primary" disabled={!newName.trim()}>
+            Crear
+          </button>
+        </div>
+
+        {tags.length === 0 ? (
+          <p className="text-xs text-gunmetal text-center py-4">Sin tags todavía.</p>
+        ) : (
+          <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto mb-5">
+            {tags.map((t) => (
+              <div key={t.id} className="flex items-center gap-2">
+                <input
+                  value={drafts[t.id] ?? t.name}
+                  onChange={(e) => setDrafts((d) => ({ ...d, [t.id]: e.target.value }))}
+                  onBlur={() => submitRename(t)}
+                  onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
+                  className="flex-1 bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2 py-1 text-tech-white text-xs focus:outline-none focus:border-rose-500"
+                />
+                <span className="mono text-[10px] text-gunmetal shrink-0">{t.file_count}</span>
+                <button
+                  onClick={() => onDelete(t)}
+                  className="p-1 rounded text-gunmetal hover:text-rose-300 hover:bg-rose-500/10 shrink-0"
+                  aria-label={`Eliminar tag ${t.name}`}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex justify-end">
+          <button onClick={onClose} className="tf-btn-ghost">Cerrar</button>
         </div>
       </div>
     </div>
@@ -632,7 +713,7 @@ function VaultDrawerFooter({
             if (ok) onClose();
           }}
           className="text-rose-400 hover:text-rose-300"
-          aria-label="Eliminar"
+          aria-label="Mover a papelera"
         />
       )}
     </>
@@ -668,6 +749,12 @@ export default function VaultPage() {
   const [currentFolderId, setCurrentFolderId] = useState(null);
   const [folderModal, setFolderModal] = useState(null); // { mode: 'create'|'rename', folder? }
 
+  // Tags — catálogo global (independiente de la carpeta actual) + filtro
+  // activo (multi-select AND: el archivo debe tener TODOS los tags elegidos).
+  const [tags, setTags] = useState([]);
+  const [activeTagIds, setActiveTagIds] = useState([]);
+  const [tagsModalOpen, setTagsModalOpen] = useState(false);
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const childFolders = folders.filter((f) => (f.parent_id ?? null) === currentFolderId);
   const breadcrumb = buildBreadcrumb(folders, currentFolderId);
@@ -680,7 +767,7 @@ export default function VaultPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedQuery, pageSize, currentFolderId]);
+  }, [debouncedQuery, pageSize, currentFolderId, activeTagIds]);
 
   const loadFolders = async () => {
     try {
@@ -688,6 +775,15 @@ export default function VaultPage() {
       setFolders(res.data || []);
     } catch {
       // Silencioso — el Vault sigue usable sin árbol de carpetas.
+    }
+  };
+
+  const loadTags = async () => {
+    try {
+      const res = await getVaultTags();
+      setTags(res.data || []);
+    } catch {
+      // Silencioso — el Vault sigue usable sin catálogo de tags.
     }
   };
 
@@ -704,6 +800,7 @@ export default function VaultPage() {
     } else {
       params.root_only = true;
     }
+    if (activeTagIds.length > 0) params.tag_ids = activeTagIds.join(',');
     const [f, s] = await Promise.allSettled([
       getVaultFiles(params),
       getVaultStats(),
@@ -721,6 +818,7 @@ export default function VaultPage() {
 
   useEffect(() => {
     loadFolders();
+    loadTags();
   }, []);
 
   useEffect(() => {
@@ -729,7 +827,7 @@ export default function VaultPage() {
       setLoading(false);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize, debouncedQuery, currentFolderId]);
+  }, [page, pageSize, debouncedQuery, currentFolderId, activeTagIds]);
 
   const handleCreateFolder = async (name) => {
     try {
@@ -782,6 +880,50 @@ export default function VaultPage() {
     } catch (err) {
       toast.error(err?.response?.data?.detail || 'No se pudo eliminar la carpeta');
     }
+  };
+
+  const handleCreateTag = async (name) => {
+    try {
+      await createVaultTag(name);
+      toast.success('Tag creado');
+      await loadTags();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'No se pudo crear el tag');
+    }
+  };
+
+  const handleRenameTag = async (tagId, name) => {
+    try {
+      await updateVaultTag(tagId, name);
+      toast.success('Tag renombrado');
+      await loadTags();
+      await load();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'No se pudo renombrar el tag');
+    }
+  };
+
+  const handleDeleteTag = async (tag) => {
+    const ok = await confirm(
+      `¿Eliminar el tag "${tag.name}"? Los archivos que lo tienen no se borran, solo pierden esa etiqueta.`,
+      'Eliminar',
+    );
+    if (!ok) return;
+    try {
+      await deleteVaultTag(tag.id);
+      toast.success('Tag eliminado');
+      setActiveTagIds((cur) => cur.filter((id) => id !== tag.id));
+      await loadTags();
+      await load();
+    } catch {
+      toast.error('No se pudo eliminar el tag');
+    }
+  };
+
+  const handleToggleTagFilter = (tagId) => {
+    setActiveTagIds((cur) =>
+      cur.includes(tagId) ? cur.filter((id) => id !== tagId) : [...cur, tagId],
+    );
   };
 
   /** Mueve el archivo del drawer a otra carpeta (o a la raíz con folderId=null). */
@@ -838,11 +980,11 @@ export default function VaultPage() {
   };
 
   const handleDelete = async (f) => {
-    const ok = await confirm(`¿Eliminar "${f.name}"?`, 'Eliminar');
+    const ok = await confirm(`¿Mover "${f.name}" a la papelera? Puedes restaurarlo después.`, 'Mover a papelera');
     if (!ok) return false;
     try {
       await deleteVaultFile(f.id);
-      toast.success('Archivo eliminado');
+      toast.success('Archivo movido a la papelera');
       // Si el item borrado era el único de la última página, retrocedemos
       // automáticamente para no quedar en una página vacía.
       if (files.length === 1 && page > 1) {
@@ -935,6 +1077,41 @@ export default function VaultPage() {
     </div>
   );
 
+  // Fila de chips de tags — filtro multi-select AND. Se omite por completo
+  // si el catálogo está vacío (nada que filtrar todavía).
+  const TagsFilterRail = tags.length > 0 && (
+    <div className="flex flex-wrap items-center gap-1.5 px-4 md:px-6 pt-1">
+      {tags.map((t) => {
+        const active = activeTagIds.includes(t.id);
+        return (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => handleToggleTagFilter(t.id)}
+            className={`inline-flex items-center gap-1 mono text-[10.5px] px-2 py-0.5 rounded-full border transition-colors ${
+              active
+                ? 'bg-rose-500/15 border-rose-500/50 text-rose-300'
+                : 'bg-transparent border-[var(--color-border)] text-gunmetal hover:text-tech-white'
+            }`}
+          >
+            <Tag size={10} />
+            {t.name}
+            {active && <X size={10} />}
+          </button>
+        );
+      })}
+      {isAdmin && (
+        <button
+          type="button"
+          onClick={() => setTagsModalOpen(true)}
+          className="mono text-[10.5px] text-gunmetal hover:text-tech-white underline underline-offset-2 ml-1"
+        >
+          gestionar tags
+        </button>
+      )}
+    </div>
+  );
+
   const KPIs = (
     <div className="flex flex-wrap gap-3 px-6 pt-4 pb-2">
       <div className="flex-1 min-w-[180px] flex">
@@ -1004,6 +1181,7 @@ export default function VaultPage() {
         </div>
         <div className="mt-3">{FolderBreadcrumb}</div>
         {SearchScopeHint}
+        {TagsFilterRail}
         {FolderGrid}
         {loading ? (
           <p className="px-4 py-12 text-center text-gunmetal text-sm">Cargando Vault…</p>
@@ -1116,6 +1294,15 @@ export default function VaultPage() {
             onSave={folderModal.mode === 'rename' ? handleRenameFolder : handleCreateFolder}
           />
         )}
+        {tagsModalOpen && (
+          <TagsManageModal
+            tags={tags}
+            onClose={() => setTagsModalOpen(false)}
+            onCreate={handleCreateTag}
+            onRename={handleRenameTag}
+            onDelete={handleDeleteTag}
+          />
+        )}
       </div>
     );
   }
@@ -1150,6 +1337,7 @@ export default function VaultPage() {
       {KPIs}
       {FolderBreadcrumb}
       {SearchScopeHint}
+      {TagsFilterRail}
       {FolderGrid}
 
       <div className="flex flex-wrap gap-3 items-center px-6 py-3 sticky top-0 bg-forge-black/80 backdrop-blur z-10 border-b border-[var(--color-border-soft)]">
@@ -1321,6 +1509,15 @@ export default function VaultPage() {
           initialName={folderModal.folder?.name}
           onCancel={() => setFolderModal(null)}
           onSave={folderModal.mode === 'rename' ? handleRenameFolder : handleCreateFolder}
+        />
+      )}
+      {tagsModalOpen && (
+        <TagsManageModal
+          tags={tags}
+          onClose={() => setTagsModalOpen(false)}
+          onCreate={handleCreateTag}
+          onRename={handleRenameTag}
+          onDelete={handleDeleteTag}
         />
       )}
     </div>
