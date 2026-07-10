@@ -2,20 +2,26 @@
 Modelo ORM para perfiles de impresión (slicer) de un filamento.
 
 `FilamentProfile` guarda los parámetros de slicer (temperaturas, velocidad,
-retracción, flow ratio, fan speed) asociados a un `InventoryItem` de
-categoría "Filamento" — el catálogo real que usa toda la app (queue,
+retracción, flow ratio, fan speed, K-value) asociados a un `InventoryItem`
+de categoría "Filamento" — el catálogo real que usa toda la app (queue,
 quotes, calculadora). Es informativo/de referencia: no participa en
 ningún cálculo de costo, solo evita tener que buscar la ficha técnica del
 filamento cada vez que se lamina.
 
 Relación 1:1 con `InventoryItem` (un perfil por filamento).
+
+Nota sobre `k_value` (issue #118): bambuddy-cfs tiene un sistema de
+K-profiles sincronizado en vivo con la impresora (MQTT, ~20 slots por
+impresora/extrusor/nozzle). Eso no aplica acá — no hay impresora en LAN.
+`k_value` es 100% manual: el usuario calibra por su cuenta (flujo estándar
+de Bambu Studio/OrcaSlicer) y anota el resultado acá como referencia.
 """
 
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -37,6 +43,11 @@ class FilamentProfile(Base):
         retraction_speed_mms:    Velocidad de retracción (mm/s).
         flow_ratio:              Multiplicador de flujo (ej. 0.98).
         fan_speed_percent:       Velocidad del fan (%).
+        k_value:                 K-factor de presión dinámica (Bambu/Klipper),
+                                  calibrado manualmente (ej. "0.020").
+        nozzle_diameter:         Diámetro de boquilla usado en la calibración
+                                  del K-value (ej. "0.4") — el K depende de esto.
+        calibrated_at:           Fecha de la última calibración manual.
         notes:                   Notas libres (ej. "necesita enclosure").
         created_at, updated_at:  Timestamps UTC.
     """
@@ -61,6 +72,9 @@ class FilamentProfile(Base):
     retraction_speed_mms: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 1), nullable=True)
     flow_ratio: Mapped[Optional[Decimal]] = mapped_column(Numeric(4, 3), nullable=True)
     fan_speed_percent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    k_value: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 4), nullable=True)
+    nozzle_diameter: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    calibrated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
