@@ -16,6 +16,7 @@ import {
   Clock,
   FileEdit,
   FileText,
+  FolderKanban,
   Layers,
   LayoutDashboard,
   ListOrdered,
@@ -109,6 +110,16 @@ export const SIDEBAR_APPS = [
     items: [
       { to: '/vault',        icon: Archive, label: 'Galería', end: true },
       { to: '/vault/upload', icon: Upload,  label: 'Subir modelo', adminOnly: true },
+    ],
+  },
+  {
+    id: 'projects',
+    name: 'Proyectos',
+    icon: FolderKanban,
+    color: '#F59E0B',
+    activeClass: 'bg-amber-500/15 text-amber-400',
+    items: [
+      { to: '/projects', icon: FolderKanban, label: 'Proyectos', end: true },
     ],
   },
   {

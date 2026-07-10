@@ -26,6 +26,7 @@ from app.database import get_db
 from app.models.inventory import InventoryItem
 from app.models.model_file import ModelFile
 from app.models.printer import Printer
+from app.models.project import Project
 from app.models.queue import PrintQueueItem
 from app.models.quote import Quote
 from app.models.user import User
@@ -33,6 +34,7 @@ from app.schemas.queue import (
     PrintQueueItemCreate,
     PrintQueueItemFromVaultCreate,
     PrintQueueItemResponse,
+    PrintQueueProjectUpdate,
     PrintQueueStatusUpdate,
     QueueQuoteSnapshot,
     QueueVaultSnapshot,
@@ -146,6 +148,7 @@ async def _build_response(
         id=item.id,
         quote_id=item.quote_id,
         vault_model_id=item.vault_model_id,
+        project_id=item.project_id,
         status=item.status,
         position=item.position,
         started_at=item.started_at,
@@ -268,6 +271,7 @@ async def _build_responses_bulk(
                 id=item.id,
                 quote_id=item.quote_id,
                 vault_model_id=item.vault_model_id,
+                project_id=item.project_id,
                 status=item.status,
                 position=item.position,
                 started_at=item.started_at,
@@ -476,6 +480,11 @@ async def add_to_queue(
     if q_result.scalar_one_or_none() is None:
         raise HTTPException(status_code=404, detail="Cotización no encontrada")
 
+    if data.project_id is not None:
+        p_result = await db.execute(select(Project).where(Project.id == data.project_id))
+        if p_result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+
     # Calcular la siguiente posición en la cola
     max_result = await db.execute(
         select(func.max(PrintQueueItem.position)).where(
@@ -486,6 +495,7 @@ async def add_to_queue(
 
     item = PrintQueueItem(
         quote_id=data.quote_id,
+        project_id=data.project_id,
         status="pending",
         position=max_pos + 1,
         notes=data.notes,
@@ -550,6 +560,11 @@ async def add_to_queue_from_vault(
         if f_result.scalar_one_or_none() is None:
             raise HTTPException(status_code=404, detail="Filamento no encontrado")
 
+    if data.project_id is not None:
+        p_result = await db.execute(select(Project).where(Project.id == data.project_id))
+        if p_result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+
     # Calcular siguiente posición.
     max_result = await db.execute(
         select(func.max(PrintQueueItem.position)).where(
@@ -574,6 +589,7 @@ async def add_to_queue_from_vault(
         quantity=data.quantity,
         weight_grams=model.sliced_weight_g,
         print_time_hours=print_time_hours,
+        project_id=data.project_id,
         status="pending",
         position=max_pos + 1,
         notes=data.notes,
@@ -667,6 +683,29 @@ async def update_queue_status(
         item.started_at = now
 
     item.status = new_status
+    await db.commit()
+    await db.refresh(item)
+    return await _build_response(item, db)
+
+
+@router.put("/{item_id}/project", response_model=PrintQueueItemResponse)
+async def update_queue_item_project(
+    item_id: int,
+    data: PrintQueueProjectUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_operator_user),
+):
+    """
+    (Re)asigna o quita (`project_id=null`) el proyecto de un ítem ya
+    encolado. Funciona en cualquier estado (incluidos terminales) — el
+    agrupamiento en proyectos es puramente organizativo.
+    """
+    item = await _get_item(db, item_id)
+    if data.project_id is not None:
+        p_result = await db.execute(select(Project).where(Project.id == data.project_id))
+        if p_result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+    item.project_id = data.project_id
     await db.commit()
     await db.refresh(item)
     return await _build_response(item, db)

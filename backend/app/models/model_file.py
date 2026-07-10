@@ -113,6 +113,13 @@ class ModelFile(Base):
         Integer, nullable=False, server_default=text("0")
     )
 
+    # Carpeta del Vault donde vive el archivo. NULL = raíz. Si se borra la
+    # carpeta, el archivo se mueve a la raíz (ondelete=SET NULL) en vez de
+    # borrarse con ella.
+    folder_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("vault_folders.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     # ── Display / metadata ──────────────────────────────────────────────────
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

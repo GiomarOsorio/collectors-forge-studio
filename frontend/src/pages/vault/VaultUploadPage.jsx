@@ -43,6 +43,7 @@ import { useAuth } from '../../context/AuthContext';
 import {
   fetchVaultMetadata,
   getVaultFile,
+  getVaultFolders,
   replaceVaultPrint,
   replaceVaultSource,
   updateVaultFile,
@@ -138,6 +139,19 @@ export default function VaultUploadPage() {
   const [existing, setExisting] = useState(null); // ModelFile original en edit-mode
   const [loadingExisting, setLoadingExisting] = useState(isEditMode);
 
+  // Carpeta destino. En upload-mode toma el `?folder=<id>` de la carpeta
+  // donde estaba parado el admin al hacer click en "Subir modelo"; en
+  // edit-mode se sobreescribe con `existing.folder_id` al cargar.
+  const folderParam = searchParams.get('folder');
+  const [folders, setFolders] = useState([]);
+  const [folderId, setFolderId] = useState(folderParam ? Number(folderParam) : null);
+
+  useEffect(() => {
+    getVaultFolders()
+      .then((res) => setFolders(res.data || []))
+      .catch(() => {});
+  }, []);
+
   // Redirigir si no es admin (mismo flujo que la V1).
   useEffect(() => {
     if (user && user.role !== 'admin') {
@@ -188,6 +202,7 @@ export default function VaultUploadPage() {
           creator_url: m.creator_url ?? '',
           tags: Array.isArray(m.tags) ? m.tags.join(', ') : '',
         });
+        setFolderId(m.folder_id ?? null);
       })
       .catch(() => {
         toast.error('No se pudo cargar el modelo a editar');
@@ -304,6 +319,7 @@ export default function VaultUploadPage() {
       creator_name:    form.creator_name.trim() || null,
       creator_url:     form.creator_url.trim() || null,
       tags:            tagsArr,
+      folder_id:       folderId,
       // Issue #71 — fallback al link. Backend usa estos campos como
       // respaldo si el parser local del .gcode.3mf no encuentra los datos.
       weight_g:        form.link_weight_g ?? null,
@@ -375,11 +391,13 @@ export default function VaultUploadPage() {
         creator_url: existing.creator_url ?? '',
         tags: Array.isArray(existing.tags) ? existing.tags.join(', ') : '',
       });
+      setFolderId(existing.folder_id ?? null);
     } else {
       setForm({
         name: '', description: '', thumbnail_url: '', source_url: '',
         source_platform: '', creator_name: '', creator_url: '', tags: '',
       });
+      setFolderId(folderParam ? Number(folderParam) : null);
     }
     setSourceFile(null);
     setPrintFile(null);
@@ -641,6 +659,18 @@ export default function VaultUploadPage() {
                 value={form.description}
                 onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
               />
+            </FormFieldRow>
+            <FormFieldRow label="Carpeta" hint="Dónde se guarda dentro del Vault">
+              <select
+                className={FORM_INPUT_CLS}
+                value={folderId ?? ''}
+                onChange={(e) => setFolderId(e.target.value === '' ? null : Number(e.target.value))}
+              >
+                <option value="">Raíz (Vault)</option>
+                {folders.map((f) => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </select>
             </FormFieldRow>
 
             <FormSectionTitle>Origen</FormSectionTitle>

@@ -45,6 +45,8 @@ from app.routers.maintenance import router as maintenance_router
 from app.routers.queue import router as queue_router
 from app.routers.inventory_categories import router as inventory_categories_router
 from app.routers.vault import router as vault_router
+from app.routers.filament_profiles import router as filament_profiles_router
+from app.routers.projects import router as projects_router
 from app.routers.oidc import router as oidc_router
 from app.services.thumbnail_extractor import extract_plate_png, save_thumbnail
 from app.services.vault_storage import download_file, ensure_bucket
@@ -282,6 +284,8 @@ app.include_router(maintenance_router)
 app.include_router(queue_router)
 app.include_router(inventory_categories_router)
 app.include_router(vault_router)
+app.include_router(filament_profiles_router)
+app.include_router(projects_router)
 
 # NOTA: el mount clásico de `/static` para binarios subidos por el usuario
 # (thumbnails de Vault, logos de empresa, imágenes de impresiones) no existe
