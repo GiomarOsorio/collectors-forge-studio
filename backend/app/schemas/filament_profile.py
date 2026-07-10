@@ -23,6 +23,12 @@ class FilamentProfileUpsert(BaseModel):
     retraction_speed_mms: Optional[Decimal] = Field(default=None, ge=0)
     flow_ratio: Optional[Decimal] = Field(default=None, gt=0)
     fan_speed_percent: Optional[int] = Field(default=None, ge=0, le=100)
+    # K-value manual (issue #118) — calibrado por el usuario, no sincronizado
+    # con ninguna impresora. `nozzle_diameter` acompaña porque el K depende
+    # del diámetro con el que se calibró.
+    k_value: Optional[Decimal] = Field(default=None, ge=0, le=99)
+    nozzle_diameter: Optional[str] = Field(default=None, max_length=10)
+    calibrated_at: Optional[datetime] = None
     notes: Optional[str] = None
 
 
@@ -39,6 +45,9 @@ class FilamentProfileResponse(BaseModel):
     retraction_speed_mms: Optional[DecimalAsFloat] = None
     flow_ratio: Optional[DecimalAsFloat] = None
     fan_speed_percent: Optional[int]
+    k_value: Optional[DecimalAsFloat] = None
+    nozzle_diameter: Optional[str] = None
+    calibrated_at: Optional[datetime] = None
     notes: Optional[str]
     created_at: datetime
     updated_at: datetime

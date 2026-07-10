@@ -1523,6 +1523,12 @@ function emptyFilamentForm() {
     retraction_speed_mms: '',
     flow_ratio: '',
     fan_speed_percent: '',
+    // K-value manual (issue #118) — calibrado por el usuario, sin sync con
+    // ninguna impresora (no hay una en LAN). `nozzle_diameter` acompaña
+    // porque el K depende del diámetro con el que se calibró.
+    k_value: '',
+    nozzle_diameter: '0.4',
+    calibrated_at: '',
     profile_notes: '',
   };
 }
@@ -1539,6 +1545,9 @@ function profileToForm(p) {
     retraction_speed_mms: p?.retraction_speed_mms ?? '',
     flow_ratio: p?.flow_ratio ?? '',
     fan_speed_percent: p?.fan_speed_percent ?? '',
+    k_value: p?.k_value ?? '',
+    nozzle_diameter: p?.nozzle_diameter ?? '0.4',
+    calibrated_at: p?.calibrated_at ? p.calibrated_at.slice(0, 10) : '',
     profile_notes: p?.notes ?? '',
   };
 }
@@ -1709,6 +1718,9 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
           retraction_speed_mms: form.retraction_speed_mms !== '' ? Number(form.retraction_speed_mms) : null,
           flow_ratio: form.flow_ratio !== '' ? Number(form.flow_ratio) : null,
           fan_speed_percent: form.fan_speed_percent !== '' ? Number(form.fan_speed_percent) : null,
+          k_value: form.k_value !== '' ? Number(form.k_value) : null,
+          nozzle_diameter: form.nozzle_diameter.trim() || null,
+          calibrated_at: form.calibrated_at || null,
           notes: form.profile_notes.trim() || null,
         };
         try {
@@ -1980,6 +1992,31 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             value={form.fan_speed_percent}
             onChange={(e) => update('fan_speed_percent', e.target.value)}
             placeholder="ej. 100"
+            className={`${FORM_INPUT_CLS} mono`}
+          />
+        </FormFieldRow>
+        <FormFieldRow label="K-value" hint="Calibrado a mano — no sincroniza con ninguna impresora">
+          <input
+            type="number" min="0" max="99" step="0.001"
+            value={form.k_value}
+            onChange={(e) => update('k_value', e.target.value)}
+            placeholder="ej. 0.020"
+            className={`${FORM_INPUT_CLS} mono`}
+          />
+        </FormFieldRow>
+        <FormFieldRow label="Diámetro de boquilla usado" hint="El K-value depende de esto">
+          <input
+            value={form.nozzle_diameter}
+            onChange={(e) => update('nozzle_diameter', e.target.value)}
+            placeholder="ej. 0.4"
+            className={`${FORM_INPUT_CLS} mono`}
+          />
+        </FormFieldRow>
+        <FormFieldRow label="Calibrado el">
+          <input
+            type="date"
+            value={form.calibrated_at}
+            onChange={(e) => update('calibrated_at', e.target.value)}
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>

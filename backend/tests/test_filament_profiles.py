@@ -111,6 +111,8 @@ class TestFilamentProfilesUpsert:
             {"fan_speed_percent": 150},  # > 100
             {"nozzle_temp_min": -10},  # < 0
             {"flow_ratio": 0},  # debe ser > 0
+            {"k_value": -0.01},  # k_value no puede ser negativo
+            {"k_value": 100},  # > 99 (fuera del rango razonable de K-factor)
         ],
     )
     async def test_put_profile_valor_fuera_de_rango_retorna_422(self, payload):
