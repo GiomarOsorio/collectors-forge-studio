@@ -71,7 +71,7 @@ jobs:
         run: docker build -t cfs-app:security-scan -f Containerfile .
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: 'cfs-app:security-scan'
           format: 'sarif'
@@ -86,7 +86,7 @@ jobs:
           category: trivy
 
       - name: Run Trivy for Containerfile/IaC
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'config'
           scan-ref: '.'
