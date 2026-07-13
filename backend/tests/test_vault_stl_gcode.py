@@ -144,9 +144,21 @@ class TestExtensionHelpers:
         assert _source_content_type("modelo.3mf") == "model/3mf"
 
 
+async def _fake_db_empty():
+    """DB dummy — nunca se toca porque la validación de extensión rechaza
+    el upload antes de que el endpoint ejecute ningún `db.execute`. Debe
+    ser un generador async real (no un `AsyncMock()` suelto): FastAPI
+    resuelve la dependencia `Depends(get_db)` para armar los argumentos
+    del endpoint ANTES de correr su cuerpo, sin importar si el código
+    llega a usarla — un override que no respeta la forma de generador
+    rompe esa resolución (visto en CI: producía 422 en vez del 400 real)."""
+    session = AsyncMock()
+    yield session
+
+
 class TestUploadValidation:
     async def test_source_txt_rechazado_400(self):
-        _set_overrides({get_db: AsyncMock(), get_current_user: lambda: _fake_user()})
+        _set_overrides({get_db: _fake_db_empty, get_current_user: lambda: _fake_user()})
         try:
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
                 r = await c.post(
@@ -160,7 +172,7 @@ class TestUploadValidation:
         assert "stl" in r.json()["detail"].lower()
 
     async def test_source_gcode_3mf_sigue_rechazado_400(self):
-        _set_overrides({get_db: AsyncMock(), get_current_user: lambda: _fake_user()})
+        _set_overrides({get_db: _fake_db_empty, get_current_user: lambda: _fake_user()})
         try:
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
                 r = await c.post(

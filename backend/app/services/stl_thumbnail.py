@@ -47,7 +47,14 @@ def render_stl_thumbnail(stl_bytes: bytes) -> Optional[bytes]:
     try:
         import matplotlib
         matplotlib.use("Agg")
-        from matplotlib import pyplot
+        # API orientada a objetos (Figure directo) en vez de `pyplot` — pyplot
+        # mantiene estado global (stack de "figura actual") que NO es
+        # thread-safe. Este render corre en un worker thread vía
+        # `asyncio.to_thread`; con `pyplot.figure()`/`pyplot.close()` el
+        # render fallaba en silencio ahí (atrapado por el except de abajo,
+        # detectado en CI: pasaba llamado directo pero no vía to_thread) —
+        # `Figure()` es un objeto plano, sin registro global que pisar.
+        from matplotlib.figure import Figure
         from mpl_toolkits import mplot3d
         from stl import mesh as stl_mesh
     except ImportError:
@@ -71,8 +78,8 @@ def render_stl_thumbnail(stl_bytes: bytes) -> Optional[bytes]:
         step = len(vectors) // _MAX_TRIANGLES_FOR_RENDER + 1
         render_vectors = vectors[::step]
 
-    figure = pyplot.figure(figsize=(_FIGSIZE_INCHES, _FIGSIZE_INCHES), dpi=_DPI)
     try:
+        figure = Figure(figsize=(_FIGSIZE_INCHES, _FIGSIZE_INCHES), dpi=_DPI)
         axes = figure.add_subplot(projection="3d")
         collection = mplot3d.art3d.Poly3DCollection(
             render_vectors, facecolor="#F59E0B", linewidths=0,
@@ -95,5 +102,3 @@ def render_stl_thumbnail(stl_bytes: bytes) -> Optional[bytes]:
     except Exception as exc:
         logger.warning("Fallo al renderizar thumbnail STL: %s", exc)
         return None
-    finally:
-        pyplot.close(figure)
