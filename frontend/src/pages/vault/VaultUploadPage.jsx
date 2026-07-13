@@ -3,15 +3,16 @@
  *
  * Soporta los dos slots de archivo definidos en `ModelFile`:
  *
- * - **source_file** (`.3mf` editable) — proyecto OrcaSlicer/BambuStudio.
+ * - **source_file** (`.3mf` o `.stl` editable) — proyecto OrcaSlicer/
+ *   BambuStudio o mesh STL sin laminar.
  * - **print_file** (`.gcode.3mf` laminado) — paquete con G-code listo para
  *   imprimir. El backend parsea su header y autollena
  *   `sliced_weight_g` / `sliced_time_seconds` / `sliced_filament_type` para
  *   que el picker de Queue pueda meterlo directo a cola.
  *
  * Al menos uno de los dos slots tiene que estar presente. Si solo se
- * sube `.3mf` editable, "Agregar a cola" estará deshabilitado (con tooltip
- * "lamina primero con tu slicer y vuelve a subir").
+ * sube el editable (`.3mf`/`.stl`), "Agregar a cola" estará deshabilitado
+ * (con tooltip "lamina primero con tu slicer y vuelve a subir").
  *
  * Los no-admins son redirigidos a /vault al montar el componente.
  *
@@ -173,7 +174,7 @@ export default function VaultUploadPage() {
     tags: '',
   });
 
-  const [sourceFile, setSourceFile] = useState(null); // .3mf editable nuevo (reemplaza)
+  const [sourceFile, setSourceFile] = useState(null); // .3mf/.stl editable nuevo (reemplaza)
   const [printFile, setPrintFile] = useState(null);   // .gcode.3mf laminado nuevo (reemplaza)
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -261,9 +262,9 @@ export default function VaultUploadPage() {
   };
 
   /**
-   * Acepta archivos del DropZone source. Valida extensión .3mf (rechaza
-   * .gcode.3mf, que pertenece al slot print). Si no hay name aún, lo
-   * deriva del filename para que el admin no tenga que tipearlo.
+   * Acepta archivos del DropZone source. Valida extensión .3mf o .stl
+   * (rechaza .gcode.3mf, que pertenece al slot print). Si no hay name
+   * aún, lo deriva del filename para que el admin no tenga que tipearlo.
    */
   const handleSourceFiles = (files) => {
     const f = files?.[0];
@@ -273,13 +274,13 @@ export default function VaultUploadPage() {
       toast.error('Ese archivo es laminado, súbelo al slot "Laminado"');
       return;
     }
-    if (!lower.endsWith('.3mf')) {
-      toast.error('El editable debe terminar en .3mf');
+    if (!lower.endsWith('.3mf') && !lower.endsWith('.stl')) {
+      toast.error('El editable debe terminar en .3mf o .stl');
       return;
     }
     setSourceFile(f);
     if (!form.name.trim()) {
-      const base = f.name.replace(/\.3mf$/i, '');
+      const base = f.name.replace(/\.(3mf|stl)$/i, '');
       setForm((prev) => ({ ...prev, name: base }));
     }
   };
@@ -601,19 +602,19 @@ export default function VaultUploadPage() {
               {sourceFile ? (
                 <FilePreviewCard
                   file={sourceFile}
-                  label={isEditMode ? 'Reemplazar editable · .3mf' : 'Editable · .3mf'}
+                  label={isEditMode ? 'Reemplazar editable · .3mf/.stl' : 'Editable · .3mf/.stl'}
                   accent={ACCENT}
                   icon={FileBox}
                   onClear={() => setSourceFile(null)}
                 />
               ) : (
                 <DropZone
-                  accept=".3mf"
+                  accept=".3mf,.stl"
                   accent={ACCENT}
                   icon={FileBox}
-                  hint={isEditMode ? 'Suelta para reemplazar el .3mf editable' : 'Suelta el .3mf editable'}
-                  meta="OrcaSlicer / BambuStudio · proyecto editable"
-                  cta="Examinar .3mf"
+                  hint={isEditMode ? 'Suelta para reemplazar el .3mf/.stl editable' : 'Suelta el .3mf o .stl editable'}
+                  meta="OrcaSlicer / BambuStudio / mesh STL · proyecto editable"
+                  cta="Examinar .3mf/.stl"
                   onFiles={handleSourceFiles}
                 />
               )}

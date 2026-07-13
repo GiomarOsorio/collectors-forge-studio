@@ -1,10 +1,10 @@
 """
-Router del Vault de modelos `.3mf` / `.gcode.3mf` para Collector's Forge Studio.
+Router del Vault de modelos `.3mf` / `.stl` / `.gcode.3mf` para Collector's Forge Studio.
 
 Gestiona la subida, descarga y administración de archivos almacenados
 en MinIO. Cada `ModelFile` puede tener hasta dos slots: `source_file`
-(`.3mf` editable) y `print_file` (`.gcode.3mf` laminado, con G-code listo
-para impresión). Al menos uno tiene que estar presente.
+(`.3mf` o `.stl` editable) y `print_file` (`.gcode.3mf` laminado, con
+G-code listo para impresión). Al menos uno tiene que estar presente.
 
 Todos los endpoints requieren autenticación JWT. Las operaciones de
 escritura (upload, edit, delete, replace) requieren `role='admin'`.
@@ -26,18 +26,24 @@ Endpoints:
     POST   /api/vault/trash/{id}/restore     — Restaurar archivo de la papelera (admin)
     DELETE /api/vault/trash/{id}             — Borrado permanente (bytes MinIO + fila) (admin)
     DELETE /api/vault/trash                  — Vaciar toda la papelera (admin)
-    GET    /api/vault/{id}/download/source   — Descargar el .3mf editable
+    POST   /api/vault/generate-stl-thumbnails — Generar thumbnails STL pendientes en lote (admin)
+    GET    /api/vault/{id}/download/source   — Descargar el .3mf/.stl editable
     GET    /api/vault/{id}/download/print    — Descargar el .gcode.3mf laminado
+    GET    /api/vault/{id}/gcode-content     — Extraer el G-code plano del plate activo (visor)
     PUT    /api/vault/{id}                   — Editar metadata (admin)
-    POST   /api/vault/{id}/replace/source    — Reemplazar el .3mf editable (admin)
+    POST   /api/vault/{id}/replace/source    — Reemplazar el .3mf/.stl editable (admin)
     POST   /api/vault/{id}/replace/print     — Reemplazar el .gcode.3mf laminado (admin)
     DELETE /api/vault/{id}                   — Mover a la papelera (soft-delete) (admin)
 """
 
+import asyncio
+import io
 import json
 import logging
+import re
 import tempfile
 import uuid
+import zipfile
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -81,6 +87,7 @@ from app.services.thumbnail_extractor import (
     save_thumbnail,
     thumbnail_key_for_plate,
 )
+from app.services.stl_thumbnail import render_stl_thumbnail
 from app.services.vault_metadata import fetch_metadata
 from app.services.vault_storage import delete_file, download_file, upload_file
 
@@ -98,6 +105,25 @@ def _ext_ok(filename: str, allowed_suffixes: tuple) -> bool:
         return False
     lower = filename.lower()
     return any(lower.endswith(s) for s in allowed_suffixes)
+
+
+def _source_content_type(filename: str) -> str:
+    """Content-Type MinIO del slot source según su extensión (.stl vs .3mf)."""
+    return "model/stl" if _ext_ok(filename, (".stl",)) else "model/3mf"
+
+
+async def _extract_source_thumbnail_png(source_bytes: bytes, source_name: str) -> Optional[bytes]:
+    """
+    Extrae/genera el PNG de thumbnail para un `source_file` sin plates.
+
+    Un `.3mf` trae el render embebido por el slicer (`extract_plate_png`,
+    lectura de ZIP — rápida). Un `.stl` es solo geometría, no hay nada que
+    extraer — hay que renderizarlo (`render_stl_thumbnail`, CPU-bound, se
+    corre en `asyncio.to_thread` para no bloquear el event loop).
+    """
+    if _ext_ok(source_name, (".stl",)):
+        return await asyncio.to_thread(render_stl_thumbnail, source_bytes)
+    return extract_plate_png(source_bytes)
 
 
 async def _get_model_file(db: AsyncSession, file_id: int) -> ModelFile:
@@ -878,6 +904,56 @@ async def empty_vault_trash(
         await delete_thumbnail(model.id)
 
 
+#: Cuántos STL sin thumbnail se procesan por llamada — el render es
+#: CPU-bound (matplotlib), no queremos bloquear el worker con cientos de
+#: renders en un solo request.
+_STL_THUMBNAIL_BATCH_SIZE = 10
+
+
+@router.post("/generate-stl-thumbnails")
+async def generate_stl_thumbnails(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """
+    Genera en lote los thumbnails pendientes de archivos `.stl` activos
+    sin `thumbnail_key` (backfill para modelos subidos antes de que este
+    endpoint existiera, o cuyo render falló en el momento del upload).
+
+    Procesa hasta `_STL_THUMBNAIL_BATCH_SIZE` por llamada — el frontend
+    puede invocarlo repetidamente hasta que `remaining` sea 0. Solo admins.
+    """
+    result = await db.execute(
+        select(ModelFile).where(
+            ModelFile.deleted_at.is_(None),
+            ModelFile.thumbnail_key.is_(None),
+            ModelFile.source_file_key.is_not(None),
+        )
+    )
+    candidates = [
+        m
+        for m in result.scalars().all()
+        if m.source_file_name and _ext_ok(m.source_file_name, (".stl",))
+    ]
+    batch = candidates[:_STL_THUMBNAIL_BATCH_SIZE]
+
+    processed = 0
+    for model in batch:
+        try:
+            stl_bytes = await download_file(model.source_file_key)
+            png = await asyncio.to_thread(render_stl_thumbnail, stl_bytes)
+            if png:
+                model.thumbnail_key = await save_thumbnail(model.id, png)
+                processed += 1
+        except Exception as exc:
+            logger.warning(
+                "No se pudo generar thumbnail STL en lote para %s: %s", model.id, exc
+            )
+
+    await db.commit()
+    return {"processed": processed, "remaining": max(len(candidates) - len(batch), 0)}
+
+
 @router.post("/upload", response_model=ModelFileResponse, status_code=status.HTTP_201_CREATED)
 async def upload_vault_file(
     metadata: str = Form(..., description="JSON con ModelFileCreate"),
@@ -895,12 +971,13 @@ async def upload_vault_file(
 
     Reglas:
       - Al menos uno de `source_file` o `print_file` es requerido.
-      - `source_file` debe terminar en `.3mf` (NO `.gcode.3mf`).
+      - `source_file` debe terminar en `.3mf` o `.stl` (NO `.gcode.3mf`).
       - `print_file` debe terminar en `.gcode.3mf`.
       - Cada archivo individual ≤ 1 GB.
       - La suma de los archivos no debe superar la cuota del Vault.
       - Si se sube `print_file`, se parsea su header y se popula `sliced_*`.
-      - Thumbnail se extrae del `print_file` primero, fallback al `source_file`.
+      - Thumbnail se extrae del `print_file` primero, fallback al `source_file`
+        (render 3D offline si el source es `.stl`).
 
     Solo admins pueden subir archivos.
     """
@@ -915,12 +992,12 @@ async def upload_vault_file(
         if not source_file.filename or _ext_ok(source_file.filename, (".gcode.3mf",)):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="`source_file` debe ser un .3mf editable (no .gcode.3mf)",
+                detail="`source_file` debe ser un .3mf o .stl editable (no .gcode.3mf)",
             )
-        if not _ext_ok(source_file.filename, (".3mf",)):
+        if not _ext_ok(source_file.filename, (".3mf", ".stl")):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="`source_file` debe terminar en .3mf",
+                detail="`source_file` debe terminar en .3mf o .stl",
             )
     if print_file is not None and not _ext_ok(print_file.filename or "", (".gcode.3mf",)):
         raise HTTPException(
@@ -975,7 +1052,7 @@ async def upload_vault_file(
     if source_file is not None:
         source_key = f"{uuid.uuid4()}-{source_file.filename.replace(' ', '_')}"
         source_name = source_file.filename
-        await upload_file(source_key, source_bytes, content_type="model/3mf")
+        await upload_file(source_key, source_bytes, content_type=_source_content_type(source_name))
     if print_file is not None:
         print_key = f"{uuid.uuid4()}-{print_file.filename.replace(' ', '_')}"
         print_name = print_file.filename
@@ -1049,9 +1126,9 @@ async def upload_vault_file(
             logger.warning("No se pudieron persistir plates de %s: %s", model.id, exc)
 
     # Fallback legacy: si no hay plates pero hay source con thumbnail,
-    # extraemos al menos uno para el thumbnail principal.
+    # extraemos (.3mf) o renderizamos (.stl) uno para el thumbnail principal.
     if not model.plates and source_bytes is not None:
-        png = extract_plate_png(source_bytes)
+        png = await _extract_source_thumbnail_png(source_bytes, source_name)
         if png:
             try:
                 model.thumbnail_key = await save_thumbnail(model.id, png)
@@ -1072,12 +1149,12 @@ async def download_source_file(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Descarga el `.3mf` editable. 404 si el modelo no lo tiene."""
+    """Descarga el `.3mf`/`.stl` editable. 404 si el modelo no lo tiene."""
     model = await _get_model_file(db, file_id)
     if not model.source_file_key:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Este modelo no tiene .3mf editable",
+            detail="Este modelo no tiene .3mf/.stl editable",
         )
     data = await download_file(model.source_file_key)
     return Response(
@@ -1110,6 +1187,71 @@ async def download_print_file(
             "Content-Disposition": f'attachment; filename="{model.print_file_name}"',
         },
     )
+
+
+#: Límite del G-code servido al visor — una impresión gigante puede pesar
+#: cientos de MB; el visor del navegador (gcode-preview) no puede ni debe
+#: procesar eso.
+_MAX_GCODE_CONTENT_BYTES = 80 * 1024 * 1024
+
+#: Patrón de nombre de plate dentro del ZIP `.gcode.3mf` (1-based).
+_PLATE_GCODE_RE = re.compile(r"^Metadata/plate_(\d+)\.gcode$")
+
+
+@router.get("/{file_id}/gcode-content")
+async def get_gcode_content(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Extrae el G-code plano del plate activo de un `.gcode.3mf` para el
+    visor 3D del frontend (`gcode-preview`).
+
+    El `.gcode.3mf` es un ZIP; el G-code vive en `Metadata/plate_{N}.gcode`
+    (N = `active_plate_index` + 1, mismo offset 1-based que los
+    thumbnails). Si ese plate específico no está (edge case improbable),
+    cae al primer `plate_*.gcode` disponible en el ZIP.
+
+    413 si el G-code extraído supera 80 MB. 404 si el modelo no tiene
+    `print_file` o el ZIP no contiene ningún G-code.
+    """
+    model = await _get_model_file(db, file_id)
+    if not model.print_file_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Este modelo no tiene .gcode.3mf laminado",
+        )
+
+    zip_bytes = await download_file(model.print_file_key)
+    gcode_name = f"Metadata/plate_{model.active_plate_index + 1}.gcode"
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            namelist = zf.namelist()
+            if gcode_name not in namelist:
+                candidates = sorted(n for n in namelist if _PLATE_GCODE_RE.match(n))
+                if not candidates:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="El .gcode.3mf no contiene G-code extraíble",
+                    )
+                gcode_name = candidates[0]
+
+            info = zf.getinfo(gcode_name)
+            if info.file_size > _MAX_GCODE_CONTENT_BYTES:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail="El G-code supera 80 MB — demasiado grande para el visor",
+                )
+            gcode_bytes = zf.read(gcode_name)
+    except zipfile.BadZipFile:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="El .gcode.3mf está corrupto o no es un ZIP válido",
+        )
+
+    return Response(content=gcode_bytes, media_type="text/plain")
 
 
 @router.get("/{file_id}/thumbnail")
@@ -1301,18 +1443,18 @@ async def _replace_slot(
     Reemplaza el archivo del slot indicado conservando metadatos.
     Llamado desde los dos endpoints específicos /replace/source y /replace/print.
     """
-    expected_suffix = ".3mf" if slot == "source" else ".gcode.3mf"
-    if not file.filename or not _ext_ok(file.filename, (expected_suffix,)):
+    expected_suffixes = (".3mf", ".stl") if slot == "source" else (".gcode.3mf",)
+    if not file.filename or not _ext_ok(file.filename, expected_suffixes):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"El archivo del slot `{slot}` debe terminar en {expected_suffix}",
+            detail=f"El archivo del slot `{slot}` debe terminar en {' o '.join(expected_suffixes)}",
         )
 
     # Para source extra validar que no sea .gcode.3mf (que también termina en .3mf).
     if slot == "source" and _ext_ok(file.filename, (".gcode.3mf",)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="`source_file` debe ser .3mf editable, no .gcode.3mf",
+            detail="`source_file` debe ser .3mf o .stl editable, no .gcode.3mf",
         )
 
     content = await file.read()
@@ -1339,7 +1481,8 @@ async def _replace_slot(
     # solo después de confirmar la BD.
     old_key = model.source_file_key if slot == "source" else model.print_file_key
     new_key = f"{uuid.uuid4()}-{file.filename.replace(' ', '_')}"
-    await upload_file(new_key, content, content_type="model/3mf")
+    upload_content_type = _source_content_type(file.filename) if slot == "source" else "model/3mf"
+    await upload_file(new_key, content, content_type=upload_content_type)
 
     if slot == "source":
         model.source_file_key = new_key
@@ -1363,7 +1506,7 @@ async def _replace_slot(
     # Si fue replace de source y no había plates ya, intentar thumbnail
     # fallback desde el source. (En print el flow de plates ya cubre).
     if slot == "source" and not model.plates:
-        png = extract_plate_png(content)
+        png = await _extract_source_thumbnail_png(content, file.filename)
         if png:
             await delete_thumbnail(model.id)
             try:

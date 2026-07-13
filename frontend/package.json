@@ -25,6 +25,7 @@
     "@react-three/fiber": "^9.5.0",
     "@tailwindcss/vite": "^4.2.0",
     "axios": "^1.13.5",
+    "gcode-preview": "^2.18.0",
     "i18next": "^26.2.0",
     "i18next-browser-languagedetector": "^8.2.1",
     "lucide-react": "^0.574.0",
