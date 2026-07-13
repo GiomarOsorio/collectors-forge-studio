@@ -22,10 +22,14 @@ import {
   Eye,
   EyeOff,
   Globe,
+  Monitor,
+  Moon,
+  Palette,
   Pencil,
   Save,
   Settings as SettingsIcon,
   Shield,
+  Sun,
   User as UserIcon,
   Users,
   X,
@@ -45,6 +49,7 @@ import {
 import MobileAppHeader from '../../components/MobileAppHeader';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { getUsers, updateMe, updateUser } from '../../services/api';
 import { apiErrorMsg } from '../../utils/apiError';
 
@@ -479,6 +484,79 @@ function LanguageDrawer({ open, currentCode, onClose, isMobile }) {
   );
 }
 
+/**
+ * Drawer para elegir el tema de la interfaz (issue #126).
+ * Persiste vía `setMode` del ThemeContext, que escribe a localStorage y
+ * aplica/quita la clase `dark` en `<html>`.
+ */
+const THEME_OPTIONS = [
+  { value: 'light', icon: Sun },
+  { value: 'dark', icon: Moon },
+  { value: 'system', icon: Monitor },
+];
+
+function AppearanceDrawer({ open, onClose, isMobile }) {
+  const { t } = useTranslation();
+  const { mode, setMode } = useTheme();
+  const Body = (
+    <div className="p-5 flex flex-col gap-3">
+      <p className="text-[12.5px] text-steel leading-relaxed">
+        {t('settings.appearance.description')}
+      </p>
+      <div className="flex flex-col gap-2">
+        {THEME_OPTIONS.map(({ value, icon: Icon }) => {
+          const active = value === mode;
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() => {
+                setMode(value);
+                onClose();
+              }}
+              className="flex items-center gap-3 px-3.5 py-3 rounded-lg text-left transition-colors"
+              style={{
+                background: active
+                  ? 'color-mix(in oklab, var(--color-forge-teal) 12%, transparent)'
+                  : 'var(--color-surf-card-2)',
+                border: active
+                  ? '1px solid color-mix(in oklab, var(--color-forge-teal) 36%, transparent)'
+                  : '1px solid var(--color-border)',
+              }}
+            >
+              <span className="w-8 h-8 rounded-md flex items-center justify-center shrink-0 bg-surf-hover text-steel">
+                <Icon size={16} />
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13.5px] font-semibold text-tech-white">
+                  {t(`settings.appearance.${value}`)}
+                </div>
+              </div>
+              {active && (
+                <CheckCircle2 size={16} className="text-forge-teal shrink-0" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+  return isMobile ? (
+    <MobileSheet open={open} onClose={onClose} title={t('settings.appearance.title')}>
+      {Body}
+    </MobileSheet>
+  ) : (
+    <DetailDrawer
+      open={open}
+      onClose={onClose}
+      eyebrow="Settings"
+      title={t('settings.appearance.title')}
+    >
+      {Body}
+    </DetailDrawer>
+  );
+}
+
 function UsersDrawer({ open, users, currentUserId, onClose, onChanged, isMobile }) {
   const [expandedId, setExpandedId] = useState(null);
 
@@ -579,7 +657,9 @@ export default function SettingsPage() {
 
   const badge = useMemo(() => roleBadge(user?.role), [user?.role]);
   const { t, i18n } = useTranslation();
+  const { mode } = useTheme();
   const [languageOpen, setLanguageOpen] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
   const currentLang = SUPPORTED_LANGS.find((l) => l.code === i18n.language)
     || SUPPORTED_LANGS[0];
 
@@ -603,6 +683,16 @@ export default function SettingsPage() {
         status: `${currentLang.flag} ${currentLang.label}`,
         complete: true,
         onClick: () => setLanguageOpen(true),
+        visible: true,
+      },
+      {
+        id: 'appearance',
+        icon: Palette,
+        title: t('settings.appearance.title'),
+        desc: t('settings.appearance.description'),
+        status: t(`settings.appearance.${mode}`),
+        complete: true,
+        onClick: () => setAppearanceOpen(true),
         visible: true,
       },
       {
@@ -633,7 +723,7 @@ export default function SettingsPage() {
       },
     ];
     return out.filter((s) => s.visible);
-  }, [user, isAdmin, users, loadingUsers, t, currentLang]);
+  }, [user, isAdmin, users, loadingUsers, t, currentLang, mode]);
 
   const KPIs = (
     <div className="flex flex-wrap gap-3 px-6 pt-4 pb-2">
@@ -751,6 +841,11 @@ export default function SettingsPage() {
         open={languageOpen}
         currentCode={i18n.language}
         onClose={() => setLanguageOpen(false)}
+        isMobile={isMobile}
+      />
+      <AppearanceDrawer
+        open={appearanceOpen}
+        onClose={() => setAppearanceOpen(false)}
         isMobile={isMobile}
       />
     </>

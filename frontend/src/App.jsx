@@ -47,6 +47,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DirtyStateProvider } from './context/DirtyStateContext';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { ConfirmProvider } from './components/ConfirmDialog';
 import AppLayout from './components/AppLayout';
 import Login from './pages/Login';
@@ -246,24 +247,48 @@ function AppRoutes() {
 }
 
 /**
+ * Toaster con estilo reactivo al tema claro/oscuro.
+ * Componente separado porque `useTheme()` solo puede llamarse dentro del
+ * árbol de `ThemeProvider`, no en `App()` antes de montarlo.
+ *
+ * @returns {JSX.Element}
+ */
+function ThemedToaster() {
+  const { resolvedMode } = useTheme();
+  const isDark = resolvedMode === 'dark';
+  return (
+    <Toaster
+      position="top-right"
+      toastOptions={{
+        style: {
+          background: isDark ? '#1A1D25' : '#FFFFFF',
+          color: isDark ? '#F2F4F6' : '#171B24',
+          border: `1px solid ${isDark ? '#2A2F38' : '#E2E6EC'}`,
+        },
+        success: { iconTheme: { primary: '#2DD4BF', secondary: isDark ? '#F2F4F6' : '#FFFFFF' } },
+      }}
+    />
+  );
+}
+
+/**
  * Componente raíz de Collector's Forge Studio.
  *
  * @returns {JSX.Element}
  */
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <DirtyStateProvider>
-          <ConfirmProvider>
-            <AppRoutes />
-            <Toaster position="top-right" toastOptions={{
-            style: { background: '#1A1D25', color: '#F2F4F6', border: '1px solid #2A2F38' },
-            success: { iconTheme: { primary: '#2DD4BF', secondary: '#F2F4F6' } },
-          }} />
-          </ConfirmProvider>
-        </DirtyStateProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <DirtyStateProvider>
+            <ConfirmProvider>
+              <AppRoutes />
+              <ThemedToaster />
+            </ConfirmProvider>
+          </DirtyStateProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }

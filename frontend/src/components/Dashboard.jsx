@@ -57,7 +57,7 @@ function WidgetCard({ entry, onCycleSize, onHide, dragHandle }) {
   const Icon = def.icon;
   const Body = def.Component;
   return (
-    <div className="bg-[#111520] border border-[#222630] rounded-2xl p-4 flex flex-col gap-3 h-full">
+    <div className="bg-surf-card border border-border rounded-2xl p-4 flex flex-col gap-3 h-full">
       <div className="flex items-center gap-2">
         {dragHandle && (
           <button
@@ -75,7 +75,7 @@ function WidgetCard({ entry, onCycleSize, onHide, dragHandle }) {
         <button
           type="button"
           onClick={() => onCycleSize(entry.id)}
-          className="px-2 py-1 text-xs text-gunmetal hover:text-tech-white hover:bg-[#222630] rounded transition-colors"
+          className="px-2 py-1 text-xs text-gunmetal hover:text-tech-white hover:bg-border rounded transition-colors"
           title="Cambiar tamaño"
           aria-label="Cambiar tamaño del widget"
         >
@@ -84,7 +84,7 @@ function WidgetCard({ entry, onCycleSize, onHide, dragHandle }) {
         <button
           type="button"
           onClick={() => onHide(entry.id)}
-          className="p-1 text-gunmetal hover:text-rose-400 hover:bg-[#222630] rounded transition-colors"
+          className="p-1 text-gunmetal hover:text-rose-400 hover:bg-border rounded transition-colors"
           title="Ocultar widget"
           aria-label="Ocultar widget"
         >
@@ -129,7 +129,7 @@ function SortableWidget({ entry, onCycleSize, onHide }) {
 function HiddenWidgetsRow({ hidden, onShow, onReset }) {
   if (hidden.length === 0) return null;
   return (
-    <div className="mt-6 pt-4 border-t border-[#222630]">
+    <div className="mt-6 pt-4 border-t border-border">
       <div className="flex items-center justify-between mb-2">
         <p className="text-xs uppercase tracking-widest text-gunmetal">Widgets ocultos</p>
         <button
@@ -149,7 +149,7 @@ function HiddenWidgetsRow({ hidden, onShow, onReset }) {
               key={def.id}
               type="button"
               onClick={() => onShow(def.id)}
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#111520] border border-[#222630] text-sm text-steel hover:border-forge-teal/40 hover:text-tech-white transition-colors"
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surf-card border border-border text-sm text-steel hover:border-forge-teal/40 hover:text-tech-white transition-colors"
             >
               <Icon size={14} style={{ color: def.color }} />
               <span>{def.title}</span>

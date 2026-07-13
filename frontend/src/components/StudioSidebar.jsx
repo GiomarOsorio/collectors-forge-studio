@@ -92,7 +92,7 @@ function AppRow({ app, active, badgeCount, dragHandle, onNavigate }) {
         className={`relative flex-1 flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-colors border ${
           active
             ? 'bg-blue-500/8 border-blue-500/22 text-tech-white'
-            : 'bg-transparent border-transparent text-steel hover:bg-[#1A2030] hover:text-tech-white'
+            : 'bg-transparent border-transparent text-steel hover:bg-surf-hover hover:text-tech-white'
         }`}
         style={
           active
@@ -183,8 +183,8 @@ function ActiveAppSection({ app, isAdmin, onNavigate }) {
                 className={({ isActive }) =>
                   `flex items-center gap-2 px-2.5 py-1.5 rounded-md text-[12.5px] transition-colors ${
                     isActive
-                      ? 'bg-[#1A2030] text-tech-white'
-                      : 'text-steel hover:bg-[#1A2030] hover:text-tech-white'
+                      ? 'bg-surf-hover text-tech-white'
+                      : 'text-steel hover:bg-surf-hover hover:text-tech-white'
                   }`
                 }
               >
@@ -274,12 +274,12 @@ export default function StudioSidebar({ open, onClose }) {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#0A0E16] text-tech-white border-r border-[#1C2230] flex flex-col transition-transform duration-300 ${
+        className={`fixed inset-y-0 left-0 z-40 w-64 bg-surf-sidebar text-tech-white border-r border-border-soft flex flex-col transition-transform duration-300 ${
           open ? 'translate-x-0' : '-translate-x-full'
         } lg:translate-x-0`}
       >
         {/* Brand */}
-        <div className="px-3.5 py-3.5 border-b border-[#1C2230] flex items-center justify-between gap-2">
+        <div className="px-3.5 py-3.5 border-b border-border-soft flex items-center justify-between gap-2">
           <Link
             to="/"
             onClick={onClose}
@@ -313,13 +313,13 @@ export default function StudioSidebar({ open, onClose }) {
         <div className="px-3 py-2.5">
           <div
             className="flex items-center gap-2 px-2.5 py-1.5 rounded-md border text-gunmetal-dim"
-            style={{ background: '#0F1219', borderColor: '#1C2230' }}
+            style={{ background: 'var(--color-forge-black)', borderColor: 'var(--color-border-soft)' }}
           >
             <Search size={13} />
             <span className="flex-1 text-xs">Buscar…</span>
             <span
               className="mono text-[10px] px-1 rounded-sm border"
-              style={{ borderColor: '#1C2230' }}
+              style={{ borderColor: 'var(--color-border-soft)' }}
             >
               ⌘K
             </span>
@@ -363,10 +363,10 @@ export default function StudioSidebar({ open, onClose }) {
         </nav>
 
         {/* Footer: avatar + user + Settings ⚙️ + Logout */}
-        <div className="px-3 py-2.5 border-t border-[#1C2230] flex items-center gap-2.5">
+        <div className="px-3 py-2.5 border-t border-border-soft flex items-center gap-2.5">
           <div
             className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-semibold text-tech-white shrink-0 border"
-            style={{ background: '#1A2030', borderColor: '#303642', fontFamily: 'var(--font-mono)' }}
+            style={{ background: 'var(--color-surf-hover)', borderColor: 'var(--color-border-strong)', fontFamily: 'var(--font-mono)' }}
           >
             {(user?.username || '?').charAt(0).toUpperCase()}
           </div>
@@ -388,14 +388,14 @@ export default function StudioSidebar({ open, onClose }) {
             onClick={onClose}
             aria-label="Configuración"
             title="Configuración"
-            className="p-1.5 text-gunmetal hover:text-tech-white rounded-md hover:bg-[#1A2030] transition-colors shrink-0"
+            className="p-1.5 text-gunmetal hover:text-tech-white rounded-md hover:bg-surf-hover transition-colors shrink-0"
           >
             <Settings size={14} />
           </NavLink>
           <button
             type="button"
             onClick={handleLogout}
-            className="p-1.5 text-gunmetal hover:text-tech-white rounded-md hover:bg-[#1A2030] transition-colors shrink-0"
+            className="p-1.5 text-gunmetal hover:text-tech-white rounded-md hover:bg-surf-hover transition-colors shrink-0"
             title="Cerrar sesión"
             aria-label="Cerrar sesión"
           >
