@@ -720,7 +720,7 @@ export const uploadVaultFile = (formData, onUploadProgress) =>
   api.post('/vault/upload', formData, { onUploadProgress });
 
 /**
- * Descarga el .3mf editable de un modelo. 404 si el modelo no lo tiene.
+ * Descarga el .3mf/.stl editable de un modelo. 404 si el modelo no lo tiene.
  * @param {number} id - ID del archivo en el Vault
  */
 export const downloadVaultSource = (id) =>
@@ -732,6 +732,15 @@ export const downloadVaultSource = (id) =>
  */
 export const downloadVaultPrint = (id) =>
   api.get(`/vault/${id}/download/print`, { responseType: 'blob' });
+
+/**
+ * Extrae el G-code plano del plate activo de un `.gcode.3mf` (issue #129).
+ * Usado por el visor `GCodeViewerModal` (gcode-preview). 404 si el modelo
+ * no tiene print_file, 413 si el G-code supera 80 MB.
+ * @param {number} id - ID del archivo en el Vault
+ */
+export const getVaultGcodeContent = (id) =>
+  api.get(`/vault/${id}/gcode-content`, { responseType: 'text' });
 
 /**
  * Obtiene un solo archivo del Vault por ID. Usado por el editor para

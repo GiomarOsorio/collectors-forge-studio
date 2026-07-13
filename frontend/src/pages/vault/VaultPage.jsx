@@ -1,18 +1,21 @@
 /**
- * @file Página de la app Vault — galería de modelos `.3mf` / `.gcode.3mf`.
+ * @file Página de la app Vault — galería de modelos `.3mf` / `.stl` / `.gcode.3mf`.
  *
- * Thumbnails locales (extraídos del ZIP del modelo) con prioridad sobre el
- * `thumbnail_url` externo. Cada modelo puede tener un slot `source_file`
- * (`.3mf` editable) y/o `print_file` (`.gcode.3mf` laminado, listo para
- * imprimir desde la cola).
+ * Thumbnails locales (extraídos del ZIP del modelo, o renderizados
+ * server-side para `.stl`) con prioridad sobre el `thumbnail_url` externo.
+ * Cada modelo puede tener un slot `source_file` (`.3mf` o `.stl` editable)
+ * y/o `print_file` (`.gcode.3mf` laminado, listo para imprimir desde la
+ * cola). Los `.stl` obtienen un preview 3D interactivo en el detalle
+ * (`StlLivePreview` + `ModelViewer3D`) en vez del thumbnail estático.
  *
  * @module pages/vault/VaultPage
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   Archive,
+  Boxes,
   ChevronRight,
   Download,
   FileBox,
@@ -41,6 +44,7 @@ import {
   StatusPill,
 } from '../../components/ui';
 import MobileAppHeader from '../../components/MobileAppHeader';
+import ModelViewer3D from '../../components/ModelViewer3D';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../context/AuthContext';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -55,12 +59,14 @@ import {
   downloadVaultSource,
   getVaultFiles,
   getVaultFolders,
+  getVaultGcodeContent,
   getVaultStats,
   getVaultTags,
   updateVaultFile,
   updateVaultFolder,
   updateVaultTag,
 } from '../../services/api';
+import { apiErrorMsg } from '../../utils/apiError';
 import { getThumbnail } from '../../utils/thumbnail';
 
 const ACCENT = '#F43F5E';
@@ -438,9 +444,166 @@ function VaultRow({ file, onClick }) {
  * `DetailDrawer` v2; las acciones viven en `VaultDrawerFooter`. Muestra
  * los dos slots (source / print) por separado + metadatos sliced si los hay.
  */
+/**
+ * Preview 3D interactivo para archivos `.stl` en el detalle del Vault
+ * (issue #129). Descarga el `.stl` autenticado como blob — el `STLLoader`
+ * de three.js hace su propio `fetch` interno y no puede enviar el header
+ * `Authorization`, por eso no se le puede pasar la URL del endpoint
+ * directo (`/api/vault/{id}/download/source`), sino un blob: URL local.
+ */
+function StlLivePreview({ fileId, fileName }) {
+  const [blobUrl, setBlobUrl] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl = null;
+    setLoading(true);
+    setError(false);
+    downloadVaultSource(fileId)
+      .then((res) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(res.data);
+        setBlobUrl(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [fileId]);
+
+  if (error) return null;
+  if (loading || !blobUrl) {
+    return (
+      <div className="h-48 rounded-lg overflow-hidden bg-[var(--color-surf-sidebar)] border border-[var(--color-border)] flex items-center justify-center">
+        <div className="w-6 h-6 border-2 border-rose-500/20 border-t-rose-500 rounded-full animate-spin" />
+      </div>
+    );
+  }
+  return <ModelViewer3D url={blobUrl} fileName={fileName} />;
+}
+
+/**
+ * Modal del visor de G-code (`gcode-preview`, WebGL) para archivos con
+ * `.gcode.3mf` laminado (issue #129). Descarga el G-code plano del plate
+ * activo vía `getVaultGcodeContent` (autenticado, ya viene como texto) y
+ * lo renderiza capa por capa. `dispose()` en el cleanup evita acumular
+ * contextos WebGL si React StrictMode monta el efecto dos veces en dev.
+ */
+function GCodeViewerModal({ fileId, fileName, onClose }) {
+  const canvasRef = useRef(null);
+  const previewRef = useRef(null);
+  const [loading, setLoading] = useState(true);
+  const [maxLayer, setMaxLayer] = useState(0);
+  const [layer, setLayer] = useState(0);
+  const [showTravel, setShowTravel] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    // `gcode-preview` carga bundleado su propia copia de three.js (dep
+    // directa, no peer — versión distinta a la de @react-three/fiber) —
+    // import dinámico para que ese peso solo se pague al abrir el visor,
+    // no en cada carga de VaultPage.
+    Promise.all([getVaultGcodeContent(fileId), import('gcode-preview')])
+      .then(([res, { init }]) => {
+        if (cancelled || !canvasRef.current) return;
+        const preview = init({ canvas: canvasRef.current, renderTravel: false });
+        previewRef.current = preview;
+        preview.processGCode(res.data);
+        preview.render();
+        const top = preview.maxLayerIndex ?? 0;
+        setMaxLayer(top);
+        setLayer(top);
+      })
+      .catch((err) => {
+        if (!cancelled) toast.error(apiErrorMsg(err, 'No se pudo cargar el G-code'));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      previewRef.current?.dispose?.();
+      previewRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileId]);
+
+  // Slider de capas: no re-parsea el gcode, solo re-dibuja hasta `layer`.
+  useEffect(() => {
+    if (!previewRef.current) return;
+    previewRef.current.endLayer = layer;
+    previewRef.current.render();
+  }, [layer]);
+
+  // Toggle travel moves: los segmentos ya están parseados (processGCode los
+  // guarda a ambos), solo cambia si `render()` los dibuja o no.
+  useEffect(() => {
+    if (!previewRef.current) return;
+    previewRef.current.renderTravel = showTravel;
+    previewRef.current.render();
+  }, [showTravel]);
+
+  return (
+    <div className="tf-modal-overlay" onClick={onClose}>
+      <div
+        className="bg-surf-panel border border-border-legacy rounded-xl w-full max-w-3xl flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-soft)]">
+          <p className="text-sm font-semibold text-tech-white truncate">{fileName}</p>
+          <button type="button" onClick={onClose} className="text-gunmetal hover:text-tech-white" aria-label="Cerrar">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="relative w-full h-[420px] bg-black">
+          <canvas ref={canvasRef} className="w-full h-full block" />
+          {loading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+              <div className="w-7 h-7 border-2 border-rose-500/20 border-t-rose-500 rounded-full animate-spin" />
+            </div>
+          )}
+        </div>
+        <div className="p-4 flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <span className="mono text-[10.5px] text-gunmetal shrink-0 w-24">
+              Capa {layer + 1} / {maxLayer + 1}
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={maxLayer}
+              value={layer}
+              onChange={(e) => setLayer(Number(e.target.value))}
+              className="flex-1"
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm text-steel cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showTravel}
+              onChange={(e) => setShowTravel(e.target.checked)}
+            />
+            Mostrar movimientos de desplazamiento (travel)
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function VaultDrawerBody({ file, onActivePlateChange, isAdmin, folders, onMoveFile }) {
   if (!file) return null;
   const thumb = getThumbnail(file);
+  const isStlSource = file.source_file_name?.toLowerCase().endsWith('.stl');
   const sliceTime = fmtTime(file.sliced_time_seconds);
   const plates = Array.isArray(file.plates) ? file.plates : [];
   const hasMultiplePlates = plates.length > 1;
@@ -466,19 +629,23 @@ function VaultDrawerBody({ file, onActivePlateChange, isAdmin, folders, onMoveFi
       {!isAdmin && currentFolder && (
         <p className="mono text-[10.5px] text-gunmetal -mb-2">📁 {currentFolder.name}</p>
       )}
-      <div
-        className="h-48 rounded-lg overflow-hidden bg-[var(--color-surf-sidebar)] flex items-center justify-center border border-[var(--color-border)]"
-      >
-        {thumb ? (
-          // object-contain + object-center: el modelo siempre se ve completo
-          // y centrado aunque el container cambie de ancho (sidebar abriendo).
-          // Issue #72 — el bug previo era object-cover que recortaba y movía
-          // el "centro visible" cuando cambiaba el ancho del drawer.
-          <img src={thumb} alt={file.name} className="w-full h-full object-contain object-center" />
-        ) : (
-          <Archive size={50} style={{ color: `${ACCENT}55` }} />
-        )}
-      </div>
+      {isStlSource ? (
+        <StlLivePreview fileId={file.id} fileName={file.source_file_name} />
+      ) : (
+        <div
+          className="h-48 rounded-lg overflow-hidden bg-[var(--color-surf-sidebar)] flex items-center justify-center border border-[var(--color-border)]"
+        >
+          {thumb ? (
+            // object-contain + object-center: el modelo siempre se ve completo
+            // y centrado aunque el container cambie de ancho (sidebar abriendo).
+            // Issue #72 — el bug previo era object-cover que recortaba y movía
+            // el "centro visible" cuando cambiaba el ancho del drawer.
+            <img src={thumb} alt={file.name} className="w-full h-full object-contain object-center" />
+          ) : (
+            <Archive size={50} style={{ color: `${ACCENT}55` }} />
+          )}
+        </div>
+      )}
 
       {/* Plate picker — issue #68. Solo aparece si hay >1 plate. */}
       {hasMultiplePlates && (
@@ -544,7 +711,7 @@ function VaultDrawerBody({ file, onActivePlateChange, isAdmin, folders, onMoveFi
           />
           <div className="flex-1 min-w-0">
             <p className="text-sm text-tech-white truncate">
-              {file.source_file_name || 'Sin .3mf editable'}
+              {file.source_file_name || 'Sin .3mf/.stl editable'}
             </p>
             <p className="mono text-[10.5px] text-gunmetal mt-0.5">
               {file.source_file_size != null
@@ -664,6 +831,7 @@ function VaultDrawerFooter({
   isAdmin,
   onDownloadSource,
   onDownloadPrint,
+  onViewGcode,
   onDelete,
   onClose,
 }) {
@@ -682,6 +850,17 @@ function VaultDrawerFooter({
           Descargar laminado
         </Button>
       )}
+      {file.is_print_ready && (
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={Boxes}
+          onClick={() => onViewGcode(file)}
+          title="Visor 3D del G-code, capa por capa"
+        >
+          Ver G-code
+        </Button>
+      )}
       {file.source_file_name && (
         <Button
           variant={file.is_print_ready ? 'ghost' : 'primary'}
@@ -689,7 +868,7 @@ function VaultDrawerFooter({
           icon={Download}
           onClick={() => onDownloadSource(file)}
           className={file.is_print_ready ? '' : 'flex-1 justify-center'}
-          title=".3mf editable — para abrir en OrcaSlicer/BambuStudio"
+          title="Editable — .3mf para OrcaSlicer/BambuStudio, .stl para cualquier slicer"
         >
           {file.is_print_ready ? 'Editable' : 'Descargar editable'}
         </Button>
@@ -741,6 +920,7 @@ export default function VaultPage() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
+  const [gcodeViewerFile, setGcodeViewerFile] = useState(null);
 
   // Carpetas — `currentFolderId=null` es la raíz del Vault. `folders` es
   // la lista plana completa (para armar breadcrumb + subcarpetas + el
@@ -1280,6 +1460,7 @@ export default function VaultPage() {
                 isAdmin={isAdmin}
                 onDownloadSource={handleDownloadSource}
                 onDownloadPrint={handleDownloadPrint}
+                onViewGcode={setGcodeViewerFile}
                 onDelete={handleDelete}
                 onClose={() => setSelected(null)}
               />
@@ -1476,6 +1657,7 @@ export default function VaultPage() {
               isAdmin={isAdmin}
               onDownloadSource={handleDownloadSource}
               onDownloadPrint={handleDownloadPrint}
+              onViewGcode={setGcodeViewerFile}
               onDelete={handleDelete}
               onClose={() => setSelected(null)}
             />
@@ -1518,6 +1700,13 @@ export default function VaultPage() {
           onCreate={handleCreateTag}
           onRename={handleRenameTag}
           onDelete={handleDeleteTag}
+        />
+      )}
+      {gcodeViewerFile && (
+        <GCodeViewerModal
+          fileId={gcodeViewerFile.id}
+          fileName={gcodeViewerFile.print_file_name || gcodeViewerFile.name}
+          onClose={() => setGcodeViewerFile(null)}
         />
       )}
     </div>
