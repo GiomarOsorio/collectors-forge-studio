@@ -31,12 +31,21 @@
     "tabs": {
       "account": "Cuenta",
       "users": "Usuarios",
-      "language": "Idioma"
+      "language": "Idioma",
+      "appearance": "Apariencia"
     },
     "language": {
       "title": "Idioma de la interfaz",
       "description": "Elige el idioma de los textos de la aplicación. Se aplica al instante.",
       "current": "Idioma actual"
+    },
+    "appearance": {
+      "title": "Apariencia",
+      "description": "Elige cómo se ve la aplicación. \"Sistema\" sigue la preferencia de tu dispositivo.",
+      "current": "Tema actual",
+      "light": "Claro",
+      "dark": "Oscuro",
+      "system": "Sistema"
     }
   },
   "auth": {

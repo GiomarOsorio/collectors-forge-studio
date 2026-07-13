@@ -93,7 +93,7 @@ export default function AppLayout() {
           </div>
         </main>
 
-        <footer className="bg-[#0A0E16] border-t border-[#222630] py-2 px-6 text-center shrink-0">
+        <footer className="bg-surf-sidebar border-t border-border py-2 px-6 text-center shrink-0">
           <p className="text-gunmetal text-xs">Collector's Forge Studio · Medellín, Colombia</p>
         </footer>
       </div>

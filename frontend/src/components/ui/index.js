@@ -12,6 +12,8 @@
 export { default as Button } from './Button';
 export { default as Card } from './Card';
 export { default as Chip } from './Chip';
+export { default as Collapsible } from './Collapsible';
+export { default as ContextMenu } from './ContextMenu';
 export { default as DetailDrawer } from './DetailDrawer';
 export { default as Input } from './Input';
 export { default as KPI } from './KPI';

@@ -31,12 +31,21 @@
     "tabs": {
       "account": "Account",
       "users": "Users",
-      "language": "Language"
+      "language": "Language",
+      "appearance": "Appearance"
     },
     "language": {
       "title": "Interface language",
       "description": "Pick the language used across the app. Applies instantly.",
       "current": "Current language"
+    },
+    "appearance": {
+      "title": "Appearance",
+      "description": "Choose how the app looks. \"System\" follows your device's preference.",
+      "current": "Current theme",
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
     }
   },
   "auth": {
