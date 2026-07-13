@@ -12,11 +12,13 @@
  *
  * Además, si el backend responde DEV_LOGIN_ENABLED=true (solo pasa en el
  * deploy de cfs-app-dev — ver services/cfs-app/quadlets/cfs-app-dev.container
- * en service-deployments, nunca en prod), se muestra un segundo botón
- * "Iniciar sesión (dev, sin SSO)" que sí pega al backend real y emite un JWT
- * válido — necesario porque el redirect_uri OIDC de dev hoy apunta al mismo
- * Authentik que prod (Infisical solo tiene el environment "prod" poblado), y
- * el flujo SSO real no completa ahí.
+ * en service-deployments, nunca en prod), el objetivo de ese entorno es cero
+ * fricción (issue #143): sin `?error=` en la URL, se auto-redirige a
+ * `/api/auth/oidc/dev-login` (login real contra el backend, sin pasar por
+ * Authentik — necesario porque el redirect_uri OIDC de dev hoy apunta al
+ * mismo Authentik que prod, y el flujo SSO real no completa ahí). El botón
+ * "Iniciar sesión (dev, sin SSO)" queda como fallback manual para cuando hay
+ * `?error=` (evita loop de redirects si el auto-login fallara).
  *
  * @module pages/Login
  */
@@ -62,16 +64,20 @@ export default function Login() {
 
   useEffect(() => {
     if (error) {
+      // Con ?error= NUNCA auto-redirigimos (ni a Authentik ni a dev-login)
+      // — evita un loop infinito si el callback sigue fallando. El usuario
+      // ve el error + los botones manuales como fallback (issue #143).
       toast.error(MENSAJES_ERROR[error] || 'Error de autenticación');
       return;
     }
     if (IS_DEV) return; // en dev no auto-redirigir: dejamos elegir bypass
-    // Espera a saber si el backend tiene dev-login disponible antes de
-    // auto-redirigir a Authentik — en cfs-app-dev ese redirect nunca completa
-    // (comparte redirect_uri con prod), así que ahí queremos mostrar el botón
-    // de bypass en vez de mandar al usuario a un SSO que va a fallar.
     if (!devLoginChecked) return;
-    if (devLoginAvailable) return;
+    if (devLoginAvailable) {
+      // cfs-app-dev: cero fricción (issue #143) — login real contra el
+      // backend, sin pasar por Authentik (su redirect_uri ahí nunca completa).
+      window.location.href = '/api/auth/oidc/dev-login';
+      return;
+    }
     window.location.href = '/api/auth/oidc/login';
   }, [error, devLoginChecked, devLoginAvailable]);
 
@@ -84,14 +90,19 @@ export default function Login() {
     window.location.href = '/api/auth/oidc/dev-login';
   };
 
-  // Producción sin error: spinner mientras se redirige (o mientras se
-  // confirma si hay dev-login disponible en este deploy).
-  if (!error && !IS_DEV && (!devLoginChecked || !devLoginAvailable)) {
+  // Producción sin error: spinner mientras se redirige (Authentik o,
+  // en cfs-app-dev, el auto-login sin fricción del issue #143).
+  if (!error && !IS_DEV) {
+    const spinnerText = !devLoginChecked
+      ? 'Verificando sesión...'
+      : devLoginAvailable
+      ? 'Entrando (dev)…'
+      : 'Redirigiendo al proveedor de identidad...';
     return (
       <div className="min-h-screen flex items-center justify-center bg-forge-black">
         <div className="flex flex-col items-center gap-4 text-gunmetal">
           <Loader2 size={40} className="animate-spin text-teal-400" />
-          <span className="text-sm">Redirigiendo al proveedor de identidad...</span>
+          <span className="text-sm">{spinnerText}</span>
         </div>
       </div>
     );
