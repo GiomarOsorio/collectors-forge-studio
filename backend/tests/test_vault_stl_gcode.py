@@ -205,7 +205,14 @@ class TestUploadStlHappyPath:
 
         _set_overrides({get_db: _fake_db_gen, get_current_user: lambda: _fake_user()})
         try:
-            with patch("app.routers.vault.upload_file", new=AsyncMock()) as mock_upload:
+            # `save_thumbnail` vive en app.services.thumbnail_extractor y
+            # tiene su PROPIO `upload_file` importado (`from ... import
+            # upload_file`) — un binding independiente del de vault.py.
+            # Patchear solo el de vault.py deja ese segundo call site
+            # pegándole a MinIO real (detectado en CI: ConnectionError
+            # silencioso, atrapado por el except del endpoint).
+            with patch("app.routers.vault.upload_file", new=AsyncMock()) as mock_upload, \
+                 patch("app.services.thumbnail_extractor.upload_file", new=AsyncMock()) as mock_upload_thumb:
                 async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
                     r = await c.post(
                         "/api/vault/upload",
@@ -218,9 +225,10 @@ class TestUploadStlHappyPath:
         assert r.status_code == 201
         body = r.json()
         assert body["source_file_name"] == "cubo.stl"
-        # El thumbnail se generó (render real) y se subió a MinIO (mockeado)
-        # — al menos 2 llamadas: el .stl en sí + el PNG del thumbnail.
-        assert mock_upload.await_count >= 2
+        # El .stl en sí se subió (vault.py) y el thumbnail PNG (render
+        # real) se subió por separado (thumbnail_extractor.save_thumbnail).
+        assert mock_upload.await_count >= 1
+        assert mock_upload_thumb.await_count >= 1
         # fake_model.thumbnail_key fue seteado por el endpoint tras el render.
         assert fake_model.thumbnail_key is not None
 
@@ -330,8 +338,11 @@ class TestGenerateStlThumbnailsBatch:
 
         _set_overrides({get_db: _fake_db_gen, get_current_user: lambda: _fake_user()})
         try:
+            # Mismo motivo que en TestUploadStlHappyPath: save_thumbnail usa
+            # su propio `upload_file` importado en thumbnail_extractor.py.
             with patch("app.routers.vault.download_file", new=AsyncMock(return_value=stl_bytes)), \
-                 patch("app.routers.vault.upload_file", new=AsyncMock()):
+                 patch("app.routers.vault.upload_file", new=AsyncMock()), \
+                 patch("app.services.thumbnail_extractor.upload_file", new=AsyncMock()):
                 async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
                     r = await c.post("/api/vault/generate-stl-thumbnails")
         finally:
