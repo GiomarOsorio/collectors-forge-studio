@@ -219,6 +219,26 @@ curl http://localhost:3000/api/health
 # {"status":"ok","app":"Collector's Forge Studio"}
 ```
 
+### 1.6 Monitoreo externo (Uptime Kuma)
+
+`/api/health` solo confirma que el proceso responde — no es suficiente
+para saber si el servicio en prod está realmente sano (puede responder 200
+con Postgres o MinIO caídos). Para monitoreo externo usar en su lugar:
+
+```bash
+curl https://cfs.turtlenode.dev/api/health/full
+```
+
+Responde `200` + `{"status":"ok", ...}` si Postgres, MinIO y Alembic están
+bien; `503` + `{"status":"degraded", "checks": {...}}` con el detalle de
+cuál falló si no. Ver **[docs/api.md § Health Check](api.md#health-check)**
+para el shape completo de la respuesta.
+
+Setup recomendado en Uptime Kuma: 3 monitores tipo **Json Query**
+apuntando a `https://cfs.turtlenode.dev/api/health/full`, evaluando
+`checks.db`, `checks.minio` y `checks.alembic` contra `"ok"` cada uno —
+así la alerta dice cuál componente falló en vez de solo "CFS degradado".
+
 ---
 
 ## 2. Actualización (después de git push)

@@ -66,10 +66,12 @@ import {
   createInventoryItem,
   deleteInventoryItem,
   createPurchaseOrder,
+  getFilamentProfile,
   getInventoryItems,
   getPurchaseOrders,
   updateInventoryItem,
   updatePurchaseOrder,
+  upsertFilamentProfile,
 } from '../../services/api';
 import { MATERIALS, MATERIAL_ORDER } from '../../config/materials';
 import {
@@ -1511,6 +1513,42 @@ function emptyFilamentForm() {
     supplier_contact: '',
     needs_purchase: false,
     notes: '',
+    // Perfil de impresión (slicer) — referencia, no afecta costo.
+    nozzle_temp_min: '',
+    nozzle_temp_max: '',
+    bed_temp: '',
+    bed_temp_first_layer: '',
+    print_speed_mms: '',
+    retraction_distance_mm: '',
+    retraction_speed_mms: '',
+    flow_ratio: '',
+    fan_speed_percent: '',
+    // K-value manual (issue #118) — calibrado por el usuario, sin sync con
+    // ninguna impresora (no hay una en LAN). `nozzle_diameter` acompaña
+    // porque el K depende del diámetro con el que se calibró.
+    k_value: '',
+    nozzle_diameter: '0.4',
+    calibrated_at: '',
+    profile_notes: '',
+  };
+}
+
+/** Pre-fill de los campos de perfil de slicer desde FilamentProfileResponse. */
+function profileToForm(p) {
+  return {
+    nozzle_temp_min: p?.nozzle_temp_min ?? '',
+    nozzle_temp_max: p?.nozzle_temp_max ?? '',
+    bed_temp: p?.bed_temp ?? '',
+    bed_temp_first_layer: p?.bed_temp_first_layer ?? '',
+    print_speed_mms: p?.print_speed_mms ?? '',
+    retraction_distance_mm: p?.retraction_distance_mm ?? '',
+    retraction_speed_mms: p?.retraction_speed_mms ?? '',
+    flow_ratio: p?.flow_ratio ?? '',
+    fan_speed_percent: p?.fan_speed_percent ?? '',
+    k_value: p?.k_value ?? '',
+    nozzle_diameter: p?.nozzle_diameter ?? '0.4',
+    calibrated_at: p?.calibrated_at ? p.calibrated_at.slice(0, 10) : '',
+    profile_notes: p?.notes ?? '',
   };
 }
 
@@ -1561,11 +1599,29 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
   const [form, setForm] = useState(emptyFilamentForm());
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  // Una vez que el InventoryItem se crea con éxito, guardamos su id acá.
+  // Si el upsert del perfil de slicer falla justo después y el drawer
+  // se queda abierto para reintentar, un segundo submit debe actualizar
+  // ese item (no crear uno duplicado) aunque `mode` siga siendo 'create'.
+  const [savedItemId, setSavedItemId] = useState(null);
 
   useEffect(() => {
     if (!open) return;
     setForm(mode === 'edit' && initial ? filamentToForm(initial) : emptyFilamentForm());
     setErrors({});
+    setSavedItemId(null);
+    // Perfil de slicer vive en tabla separada — se carga aparte. 404 = sin
+    // perfil guardado todavía, el form de perfil queda en blanco.
+    // `cancelled` evita que un fetch lento de un filamento previo (ej. si
+    // el admin cierra y abre el drawer de otro filamento rápido) pise el
+    // form del filamento que está abierto ahora.
+    let cancelled = false;
+    if (mode === 'edit' && initial?.id) {
+      getFilamentProfile(initial.id)
+        .then((res) => { if (!cancelled) setForm((cur) => ({ ...cur, ...profileToForm(res.data) })); })
+        .catch(() => {});
+    }
+    return () => { cancelled = true; };
   }, [open, mode, initial]);
 
   // Guard temprano: si no está abierto, no rendereamos nada — evita que
@@ -1631,15 +1687,54 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
         min_quantity: form.min_quantity !== '' ? Number(form.min_quantity) : 0,
         notes: form.notes.trim() || null,
       };
-      const res =
-        mode === 'edit'
-          ? await updateInventoryItem(initial.id, payload)
-          : await createInventoryItem(payload);
+      // Si un intento anterior ya creó el item pero falló el perfil,
+      // `savedItemId` ya existe — un reintento debe actualizar, no crear
+      // un segundo InventoryItem duplicado.
+      const isEditLike = mode === 'edit' || savedItemId != null;
+      const targetId = mode === 'edit' ? initial.id : savedItemId;
+      const res = isEditLike
+        ? await updateInventoryItem(targetId, payload)
+        : await createInventoryItem(payload);
       toast.success(
-        mode === 'edit'
+        isEditLike
           ? `Filamento "${payload.color_name}" actualizado`
           : `Filamento "${payload.color_name}" agregado`,
       );
+
+      const itemId = isEditLike ? targetId : res.data?.id;
+      if (itemId) setSavedItemId(itemId);
+
+      // Perfil de slicer — se guarda junto con el filamento. Si falla,
+      // NO cerramos el drawer: el usuario debe ver el error y poder
+      // reintentar, en vez de creer que todo quedó guardado.
+      if (itemId) {
+        const profilePayload = {
+          nozzle_temp_min: form.nozzle_temp_min !== '' ? Number(form.nozzle_temp_min) : null,
+          nozzle_temp_max: form.nozzle_temp_max !== '' ? Number(form.nozzle_temp_max) : null,
+          bed_temp: form.bed_temp !== '' ? Number(form.bed_temp) : null,
+          bed_temp_first_layer: form.bed_temp_first_layer !== '' ? Number(form.bed_temp_first_layer) : null,
+          print_speed_mms: form.print_speed_mms !== '' ? Number(form.print_speed_mms) : null,
+          retraction_distance_mm: form.retraction_distance_mm !== '' ? Number(form.retraction_distance_mm) : null,
+          retraction_speed_mms: form.retraction_speed_mms !== '' ? Number(form.retraction_speed_mms) : null,
+          flow_ratio: form.flow_ratio !== '' ? Number(form.flow_ratio) : null,
+          fan_speed_percent: form.fan_speed_percent !== '' ? Number(form.fan_speed_percent) : null,
+          k_value: form.k_value !== '' ? Number(form.k_value) : null,
+          nozzle_diameter: form.nozzle_diameter.trim() || null,
+          calibrated_at: form.calibrated_at || null,
+          notes: form.profile_notes.trim() || null,
+        };
+        try {
+          await upsertFilamentProfile(itemId, profilePayload);
+        } catch {
+          toast.error(
+            'El filamento se guardó, pero el perfil de impresión NO — revisa los valores y presiona Guardar de nuevo.',
+            { duration: 8000 },
+          );
+          onSaved?.(res.data);
+          return; // Drawer queda abierto para reintentar solo el perfil.
+        }
+      }
+
       onSaved?.(res.data);
       onClose?.();
     } catch (err) {
@@ -1812,6 +1907,130 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
+      </div>
+
+      <FormSectionTitle>Perfil de impresión (slicer)</FormSectionTitle>
+      <p className="text-[11.5px] text-gunmetal -mt-1.5">
+        Referencia rápida al laminar — no afecta el cálculo de costo.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <FormFieldRow label="Temp. boquilla mín (°C)">
+          <input
+            type="number" min="0" max="400" step="1"
+            value={form.nozzle_temp_min}
+            onChange={(e) => update('nozzle_temp_min', e.target.value)}
+            placeholder="ej. 200"
+            className={`${FORM_INPUT_CLS} mono`}
+          />
+        </FormFieldRow>
+        <FormFieldRow label="Temp. boquilla máx (°C)">
+          <input
+            type="number" min="0" max="400" step="1"
+            value={form.nozzle_temp_max}
+            onChange={(e) => update('nozzle_temp_max', e.target.value)}
+            placeholder="ej. 220"
+            className={`${FORM_INPUT_CLS} mono`}
+          />
+        </FormFieldRow>
+        <FormFieldRow label="Temp. cama (°C)">
+          <input
+            type="number" min="0" max="200" step="1"
+            value={form.bed_temp}
+            onChange={(e) => update('bed_temp', e.target.value)}
+            placeholder="ej. 55"
+            className={`${FORM_INPUT_CLS} mono`}
+          />
+        </FormFieldRow>
+        <FormFieldRow label="Temp. cama 1ra capa (°C)">
+          <input
+            type="number" min="0" max="200" step="1"
+            value={form.bed_temp_first_layer}
+            onChange={(e) => update('bed_temp_first_layer', e.target.value)}
+            placeholder="ej. 60"
+            className={`${FORM_INPUT_CLS} mono`}
+          />
+        </FormFieldRow>
+        <FormFieldRow label="Velocidad impresión (mm/s)">
+          <input
+            type="number" min="0" step="1"
+            value={form.print_speed_mms}
+            onChange={(e) => update('print_speed_mms', e.target.value)}
+            placeholder="ej. 250"
+            className={`${FORM_INPUT_CLS} mono`}
+          />
+        </FormFieldRow>
+        <FormFieldRow label="Flow ratio">
+          <input
+            type="number" min="0" step="0.01"
+            value={form.flow_ratio}
+            onChange={(e) => update('flow_ratio', e.target.value)}
+            placeholder="ej. 0.98"
+            className={`${FORM_INPUT_CLS} mono`}
+          />
+        </FormFieldRow>
+        <FormFieldRow label="Distancia retracción (mm)">
+          <input
+            type="number" min="0" step="0.1"
+            value={form.retraction_distance_mm}
+            onChange={(e) => update('retraction_distance_mm', e.target.value)}
+            placeholder="ej. 0.8"
+            className={`${FORM_INPUT_CLS} mono`}
+          />
+        </FormFieldRow>
+        <FormFieldRow label="Velocidad retracción (mm/s)">
+          <input
+            type="number" min="0" step="1"
+            value={form.retraction_speed_mms}
+            onChange={(e) => update('retraction_speed_mms', e.target.value)}
+            placeholder="ej. 40"
+            className={`${FORM_INPUT_CLS} mono`}
+          />
+        </FormFieldRow>
+        <FormFieldRow label="Fan speed (%)">
+          <input
+            type="number" min="0" max="100" step="1"
+            value={form.fan_speed_percent}
+            onChange={(e) => update('fan_speed_percent', e.target.value)}
+            placeholder="ej. 100"
+            className={`${FORM_INPUT_CLS} mono`}
+          />
+        </FormFieldRow>
+        <FormFieldRow label="K-value" hint="Calibrado a mano — no sincroniza con ninguna impresora">
+          <input
+            type="number" min="0" max="99" step="0.001"
+            value={form.k_value}
+            onChange={(e) => update('k_value', e.target.value)}
+            placeholder="ej. 0.020"
+            className={`${FORM_INPUT_CLS} mono`}
+          />
+        </FormFieldRow>
+        <FormFieldRow label="Diámetro de boquilla usado" hint="El K-value depende de esto">
+          <input
+            value={form.nozzle_diameter}
+            onChange={(e) => update('nozzle_diameter', e.target.value)}
+            placeholder="ej. 0.4"
+            className={`${FORM_INPUT_CLS} mono`}
+          />
+        </FormFieldRow>
+        <FormFieldRow label="Calibrado el">
+          <input
+            type="date"
+            value={form.calibrated_at}
+            onChange={(e) => update('calibrated_at', e.target.value)}
+            className={`${FORM_INPUT_CLS} mono`}
+          />
+        </FormFieldRow>
+        <div className="sm:col-span-2">
+          <FormFieldRow label="Notas de perfil">
+            <textarea
+              rows={2}
+              value={form.profile_notes}
+              onChange={(e) => update('profile_notes', e.target.value)}
+              placeholder="ej. necesita enclosure, usar chamber heater…"
+              className={`${FORM_INPUT_CLS} resize-y`}
+            />
+          </FormFieldRow>
+        </div>
       </div>
 
       <FormSectionTitle>Proveedor & costo</FormSectionTitle>

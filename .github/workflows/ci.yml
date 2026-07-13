@@ -13,11 +13,86 @@ on:
       - '**/*.md'
   workflow_dispatch:
 
+# Cancela corridas en progreso de la misma rama — evita acumular runs
+# duplicados si se pushea varias veces seguidas a un PR.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # ============================================================================
+  # Gate — decide si este run es un push post-merge (el código ya pasó por el
+  # pull_request CI completo mientras el PR estaba abierto) o un commit nuevo
+  # que todavía necesita verificarse. En un push que es el merge commit de un
+  # PR ya mergeado, saltamos lint/tests/e2e y corremos solo Security Audit +
+  # Publish; en un push directo o un PR corremos todo. Mismo patrón que
+  # bambuddy-cfs (ci.yml, job `gate`).
+  #
+  # Detección: en un `push`, pregunta a la API qué PRs están asociados al sha
+  # empujado y si alguno fue MERGEADO como exactamente ese sha
+  # (merge_commit_sha). Cierto tanto para merge commit como para squash. Otro
+  # evento (pull_request/workflow_dispatch) o un fallo de API cae a `false`
+  # — o sea, fail-safe hacia correr la suite completa.
+  # ============================================================================
+
+  gate:
+    name: Gate (merged-PR detection)
+    runs-on: ubuntu-latest
+    if: github.actor == github.repository_owner
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      from_merged_pr: ${{ steps.detect.outputs.from_merged_pr }}
+    steps:
+      - name: Detectar push post-merge
+        id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" != "push" ]; then
+            echo "from_merged_pr=false" >> "$GITHUB_OUTPUT"
+            echo "Evento '$EVENT' no es push → CI completo."
+            exit 0
+          fi
+          count=$(gh api "repos/$REPO/commits/$HEAD_SHA/pulls" \
+            --jq "[.[] | select(.merged_at != null and .merge_commit_sha == \"$HEAD_SHA\")] | length" \
+            2>/dev/null || echo 0)
+          if [ "${count:-0}" -gt 0 ]; then
+            echo "from_merged_pr=true" >> "$GITHUB_OUTPUT"
+            echo "HEAD $HEAD_SHA es el merge commit de un PR ya mergeado → solo Security + Publish."
+          else
+            echo "from_merged_pr=false" >> "$GITHUB_OUTPUT"
+            echo "Ningún PR mergeado mapea a $HEAD_SHA → CI completo."
+          fi
+
+  # ============================================================================
+  # Security Audit (bloqueante) — corre PRIMERO, antes de lint/tests. Llama a
+  # security.yml como workflow reusable para que `needs:` funcione entre
+  # archivos. security.yml ya no tiene triggers propios de push/pull_request
+  # (ver ese archivo) — esta es su única invocación por commit, evitando la
+  # doble corrida que había antes.
+  # ============================================================================
+
+  security-audit:
+    name: Security Audit
+    if: github.actor == github.repository_owner
+    uses: ./.github/workflows/security.yml
+    permissions:
+      contents: read
+      security-events: write
+      issues: write
+    secrets: inherit
+
   # ── Lint frontend + python syntax check ──────────────────────────────────
   lint:
     name: Lint
     runs-on: self-hosted
+    if: github.actor == github.repository_owner && needs.gate.outputs.from_merged_pr != 'true'
+    needs: [gate, security-audit]
 
     steps:
       - name: Checkout código
@@ -53,6 +128,8 @@ jobs:
   test-backend:
     name: Tests Backend
     runs-on: self-hosted
+    if: github.actor == github.repository_owner && needs.gate.outputs.from_merged_pr != 'true'
+    needs: [gate, security-audit]
 
     env:
       DATABASE_URL: postgresql+asyncpg://collectorsforge:ci_password@localhost:5433/collectorsforge_test
@@ -117,6 +194,8 @@ jobs:
   test-frontend:
     name: Tests Frontend
     runs-on: self-hosted
+    if: github.actor == github.repository_owner && needs.gate.outputs.from_merged_pr != 'true'
+    needs: [gate, security-audit]
 
     steps:
       - name: Checkout código
@@ -149,7 +228,8 @@ jobs:
   e2e-frontend:
     name: E2E + Visual
     runs-on: self-hosted
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') && needs.gate.outputs.from_merged_pr != 'true'
+    needs: [gate, security-audit]
 
     steps:
       - name: Checkout código
@@ -199,6 +279,14 @@ jobs:
   # develop/main ese job ni se dispara, así que no puede ser una dependencia
   # dura de un job que sí corre en push.
   #
+  # !failure() && !cancelled() (en vez de dejar que `needs` lo exija
+  # implícito) permite que Publish corra aun cuando gate/lint/test-backend/
+  # test-frontend fueron SKIPPED (push post-merge, ver job `gate`) — un
+  # `needs` en estado skipped no es success ni failure. security-audit sigue
+  # siendo un gate duro: si falla, failure() es true y Publish no corre ni
+  # en un push post-merge. Mismo patrón que bambuddy-cfs (ci.yml,
+  # docker-publish).
+  #
   # Patrón adaptado de bambuddy-cfs (mismo proyecto Infisical `homelab`,
   # mismos secrets ya usados por deploy.sh): login Infisical → jalar
   # credenciales del registry desde /Registry → build + push con podman →
@@ -209,8 +297,10 @@ jobs:
   docker-publish:
     name: Publish Docker Image
     runs-on: self-hosted
-    if: github.actor == github.repository_owner && github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
+    if: github.actor == github.repository_owner && github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main') && !failure() && !cancelled()
     needs:
+      - gate
+      - security-audit
       - lint
       - test-backend
       - test-frontend

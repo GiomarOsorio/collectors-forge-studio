@@ -7,7 +7,7 @@
  * @module config/apps
  */
 
-import { Archive, Building2, Calculator, Package, Wrench, ListOrdered } from 'lucide-react';
+import { Archive, Building2, Calculator, FolderKanban, Package, Wrench, ListOrdered } from 'lucide-react';
 
 /**
  * @typedef {Object} AppDefinition
@@ -71,6 +71,16 @@ export const APPS = [
     icon: Archive,
     route: '/vault',
     color: '#F43F5E',
+    badge: null,
+  },
+  {
+    id: 'projects',
+    name: 'Proyectos',
+    shortDescription: 'Agrupa impresiones por encargo',
+    description: 'Agrupa varios ítems de la cola de impresión bajo un mismo proyecto/cliente y sigue su progreso (pendiente/imprimiendo/listo).',
+    icon: FolderKanban,
+    route: '/projects',
+    color: '#F59E0B',
     badge: null,
   },
   {

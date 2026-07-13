@@ -34,6 +34,7 @@ class ModelFileCreate(BaseModel):
     source_platform: Optional[str] = Field(default=None, max_length=50)
     creator_name: Optional[str] = Field(default=None, max_length=200)
     creator_url: Optional[str] = Field(default=None, max_length=1000)
+    folder_id: Optional[int] = None
 
 
 class ModelFileUpdate(BaseModel):
@@ -46,6 +47,7 @@ class ModelFileUpdate(BaseModel):
     source_platform: Optional[str] = Field(default=None, max_length=50)
     creator_name: Optional[str] = Field(default=None, max_length=200)
     creator_url: Optional[str] = Field(default=None, max_length=1000)
+    folder_id: Optional[int] = None
 
 
 class PlateInfo(BaseModel):
@@ -94,6 +96,7 @@ class ModelFileResponse(BaseModel):
     source_platform: Optional[str]
     creator_name: Optional[str]
     creator_url: Optional[str]
+    folder_id: Optional[int] = None
 
     # Multi-plate (issue #68). `active_plate_index` indica cuál plate
     # actualmente sincroniza `sliced_*` + thumbnail principal.
@@ -102,6 +105,9 @@ class ModelFileResponse(BaseModel):
 
     created_at: datetime
     updated_at: datetime
+    # NULL = activo. Con fecha = está en la papelera (usado por la vista
+    # de papelera para mostrar "eliminado el X").
+    deleted_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 

@@ -90,6 +90,14 @@ export const login = (username, password) => {
 export const getMe = () => api.get('/auth/me');
 
 /**
+ * Indica si el backend tiene habilitado el bypass de login de dev
+ * (DEV_LOGIN_ENABLED — solo true en el deploy de cfs-app-dev, nunca en prod).
+ *
+ * @returns {Promise<import('axios').AxiosResponse>} Respuesta con { enabled: boolean }
+ */
+export const getDevLoginStatus = () => api.get('/auth/oidc/dev-login-status');
+
+/**
  * Registra un nuevo usuario en el sistema.
  *
  * @param {Object} data - Datos del nuevo usuario
@@ -773,10 +781,122 @@ export const replaceVaultPrint = (id, file, onUploadProgress) => {
 };
 
 /**
- * Elimina un archivo del Vault y su objeto en MinIO (solo admins).
+ * Mueve un archivo del Vault a la papelera (soft-delete, solo admins).
+ * Los bytes en MinIO no se borran — eso pasa recién en `purgeVaultFile`.
  * @param {number} id - ID del archivo
  */
 export const deleteVaultFile = (id) => api.delete(`/vault/${id}`);
+
+// ── Tags del Vault ───────────────────────────────────────────────────────────
+
+/** Lista el catálogo de tags del Vault (con conteo de archivos activos). */
+export const getVaultTags = () => api.get('/vault/tags');
+
+/** Crea un tag nuevo en el catálogo (solo admins). */
+export const createVaultTag = (name) => api.post('/vault/tags', { name });
+
+/** Renombra un tag existente — aplica a todos los archivos que lo usan (solo admins). */
+export const updateVaultTag = (id, name) => api.patch(`/vault/tags/${id}`, { name });
+
+/** Elimina un tag del catálogo (no borra los archivos, solo la etiqueta) (solo admins). */
+export const deleteVaultTag = (id) => api.delete(`/vault/tags/${id}`);
+
+// ── Papelera del Vault ───────────────────────────────────────────────────────
+
+/** Lista los archivos en la papelera (paginado). */
+export const getVaultTrash = (params) => api.get('/vault/trash', { params });
+
+/** Restaura un archivo de la papelera (solo admins). */
+export const restoreVaultFile = (id) => api.post(`/vault/trash/${id}/restore`);
+
+/** Borrado permanente: bytes de MinIO + fila. Solo si ya está en la papelera (solo admins). */
+export const purgeVaultFile = (id) => api.delete(`/vault/trash/${id}`);
+
+/** Vacía toda la papelera — borrado permanente de todo lo que hay en ella (solo admins). */
+export const emptyVaultTrash = () => api.delete('/vault/trash');
+
+// ── Carpetas del Vault ──────────────────────────────────────────────────────
+
+/** Lista todas las carpetas del Vault (plana, con parent_id + file_count). */
+export const getVaultFolders = () => api.get('/vault/folders');
+
+/**
+ * Crea una carpeta nueva. Solo admins.
+ * @param {{name: string, parent_id?: number|null}} data
+ */
+export const createVaultFolder = (data) => api.post('/vault/folders', data);
+
+/**
+ * Renombra y/o mueve una carpeta. Solo admins.
+ * `move_to_root: true` es la única forma de poner parent_id=null.
+ * @param {number} id
+ * @param {{name?: string, parent_id?: number, move_to_root?: boolean}} data
+ */
+export const updateVaultFolder = (id, data) => api.put(`/vault/folders/${id}`, data);
+
+/** Elimina una carpeta (sus archivos suben a la raíz; subcarpetas se borran en cascada). Solo admins. */
+export const deleteVaultFolder = (id) => api.delete(`/vault/folders/${id}`);
+
+// ============================================================================
+// Filament Profiles — parámetros de slicer por filamento (referencia)
+// ============================================================================
+
+/**
+ * Obtiene el perfil de slicer de un filamento. 404 si no tiene uno guardado
+ * — el caller debe capturar el error y tratarlo como "sin perfil todavía".
+ * @param {number} inventoryItemId
+ */
+export const getFilamentProfile = (inventoryItemId) =>
+  api.get(`/filament-profiles/${inventoryItemId}`);
+
+/**
+ * Crea o actualiza (upsert) el perfil de slicer de un filamento.
+ * @param {number} inventoryItemId
+ * @param {Object} data - Campos de FilamentProfileUpsert
+ */
+export const upsertFilamentProfile = (inventoryItemId, data) =>
+  api.put(`/filament-profiles/${inventoryItemId}`, data);
+
+/** Elimina el perfil de slicer de un filamento. */
+export const deleteFilamentProfile = (inventoryItemId) =>
+  api.delete(`/filament-profiles/${inventoryItemId}`);
+
+// ============================================================================
+// Proyectos — agrupador de ítems de la cola de impresión
+// ============================================================================
+
+/** Lista todos los proyectos con conteo de items de cola por estado. */
+export const getProjects = () => api.get('/projects/');
+
+/**
+ * Crea un proyecto nuevo.
+ * @param {{name: string, client_name?: string, notes?: string}} data
+ */
+export const createProject = (data) => api.post('/projects/', data);
+
+/** Detalle de un proyecto (con progreso agregado). */
+export const getProject = (id) => api.get(`/projects/${id}`);
+
+/** Lista los ítems de cola (cualquier estado) asociados al proyecto. */
+export const getProjectItems = (id) => api.get(`/projects/${id}/items`);
+
+/**
+ * Edita nombre/cliente/estado/notas de un proyecto.
+ * @param {number} id
+ * @param {Object} data - Campos de ProjectUpdate
+ */
+export const updateProject = (id, data) => api.put(`/projects/${id}`, data);
+
+/** Elimina un proyecto (los items de cola quedan sin agrupar). */
+export const deleteProject = (id) => api.delete(`/projects/${id}`);
+
+/**
+ * (Re)asigna o quita (projectId=null) el proyecto de un ítem ya encolado.
+ * @param {number} itemId
+ * @param {number|null} projectId
+ */
+export const assignQueueItemProject = (itemId, projectId) =>
+  api.put(`/queue/${itemId}/project`, { project_id: projectId });
 
 export default api;
 

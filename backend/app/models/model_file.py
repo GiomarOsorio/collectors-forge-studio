@@ -36,9 +36,9 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import JSONB
 
 from app.database import Base
+from app.models.vault_tag import VaultTag, model_file_tags
 
 
 class ModelFile(Base):
@@ -65,7 +65,8 @@ class ModelFile(Base):
                          cualquiera de los dos `.3mf` (formato:
                          `thumbnails/{id}.png`). Se sirve al frontend
                          vía `GET /api/vault/{id}/thumbnail` (proxy).
-        tags:            Array JSONB de etiquetas.
+        tags:            Etiquetas (catálogo relacional M2M, ver `VaultTag`).
+        deleted_at:      NULL = activo; con fecha = en la papelera (soft-delete).
         source_url:      URL de origen del modelo.
         source_platform: Plataforma de origen.
         creator_name:    Nombre del creador del modelo original.
@@ -113,12 +114,18 @@ class ModelFile(Base):
         Integer, nullable=False, server_default=text("0")
     )
 
+    # Carpeta del Vault donde vive el archivo. NULL = raíz. Si se borra la
+    # carpeta, el archivo se mueve a la raíz (ondelete=SET NULL) en vez de
+    # borrarse con ella.
+    folder_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("vault_folders.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     # ── Display / metadata ──────────────────────────────────────────────────
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     thumbnail_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     thumbnail_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    tags: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     source_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     source_platform: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     creator_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
@@ -132,6 +139,17 @@ class ModelFile(Base):
         DateTime,
         default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
         onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
+
+    # Papelera: NULL = activo. Si tiene fecha, está en la papelera (soft-delete)
+    # — los bytes en MinIO NO se borran hasta el borrado permanente desde
+    # DELETE /api/vault/trash/{id}. Sigue contando para la cuota de storage
+    # mientras está acá (los bytes siguen ocupando espacio real).
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    # ── Tags (catálogo relacional M2M — ver app.models.vault_tag) ───────────
+    tags: Mapped[list["VaultTag"]] = relationship(
+        "VaultTag", secondary=model_file_tags, order_by="VaultTag.name"
     )
 
     # ── Plates extraídos del .gcode.3mf (issue #68) ─────────────────────────

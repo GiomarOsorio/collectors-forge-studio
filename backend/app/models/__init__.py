@@ -39,7 +39,11 @@ from app.models.purchase_order import PurchaseOrder, PurchaseOrderItem
 from app.models.printed_item import PrintedItem
 from app.models.maintenance import MaintenanceLog, MaintenanceLogItem
 from app.models.queue import PrintQueueItem
+from app.models.vault_tag import VaultTag
 from app.models.model_file import ModelFile, ModelFilePlate
+from app.models.vault_folder import VaultFolder
+from app.models.filament_profile import FilamentProfile
+from app.models.project import Project
 
 __all__ = [
     "Company", "CompanyTemplate", "User", "Filament", "Printer", "AppSettings",
@@ -48,5 +52,9 @@ __all__ = [
     "PrintedItem",
     "MaintenanceLog", "MaintenanceLogItem",
     "PrintQueueItem",
+    "VaultTag",
     "ModelFile", "ModelFilePlate",
+    "VaultFolder",
+    "FilamentProfile",
+    "Project",
 ]

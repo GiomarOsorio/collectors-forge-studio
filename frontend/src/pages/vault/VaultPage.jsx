@@ -16,11 +16,16 @@ import {
   ChevronRight,
   Download,
   FileBox,
+  Folder,
+  FolderPlus,
   HardDrive,
+  MoreVertical,
   Pencil,
   Plus,
   Printer,
   Search,
+  Tag,
+  Trash,
   Trash2,
   Upload,
   X,
@@ -40,12 +45,21 @@ import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../context/AuthContext';
 import { useConfirm } from '../../components/ConfirmDialog';
 import {
+  createVaultFolder,
+  createVaultTag,
   deleteVaultFile,
+  deleteVaultFolder,
+  deleteVaultTag,
   setActiveVaultPlate,
   downloadVaultPrint,
   downloadVaultSource,
   getVaultFiles,
+  getVaultFolders,
   getVaultStats,
+  getVaultTags,
+  updateVaultFile,
+  updateVaultFolder,
+  updateVaultTag,
 } from '../../services/api';
 import { getThumbnail } from '../../utils/thumbnail';
 
@@ -82,6 +96,241 @@ const fmtTime = (seconds) => {
   const m = Math.floor((total % 3600) / 60);
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 };
+
+/** Camino de carpetas desde la raíz hasta `folderId` (excluida la raíz). */
+const buildBreadcrumb = (folders, folderId) => {
+  const byId = new Map(folders.map((f) => [f.id, f]));
+  const path = [];
+  let current = folderId != null ? byId.get(folderId) : null;
+  while (current) {
+    path.unshift(current);
+    current = current.parent_id != null ? byId.get(current.parent_id) : null;
+  }
+  return path;
+};
+
+/**
+ * IDs de todos los descendientes de `folderId` (hijos, nietos, etc.) —
+ * usado para excluir del picker "mover a…" los destinos que el backend
+ * (`_assert_not_own_descendant`) siempre va a rechazar.
+ */
+const getDescendantIds = (folders, folderId) => {
+  const childrenOf = new Map();
+  for (const f of folders) {
+    if (f.parent_id != null) {
+      if (!childrenOf.has(f.parent_id)) childrenOf.set(f.parent_id, []);
+      childrenOf.get(f.parent_id).push(f.id);
+    }
+  }
+  const result = new Set();
+  const queue = [...(childrenOf.get(folderId) || [])];
+  while (queue.length > 0) {
+    const id = queue.shift();
+    if (result.has(id)) continue;
+    result.add(id);
+    queue.push(...(childrenOf.get(id) || []));
+  }
+  return result;
+};
+
+// ─── Carpetas ───────────────────────────────────────────────────────────────
+
+/**
+ * Tarjeta de carpeta — visualmente distinta de VaultCard (sin thumbnail),
+ * mismo tamaño para alinear en el grid. Click navega adentro; el menú
+ * "..." (solo admin) abre renombrar/mover/eliminar.
+ */
+function FolderCard({ folder, folders, isAdmin, onOpen, onRename, onMove, onDelete }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  // Excluye la carpeta misma Y sus descendientes — moverla ahí siempre
+  // lo rechaza el backend (_assert_not_own_descendant), así que no se
+  // ofrecen como destino válido en el picker.
+  const excludedIds = getDescendantIds(folders, folder.id);
+  const otherFolders = folders.filter((f) => f.id !== folder.id && !excludedIds.has(f.id));
+  return (
+    <Card className="relative text-left w-full overflow-hidden flex flex-col">
+      <button
+        type="button"
+        onClick={() => onOpen(folder.id)}
+        className="h-40 bg-[var(--color-surf-sidebar)] flex items-center justify-center w-full"
+      >
+        <Folder size={40} style={{ color: `${ACCENT}88` }} />
+      </button>
+      <div className="p-3 flex items-center gap-2">
+        <button type="button" onClick={() => onOpen(folder.id)} className="flex-1 min-w-0 text-left">
+          <p className="text-sm font-semibold text-tech-white truncate" title={folder.name}>
+            {folder.name}
+          </p>
+          <p className="mono text-[10.5px] text-gunmetal truncate">
+            {folder.file_count} archivo{folder.file_count === 1 ? '' : 's'}
+          </p>
+        </button>
+        {isAdmin && (
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o); }}
+              className="p-1.5 rounded text-gunmetal hover:text-tech-white hover:bg-white/5"
+              aria-label="Opciones de carpeta"
+            >
+              <MoreVertical size={14} />
+            </button>
+            {menuOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                <div className="absolute right-0 top-full mt-1 z-20 w-44 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surf-card)] shadow-xl py-1">
+                  <button
+                    type="button"
+                    className="w-full text-left px-3 py-1.5 text-xs text-tech-white hover:bg-white/5 flex items-center gap-2"
+                    onClick={() => { setMenuOpen(false); onRename(folder); }}
+                  >
+                    <Pencil size={12} /> Renombrar
+                  </button>
+                  {otherFolders.length > 0 && (
+                    <div className="px-3 py-1.5">
+                      <span className="block text-[10px] text-gunmetal mb-1">Mover a…</span>
+                      <select
+                        defaultValue=""
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setMenuOpen(false);
+                          if (val === '__root__') onMove(folder, null);
+                          else if (val) onMove(folder, Number(val));
+                        }}
+                        className="w-full bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded text-[11px] text-tech-white px-1.5 py-1"
+                      >
+                        <option value="" disabled>— elegir —</option>
+                        <option value="__root__">Raíz (Vault)</option>
+                        {otherFolders.map((f) => (
+                          <option key={f.id} value={f.id}>{f.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className="w-full text-left px-3 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10 flex items-center gap-2"
+                    onClick={() => { setMenuOpen(false); onDelete(folder); }}
+                  >
+                    <Trash2 size={12} /> Eliminar
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/** Modal simple (crear/renombrar carpeta) — reusa las clases globales tf-modal*. */
+function FolderNameModal({ mode, initialName, onCancel, onSave }) {
+  const [name, setName] = useState(initialName || '');
+  const submit = () => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    onSave(trimmed);
+  };
+  return (
+    <div className="tf-modal-overlay" style={{ zIndex: 9999 }}>
+      <div className="tf-modal max-w-sm">
+        <p className="text-tech-white text-sm font-semibold mb-3">
+          {mode === 'rename' ? 'Renombrar carpeta' : 'Nueva carpeta'}
+        </p>
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && submit()}
+          placeholder="Nombre de la carpeta"
+          className="w-full bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm focus:outline-none focus:border-rose-500 mb-5"
+        />
+        <div className="flex justify-end gap-3">
+          <button onClick={onCancel} className="tf-btn-ghost">Cancelar</button>
+          <button onClick={submit} className="tf-btn-primary" disabled={!name.trim()}>
+            {mode === 'rename' ? 'Guardar' : 'Crear'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Modal de gestión del catálogo de tags — crear nuevo, renombrar y
+ * eliminar. Cada fila existente es rename-inline (blur/Enter para
+ * guardar) + botón eliminar; arriba un input para crear uno nuevo.
+ */
+function TagsManageModal({ tags, onClose, onCreate, onRename, onDelete }) {
+  const [newName, setNewName] = useState('');
+  const [drafts, setDrafts] = useState({}); // { [tagId]: draftName }
+
+  const submitCreate = () => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    onCreate(trimmed);
+    setNewName('');
+  };
+
+  const submitRename = (tag) => {
+    const draft = (drafts[tag.id] ?? tag.name).trim();
+    if (!draft || draft === tag.name) return;
+    onRename(tag.id, draft);
+  };
+
+  return (
+    <div className="tf-modal-overlay" style={{ zIndex: 9999 }}>
+      <div className="tf-modal max-w-sm">
+        <p className="text-tech-white text-sm font-semibold mb-3">Gestionar tags</p>
+
+        <div className="flex gap-2 mb-4">
+          <input
+            autoFocus
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && submitCreate()}
+            placeholder="Nuevo tag…"
+            className="flex-1 bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm focus:outline-none focus:border-rose-500"
+          />
+          <button onClick={submitCreate} className="tf-btn-primary" disabled={!newName.trim()}>
+            Crear
+          </button>
+        </div>
+
+        {tags.length === 0 ? (
+          <p className="text-xs text-gunmetal text-center py-4">Sin tags todavía.</p>
+        ) : (
+          <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto mb-5">
+            {tags.map((t) => (
+              <div key={t.id} className="flex items-center gap-2">
+                <input
+                  value={drafts[t.id] ?? t.name}
+                  onChange={(e) => setDrafts((d) => ({ ...d, [t.id]: e.target.value }))}
+                  onBlur={() => submitRename(t)}
+                  onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
+                  className="flex-1 bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2 py-1 text-tech-white text-xs focus:outline-none focus:border-rose-500"
+                />
+                <span className="mono text-[10px] text-gunmetal shrink-0">{t.file_count}</span>
+                <button
+                  onClick={() => onDelete(t)}
+                  className="p-1 rounded text-gunmetal hover:text-rose-300 hover:bg-rose-500/10 shrink-0"
+                  aria-label={`Eliminar tag ${t.name}`}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex justify-end">
+          <button onClick={onClose} className="tf-btn-ghost">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Card / row ─────────────────────────────────────────────────────────────
 
@@ -189,15 +438,34 @@ function VaultRow({ file, onClick }) {
  * `DetailDrawer` v2; las acciones viven en `VaultDrawerFooter`. Muestra
  * los dos slots (source / print) por separado + metadatos sliced si los hay.
  */
-function VaultDrawerBody({ file, onActivePlateChange }) {
+function VaultDrawerBody({ file, onActivePlateChange, isAdmin, folders, onMoveFile }) {
   if (!file) return null;
   const thumb = getThumbnail(file);
   const sliceTime = fmtTime(file.sliced_time_seconds);
   const plates = Array.isArray(file.plates) ? file.plates : [];
   const hasMultiplePlates = plates.length > 1;
   const activeIdx = file.active_plate_index ?? 0;
+  const currentFolder = folders?.find((f) => f.id === file.folder_id);
   return (
     <div className="flex flex-col gap-4">
+      {isAdmin && Array.isArray(folders) && (
+        <div>
+          <span className="lbl-eyebrow text-[9px] mb-1.5 block">Carpeta</span>
+          <select
+            value={file.folder_id ?? ''}
+            onChange={(e) => onMoveFile?.(file, e.target.value === '' ? null : Number(e.target.value))}
+            className="w-full bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm focus:outline-none focus:border-rose-500"
+          >
+            <option value="">Raíz (Vault)</option>
+            {folders.map((f) => (
+              <option key={f.id} value={f.id}>{f.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      {!isAdmin && currentFolder && (
+        <p className="mono text-[10.5px] text-gunmetal -mb-2">📁 {currentFolder.name}</p>
+      )}
       <div
         className="h-48 rounded-lg overflow-hidden bg-[var(--color-surf-sidebar)] flex items-center justify-center border border-[var(--color-border)]"
       >
@@ -445,7 +713,7 @@ function VaultDrawerFooter({
             if (ok) onClose();
           }}
           className="text-rose-400 hover:text-rose-300"
-          aria-label="Eliminar"
+          aria-label="Mover a papelera"
         />
       )}
     </>
@@ -474,7 +742,22 @@ export default function VaultPage() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
 
+  // Carpetas — `currentFolderId=null` es la raíz del Vault. `folders` es
+  // la lista plana completa (para armar breadcrumb + subcarpetas + el
+  // selector "mover a carpeta" del drawer).
+  const [folders, setFolders] = useState([]);
+  const [currentFolderId, setCurrentFolderId] = useState(null);
+  const [folderModal, setFolderModal] = useState(null); // { mode: 'create'|'rename', folder? }
+
+  // Tags — catálogo global (independiente de la carpeta actual) + filtro
+  // activo (multi-select AND: el archivo debe tener TODOS los tags elegidos).
+  const [tags, setTags] = useState([]);
+  const [activeTagIds, setActiveTagIds] = useState([]);
+  const [tagsModalOpen, setTagsModalOpen] = useState(false);
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const childFolders = folders.filter((f) => (f.parent_id ?? null) === currentFolderId);
+  const breadcrumb = buildBreadcrumb(folders, currentFolderId);
 
   // Reset a página 1 cada vez que cambia el query efectivo.
   useEffect(() => {
@@ -484,12 +767,40 @@ export default function VaultPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedQuery, pageSize]);
+  }, [debouncedQuery, pageSize, currentFolderId, activeTagIds]);
+
+  const loadFolders = async () => {
+    try {
+      const res = await getVaultFolders();
+      setFolders(res.data || []);
+    } catch {
+      // Silencioso — el Vault sigue usable sin árbol de carpetas.
+    }
+  };
+
+  const loadTags = async () => {
+    try {
+      const res = await getVaultTags();
+      setTags(res.data || []);
+    } catch {
+      // Silencioso — el Vault sigue usable sin catálogo de tags.
+    }
+  };
 
   const load = async () => {
     setLoading(true);
     const params = { page, page_size: pageSize };
-    if (debouncedQuery) params.q = debouncedQuery;
+    if (debouncedQuery) {
+      // Una búsqueda activa ignora el filtro de carpeta — busca en todo
+      // el Vault. Si no, el usuario podría creer que un archivo se perdió
+      // solo porque está parado en otra carpeta.
+      params.q = debouncedQuery;
+    } else if (currentFolderId != null) {
+      params.folder_id = currentFolderId;
+    } else {
+      params.root_only = true;
+    }
+    if (activeTagIds.length > 0) params.tag_ids = activeTagIds.join(',');
     const [f, s] = await Promise.allSettled([
       getVaultFiles(params),
       getVaultStats(),
@@ -506,12 +817,127 @@ export default function VaultPage() {
   };
 
   useEffect(() => {
+    loadFolders();
+    loadTags();
+  }, []);
+
+  useEffect(() => {
     load().catch(() => {
       toast.error('No se pudo cargar el Vault');
       setLoading(false);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize, debouncedQuery]);
+  }, [page, pageSize, debouncedQuery, currentFolderId, activeTagIds]);
+
+  const handleCreateFolder = async (name) => {
+    try {
+      await createVaultFolder({ name, parent_id: currentFolderId });
+      setFolderModal(null);
+      toast.success('Carpeta creada');
+      await loadFolders();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'No se pudo crear la carpeta');
+    }
+  };
+
+  const handleRenameFolder = async (name) => {
+    try {
+      await updateVaultFolder(folderModal.folder.id, { name });
+      setFolderModal(null);
+      toast.success('Carpeta renombrada');
+      await loadFolders();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'No se pudo renombrar la carpeta');
+    }
+  };
+
+  const handleMoveFolder = async (folder, newParentId) => {
+    try {
+      if (newParentId == null) {
+        await updateVaultFolder(folder.id, { move_to_root: true });
+      } else {
+        await updateVaultFolder(folder.id, { parent_id: newParentId });
+      }
+      toast.success('Carpeta movida');
+      await loadFolders();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'No se pudo mover la carpeta');
+    }
+  };
+
+  const handleDeleteFolder = async (folder) => {
+    const hasChildren = folders.some((f) => f.parent_id === folder.id);
+    const msg = hasChildren
+      ? `"${folder.name}" tiene subcarpetas — se eliminarán también. Los archivos dentro subirán a la raíz. ¿Continuar?`
+      : `¿Eliminar la carpeta "${folder.name}"? Los archivos dentro subirán a la raíz.`;
+    const ok = await confirm(msg, 'Eliminar');
+    if (!ok) return;
+    try {
+      await deleteVaultFolder(folder.id);
+      toast.success('Carpeta eliminada');
+      await loadFolders();
+      await load();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'No se pudo eliminar la carpeta');
+    }
+  };
+
+  const handleCreateTag = async (name) => {
+    try {
+      await createVaultTag(name);
+      toast.success('Tag creado');
+      await loadTags();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'No se pudo crear el tag');
+    }
+  };
+
+  const handleRenameTag = async (tagId, name) => {
+    try {
+      await updateVaultTag(tagId, name);
+      toast.success('Tag renombrado');
+      await loadTags();
+      await load();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'No se pudo renombrar el tag');
+    }
+  };
+
+  const handleDeleteTag = async (tag) => {
+    const ok = await confirm(
+      `¿Eliminar el tag "${tag.name}"? Los archivos que lo tienen no se borran, solo pierden esa etiqueta.`,
+      'Eliminar',
+    );
+    if (!ok) return;
+    try {
+      await deleteVaultTag(tag.id);
+      toast.success('Tag eliminado');
+      setActiveTagIds((cur) => cur.filter((id) => id !== tag.id));
+      await loadTags();
+      await load();
+    } catch {
+      toast.error('No se pudo eliminar el tag');
+    }
+  };
+
+  const handleToggleTagFilter = (tagId) => {
+    setActiveTagIds((cur) =>
+      cur.includes(tagId) ? cur.filter((id) => id !== tagId) : [...cur, tagId],
+    );
+  };
+
+  /** Mueve el archivo del drawer a otra carpeta (o a la raíz con folderId=null). */
+  const handleMoveFile = async (file, folderId) => {
+    try {
+      const res = await updateVaultFile(file.id, { folder_id: folderId });
+      setSelected(res.data);
+      toast.success('Archivo movido');
+      await load();
+      await loadFolders();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'No se pudo mover el archivo');
+    }
+  };
 
   /**
    * Descarga uno de los slots (source o print) del modelo y dispara la
@@ -554,11 +980,11 @@ export default function VaultPage() {
   };
 
   const handleDelete = async (f) => {
-    const ok = await confirm(`¿Eliminar "${f.name}"?`, 'Eliminar');
+    const ok = await confirm(`¿Mover "${f.name}" a la papelera? Puedes restaurarlo después.`, 'Mover a papelera');
     if (!ok) return false;
     try {
       await deleteVaultFile(f.id);
-      toast.success('Archivo eliminado');
+      toast.success('Archivo movido a la papelera');
       // Si el item borrado era el único de la última página, retrocedemos
       // automáticamente para no quedar en una página vacía.
       if (files.length === 1 && page > 1) {
@@ -576,6 +1002,115 @@ export default function VaultPage() {
   const usedBytes = stats?.used_bytes ?? 0;
   const quotaBytes = stats?.quota_bytes ?? 1;
   const percent = stats?.percent ?? 0;
+
+  const FolderBreadcrumb = (
+    <div className="flex flex-wrap items-center gap-1.5 px-4 md:px-6 pt-1">
+      <button
+        type="button"
+        onClick={() => setCurrentFolderId(null)}
+        className={`mono text-[11px] px-1.5 py-0.5 rounded hover:bg-white/5 ${currentFolderId === null ? 'text-tech-white font-semibold' : 'text-gunmetal'}`}
+      >
+        Vault
+      </button>
+      {breadcrumb.map((f) => (
+        <span key={f.id} className="flex items-center gap-1.5">
+          <ChevronRight size={11} className="text-gunmetal-dim" />
+          <button
+            type="button"
+            onClick={() => setCurrentFolderId(f.id)}
+            className={`mono text-[11px] px-1.5 py-0.5 rounded hover:bg-white/5 ${f.id === currentFolderId ? 'text-tech-white font-semibold' : 'text-gunmetal'}`}
+          >
+            {f.name}
+          </button>
+        </span>
+      ))}
+      <span className="flex-1" />
+      {isAdmin && (
+        <button
+          type="button"
+          onClick={() => setFolderModal({ mode: 'create' })}
+          className="mono text-[11px] px-2 py-1 rounded-md border border-[var(--color-border-strong)] text-gunmetal hover:text-tech-white hover:border-rose-500/40 flex items-center gap-1.5"
+        >
+          <FolderPlus size={12} /> Nueva carpeta
+        </button>
+      )}
+    </div>
+  );
+
+  // Cuando hay búsqueda activa, `load()` ignora el filtro de carpeta y
+  // busca en todo el Vault — este aviso evita que el breadcrumb (que
+  // sigue mostrando la carpeta actual) parezca contradecir los resultados.
+  const SearchScopeHint = debouncedQuery && currentFolderId != null && (
+    <p className="px-4 md:px-6 -mt-0.5 mono text-[10.5px] text-gunmetal">
+      Buscando en todo el Vault, no solo en esta carpeta
+    </p>
+  );
+
+  // Copy del empty-state: distingue "el Vault entero está vacío" de
+  // "esta carpeta puntual está vacía" — antes ambos casos mostraban
+  // "Vault vacío", lo cual confunde en una carpeta reciente sin archivos.
+  const isEmptyNoQuery = total === 0 && !debouncedQuery;
+  const emptyTitle = isEmptyNoQuery ? (currentFolderId ? 'Carpeta vacía' : 'Vault vacío') : 'Sin resultados';
+  const emptyHint = isEmptyNoQuery
+    ? (currentFolderId
+        ? 'Sube un modelo aquí o muévelo desde otra carpeta.'
+        : 'Sube tu primer .3mf para tener tus modelos organizados aquí.')
+    : 'Cambia el filtro o limpia la búsqueda.';
+
+  const FolderGrid = childFolders.length > 0 && (
+    <div
+      className="px-4 md:px-6 pb-3 pt-2 grid gap-3"
+      style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}
+    >
+      {childFolders.map((f) => (
+        <FolderCard
+          key={f.id}
+          folder={f}
+          folders={folders}
+          isAdmin={isAdmin}
+          onOpen={setCurrentFolderId}
+          onRename={(folder) => setFolderModal({ mode: 'rename', folder })}
+          onMove={handleMoveFolder}
+          onDelete={handleDeleteFolder}
+        />
+      ))}
+    </div>
+  );
+
+  // Fila de chips de tags — filtro multi-select AND. Se omite por completo
+  // si el catálogo está vacío (nada que filtrar todavía).
+  const TagsFilterRail = tags.length > 0 && (
+    <div className="flex flex-wrap items-center gap-1.5 px-4 md:px-6 pt-1">
+      {tags.map((t) => {
+        const active = activeTagIds.includes(t.id);
+        return (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => handleToggleTagFilter(t.id)}
+            className={`inline-flex items-center gap-1 mono text-[10.5px] px-2 py-0.5 rounded-full border transition-colors ${
+              active
+                ? 'bg-rose-500/15 border-rose-500/50 text-rose-300'
+                : 'bg-transparent border-[var(--color-border)] text-gunmetal hover:text-tech-white'
+            }`}
+          >
+            <Tag size={10} />
+            {t.name}
+            {active && <X size={10} />}
+          </button>
+        );
+      })}
+      {isAdmin && (
+        <button
+          type="button"
+          onClick={() => setTagsModalOpen(true)}
+          className="mono text-[10.5px] text-gunmetal hover:text-tech-white underline underline-offset-2 ml-1"
+        >
+          gestionar tags
+        </button>
+      )}
+    </div>
+  );
 
   const KPIs = (
     <div className="flex flex-wrap gap-3 px-6 pt-4 pb-2">
@@ -644,31 +1179,33 @@ export default function VaultPage() {
             />
           </div>
         </div>
+        <div className="mt-3">{FolderBreadcrumb}</div>
+        {SearchScopeHint}
+        {TagsFilterRail}
+        {FolderGrid}
         {loading ? (
           <p className="px-4 py-12 text-center text-gunmetal text-sm">Cargando Vault…</p>
         ) : files.length === 0 ? (
           <div className="mt-3 pb-28">
-            <EmptyState
-              icon={Archive}
-              accent={ACCENT}
-              title={total === 0 && !debouncedQuery ? 'Vault vacío' : 'Sin resultados'}
-              hint={
-                total === 0 && !debouncedQuery
-                  ? 'Sube tu primer .3mf para tener tus modelos organizados aquí.'
-                  : 'Cambia el filtro o limpia la búsqueda.'
-              }
-              action={
-                isAdmin && total === 0 && !debouncedQuery ? (
-                  <button
-                    type="button"
-                    onClick={() => navigate('/vault/upload')}
-                    className="btn btn-primary btn-sm"
-                  >
-                    <Upload size={13} /> Subir primer modelo
-                  </button>
-                ) : null
-              }
-            />
+            {childFolders.length === 0 && (
+              <EmptyState
+                icon={Archive}
+                accent={ACCENT}
+                title={emptyTitle}
+                hint={emptyHint}
+                action={
+                  isAdmin && isEmptyNoQuery ? (
+                    <button
+                      type="button"
+                      onClick={() => navigate(currentFolderId ? `/vault/upload?folder=${currentFolderId}` : '/vault/upload')}
+                      className="btn btn-primary btn-sm"
+                    >
+                      <Upload size={13} /> Subir modelo
+                    </button>
+                  ) : null
+                }
+              />
+            )}
           </div>
         ) : (
           <>
@@ -712,7 +1249,7 @@ export default function VaultPage() {
         {isAdmin && (
           <button
             type="button"
-            onClick={() => navigate('/vault/upload')}
+            onClick={() => navigate(currentFolderId ? `/vault/upload?folder=${currentFolderId}` : '/vault/upload')}
             className="fixed bottom-20 right-4 z-40 inline-flex items-center gap-2 pl-4 pr-5 py-3.5 rounded-full font-semibold text-sm shadow-2xl active:scale-95 transition-transform"
             style={{ background: ACCENT, color: '#FFF', boxShadow: `0 8px 24px ${ACCENT}55` }}
             aria-label="Subir modelo"
@@ -728,7 +1265,13 @@ export default function VaultPage() {
           height="full"
         >
           <div className="px-5 pt-4 pb-3">
-            <VaultDrawerBody file={selected} onActivePlateChange={handleActivePlateChange} />
+            <VaultDrawerBody
+              file={selected}
+              onActivePlateChange={handleActivePlateChange}
+              isAdmin={isAdmin}
+              folders={folders}
+              onMoveFile={handleMoveFile}
+            />
           </div>
           {selected && (
             <div className="px-5 pt-3 pb-5 border-t border-[var(--color-border-soft)] flex flex-wrap gap-2 sticky bottom-0 bg-[var(--color-surf-sidebar)]">
@@ -743,6 +1286,23 @@ export default function VaultPage() {
             </div>
           )}
         </MobileSheet>
+        {folderModal && (
+          <FolderNameModal
+            mode={folderModal.mode}
+            initialName={folderModal.folder?.name}
+            onCancel={() => setFolderModal(null)}
+            onSave={folderModal.mode === 'rename' ? handleRenameFolder : handleCreateFolder}
+          />
+        )}
+        {tagsModalOpen && (
+          <TagsManageModal
+            tags={tags}
+            onClose={() => setTagsModalOpen(false)}
+            onCreate={handleCreateTag}
+            onRename={handleRenameTag}
+            onDelete={handleDeleteTag}
+          />
+        )}
       </div>
     );
   }
@@ -765,13 +1325,20 @@ export default function VaultPage() {
           </span>
         </div>
         {isAdmin && (
-          <Link to="/vault/upload" className="btn btn-primary btn-sm">
+          <Link
+            to={currentFolderId ? `/vault/upload?folder=${currentFolderId}` : '/vault/upload'}
+            className="btn btn-primary btn-sm"
+          >
             <Upload size={13} /> Subir modelo
           </Link>
         )}
       </header>
 
       {KPIs}
+      {FolderBreadcrumb}
+      {SearchScopeHint}
+      {TagsFilterRail}
+      {FolderGrid}
 
       <div className="flex flex-wrap gap-3 items-center px-6 py-3 sticky top-0 bg-forge-black/80 backdrop-blur z-10 border-b border-[var(--color-border-soft)]">
         <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 min-w-[260px] basis-[280px] flex-1 max-w-md">
@@ -799,23 +1366,24 @@ export default function VaultPage() {
       {loading ? (
         <p className="px-6 py-16 text-center text-gunmetal text-sm">Cargando Vault…</p>
       ) : files.length === 0 ? (
-        <EmptyState
-          icon={Archive}
-          accent={ACCENT}
-          title={total === 0 && !debouncedQuery ? 'Vault vacío' : 'Sin resultados'}
-          hint={
-            total === 0 && !debouncedQuery
-              ? 'Sube tu primer .3mf para tener tus modelos organizados aquí.'
-              : 'Cambia el filtro o limpia la búsqueda.'
-          }
-          action={
-            isAdmin && total === 0 && !debouncedQuery ? (
-              <Link to="/vault/upload" className="btn btn-primary btn-sm">
-                <Upload size={13} /> Subir primer modelo
-              </Link>
-            ) : null
-          }
-        />
+        childFolders.length === 0 && (
+          <EmptyState
+            icon={Archive}
+            accent={ACCENT}
+            title={emptyTitle}
+            hint={emptyHint}
+            action={
+              isAdmin && isEmptyNoQuery ? (
+                <Link
+                  to={currentFolderId ? `/vault/upload?folder=${currentFolderId}` : '/vault/upload'}
+                  className="btn btn-primary btn-sm"
+                >
+                  <Upload size={13} /> Subir modelo
+                </Link>
+              ) : null
+            }
+          />
+        )
       ) : (
         <>
           <div
@@ -914,7 +1482,13 @@ export default function VaultPage() {
           )
         }
       >
-        <VaultDrawerBody file={selected} onActivePlateChange={handleActivePlateChange} />
+        <VaultDrawerBody
+          file={selected}
+          onActivePlateChange={handleActivePlateChange}
+          isAdmin={isAdmin}
+          folders={folders}
+          onMoveFile={handleMoveFile}
+        />
       </DetailDrawer>
 
       <footer className="mt-auto px-6 py-2.5 border-t border-[var(--color-border-soft)] bg-[var(--color-surf-sidebar)] flex flex-wrap items-center gap-4 text-[11px] text-gunmetal">
@@ -928,6 +1502,24 @@ export default function VaultPage() {
         <span className="flex-1" />
         <span className="mono">es-CO</span>
       </footer>
+
+      {folderModal && (
+        <FolderNameModal
+          mode={folderModal.mode}
+          initialName={folderModal.folder?.name}
+          onCancel={() => setFolderModal(null)}
+          onSave={folderModal.mode === 'rename' ? handleRenameFolder : handleCreateFolder}
+        />
+      )}
+      {tagsModalOpen && (
+        <TagsManageModal
+          tags={tags}
+          onClose={() => setTagsModalOpen(false)}
+          onCreate={handleCreateTag}
+          onRename={handleRenameTag}
+          onDelete={handleDeleteTag}
+        />
+      )}
     </div>
   );
 }

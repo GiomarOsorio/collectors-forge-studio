@@ -49,9 +49,11 @@ import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useConfirm } from '../../components/ConfirmDialog';
 import {
   addToQueueFromVault,
+  assignQueueItemProject,
   deleteQueueItem,
   getInventoryItems,
   getPrinters,
+  getProjects,
   getQueue,
   getQueueHistory,
   getVaultFiles,
@@ -315,12 +317,27 @@ function QueueRow({ item, onClick }) {
  * Cuerpo del drawer (info read-only). El header (con eyebrow `COLA · POSICIÓN
  * #N`) lo aporta `DetailDrawer` v2; las acciones viven en `QueueDrawerFooter`.
  */
-function QueueDrawerBody({ item }) {
+function QueueDrawerBody({ item, projects, onAssignProject }) {
   if (!item) return null;
   const badge = statusBadge(item.status);
   const v = itemView(item);
   return (
     <div className="flex flex-col gap-4">
+      {Array.isArray(projects) && projects.length > 0 && (
+        <div>
+          <span className="lbl-eyebrow text-[9px] mb-1.5 block">Proyecto</span>
+          <select
+            value={item.project_id ?? ''}
+            onChange={(e) => onAssignProject?.(item, e.target.value === '' ? null : Number(e.target.value))}
+            className="w-full bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm focus:outline-none focus:border-teal-500"
+          >
+            <option value="">— Sin proyecto —</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
       <div>
         <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
           <StatusPill tone={badge.tone} icon={badge.icon} size="lg">
@@ -530,7 +547,7 @@ function VaultPickerRow({ model, selected, onSelect }) {
  * Si no hay modelos `print_ready`, muestra empty state con CTA a
  * `/vault/upload`.
  */
-function VaultPickerDrawer({ open, onClose, onAdded, printers, filaments, isMobile }) {
+function VaultPickerDrawer({ open, onClose, onAdded, printers, filaments, projects, isMobile }) {
   const [models, setModels] = useState([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [query, setQuery] = useState('');
@@ -540,6 +557,7 @@ function VaultPickerDrawer({ open, onClose, onAdded, printers, filaments, isMobi
     filament_id: '',
     quantity: 1,
     notes: '',
+    project_id: '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -553,6 +571,7 @@ function VaultPickerDrawer({ open, onClose, onAdded, printers, filaments, isMobi
       filament_id: '',
       quantity: 1,
       notes: '',
+      project_id: '',
     });
     setLoadingModels(true);
     // Issue #62: mostrar TODOS los modelos (no solo print_ready). Los
@@ -591,6 +610,7 @@ function VaultPickerDrawer({ open, onClose, onAdded, printers, filaments, isMobi
         filament_id: form.filament_id ? parseInt(form.filament_id, 10) : null,
         quantity: Math.max(1, Math.min(999, parseInt(form.quantity, 10) || 1)),
         notes: form.notes.trim() || null,
+        project_id: form.project_id ? parseInt(form.project_id, 10) : null,
       });
       toast.success(`Agregado a cola en posición #${res.data.position}`);
       onAdded?.();
@@ -714,6 +734,20 @@ function VaultPickerDrawer({ open, onClose, onAdded, printers, filaments, isMobi
               onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
             />
           </FormFieldRow>
+          {projects?.length > 0 && (
+            <FormFieldRow label="Proyecto" hint="Opcional — agrupa este item con otros del mismo encargo">
+              <select
+                className={FORM_INPUT_CLS}
+                value={form.project_id}
+                onChange={(e) => setForm((p) => ({ ...p, project_id: e.target.value }))}
+              >
+                <option value="">— Sin proyecto —</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={String(p.id)}>{p.name}</option>
+                ))}
+              </select>
+            </FormFieldRow>
+          )}
         </form>
       )}
     </div>
@@ -778,21 +812,30 @@ export default function QueuePage() {
   const [history, setHistory] = useState([]);
   const [printers, setPrinters] = useState([]);
   const [filaments, setFilaments] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState(null);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const firstLoad = useRef(true);
+  // Cada uno solo se marca `true` cuando su fetch respectivo TUVO ÉXITO —
+  // así, si getProjects() (o printers/filaments) falla transitoriamente en
+  // el primer load, el siguiente load() lo reintenta en vez de quedar
+  // deshabilitado en silencio por el resto de la sesión.
+  const printersLoaded = useRef(false);
+  const filamentsLoaded = useRef(false);
+  const projectsLoaded = useRef(false);
 
   const load = async () => {
     setLoading(true);
-    const [a, h, p, f] = await Promise.allSettled([
+    const [a, h, p, f, pr] = await Promise.allSettled([
       getQueue(),
       getQueueHistory(),
-      // Cargamos printers/filaments solo la primera vez (no cambian seguido)
-      // para no pegarle a la API en cada refresh post-mutación.
-      firstLoad.current ? getPrinters() : Promise.resolve({ data: null }),
-      firstLoad.current ? getInventoryItems() : Promise.resolve({ data: null }),
+      // Cargamos printers/filaments/proyectos solo mientras no hayan
+      // cargado con éxito todavía (no cambian seguido) para no pegarle a
+      // la API en cada refresh post-mutación.
+      printersLoaded.current ? Promise.resolve({ data: null }) : getPrinters(),
+      filamentsLoaded.current ? Promise.resolve({ data: null }) : getInventoryItems(),
+      projectsLoaded.current ? Promise.resolve({ data: null }) : getProjects(),
     ]);
     if (a.status === 'fulfilled') setActive(a.value.data || []);
     if (h.status === 'fulfilled') setHistory(h.value.data || []);
@@ -801,6 +844,7 @@ export default function QueuePage() {
         (a.name || '').localeCompare(b.name || '', 'es'),
       );
       setPrinters(arr);
+      printersLoaded.current = true;
     }
     if (f.status === 'fulfilled' && f.value.data) {
       // Solo filamentos para el picker.
@@ -808,8 +852,12 @@ export default function QueuePage() {
         .filter((it) => (it.category || '').toLowerCase() === 'filamento')
         .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es'));
       setFilaments(arr);
+      filamentsLoaded.current = true;
     }
-    firstLoad.current = false;
+    if (pr.status === 'fulfilled' && pr.value.data) {
+      setProjects(pr.value.data);
+      projectsLoaded.current = true;
+    }
     setLoading(false);
   };
 
@@ -881,6 +929,17 @@ export default function QueuePage() {
       toast.error('No se pudo actualizar');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleAssignProject = async (item, projectId) => {
+    try {
+      const res = await assignQueueItemProject(item.id, projectId);
+      setSelected(res.data);
+      toast.success(projectId ? 'Proyecto asignado' : 'Proyecto quitado');
+      await load();
+    } catch {
+      toast.error('No se pudo actualizar el proyecto');
     }
   };
 
@@ -1060,7 +1119,7 @@ export default function QueuePage() {
           height="full"
         >
           <div className="px-5 pt-4 pb-3">
-            <QueueDrawerBody item={selected} />
+            <QueueDrawerBody item={selected} projects={projects} onAssignProject={handleAssignProject} />
           </div>
           {selected && (
             <div className="px-5 pt-3 pb-5 border-t border-[var(--color-border-soft)] flex flex-wrap gap-2 sticky bottom-0 bg-[var(--color-surf-sidebar)]">
@@ -1083,6 +1142,7 @@ export default function QueuePage() {
           }}
           printers={printers}
           filaments={filaments}
+          projects={projects}
           isMobile
         />
       </div>
@@ -1202,7 +1262,7 @@ export default function QueuePage() {
           )
         }
       >
-        <QueueDrawerBody item={selected} />
+        <QueueDrawerBody item={selected} projects={projects} onAssignProject={handleAssignProject} />
       </DetailDrawer>
 
       <VaultPickerDrawer
@@ -1214,6 +1274,7 @@ export default function QueuePage() {
         }}
         printers={printers}
         filaments={filaments}
+        projects={projects}
         isMobile={false}
       />
 
