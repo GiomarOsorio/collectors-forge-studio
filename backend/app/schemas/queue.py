@@ -46,6 +46,10 @@ class PrintQueueItemFromVaultCreate(BaseModel):
     vault_model_id: int
     printer_id: int
     filament_id: Optional[int] = None
+    #: Bobina física específica a consumir (issue #134). Si se setea, el
+    #: descuento al marcar 'done' va SOLO a esta bobina — reemplaza el
+    #: descuento agregado normal de `filament_id`.
+    spool_id: Optional[int] = None
     quantity: int = Field(default=1, ge=1, le=999)
     notes: Optional[str] = None
     project_id: Optional[int] = None
@@ -89,6 +93,10 @@ class QueueVaultSnapshot(BaseModel):
     print_time_hours: Optional[DecimalAsFloat]
     quantity: int
     print_file_name: Optional[str] = None
+    # Bobina física asignada (issue #134) — reemplaza el descuento agregado.
+    spool_id: Optional[int] = None
+    spool_label_code: Optional[str] = None
+    spool_percent_remaining: Optional[float] = None
 
 
 class PrintQueueItemResponse(BaseModel):
@@ -114,6 +122,10 @@ class PrintQueueItemResponse(BaseModel):
     #: o si el usuario fue borrado después (ondelete=SET NULL).
     created_by: Optional[int] = None
     created_by_username: Optional[str] = None
+    #: Transitorio (issue #134) — solo viene poblado justo después de
+    #: marcar 'done' con una bobina insuficiente (no bloquea, solo avisa).
+    #: None en cualquier otro momento/respuesta.
+    spool_warning: Optional[str] = None
     created_at: datetime
     quote: Optional[QueueQuoteSnapshot] = None
     vault: Optional[QueueVaultSnapshot] = None

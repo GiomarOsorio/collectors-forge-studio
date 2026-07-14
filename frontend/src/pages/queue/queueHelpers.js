@@ -75,6 +75,9 @@ export function itemView(item) {
       total_price: null,
       filament_name: v.filament_name,
       sliced_filament_type: v.sliced_filament_type,
+      spool_id: v.spool_id,
+      spool_label_code: v.spool_label_code,
+      spool_percent_remaining: v.spool_percent_remaining,
     };
   }
   return {

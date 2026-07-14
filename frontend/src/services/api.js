@@ -655,6 +655,32 @@ export const updateInventoryCategory = (id, data) => api.put(`/inventory/categor
 export const deleteInventoryCategory = (id) => api.delete(`/inventory/categories/${id}`);
 
 // ============================================================================
+// Inventario - Bobinas individuales (spools, issue #134)
+// ============================================================================
+
+/**
+ * Lista bobinas con filtros opcionales.
+ * @param {Object} [params]
+ * @param {number} [params.inventory_item_id]
+ * @param {string} [params.status] - CSV, ej. 'active,finished'
+ * @param {string} [params.material]
+ * @param {string} [params.q]
+ */
+export const getSpools = (params) => api.get('/inventory/spools/', { params });
+
+/** Alta masiva de bobinas (1-100). `add_to_stock` suma al agregado del padre. */
+export const createSpools = (data) => api.post('/inventory/spools/', data);
+
+/** Edita una bobina (peso manual, stops, efecto, notas, status). */
+export const updateSpool = (id, data) => api.put(`/inventory/spools/${id}`, data);
+
+/** Elimina una bobina (admin) — bloqueado si algún item 'printing' la referencia. */
+export const deleteSpool = (id) => api.delete(`/inventory/spools/${id}`);
+
+/** Gramos restantes por tipo de filamento vs. el umbral configurado. */
+export const getSpoolsLowStock = () => api.get('/inventory/spools/low-stock');
+
+// ============================================================================
 // Cola de impresión (Queue)
 // ============================================================================
 

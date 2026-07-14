@@ -29,6 +29,7 @@ class AppSettingsUpdate(BaseModel):
     labor_cost_per_hour: Optional[Decimal] = Field(default=None, ge=0)
     default_margin_percent: Optional[Decimal] = Field(default=None, ge=0, le=100)
     currency: Optional[str] = None
+    spool_low_stock_threshold_g: Optional[Decimal] = Field(default=None, ge=0)
 
 
 class AppSettingsResponse(BaseModel):
@@ -45,5 +46,6 @@ class AppSettingsResponse(BaseModel):
     labor_cost_per_hour: DecimalAsFloat
     default_margin_percent: DecimalAsFloat
     currency: str
+    spool_low_stock_threshold_g: DecimalAsFloat
 
     model_config = {"from_attributes": True}

@@ -29,6 +29,8 @@ class AppSettings(Base):
         labor_cost_per_hour: Costo de mano de obra por hora en USD. Numeric(12,4).
         default_margin_percent: Margen por defecto (0–100). Numeric(7,4).
         currency: Código ISO de moneda. Ej: "USD".
+        spool_low_stock_threshold_g: Umbral (gramos) para alertar bobinas
+            bajas por tipo de filamento (issue #134). Numeric(8,1).
         updated_at: Timestamp UTC de la última modificación.
     """
 
@@ -38,6 +40,7 @@ class AppSettings(Base):
         CheckConstraint("failure_rate_percent >= 0 AND failure_rate_percent <= 100",    name="ck_settings_failure_range"),
         CheckConstraint("labor_cost_per_hour >= 0",                                     name="ck_settings_labor_ge0"),
         CheckConstraint("default_margin_percent >= 0 AND default_margin_percent <= 100", name="ck_settings_margin_range"),
+        CheckConstraint("spool_low_stock_threshold_g >= 0",                              name="ck_settings_spool_threshold_ge0"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

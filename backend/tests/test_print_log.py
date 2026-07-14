@@ -72,6 +72,7 @@ def _fake_log_item(item_id, status="pending", created_at=None, piece_name=None, 
     m.piece_name = piece_name
     m.printer_id = None
     m.filament_id = None
+    m.spool_id = None
     m.quantity = 1
     m.weight_grams = None
     m.print_time_hours = None

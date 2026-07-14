@@ -45,6 +45,7 @@ from app.models.model_file_photo import ModelFilePhoto
 from app.models.vault_folder import VaultFolder
 from app.models.filament_profile import FilamentProfile
 from app.models.project import Project
+from app.models.spool import Spool
 
 __all__ = [
     "Company", "CompanyTemplate", "User", "Filament", "Printer", "AppSettings",
@@ -58,4 +59,5 @@ __all__ = [
     "VaultFolder",
     "FilamentProfile",
     "Project",
+    "Spool",
 ]
