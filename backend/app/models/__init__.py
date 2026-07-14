@@ -38,6 +38,7 @@ from app.models.inventory_category import InventoryCategory
 from app.models.purchase_order import PurchaseOrder, PurchaseOrderItem
 from app.models.printed_item import PrintedItem
 from app.models.maintenance import MaintenanceLog, MaintenanceLogItem
+from app.models.maintenance_schedule import MaintenanceSchedule
 from app.models.queue import PrintQueueItem
 from app.models.vault_tag import VaultTag
 from app.models.model_file import ModelFile, ModelFilePlate
@@ -52,7 +53,7 @@ __all__ = [
     "Quote", "ClientQuote", "Supply", "ElectricityTariff",
     "InventoryItem", "InventoryCategory", "PurchaseOrder", "PurchaseOrderItem",
     "PrintedItem",
-    "MaintenanceLog", "MaintenanceLogItem",
+    "MaintenanceLog", "MaintenanceLogItem", "MaintenanceSchedule",
     "PrintQueueItem",
     "VaultTag",
     "ModelFile", "ModelFilePlate", "ModelFilePhoto",

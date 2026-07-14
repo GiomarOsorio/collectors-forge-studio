@@ -782,6 +782,76 @@ Elimina un registro.
 
 ---
 
+## Recordatorios de mantenimiento (Schedules, issue #138)
+
+Recordatorio recurrente por impresora, por horas de impresión o por días.
+El progreso (`progress_pct`) y `status` (`ok` | `due_soon` ≥80% | `overdue`
+≥100%) se calculan en cada response, no se persisten.
+
+### `GET /maintenance/schedules/`
+Lista recordatorios con progreso calculado. **Query params:** `?printer_id=1` (opcional).
+
+### `GET /maintenance/schedules/due`
+Lista global de recordatorios habilitados con `status != 'ok'` (para badges de sidebar/home).
+
+**Response 200:**
+```json
+[
+  {
+    "id": 1,
+    "printer_id": 1,
+    "printer_name": "P2S del estudio",
+    "task_name": "Lubricar ejes XY",
+    "description": null,
+    "interval_type": "print_hours",
+    "interval_value": 300,
+    "last_done_at": "2026-01-01T00:00:00",
+    "last_done_hours": 0,
+    "enabled": true,
+    "created_at": "2026-01-01T00:00:00",
+    "updated_at": "2026-01-01T00:00:00",
+    "progress_pct": 83.3,
+    "status": "due_soon"
+  }
+]
+```
+
+### `POST /maintenance/schedules/` (admin)
+Crea un recordatorio. Baseline: `last_done_at`/`last_done_hours` se fijan
+al momento de creación (progreso arranca en 0%).
+
+**Body:**
+```json
+{
+  "printer_id": 1,
+  "task_name": "Lubricar ejes XY",
+  "description": null,
+  "interval_type": "print_hours",
+  "interval_value": 300
+}
+```
+
+### `PUT /maintenance/schedules/{id}` (admin)
+Edita campos del recordatorio (no reasigna la impresora). Todos los campos son opcionales.
+
+### `DELETE /maintenance/schedules/{id}` (admin)
+Elimina un recordatorio.
+
+### `POST /maintenance/schedules/{id}/complete`
+Marca el recordatorio como hecho: resetea `last_done_at`/`last_done_hours`
+al estado actual de la impresora y crea un `MaintenanceLog` automático
+(`maintenance_type=task_name`, sin ítems) para no perder trazabilidad.
+
+### Integración con `POST /maintenance/logs/`
+
+El body de `POST /maintenance/logs/` acepta `schedule_ids: [int]` opcional.
+Además, cualquier schedule habilitado de esa impresora cuyo `task_name`
+coincida (case-insensitive) con `maintenance_type` se resetea
+automáticamente en la misma transacción. La response incluye
+`matched_schedules: [int]` con los ids efectivamente reseteados.
+
+---
+
 ## Cola de impresión
 
 ### `GET /queue/`

@@ -1,9 +1,11 @@
 /**
  * @file Página de la app Mantenimiento.
  *
- * Dos pestañas:
+ * Tres pestañas:
  *  - Dashboard: tarjetas por impresora con badges 🟢🟡🔴 por tipo de mantto.
  *  - Historial: lista cronológica de registros con buscador + filtro impresora.
+ *  - Programados: recordatorios recurrentes por intervalo (issue #138),
+ *    delegados a `SchedulesSection` (auto-contenido, fetch propio).
  *
  * Crear / editar / eliminar logs vive en `LogFormDrawer` (header, FAB,
  * drawer de impresora y drawer de log). Actualizar `current_hours` vive
@@ -20,6 +22,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import {
   AlertTriangle,
+  Bell,
   CheckCircle2,
   ChevronRight,
   ClipboardList,
@@ -59,12 +62,14 @@ import {
   updatePrinter,
 } from '../../services/api';
 import { MAINTENANCE_TYPES, getMaintenanceType } from '../../config/maintenance';
+import SchedulesSection from './components/SchedulesSection';
 
 const ACCENT = '#8B5CF6';
 
 const TABS = [
-  { id: 'dashboard', label: 'Dashboard',  icon: LayoutDashboard },
-  { id: 'logs',      label: 'Historial',  icon: ClipboardList },
+  { id: 'dashboard',  label: 'Dashboard',   icon: LayoutDashboard },
+  { id: 'logs',       label: 'Historial',   icon: ClipboardList },
+  { id: 'schedules',  label: 'Programados', icon: Bell },
 ];
 
 const TYPE_BY_VALUE = MAINTENANCE_TYPES.reduce((acc, t) => {
@@ -941,6 +946,7 @@ export default function MaintenancePage() {
   const [loading, setLoading] = useState(true);
   const [selectedPrinter, setSelectedPrinter] = useState(null);
   const [selectedLog, setSelectedLog] = useState(null);
+  const [schedulesCount, setSchedulesCount] = useState(0);
 
   // Estado del LogFormDrawer (create + edit modes).
   const [logFormOpen, setLogFormOpen] = useState(false);
@@ -1084,7 +1090,7 @@ export default function MaintenancePage() {
     });
   }, [logs, query]);
 
-  const counts = { dashboard: summary.length, logs: logs.length };
+  const counts = { dashboard: summary.length, logs: logs.length, schedules: schedulesCount };
 
   const KPIs = (
     <div className="flex flex-wrap gap-3 px-6 pt-4 pb-2">
@@ -1215,7 +1221,7 @@ export default function MaintenancePage() {
               ))}
             </div>
           )
-        ) : (
+        ) : tab === 'logs' ? (
           <>
             <div className="px-4 mt-3 flex flex-col gap-2">
               <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-2">
@@ -1276,6 +1282,8 @@ export default function MaintenancePage() {
               </ul>
             )}
           </>
+        ) : (
+          <SchedulesSection printers={printers} isMobile onCountChange={setSchedulesCount} />
         )}
         <button
           type="button"
@@ -1410,7 +1418,7 @@ export default function MaintenancePage() {
             ))}
           </div>
         )
-      ) : (
+      ) : tab === 'logs' ? (
         <div className="flex flex-col">
           <div className="flex flex-wrap gap-3 items-center px-6 py-3 sticky top-0 bg-forge-black/80 backdrop-blur z-10">
             <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 min-w-[260px] basis-[280px] flex-1 max-w-md">
@@ -1483,6 +1491,8 @@ export default function MaintenancePage() {
             </div>
           )}
         </div>
+      ) : (
+        <SchedulesSection printers={printers} isMobile={false} onCountChange={setSchedulesCount} />
       )}
 
       <DetailDrawer

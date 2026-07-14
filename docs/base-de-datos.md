@@ -71,7 +71,8 @@ Las migraciones están en `backend/alembic/versions/`. Se aplican con `alembic u
 | `2787aa619580` | `2787aa619580_vault_photos_notes_failure_reason.py` | Tabla `model_file_photos`, `model_files.notes`, `print_queue.failure_reason`/`failure_category` (issue #130) |
 | `68c641f83b25` | `68c641f83b25_queue_batch_schedule.py` | `print_queue.batch_id` + `scheduled_at` (issue #133) |
 | `82717e0701b3` | `82717e0701b3_print_queue_created_by.py` | `print_queue.created_by` FK→users (issue #131) |
-| `8422a0c213e9` | `8422a0c213e9_inventory_spools.py` | **Head actual** — Tabla `spools`, `print_queue.spool_id`, `app_settings.spool_low_stock_threshold_g` (issue #134) |
+| `8422a0c213e9` | `8422a0c213e9_inventory_spools.py` | Tabla `spools`, `print_queue.spool_id`, `app_settings.spool_low_stock_threshold_g` (issue #134) |
+| `9533b1d4f6a2` | `9533b1d4f6a2_maintenance_schedules.py` | **Head actual** — Tabla `maintenance_schedules` (recordatorios de mantenimiento por intervalo, issue #138) |
 
 **Aplicar todas las migraciones:**
 ```bash
@@ -318,6 +319,36 @@ Singleton — solo hay una fila (se consulta con `LIMIT 1`).
 | `log_id` | INTEGER FK → maintenance_logs | — |
 | `inventory_item_id` | UUID FK → inventory_items | Ítem usado |
 | `quantity` | NUMERIC(12,4) | Cantidad usada (se descuenta del stock) |
+
+### `maintenance_schedules` (issue #138)
+
+Recordatorio recurrente de mantenimiento por impresora (ej. "Lubricar ejes
+XY cada 300h"). El progreso hacia el vencimiento (`progress_pct`, `status`)
+se calcula en el response del endpoint, no se persiste como columna.
+
+Baseline al crear un schedule nuevo: `last_done_at = created_at` y
+`last_done_hours = printer.current_hours` al momento de la creación —
+el progreso arranca en 0% sin necesitar NULL-handling especial.
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `printer_id` | INTEGER FK → printers CASCADE | — |
+| `task_name` | VARCHAR(120) | Nombre de la tarea. Ej: "Lubricar ejes XY" |
+| `description` | VARCHAR(500) NULL | — |
+| `interval_type` | VARCHAR(12) | `'print_hours'` o `'days'` (CHECK) |
+| `interval_value` | NUMERIC(8,1) | Magnitud del intervalo. > 0 (CHECK) |
+| `last_done_at` | TIMESTAMP | Fecha del último "hecho" |
+| `last_done_hours` | NUMERIC(10,2) | Horas de la impresora en el último "hecho" |
+| `enabled` | BOOLEAN | Si cuenta para vencidos/badges. Default `true` |
+| `last_notified_at` | TIMESTAMP NULL | Última notificación `maintenance.due` emitida (issue #137, evita spam) |
+| `created_at` / `updated_at` | TIMESTAMP | — |
+
+Al crear un `maintenance_logs` manual, los schedules habilitados de esa
+impresora cuyo `task_name` coincide (case-insensitive) con
+`maintenance_type`, o cuyo id esté en el parámetro `schedule_ids` del
+POST, se resetean (`last_done_at`/`last_done_hours`) en la misma
+transacción.
 
 ### `model_files`
 
