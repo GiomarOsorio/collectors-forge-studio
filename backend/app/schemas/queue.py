@@ -9,11 +9,12 @@ Cada response trae uno de los dos no-nulo (los items pre-existentes solo
 traen `quote`; los nuevos desde el picker traen `vault`).
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Annotated, Literal, Optional
+from typing import Annotated, List, Literal, Optional
+from uuid import UUID
 
-from pydantic import BaseModel, Field, PlainSerializer
+from pydantic import BaseModel, Field, PlainSerializer, model_validator
 
 #: Categorías de motivo de fallo (issue #130) — alimentan el historial
 #: por modelo del Vault y el futuro epic de Stats.
@@ -48,6 +49,11 @@ class PrintQueueItemFromVaultCreate(BaseModel):
     quantity: int = Field(default=1, ge=1, le=999)
     notes: Optional[str] = None
     project_id: Optional[int] = None
+    #: Si True y quantity > 1, crea `quantity` items independientes
+    #: (quantity=1 cada uno) compartiendo un `batch_id` autogenerado, en
+    #: vez de un solo item con quantity=N. Permite repartir copias entre
+    #: impresoras/horarios distintos (issue #133).
+    split_copies: bool = False
 
 
 class QueueQuoteSnapshot(BaseModel):
@@ -99,11 +105,26 @@ class PrintQueueItemResponse(BaseModel):
     notes: Optional[str]
     failure_reason: Optional[str] = None
     failure_category: Optional[FailureCategory] = None
+    batch_id: Optional[UUID] = None
+    scheduled_at: Optional[datetime] = None
+    #: Calculado (no vive en BD): True si `scheduled_at` ya pasó y el item
+    #: sigue `pending`. Puramente informativo — no bloquea nada.
+    overdue: bool = False
     created_at: datetime
     quote: Optional[QueueQuoteSnapshot] = None
     vault: Optional[QueueVaultSnapshot] = None
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def _compute_overdue(self) -> "PrintQueueItemResponse":
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        self.overdue = (
+            self.status == "pending"
+            and self.scheduled_at is not None
+            and self.scheduled_at < now
+        )
+        return self
 
 
 class PrintQueueStatusUpdate(BaseModel):
@@ -124,3 +145,27 @@ class PrintQueueProjectUpdate(BaseModel):
     """Payload para (re)asignar o quitar el proyecto de un ítem ya encolado."""
 
     project_id: Optional[int] = None
+
+
+class QueueReorderRequest(BaseModel):
+    """
+    Payload para reordenar la cola por drag-and-drop.
+
+    `item_ids` es la lista COMPLETA de ids pending en el nuevo orden — el
+    backend asigna `position` = índice en la lista. Todos deben existir y
+    estar en estado `pending`.
+    """
+
+    item_ids: List[int] = Field(min_length=1)
+
+
+class QueueBatchCreateRequest(BaseModel):
+    """Payload para agrupar ≥2 items pending como lote."""
+
+    item_ids: List[int] = Field(min_length=2)
+
+
+class QueueScheduleUpdate(BaseModel):
+    """Payload para programar (o quitar programación de) un ítem."""
+
+    scheduled_at: Optional[datetime] = None

@@ -790,6 +790,49 @@ Elimina un ítem de la cola (solo si está en estado `pending` o `cancelled`).
 ### `GET /queue/history`
 Lista los últimos 50 ítems completados o cancelados.
 
+### Queue avanzada (issue #133)
+
+#### `PUT /queue/reorder`
+Reordena la cola de `pending` por drag-and-drop. `item_ids` debe ser la lista
+COMPLETA de ids `pending` actuales, en el nuevo orden — se valida que sea
+exactamente el mismo conjunto antes de aplicar ningún cambio.
+
+**Body:**
+```json
+{ "item_ids": [3, 1, 2] }
+```
+
+#### `POST /queue/batch`
+Agrupa ≥2 ítems `pending` como lote — asigna un `batch_id` (UUID) nuevo y
+compartido a todos.
+
+**Body:**
+```json
+{ "item_ids": [1, 2, 3] }
+```
+
+#### `DELETE /queue/batch/{batch_id}`
+Desagrupa un lote — pone `batch_id=NULL` a todos sus miembros.
+
+#### `POST /queue/{id}/duplicate`
+Clona un ítem de la cola (de cualquier estado) como uno nuevo `pending` al
+final de la cola.
+
+#### `PUT /queue/{id}/schedule`
+Programa (o quita programación de, con `scheduled_at: null`) un ítem.
+Puramente organizativo — no dispara nada automático.
+
+**Body:**
+```json
+{ "scheduled_at": "2026-08-01T10:00:00" }
+```
+
+#### `split_copies` en `POST /queue/from-vault`
+Si `split_copies: true` y `quantity > 1`, crea `quantity` items
+independientes (`quantity=1` cada uno) con un `batch_id` compartido, en vez
+de un solo item con `quantity=N` — permite repartir las copias entre
+impresoras/horarios distintos.
+
 ---
 
 ## Vault de modelos .3mf

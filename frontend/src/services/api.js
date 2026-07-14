@@ -688,6 +688,25 @@ export const updateQueueStatus = (id, data) => api.put(`/queue/${id}/status`, da
 /** Elimina un ítem de la cola (solo si pending o cancelled). */
 export const deleteQueueItem = (id) => api.delete(`/queue/${id}`);
 
+/**
+ * Reordena la cola por drag-and-drop (issue #133). `itemIds` debe ser la
+ * lista COMPLETA de ids `pending` actuales, en el nuevo orden deseado.
+ */
+export const reorderQueue = (itemIds) => api.put('/queue/reorder', { item_ids: itemIds });
+
+/** Agrupa ≥2 ítems pending como lote — devuelve los items con batch_id asignado. */
+export const createQueueBatch = (itemIds) => api.post('/queue/batch', { item_ids: itemIds });
+
+/** Desagrupa un lote — pone batch_id=NULL a todos sus miembros. */
+export const deleteQueueBatch = (batchId) => api.delete(`/queue/batch/${batchId}`);
+
+/** Clona un ítem de la cola como uno nuevo pending al final. */
+export const duplicateQueueItem = (id) => api.post(`/queue/${id}/duplicate`);
+
+/** Programa (o quita programación de, con `null`) un ítem. Puramente organizativo. */
+export const scheduleQueueItem = (id, scheduledAt) =>
+  api.put(`/queue/${id}/schedule`, { scheduled_at: scheduledAt });
+
 // ============================================================================
 // Vault — archivos .3mf
 // ============================================================================
