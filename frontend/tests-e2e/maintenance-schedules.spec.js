@@ -60,7 +60,7 @@ test.describe('Mantenimiento — Recordatorios (issue #138)', () => {
 
     await page.getByRole('button', { name: /Programados/i }).click();
     await expect(page.getByText('Lubricar ejes XY')).toBeVisible();
-    await expect(page.getByText('Vencido')).toBeVisible();
+    await expect(page.getByText('Vencido', { exact: true })).toBeVisible();
   });
 
   test('alta masiva desde preset dispara la request con el payload correcto', async ({ page }) => {
