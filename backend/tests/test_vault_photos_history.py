@@ -18,6 +18,8 @@ Cubre:
     - print_count en el listado (GET /) agregado sin N+1
 """
 
+from datetime import datetime, timezone
+from itertools import count
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -84,6 +86,16 @@ def _fake_db_with_model(model):
         result = MagicMock()
         result.scalar_one_or_none.return_value = model
         session.execute = AsyncMock(return_value=result)
+
+        ids = count(1)
+
+        async def _refresh(obj):
+            if getattr(obj, "id", None) is None:
+                obj.id = next(ids)
+            if getattr(obj, "created_at", None) is None:
+                obj.created_at = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        session.refresh = _refresh
         yield session
 
     return _gen
