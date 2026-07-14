@@ -74,8 +74,12 @@ test.describe('Queue — reorder drag-and-drop y tabs (issue #133)', () => {
   });
 
   test('arrastra el primer item al final de la cola', async ({ page }, testInfo) => {
-    // dragTo() simula mouse events — el soporte táctil de dnd-kit en el
-    // viewport mobile no se ejerce igual; cubierto solo en desktop.
+    // dnd-kit escucha pointermove crudos con activationConstraint.distance;
+    // locator.dragTo() mueve el mouse en muy pocos pasos y no dispara
+    // suficientes eventos intermedios para que el sensor registre el drag
+    // (patrón conocido dnd-kit+Playwright). Simulamos el gesto a mano con
+    // mouse.move() en varios pasos pequeños. Táctil en mobile no se ejerce
+    // igual — cubierto solo en desktop.
     test.skip(testInfo.project.name === 'mobile-iphone12', 'drag-drop cubierto solo en desktop');
 
     await page.goto('/queue');
@@ -88,7 +92,26 @@ test.describe('Queue — reorder drag-and-drop y tabs (issue #133)', () => {
 
     const handles = page.locator('[aria-label="Arrastrar para reordenar"]');
     await expect(handles).toHaveCount(3);
-    await handles.first().dragTo(handles.last());
+
+    const source = await handles.first().boundingBox();
+    const target = await handles.last().boundingBox();
+    const start = { x: source.x + source.width / 2, y: source.y + source.height / 2 };
+    const end = { x: target.x + target.width / 2, y: target.y + target.height / 2 };
+
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    // Primer micro-movimiento para superar activationConstraint.distance (5px).
+    await page.mouse.move(start.x, start.y + 8, { steps: 3 });
+    const STEPS = 12;
+    for (let i = 1; i <= STEPS; i += 1) {
+      await page.mouse.move(
+        start.x + ((end.x - start.x) * i) / STEPS,
+        start.y + ((end.y - start.y) * i) / STEPS,
+        { steps: 3 },
+      );
+      await page.waitForTimeout(40);
+    }
+    await page.mouse.up();
 
     const req = await reorderRequest;
     const body = req.postDataJSON();
