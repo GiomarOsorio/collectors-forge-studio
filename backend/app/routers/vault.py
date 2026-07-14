@@ -30,6 +30,12 @@ Endpoints:
     GET    /api/vault/{id}/download/source   — Descargar el .3mf/.stl editable
     GET    /api/vault/{id}/download/print    — Descargar el .gcode.3mf laminado
     GET    /api/vault/{id}/gcode-content     — Extraer el G-code plano del plate activo (visor)
+    GET    /api/vault/{id}/print-history     — Historial de impresiones del modelo + gramos/tasa de éxito
+    GET    /api/vault/{id}/photos            — Listar fotos adjuntas
+    POST   /api/vault/{id}/photos            — Subir hasta 5 fotos (admin)
+    PATCH  /api/vault/{id}/photos/{photo_id} — Editar caption de una foto (admin)
+    GET    /api/vault/{id}/photos/{photo_id} — Servir el binario de una foto
+    DELETE /api/vault/{id}/photos/{photo_id} — Eliminar una foto (admin)
     PUT    /api/vault/{id}                   — Editar metadata (admin)
     POST   /api/vault/{id}/replace/source    — Reemplazar el .3mf/.stl editable (admin)
     POST   /api/vault/{id}/replace/print     — Reemplazar el .gcode.3mf laminado (admin)
@@ -47,7 +53,7 @@ import zipfile
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
@@ -57,14 +63,22 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database import get_db
+from app.models.inventory import InventoryItem
 from app.models.model_file import ModelFile, ModelFilePlate
+from app.models.model_file_photo import ModelFilePhoto
+from app.models.printer import Printer
+from app.models.queue import PrintQueueItem
 from app.models.user import User
 from app.models.vault_folder import VaultFolder
 from app.models.vault_tag import VaultTag, model_file_tags
 from app.schemas.vault import (
     ModelFileListResponse,
+    ModelFilePhotoCaptionUpdate,
+    ModelFilePhotoResponse,
     ModelFileResponse,
     ModelFileUpdate,
+    PrintHistoryEntry,
+    PrintHistoryResponse,
     VaultMetadataRequest,
     VaultMetadataResponse,
     VaultStatsResponse,
@@ -87,6 +101,7 @@ from app.services.thumbnail_extractor import (
     save_thumbnail,
     thumbnail_key_for_plate,
 )
+from app.services.formatters import IMAGE_EXT_MAP, IMAGE_MAGIC_CHECKS
 from app.services.stl_thumbnail import render_stl_thumbnail
 from app.services.vault_metadata import fetch_metadata
 from app.services.vault_storage import delete_file, download_file, upload_file
@@ -160,7 +175,9 @@ async def _get_used_bytes(db: AsyncSession) -> int:
     return result.scalar() or 0
 
 
-def _to_response(model: ModelFile, username: Optional[str]) -> ModelFileResponse:
+def _to_response(
+    model: ModelFile, username: Optional[str], print_count: int = 0
+) -> ModelFileResponse:
     # Si el modelo tiene un thumbnail en MinIO, exponemos al frontend la
     # URL del endpoint proxy que lo sirve (con `updated_at` como
     # cache-buster). Si no tiene, queda None y el frontend cae al
@@ -204,6 +221,8 @@ def _to_response(model: ModelFile, username: Optional[str]) -> ModelFileResponse
         tags=[t.name for t in (model.tags or [])],
         source_url=model.source_url,
         source_platform=model.source_platform,
+        notes=model.notes,
+        print_count=print_count,
         creator_name=model.creator_name,
         creator_url=model.creator_url,
         folder_id=model.folder_id,
@@ -539,8 +558,26 @@ async def list_vault_files(
         )
         usernames = {row.id: row.username for row in users_result}
 
+    # Badge "N impresiones" (issue #130) — un solo query agregado con
+    # GROUP BY para todos los modelos de esta página, no un COUNT por fila.
+    model_ids = [m.id for m in models]
+    print_counts: dict = {}
+    if model_ids:
+        pc_result = await db.execute(
+            select(PrintQueueItem.vault_model_id, func.count())
+            .where(
+                PrintQueueItem.vault_model_id.in_(model_ids),
+                PrintQueueItem.status.in_(("done", "cancelled", "printing")),
+            )
+            .group_by(PrintQueueItem.vault_model_id)
+        )
+        print_counts = {row[0]: row[1] for row in pc_result.all()}
+
     return ModelFileListResponse(
-        items=[_to_response(m, usernames.get(m.uploaded_by)) for m in models],
+        items=[
+            _to_response(m, usernames.get(m.uploaded_by), print_counts.get(m.id, 0))
+            for m in models
+        ],
         total=total,
         page=page,
         page_size=page_size,
@@ -1330,6 +1367,265 @@ async def get_vault_plate_thumbnail(
         media_type="image/png",
         headers={"Cache-Control": "public, max-age=86400"},
     )
+
+
+# ─── Historial de impresiones por modelo (issue #130) ───────────────────────
+
+
+@router.get("/{file_id}/print-history", response_model=PrintHistoryResponse)
+async def get_vault_print_history(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Historial de impresiones de un modelo del Vault: todas las filas
+    `done` / `cancelled` / `printing` de la cola que lo referencian, más
+    recientes primero, con gramos totales y tasa de éxito agregados
+    (`done` / (`done` + `cancelled`) — `printing` no cuenta para la tasa,
+    aún no terminó).
+    """
+    await _get_model_file(db, file_id)  # 404 si el modelo no existe
+
+    items_result = await db.execute(
+        select(PrintQueueItem)
+        .where(
+            PrintQueueItem.vault_model_id == file_id,
+            PrintQueueItem.status.in_(("done", "cancelled", "printing")),
+        )
+        .order_by(PrintQueueItem.created_at.desc())
+    )
+    items = items_result.scalars().all()
+
+    printer_ids = {i.printer_id for i in items if i.printer_id is not None}
+    printers_by_id: dict = {}
+    if printer_ids:
+        p_result = await db.execute(select(Printer).where(Printer.id.in_(printer_ids)))
+        printers_by_id = {p.id: p for p in p_result.scalars().all()}
+
+    filament_ids = {i.filament_id for i in items if i.filament_id is not None}
+    filaments_by_id: dict = {}
+    if filament_ids:
+        f_result = await db.execute(
+            select(InventoryItem).where(InventoryItem.id.in_(filament_ids))
+        )
+        filaments_by_id = {f.id: f for f in f_result.scalars().all()}
+
+    entries = []
+    total_grams = Decimal("0")
+    done_count = 0
+    terminal_count = 0
+    for i in items:
+        printer = printers_by_id.get(i.printer_id) if i.printer_id else None
+        fil = filaments_by_id.get(i.filament_id) if i.filament_id else None
+        qty = i.quantity or 1
+        if i.weight_grams is not None:
+            total_grams += i.weight_grams * qty
+        if i.status in ("done", "cancelled"):
+            terminal_count += 1
+            if i.status == "done":
+                done_count += 1
+        entries.append(
+            PrintHistoryEntry(
+                id=i.id,
+                status=i.status,
+                quantity=qty,
+                piece_name=i.piece_name,
+                printer_name=printer.name if printer else None,
+                filament_name=fil.name if fil else None,
+                weight_grams=i.weight_grams,
+                print_time_hours=i.print_time_hours,
+                failure_reason=i.failure_reason,
+                failure_category=i.failure_category,
+                created_at=i.created_at,
+                completed_at=i.completed_at,
+            )
+        )
+
+    success_rate = (done_count / terminal_count * 100) if terminal_count else None
+    return PrintHistoryResponse(
+        items=entries,
+        total_grams=float(total_grams),
+        success_rate_pct=success_rate,
+    )
+
+
+# ─── Fotos por modelo (issue #130) ───────────────────────────────────────────
+
+#: Mismo límite que printed_items.py — 10 MB por foto.
+MAX_PHOTO_BYTES = 10 * 1024 * 1024
+#: Tope de fotos por request — evita requests multipart gigantes.
+MAX_PHOTOS_PER_REQUEST = 5
+#: Prefix bajo el cual se guardan las fotos en el bucket MinIO.
+_PHOTO_PREFIX = "photos"
+#: Map de extensión a media_type devuelto al servir la foto.
+_PHOTO_MEDIA_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+}
+
+
+def _photo_to_response(photo: ModelFilePhoto) -> ModelFilePhotoResponse:
+    return ModelFilePhotoResponse(
+        id=photo.id,
+        caption=photo.caption,
+        photo_url=f"/api/vault/{photo.model_file_id}/photos/{photo.id}",
+        created_at=photo.created_at,
+    )
+
+
+async def _get_photo(db: AsyncSession, file_id: int, photo_id: int) -> ModelFilePhoto:
+    result = await db.execute(
+        select(ModelFilePhoto).where(
+            ModelFilePhoto.id == photo_id, ModelFilePhoto.model_file_id == file_id
+        )
+    )
+    photo = result.scalar_one_or_none()
+    if not photo:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Foto no encontrada")
+    return photo
+
+
+@router.get("/{file_id}/photos", response_model=List[ModelFilePhotoResponse])
+async def list_vault_photos(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Lista las fotos adjuntas a un modelo, más recientes primero."""
+    await _get_model_file(db, file_id)
+    result = await db.execute(
+        select(ModelFilePhoto)
+        .where(ModelFilePhoto.model_file_id == file_id)
+        .order_by(ModelFilePhoto.created_at.desc())
+    )
+    return [_photo_to_response(p) for p in result.scalars().all()]
+
+
+@router.post(
+    "/{file_id}/photos",
+    response_model=List[ModelFilePhotoResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_vault_photos(
+    file_id: int,
+    files: List[UploadFile] = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """
+    Sube hasta `MAX_PHOTOS_PER_REQUEST` fotos para un modelo. Cada una se
+    guarda como fila independiente (aditivo — no reemplaza fotos previas).
+    Mismo criterio de validación que `printed_items.py`: content-type
+    declarado + magic bytes reales (evita spoofing de MIME), 10 MB máx.
+    """
+    await _get_model_file(db, file_id)  # 404 si el modelo no existe
+
+    if len(files) > MAX_PHOTOS_PER_REQUEST:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Máximo {MAX_PHOTOS_PER_REQUEST} fotos por request",
+        )
+
+    allowed_content_types = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+    created: list = []
+    for file in files:
+        if file.content_type not in allowed_content_types:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Tipo de archivo no permitido: {file.content_type}. "
+                       f"Use JPEG, PNG, WebP o GIF.",
+            )
+        content = await file.read()
+        if len(content) > MAX_PHOTO_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"'{file.filename}' supera el límite de 10 MB",
+            )
+        check = IMAGE_MAGIC_CHECKS.get(file.content_type)
+        if not content or (check and not check(content)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"'{file.filename}' no es una imagen válida.",
+            )
+
+        extension = IMAGE_EXT_MAP.get(file.content_type, ".jpg")
+        key = f"{_PHOTO_PREFIX}/{file_id}/{uuid.uuid4()}{extension}"
+        await upload_file(key, content, content_type=file.content_type)
+
+        photo = ModelFilePhoto(model_file_id=file_id, minio_key=key)
+        db.add(photo)
+        created.append(photo)
+
+    await db.commit()
+    for photo in created:
+        await db.refresh(photo)
+    return [_photo_to_response(p) for p in created]
+
+
+@router.patch("/{file_id}/photos/{photo_id}", response_model=ModelFilePhotoResponse)
+async def update_vault_photo_caption(
+    file_id: int,
+    photo_id: int,
+    data: ModelFilePhotoCaptionUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """Edita el caption de una foto ya subida."""
+    photo = await _get_photo(db, file_id, photo_id)
+    photo.caption = data.caption
+    await db.commit()
+    await db.refresh(photo)
+    return _photo_to_response(photo)
+
+
+@router.get("/{file_id}/photos/{photo_id}")
+async def get_vault_photo(
+    file_id: int,
+    photo_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Sirve el binario de la foto desde MinIO. Endpoint **público** (mismo
+    razonamiento que el thumbnail: los `<img>` tags no pueden enviar el
+    header `Authorization`).
+    """
+    photo = await _get_photo(db, file_id, photo_id)
+    try:
+        data = await download_file(photo.minio_key)
+    except Exception as exc:
+        logger.warning("No se pudo descargar foto %s: %s", photo.minio_key, exc)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Foto no disponible en almacenamiento",
+        ) from exc
+
+    ext = "." + photo.minio_key.rsplit(".", 1)[-1].lower() if "." in photo.minio_key else ".jpg"
+    media_type = _PHOTO_MEDIA_TYPES.get(ext, "image/jpeg")
+    return Response(
+        content=data,
+        media_type=media_type,
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+@router.delete("/{file_id}/photos/{photo_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_vault_photo(
+    file_id: int,
+    photo_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """Elimina una foto (BD + objeto MinIO)."""
+    photo = await _get_photo(db, file_id, photo_id)
+    await db.delete(photo)
+    await db.commit()
+    try:
+        await delete_file(photo.minio_key)
+    except Exception as exc:
+        logger.debug("No se pudo borrar foto %s de MinIO: %s", photo.minio_key, exc)
 
 
 @router.patch("/{file_id}/active-plate", response_model=ModelFileResponse)

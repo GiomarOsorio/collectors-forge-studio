@@ -71,6 +71,7 @@ class ModelFile(Base):
         source_platform: Plataforma de origen.
         creator_name:    Nombre del creador del modelo original.
         creator_url:     URL del perfil del creador.
+        notes:           Notas libres del modelo (issue #130), texto plano.
         created_at:      Timestamp UTC de creación.
         updated_at:      Timestamp UTC de última modificación.
     """
@@ -130,6 +131,8 @@ class ModelFile(Base):
     source_platform: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     creator_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     creator_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    # Notas libres del modelo (issue #130) — texto plano, sin markdown.
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime,

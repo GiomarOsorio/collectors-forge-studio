@@ -16,6 +16,7 @@ import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   Archive,
   Boxes,
+  Camera,
   ChevronRight,
   Download,
   FileBox,
@@ -38,8 +39,10 @@ import {
   Button,
   Card,
   DetailDrawer,
+  DropZone,
   EmptyState,
   KPI,
+  Lightbox,
   MobileSheet,
   StatusPill,
 } from '../../components/ui';
@@ -53,6 +56,7 @@ import {
   createVaultTag,
   deleteVaultFile,
   deleteVaultFolder,
+  deleteVaultPhoto,
   deleteVaultTag,
   setActiveVaultPlate,
   downloadVaultPrint,
@@ -60,13 +64,17 @@ import {
   getVaultFiles,
   getVaultFolders,
   getVaultGcodeContent,
+  getVaultPhotos,
+  getVaultPrintHistory,
   getVaultStats,
   getVaultTags,
   updateVaultFile,
   updateVaultFolder,
   updateVaultTag,
+  uploadVaultPhotos,
 } from '../../services/api';
 import { apiErrorMsg } from '../../utils/apiError';
+import { FAILURE_CATEGORY_LABELS } from '../../utils/failureCategories';
 import { getThumbnail } from '../../utils/thumbnail';
 
 const ACCENT = '#F43F5E';
@@ -340,7 +348,7 @@ function TagsManageModal({ tags, onClose, onCreate, onRename, onDelete }) {
 
 // ─── Card / row ─────────────────────────────────────────────────────────────
 
-function VaultCard({ file, onClick }) {
+function VaultCard({ file, onClick, onShowHistory }) {
   const thumb = getThumbnail(file);
   return (
     <Card as="button" interactive onClick={() => onClick(file)} className="text-left w-full overflow-hidden flex flex-col">
@@ -374,6 +382,29 @@ function VaultCard({ file, onClick }) {
               Solo editable
             </StatusPill>
           )}
+          {/* Badge "N impresiones" (issue #130) — span, no button, para no
+              anidar interactivos dentro del Card as="button". */}
+          {file.print_count > 0 && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                onShowHistory?.(file);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onShowHistory?.(file);
+                }
+              }}
+              className="mono text-[9.5px] px-1.5 py-0.5 rounded-full border border-[var(--color-border)] text-steel hover:text-tech-white hover:border-[var(--color-border-bright)] transition-colors cursor-pointer"
+              title="Ver historial de impresiones"
+            >
+              {file.print_count} {file.print_count === 1 ? 'impresión' : 'impresiones'}
+            </span>
+          )}
         </div>
         <p className="text-sm font-semibold text-tech-white truncate" title={file.name}>
           {file.name}
@@ -401,7 +432,7 @@ function VaultCard({ file, onClick }) {
   );
 }
 
-function VaultRow({ file, onClick }) {
+function VaultRow({ file, onClick, onShowHistory }) {
   const thumb = getThumbnail(file);
   return (
     <button
@@ -425,6 +456,27 @@ function VaultRow({ file, onClick }) {
             <StatusPill tone="done" icon={Printer}>Listo</StatusPill>
           ) : (
             <StatusPill tone="neutral" icon={FileBox}>Editable</StatusPill>
+          )}
+          {file.print_count > 0 && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                onShowHistory?.(file);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onShowHistory?.(file);
+                }
+              }}
+              className="mono text-[9.5px] px-1.5 py-0.5 rounded-full border border-[var(--color-border)] text-steel hover:text-tech-white transition-colors cursor-pointer"
+              title="Ver historial de impresiones"
+            >
+              {file.print_count}×
+            </span>
           )}
         </div>
         <p className="text-sm font-semibold text-tech-white truncate">{file.name}</p>
@@ -534,7 +586,6 @@ function GCodeViewerModal({ fileId, fileName, onClose }) {
       previewRef.current?.dispose?.();
       previewRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fileId]);
 
   // Slider de capas: no re-parsea el gcode, solo re-dibuja hasta `layer`.
@@ -596,6 +647,284 @@ function GCodeViewerModal({ fileId, fileName, onClose }) {
           </label>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Modal de historial de impresiones de un modelo del Vault (issue #130):
+ * todas las filas done/cancelled/printing que lo referencian + gramos
+ * totales y tasa de éxito agregados (calculados server-side).
+ */
+function PrintHistoryModal({ fileId, fileName, onClose }) {
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getVaultPrintHistory(fileId)
+      .then((res) => {
+        if (!cancelled) setData(res.data);
+      })
+      .catch((err) => {
+        if (!cancelled) toast.error(apiErrorMsg(err, 'No se pudo cargar el historial'));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fileId]);
+
+  const statusTone = { done: 'done', cancelled: 'danger', printing: 'printing' };
+  const items = data?.items || [];
+
+  return (
+    <div className="tf-modal-overlay" onClick={onClose}>
+      <div
+        className="bg-surf-panel border border-border-legacy rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-soft)] shrink-0">
+          <p className="text-sm font-semibold text-tech-white truncate">
+            Historial · {fileName}
+          </p>
+          <button type="button" onClick={onClose} className="text-gunmetal hover:text-tech-white" aria-label="Cerrar">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">
+          {loading ? (
+            <p className="text-sm text-gunmetal text-center py-8">Cargando…</p>
+          ) : items.length === 0 ? (
+            <p className="text-sm text-gunmetal text-center py-8">Sin impresiones registradas todavía.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[10.5px] uppercase tracking-wider text-gunmetal">
+                  <th className="pb-2 font-medium">Fecha</th>
+                  <th className="pb-2 font-medium">Estado</th>
+                  <th className="pb-2 font-medium">Impresora</th>
+                  <th className="pb-2 font-medium">Filamento</th>
+                  <th className="pb-2 font-medium text-right">Gramos</th>
+                  <th className="pb-2 font-medium">Motivo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((it) => (
+                  <tr key={it.id} className="border-t border-[var(--color-border-soft)]">
+                    <td className="py-2 mono text-[11px] text-steel whitespace-nowrap">
+                      {fmtDate(it.created_at)}
+                    </td>
+                    <td className="py-2">
+                      <StatusPill tone={statusTone[it.status] || 'neutral'}>{it.status}</StatusPill>
+                    </td>
+                    <td className="py-2 text-steel">{it.printer_name || '—'}</td>
+                    <td className="py-2 text-steel">{it.filament_name || '—'}</td>
+                    <td className="py-2 text-right mono text-steel whitespace-nowrap">
+                      {it.weight_grams != null ? `${Math.round(it.weight_grams * it.quantity)}g` : '—'}
+                    </td>
+                    <td className="py-2 text-steel text-xs">
+                      {it.failure_category ? (FAILURE_CATEGORY_LABELS[it.failure_category] || it.failure_category) : ''}
+                      {it.failure_reason ? ` — ${it.failure_reason}` : ''}
+                      {!it.failure_category && !it.failure_reason ? '—' : ''}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        {items.length > 0 && (
+          <div className="px-4 py-3 border-t border-[var(--color-border-soft)] flex items-center justify-between text-xs shrink-0">
+            <span className="mono text-steel">{Math.round(data.total_grams)}g totales</span>
+            {data.success_rate_pct != null && (
+              <span className="mono text-steel">{data.success_rate_pct.toFixed(0)}% de éxito</span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Sección de fotos del detalle del Vault (issue #130) — dropzone (drag&drop
+ * + click + paste del portapapeles), grid de miniaturas, lightbox, borrar.
+ * Gestiona su propio fetch (keyed por `fileId`) para no acoplar el estado
+ * de fotos al resto de `VaultDrawerBody`.
+ */
+/**
+ * Notas de un modelo del Vault (issue #130) — texto libre, admin edita,
+ * viewer lee. Sin markdown: `whitespace-pre-wrap` alcanza y evita sumar
+ * una librería nueva solo para esto.
+ *
+ * Montado con `key={file.id}` desde `VaultDrawerBody` para que el
+ * `useState` inicial se resetee al cambiar de archivo sin cerrar el
+ * drawer (cambiar de `file` no desmonta `VaultDrawerBody` — el
+ * early-return `if (!file) return null` de arriba impide poner hooks
+ * ahí directamente, así que esta sección vive aparte).
+ */
+function VaultNotesSection({ file, isAdmin }) {
+  const [value, setValue] = useState(file.notes || '');
+  const [saving, setSaving] = useState(false);
+  const dirty = value !== (file.notes || '');
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateVaultFile(file.id, { notes: value || null });
+      toast.success('Notas guardadas');
+    } catch (err) {
+      toast.error(apiErrorMsg(err, 'No se pudieron guardar las notas'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!isAdmin) {
+    if (!file.notes) return null;
+    return (
+      <div>
+        <span className="lbl-eyebrow text-[9px]">Notas</span>
+        <p className="text-sm text-steel whitespace-pre-wrap mt-1">{file.notes}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <span className="lbl-eyebrow text-[9px] mb-1 block">Notas</span>
+      <textarea
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        rows={3}
+        placeholder="Notas sobre este modelo (fallos, ajustes de impresión, etc.)"
+        className="tf-input resize-y"
+      />
+      {dirty && (
+        <div className="flex justify-end mt-1.5">
+          <Button variant="primary" size="sm" onClick={handleSave} disabled={saving}>
+            {saving ? 'Guardando…' : 'Guardar notas'}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VaultPhotosSection({ fileId, isAdmin }) {
+  const [photos, setPhotos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(null);
+
+  const load = () => {
+    setLoading(true);
+    getVaultPhotos(fileId)
+      .then((res) => setPhotos(res.data || []))
+      .catch(() => setPhotos([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileId]);
+
+  const handleFiles = async (fileList) => {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      await uploadVaultPhotos(fileId, files);
+      toast.success(files.length > 1 ? `${files.length} fotos subidas` : 'Foto subida');
+      load();
+    } catch (err) {
+      toast.error(apiErrorMsg(err, 'No se pudieron subir las fotos'));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Paste de imágenes desde el portapapeles — issue #130.
+  useEffect(() => {
+    const handlePaste = (e) => {
+      const items = Array.from(e.clipboardData?.items || []);
+      const imageFiles = items
+        .filter((it) => it.type.startsWith('image/'))
+        .map((it) => it.getAsFile())
+        .filter(Boolean);
+      if (imageFiles.length) handleFiles(imageFiles);
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileId]);
+
+  const handleDelete = async (photoId) => {
+    try {
+      await deleteVaultPhoto(fileId, photoId);
+      setPhotos((prev) => prev.filter((p) => p.id !== photoId));
+    } catch (err) {
+      toast.error(apiErrorMsg(err, 'No se pudo borrar la foto'));
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="lbl-eyebrow text-[9px]">Fotos{photos.length > 0 ? ` (${photos.length})` : ''}</span>
+      {photos.length > 0 && (
+        <div className="grid grid-cols-4 gap-1.5">
+          {photos.map((p, idx) => (
+            <div key={p.id} className="relative group aspect-square">
+              <button
+                type="button"
+                onClick={() => setLightboxIndex(idx)}
+                className="w-full h-full rounded-md overflow-hidden bg-[var(--color-surf-sidebar)] border border-[var(--color-border)]"
+              >
+                <img src={p.photo_url} alt={p.caption || ''} className="w-full h-full object-cover" />
+              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => handleDelete(p.id)}
+                  className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-black/60 text-white/80 opacity-0 group-hover:opacity-100 hover:text-rose-400 transition-opacity"
+                  aria-label="Eliminar foto"
+                  title="Eliminar foto"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {isAdmin && (
+        <DropZone
+          accept="image/*"
+          multiple
+          icon={Camera}
+          accent={ACCENT}
+          hint={uploading ? 'Subiendo…' : 'Suelta fotos, pega del portapapeles o pulsa'}
+          meta="JPEG / PNG / WebP / GIF · máx. 10MB c/u · hasta 5 por vez"
+          cta="Examinar fotos"
+          onFiles={handleFiles}
+        />
+      )}
+      {!isAdmin && !loading && photos.length === 0 && (
+        <p className="text-xs text-gunmetal">Sin fotos adjuntas.</p>
+      )}
+      {lightboxIndex !== null && (
+        <Lightbox
+          images={photos.map((p) => ({ url: p.photo_url, caption: p.caption }))}
+          index={lightboxIndex}
+          onIndexChange={setLightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
     </div>
   );
 }
@@ -817,6 +1146,8 @@ function VaultDrawerBody({ file, onActivePlateChange, isAdmin, folders, onMoveFi
           </div>
         </div>
       )}
+      <VaultNotesSection key={file.id} file={file} isAdmin={isAdmin} />
+      <VaultPhotosSection fileId={file.id} isAdmin={isAdmin} />
     </div>
   );
 }
@@ -921,6 +1252,7 @@ export default function VaultPage() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [gcodeViewerFile, setGcodeViewerFile] = useState(null);
+  const [historyModalFile, setHistoryModalFile] = useState(null);
 
   // Carpetas — `currentFolderId=null` es la raíz del Vault. `folders` es
   // la lista plana completa (para armar breadcrumb + subcarpetas + el
@@ -1392,7 +1724,7 @@ export default function VaultPage() {
             <ul className="mt-3">
               {files.map((f) => (
                 <li key={f.id}>
-                  <VaultRow file={f} onClick={setSelected} />
+                  <VaultRow file={f} onClick={setSelected} onShowHistory={setHistoryModalFile} />
                 </li>
               ))}
             </ul>
@@ -1572,7 +1904,7 @@ export default function VaultPage() {
             style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}
           >
             {files.map((f) => (
-              <VaultCard key={f.id} file={f} onClick={setSelected} />
+              <VaultCard key={f.id} file={f} onClick={setSelected} onShowHistory={setHistoryModalFile} />
             ))}
           </div>
           {totalPages > 1 && (
@@ -1707,6 +2039,13 @@ export default function VaultPage() {
           fileId={gcodeViewerFile.id}
           fileName={gcodeViewerFile.print_file_name || gcodeViewerFile.name}
           onClose={() => setGcodeViewerFile(null)}
+        />
+      )}
+      {historyModalFile && (
+        <PrintHistoryModal
+          fileId={historyModalFile.id}
+          fileName={historyModalFile.name}
+          onClose={() => setHistoryModalFile(null)}
         />
       )}
     </div>

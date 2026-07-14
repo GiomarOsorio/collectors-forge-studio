@@ -48,6 +48,7 @@ class ModelFileUpdate(BaseModel):
     creator_name: Optional[str] = Field(default=None, max_length=200)
     creator_url: Optional[str] = Field(default=None, max_length=1000)
     folder_id: Optional[int] = None
+    notes: Optional[str] = None
 
 
 class PlateInfo(BaseModel):
@@ -97,6 +98,11 @@ class ModelFileResponse(BaseModel):
     creator_name: Optional[str]
     creator_url: Optional[str]
     folder_id: Optional[int] = None
+    notes: Optional[str] = None
+    # Cuántos PrintQueueItem (done/cancelled/printing) referencian este
+    # modelo — badge "N impresiones" en el grid (issue #130). Se calcula
+    # con un outerjoin agregado en el listado, nunca query por archivo.
+    print_count: int = 0
 
     # Multi-plate (issue #68). `active_plate_index` indica cuál plate
     # actualmente sincroniza `sliced_*` + thumbnail principal.
@@ -125,6 +131,44 @@ class VaultStatsResponse(BaseModel):
     used_bytes: int
     quota_bytes: int
     percent: float
+
+
+class ModelFilePhotoResponse(BaseModel):
+    """Foto adjunta a un archivo del Vault (issue #130)."""
+    id: int
+    caption: Optional[str] = None
+    photo_url: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ModelFilePhotoCaptionUpdate(BaseModel):
+    """Payload para editar el caption de una foto ya subida."""
+    caption: Optional[str] = Field(default=None, max_length=300)
+
+
+class PrintHistoryEntry(BaseModel):
+    """Una fila del historial de impresiones de un modelo (issue #130)."""
+    id: int
+    status: str
+    quantity: int
+    piece_name: Optional[str] = None
+    printer_name: Optional[str] = None
+    filament_name: Optional[str] = None
+    weight_grams: Optional[DecimalAsFloat] = None
+    print_time_hours: Optional[DecimalAsFloat] = None
+    failure_reason: Optional[str] = None
+    failure_category: Optional[str] = None
+    created_at: datetime
+    completed_at: Optional[datetime] = None
+
+
+class PrintHistoryResponse(BaseModel):
+    """Historial completo + agregados de un modelo del Vault."""
+    items: List[PrintHistoryEntry]
+    total_grams: float
+    success_rate_pct: Optional[float] = None
 
 
 class VaultMetadataRequest(BaseModel):

@@ -17,6 +17,7 @@ export { default as ContextMenu } from './ContextMenu';
 export { default as DetailDrawer } from './DetailDrawer';
 export { default as Input } from './Input';
 export { default as KPI } from './KPI';
+export { default as Lightbox } from './Lightbox';
 export { default as MobileSheet } from './MobileSheet';
 export { default as Sparkline } from './Sparkline';
 export { default as Swatch } from './Swatch';
