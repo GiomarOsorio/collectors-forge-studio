@@ -13,7 +13,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AlertTriangle, Archive, Layers, Plus, Search, Weight, X } from 'lucide-react';
+import { AlertTriangle, Archive, Layers, Plus, Printer, Search, Weight, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   Button,
@@ -33,9 +33,11 @@ import {
   getInventoryItems,
   getSpools,
   getSpoolsLowStock,
+  printSpoolLabels,
   updateSpool,
 } from '../../services/api';
 import { FILAMENT_EFFECT_OPTIONS } from '../../utils/filamentSwatch';
+import LabelPrintModal from './components/LabelPrintModal';
 
 const ACCENT = '#F59E0B';
 
@@ -212,17 +214,24 @@ function EditSpoolBody({ form, setForm }) {
 
 // ─── Spool card ─────────────────────────────────────────────────────────────
 
-function SpoolCard({ spool, onEdit, onDelete, highlighted }) {
+function SpoolCard({ spool, onEdit, onDelete, highlighted, selected, onToggleSelect }) {
   const pct = spool.percent_remaining;
   const tone = percentTone(pct);
   const badge = statusBadge(spool.status);
   return (
     <Card
       as="div"
-      className={`p-4 flex flex-col gap-3 ${highlighted ? 'ring-2 ring-amber-400' : ''}`}
+      className={`p-4 flex flex-col gap-3 ${highlighted ? 'ring-2 ring-amber-400' : ''} ${selected ? 'ring-2 ring-amber-500/60' : ''}`}
       id={`spool-${spool.id}`}
     >
       <div className="flex items-start gap-3">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onToggleSelect(spool.id)}
+          aria-label={`Seleccionar ${spool.label_code}`}
+          className="mt-1 shrink-0"
+        />
         <FilamentSwatch
           rgba={spool.color_hex}
           extraColors={spool.extra_colors?.stops}
@@ -303,6 +312,11 @@ export default function InventorySpoolsPage() {
   const [editTarget, setEditTarget] = useState(null);
   const [editForm, setEditForm] = useState(null);
   const [editSaving, setEditSaving] = useState(false);
+
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [labelsOpen, setLabelsOpen] = useState(false);
+  const [labelsForm, setLabelsForm] = useState({ template: 'box_62x29', monochrome: false });
+  const [printing, setPrinting] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -433,6 +447,39 @@ export default function InventorySpoolsPage() {
     }
   };
 
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  /**
+   * Abre el PDF (con QR deep-link) en una pestaña nueva — el servidor
+   * manda `Content-Disposition: inline`, así que no forzamos descarga.
+   */
+  const handlePrintLabels = async () => {
+    setPrinting(true);
+    try {
+      const res = await printSpoolLabels({
+        spool_ids: [...selectedIds],
+        template: labelsForm.template,
+        monochrome: labelsForm.monochrome,
+      });
+      const url = URL.createObjectURL(res.data);
+      window.open(url, '_blank');
+      setLabelsOpen(false);
+    } catch (err) {
+      toast.error(err.response?.data?.detail ?? 'No se pudieron generar las etiquetas');
+    } finally {
+      setPrinting(false);
+    }
+  };
+
   const Filters = (
     <div className="flex flex-wrap gap-2 items-center">
       <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 min-w-[200px] flex-1 max-w-sm">
@@ -479,6 +526,18 @@ export default function InventorySpoolsPage() {
     </div>
   );
 
+  const SelectionBar = selectedIds.size > 0 && (
+    <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-md px-3 py-2">
+      <span className="text-xs text-amber-200 flex-1">
+        {selectedIds.size} bobina{selectedIds.size === 1 ? '' : 's'} seleccionada{selectedIds.size === 1 ? '' : 's'}
+      </span>
+      <Button variant="ghost" size="sm" onClick={clearSelection}>Cancelar</Button>
+      <Button variant="primary" size="sm" icon={Printer} onClick={() => setLabelsOpen(true)}>
+        Imprimir etiquetas
+      </Button>
+    </div>
+  );
+
   const Grid = loading ? (
     <p className="py-16 text-center text-gunmetal text-sm">Cargando bobinas…</p>
   ) : spools.length === 0 ? (
@@ -502,6 +561,8 @@ export default function InventorySpoolsPage() {
           onEdit={openEdit}
           onDelete={handleDelete}
           highlighted={String(s.id) === highlightId}
+          selected={selectedIds.has(s.id)}
+          onToggleSelect={toggleSelect}
         />
       ))}
     </div>
@@ -537,6 +598,21 @@ export default function InventorySpoolsPage() {
     </>
   );
 
+  const LabelsFooter = (
+    <>
+      <Button variant="ghost" size="sm" onClick={() => setLabelsOpen(false)} className="flex-1 justify-center">
+        Cancelar
+      </Button>
+      <Button
+        variant="primary" size="sm" onClick={handlePrintLabels}
+        disabled={printing || selectedIds.size === 0}
+        className="flex-1 justify-center"
+      >
+        {printing ? 'Generando…' : 'Imprimir'}
+      </Button>
+    </>
+  );
+
   if (isMobile) {
     return (
       <div className="flex flex-col gap-3">
@@ -544,6 +620,7 @@ export default function InventorySpoolsPage() {
         <div className="px-4 flex flex-col gap-3">
           {LowStockBanner}
           {Filters}
+          {SelectionBar}
         </div>
         <div className="px-4 pb-6">{Grid}</div>
 
@@ -570,6 +647,17 @@ export default function InventorySpoolsPage() {
             </div>
           )}
         </MobileSheet>
+
+        <MobileSheet open={labelsOpen} onClose={() => setLabelsOpen(false)} title="Imprimir etiquetas" height="full">
+          <div className="px-5 pt-4 pb-3">
+            <LabelPrintModal form={labelsForm} setForm={setLabelsForm} count={selectedIds.size} />
+          </div>
+          {labelsOpen && (
+            <div className="px-5 pt-3 pb-5 border-t border-[var(--color-border-soft)] flex gap-2 sticky bottom-0 bg-[var(--color-surf-sidebar)]">
+              {LabelsFooter}
+            </div>
+          )}
+        </MobileSheet>
       </div>
     );
   }
@@ -589,6 +677,7 @@ export default function InventorySpoolsPage() {
       </header>
       {LowStockBanner}
       {Filters}
+      {SelectionBar}
       {Grid}
 
       <DetailDrawer
@@ -617,6 +706,17 @@ export default function InventorySpoolsPage() {
             <EditSpoolBody form={editForm} setForm={setEditForm} />
           </form>
         )}
+      </DetailDrawer>
+
+      <DetailDrawer
+        open={labelsOpen}
+        onClose={() => setLabelsOpen(false)}
+        eyebrow="INVENTARIO · BOBINAS"
+        title="Imprimir etiquetas"
+        width={460}
+        footer={LabelsFooter}
+      >
+        <LabelPrintModal form={labelsForm} setForm={setLabelsForm} count={selectedIds.size} />
       </DetailDrawer>
     </div>
   );

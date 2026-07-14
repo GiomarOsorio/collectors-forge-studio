@@ -73,6 +73,14 @@ class Settings(BaseSettings):
     MINIO_BUCKET: str = "cfs-models"
     VAULT_QUOTA_GB: int = 50
 
+    # URL pública de la instancia (issue #135) — el deep-link del QR de las
+    # etiquetas de bobinas necesita la URL que un teléfono puede alcanzar de
+    # verdad. En prod, `request.url` cae detrás del Cloudflare Tunnel y
+    # puede resolver a una dirección interna; con PUBLIC_URL seteado se usa
+    # ese valor en vez de adivinar desde el request. Vacío = usar
+    # `request.url.scheme://request.url.netloc` (suficiente en dev).
+    PUBLIC_URL: str = ""
+
     model_config = {"env_file": ".env"}
 
     @model_validator(mode="after")

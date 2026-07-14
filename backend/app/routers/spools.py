@@ -7,21 +7,25 @@ Endpoints bajo el prefijo /api/inventory/spools:
     PUT    /{id}        — Editar (peso manual, stops, efecto, notas, status).
     DELETE /{id}        — (admin) solo si ningún item de la cola 'printing' la referencia.
     GET    /low-stock   — Agregado de gramos restantes por tipo de filamento vs. umbral.
+    POST   /labels      — Etiquetas PDF con QR (issue #135).
 
 El consumo automático al marcar un `PrintQueueItem` como 'done' vive en
 `routers/queue.py` (`_deduct_vault_item`) — ver docstring de `Spool` para
 la regla completa de sincronía con el stock agregado.
 """
 
+import io
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings as app_config
 from app.database import get_db
 from app.models.inventory import InventoryItem
 from app.models.queue import PrintQueueItem
@@ -30,11 +34,13 @@ from app.models.spool import Spool
 from app.models.user import User
 from app.schemas.spool import (
     SpoolCreate,
+    SpoolLabelsRequest,
     SpoolLowStockEntry,
     SpoolResponse,
     SpoolUpdate,
 )
 from app.services.auth import get_admin_user, get_current_user, get_operator_user
+from app.services.label_renderer import LabelData, render_labels
 
 router = APIRouter(prefix="/api/inventory/spools", tags=["inventory-spools"])
 
@@ -266,3 +272,89 @@ async def delete_spool(
 
     await db.delete(spool)
     await db.commit()
+
+
+# ─── Etiquetas PDF con QR (issue #135) ─────────────────────────────────────
+
+def _resolve_deeplink_base(request: Request) -> str:
+    """
+    Dónde debe apuntar el QR. Prioriza `PUBLIC_URL` (settings) para que un
+    escaneo desde el teléfono llegue a la URL pública real y no a una
+    dirección interna detrás del Cloudflare Tunnel; cae al scheme+host del
+    propio request cuando no está configurado (suficiente en dev).
+    """
+    public_url = (app_config.PUBLIC_URL or "").strip().rstrip("/")
+    if public_url:
+        return public_url
+    return f"{request.url.scheme}://{request.url.netloc}"
+
+
+def _spool_to_label_data(spool: Spool, item: InventoryItem, deeplink_base: str) -> LabelData:
+    """
+    Mapea Spool + su InventoryItem padre a `LabelData`. A diferencia de
+    bambuddy (que pinta `spool_id` numérico), CFS usa `label_code`
+    (ej. "SP-0042") — más legible y ya es el identificador que el resto
+    de la UI muestra para una bobina.
+    """
+    name = item.color_name or item.filament_type or item.name
+    extra_colors = None
+    if spool.extra_colors:
+        extra_colors = spool.extra_colors.get("stops") or None
+    return LabelData(
+        label_code=spool.label_code,
+        name=name,
+        material=item.filament_type or "",
+        brand=item.filament_brand,
+        subtype=item.filament_subtype,
+        rgba=(item.color_hex or "").lstrip("#") or None,
+        extra_colors=extra_colors,
+        storage_location=item.location,
+        deeplink_url=f"{deeplink_base}/inventory/spools?spool={spool.id}",
+    )
+
+
+@router.post("/labels")
+async def print_spool_labels(
+    data: SpoolLabelsRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Genera un PDF de etiquetas (con QR deep-link) para las bobinas pedidas.
+
+    Preserva el ORDEN de `spool_ids` en el PDF resultante — para que una
+    hoja Avery coincida con el orden en que el usuario las seleccionó en
+    pantalla. 404 si algún id no existe, listando los faltantes.
+    """
+    result = await db.execute(select(Spool).where(Spool.id.in_(data.spool_ids)))
+    spools = result.scalars().all()
+
+    found_ids = {s.id for s in spools}
+    missing = [sid for sid in data.spool_ids if sid not in found_ids]
+    if missing:
+        raise HTTPException(status_code=404, detail=f"Bobina(s) no encontrada(s): {missing}")
+
+    ordered = sorted(spools, key=lambda s: data.spool_ids.index(s.id))
+
+    item_ids = {s.inventory_item_id for s in ordered}
+    items_result = await db.execute(select(InventoryItem).where(InventoryItem.id.in_(item_ids)))
+    items_by_id = {i.id: i for i in items_result.scalars().all()}
+
+    deeplink_base = _resolve_deeplink_base(request)
+    label_data = [
+        _spool_to_label_data(s, items_by_id[s.inventory_item_id], deeplink_base)
+        for s in ordered
+        if s.inventory_item_id in items_by_id
+    ]
+
+    pdf = render_labels(data.template, label_data, monochrome=data.monochrome)
+    return StreamingResponse(
+        io.BytesIO(pdf),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"inline; filename=cfs-labels-{data.template}.pdf",
+            "Content-Length": str(len(pdf)),
+            "Cache-Control": "no-store",
+        },
+    )

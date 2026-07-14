@@ -105,3 +105,21 @@ class SpoolLowStockEntry(BaseModel):
     total_remaining_g: DecimalAsFloat
     threshold_g: DecimalAsFloat
     below: bool
+
+
+#: Plantillas soportadas por `services/label_renderer.py` (issue #135).
+LabelTemplate = Literal[
+    "ams_holder_74x33", "ams_holder_75x55", "box_40x30",
+    "box_62x29", "avery_5160", "avery_l7160",
+]
+
+MAX_LABELS_PER_REQUEST = 500
+
+
+class SpoolLabelsRequest(BaseModel):
+    """Body de `POST /inventory/spools/labels`."""
+
+    spool_ids: List[int] = Field(..., min_length=1, max_length=MAX_LABELS_PER_REQUEST)
+    template: LabelTemplate
+    # Impresoras térmicas B/N: quita el swatch de color, ensancha el texto.
+    monochrome: bool = False
