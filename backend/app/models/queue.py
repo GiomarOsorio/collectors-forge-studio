@@ -19,6 +19,7 @@ Al marcar como 'done' se descuenta el inventario del filamento elegido y
 se suman las horas a la impresora — funciona para ambos caminos.
 """
 
+import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
@@ -32,6 +33,7 @@ from sqlalchemy import (
     String,
     text,
 )
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -69,6 +71,8 @@ class PrintQueueItem(Base):
         notes:                    Notas libres sobre el trabajo.
         failure_reason:           Motivo de cancelación en texto libre (opcional).
         failure_category:         Categoría fija del motivo de cancelación (opcional).
+        batch_id:                 UUID compartido entre items agrupados como lote (opcional).
+        scheduled_at:             Fecha/hora organizativa de impresión (opcional, no dispara nada).
         created_at:               Timestamp UTC de creación.
     """
 
@@ -140,6 +144,18 @@ class PrintQueueItem(Base):
     # (ver schemas.queue.FailureCategory); failure_reason es texto libre.
     failure_reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     failure_category: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+
+    # ── Queue avanzada (issue #133) ─────────────────────────────────────────
+    # batch_id: UUID compartido entre items agrupados como "lote" en la UI
+    # (agrupar/desagrupar es puramente organizativo, no afecta el flujo de
+    # estados). scheduled_at: fecha/hora organizativa — NO dispara nada
+    # automático (CFS no habla con la impresora); solo ordena la vista y
+    # marca "atrasado" si pasó y sigue pending.
+    batch_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
+    scheduled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),

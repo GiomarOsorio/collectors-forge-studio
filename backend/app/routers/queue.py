@@ -7,13 +7,21 @@ el inventario de filamentos e insumos y se suman las horas de impresión a la
 impresora correspondiente (transacción atómica).
 
 Endpoints disponibles bajo el prefijo /api/queue:
-    GET    /           — Lista ítems pendientes + en impresión (ordenados por posición).
-    POST   /           — Agrega un ítem a la cola.
-    PUT    /{id}/status — Cambia el estado de un ítem (con lógica atómica si done).
-    DELETE /{id}       — Elimina un ítem (solo si pending o cancelled).
-    GET    /history    — Historial done + cancelled (últimos 50, desc por completed_at).
+    GET    /                — Lista ítems pendientes + en impresión (ordenados por posición).
+    PUT    /reorder         — Reordena pending por drag-and-drop (issue #133).
+    POST   /                — Agrega un ítem a la cola (desde Quote).
+    POST   /from-vault      — Agrega un ítem a la cola (desde Vault, con split_copies).
+    POST   /batch           — Agrupa ≥2 ítems pending como lote (issue #133).
+    DELETE /batch/{id}      — Desagrupa un lote (issue #133).
+    PUT    /{id}/status     — Cambia el estado de un ítem (con lógica atómica si done).
+    POST   /{id}/duplicate  — Clona un ítem como uno nuevo pending (issue #133).
+    PUT    /{id}/schedule   — Programa/desprograma un ítem (issue #133).
+    PUT    /{id}/project    — (Re)asigna o quita el proyecto de un ítem.
+    DELETE /{id}            — Elimina un ítem (solo si pending o cancelled).
+    GET    /history         — Historial done + cancelled (últimos 50, desc por completed_at).
 """
 
+import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import List, Optional
@@ -36,7 +44,10 @@ from app.schemas.queue import (
     PrintQueueItemResponse,
     PrintQueueProjectUpdate,
     PrintQueueStatusUpdate,
+    QueueBatchCreateRequest,
     QueueQuoteSnapshot,
+    QueueReorderRequest,
+    QueueScheduleUpdate,
     QueueVaultSnapshot,
 )
 from app.services.auth import get_current_user, get_operator_user
@@ -156,6 +167,8 @@ async def _build_response(
         notes=item.notes,
         failure_reason=item.failure_reason,
         failure_category=item.failure_category,
+        batch_id=item.batch_id,
+        scheduled_at=item.scheduled_at,
         created_at=item.created_at,
         quote=quote_snapshot,
         vault=vault_snapshot,
@@ -281,6 +294,8 @@ async def _build_responses_bulk(
                 notes=item.notes,
                 failure_reason=item.failure_reason,
                 failure_category=item.failure_category,
+                batch_id=item.batch_id,
+                scheduled_at=item.scheduled_at,
                 created_at=item.created_at,
                 quote=quote_snapshot,
                 vault=vault_snapshot,
@@ -463,6 +478,46 @@ async def list_queue(
     return await _build_responses_bulk(items, db)
 
 
+@router.put("/reorder", response_model=List[PrintQueueItemResponse])
+async def reorder_queue(
+    data: QueueReorderRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_operator_user),
+):
+    """
+    Reordena la cola de pending por drag-and-drop.
+
+    `item_ids` debe ser la lista COMPLETA de ids `pending` actuales, en el
+    nuevo orden deseado — se valida que sea exactamente el mismo conjunto
+    (sin faltantes ni sobrantes) antes de aplicar ningún cambio.
+    `position` se reasigna como el índice en la lista (0-based). Los
+    ítems `printing` no se tocan (el frontend los fija arriba, fuera del
+    drag-and-drop).
+    """
+    if len(set(data.item_ids)) != len(data.item_ids):
+        raise HTTPException(status_code=400, detail="La lista tiene ids duplicados")
+
+    pending_result = await db.execute(
+        select(PrintQueueItem).where(PrintQueueItem.status == "pending")
+    )
+    pending_items = {item.id: item for item in pending_result.scalars().all()}
+
+    if set(data.item_ids) != set(pending_items.keys()):
+        raise HTTPException(
+            status_code=400,
+            detail="La lista debe incluir exactamente todos los ítems pending actuales, sin repetir ni omitir.",
+        )
+
+    for index, item_id in enumerate(data.item_ids):
+        pending_items[item_id].position = index
+
+    await db.commit()
+    ordered_items = [pending_items[i] for i in data.item_ids]
+    for item in ordered_items:
+        await db.refresh(item)
+    return await _build_responses_bulk(ordered_items, db)
+
+
 @router.post("/", response_model=PrintQueueItemResponse, status_code=status.HTTP_201_CREATED)
 async def add_to_queue(
     data: PrintQueueItemCreate,
@@ -584,24 +639,109 @@ async def add_to_queue_from_vault(
             Decimal("0.0001")
         )
 
-    item = PrintQueueItem(
+    base_kwargs = dict(
         vault_model_id=model.id,
         print_file_snapshot_path=model.print_file_key,
         piece_name=model.name,
         printer_id=data.printer_id,
         filament_id=data.filament_id,
-        quantity=data.quantity,
         weight_grams=model.sliced_weight_g,
         print_time_hours=print_time_hours,
         project_id=data.project_id,
         status="pending",
-        position=max_pos + 1,
         notes=data.notes,
     )
+
+    # "Separar copias": en vez de un item con quantity=N, crea N items
+    # independientes (quantity=1 c/u) con un batch_id compartido — permite
+    # repartirlas entre impresoras/horarios distintos después. El
+    # descuento sigue siendo weight×quantity por item, así que con
+    # quantity=1 funciona igual (issue #133).
+    if data.split_copies and data.quantity > 1:
+        new_batch_id = uuid.uuid4()
+        items = [
+            PrintQueueItem(
+                **base_kwargs,
+                quantity=1,
+                position=max_pos + 1 + i,
+                batch_id=new_batch_id,
+            )
+            for i in range(data.quantity)
+        ]
+        for new_item in items:
+            db.add(new_item)
+        await db.commit()
+        for new_item in items:
+            await db.refresh(new_item)
+        return await _build_response(items[0], db)
+
+    item = PrintQueueItem(**base_kwargs, quantity=data.quantity, position=max_pos + 1)
     db.add(item)
     await db.commit()
     await db.refresh(item)
     return await _build_response(item, db)
+
+
+@router.post("/batch", response_model=List[PrintQueueItemResponse], status_code=status.HTTP_201_CREATED)
+async def create_queue_batch(
+    data: QueueBatchCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_operator_user),
+):
+    """
+    Agrupa ≥2 ítems `pending` como un lote — asigna un `batch_id` (UUID)
+    nuevo y compartido a todos. Puramente organizativo (no cambia
+    `status`/`position`). Si un ítem ya pertenecía a otro lote, se mueve
+    al nuevo.
+    """
+    if len(set(data.item_ids)) != len(data.item_ids):
+        raise HTTPException(status_code=400, detail="La lista tiene ids duplicados")
+
+    result = await db.execute(
+        select(PrintQueueItem).where(PrintQueueItem.id.in_(data.item_ids))
+    )
+    items_by_id = {item.id: item for item in result.scalars().all()}
+
+    missing = set(data.item_ids) - set(items_by_id.keys())
+    if missing:
+        raise HTTPException(
+            status_code=404, detail=f"Ítems no encontrados: {sorted(missing)}"
+        )
+
+    not_pending = [i for i in data.item_ids if items_by_id[i].status != "pending"]
+    if not_pending:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Solo se pueden agrupar ítems pending: {not_pending}",
+        )
+
+    new_batch_id = uuid.uuid4()
+    for item_id in data.item_ids:
+        items_by_id[item_id].batch_id = new_batch_id
+
+    await db.commit()
+    ordered_items = [items_by_id[i] for i in data.item_ids]
+    for item in ordered_items:
+        await db.refresh(item)
+    return await _build_responses_bulk(ordered_items, db)
+
+
+@router.delete("/batch/{batch_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_queue_batch(
+    batch_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_operator_user),
+):
+    """Desagrupa un lote — pone `batch_id=NULL` a todos sus miembros."""
+    result = await db.execute(
+        select(PrintQueueItem).where(PrintQueueItem.batch_id == batch_id)
+    )
+    items = result.scalars().all()
+    if not items:
+        raise HTTPException(status_code=404, detail="Lote no encontrado")
+    for item in items:
+        item.batch_id = None
+    await db.commit()
 
 
 @router.put("/{item_id}/status", response_model=PrintQueueItemResponse)
@@ -690,6 +830,74 @@ async def update_queue_status(
         item.started_at = now
 
     item.status = new_status
+    await db.commit()
+    await db.refresh(item)
+    return await _build_response(item, db)
+
+
+@router.post(
+    "/{item_id}/duplicate",
+    response_model=PrintQueueItemResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def duplicate_queue_item(
+    item_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_operator_user),
+):
+    """
+    Clona un ítem de la cola (de cualquier estado, incluido el historial)
+    como un ítem nuevo `pending` al final de la cola.
+
+    NO copia `batch_id`/`scheduled_at` (organizativos, no tiene sentido
+    heredarlos) ni `started_at`/`completed_at`/`failure_reason`/
+    `failure_category` (pertenecen al ciclo de vida del original).
+    """
+    original = await _get_item(db, item_id)
+
+    max_result = await db.execute(
+        select(func.max(PrintQueueItem.position)).where(
+            PrintQueueItem.status.in_(list(_ACTIVE_STATUSES)),
+        )
+    )
+    max_pos = max_result.scalar() or 0
+
+    clone = PrintQueueItem(
+        quote_id=original.quote_id,
+        vault_model_id=original.vault_model_id,
+        print_file_snapshot_path=original.print_file_snapshot_path,
+        piece_name=original.piece_name,
+        printer_id=original.printer_id,
+        filament_id=original.filament_id,
+        quantity=original.quantity,
+        weight_grams=original.weight_grams,
+        print_time_hours=original.print_time_hours,
+        project_id=original.project_id,
+        status="pending",
+        position=max_pos + 1,
+        notes=original.notes,
+    )
+    db.add(clone)
+    await db.commit()
+    await db.refresh(clone)
+    return await _build_response(clone, db)
+
+
+@router.put("/{item_id}/schedule", response_model=PrintQueueItemResponse)
+async def schedule_queue_item(
+    item_id: int,
+    data: QueueScheduleUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_operator_user),
+):
+    """
+    Programa (o quita programación de, con `scheduled_at: null`) un ítem.
+
+    Puramente organizativo — NO dispara nada automático (CFS no habla con
+    la impresora). Solo afecta el orden/aviso "atrasado" en la UI.
+    """
+    item = await _get_item(db, item_id)
+    item.scheduled_at = data.scheduled_at
     await db.commit()
     await db.refresh(item)
     return await _build_response(item, db)

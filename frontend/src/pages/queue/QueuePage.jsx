@@ -18,19 +18,39 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
   Archive,
+  CalendarClock,
   CheckCircle2,
+  CheckSquare,
   ChevronRight,
   Clock,
+  Copy,
   FileBox,
   FileText,
+  GanttChartSquare,
+  GripVertical,
+  Layers,
   ListOrdered,
-  Pause,
   Play,
   Plus,
   Printer,
   Save,
   Search,
+  Square,
   Trash2,
   X,
   XCircle,
@@ -51,111 +71,42 @@ import { useConfirm } from '../../components/ConfirmDialog';
 import {
   addToQueueFromVault,
   assignQueueItemProject,
+  createQueueBatch,
+  deleteQueueBatch,
   deleteQueueItem,
+  duplicateQueueItem,
   getInventoryItems,
   getPrinters,
   getProjects,
   getQueue,
   getQueueHistory,
   getVaultFiles,
+  reorderQueue,
+  scheduleQueueItem,
   updateQueueStatus,
 } from '../../services/api';
 import { FAILURE_CATEGORIES } from '../../utils/failureCategories';
 import { fmtCOP } from '../../utils/inventoryAdapter';
 import { getThumbnail } from '../../utils/thumbnail';
-
-const ACCENT = '#14B8A6';
+import BatchRow from './components/BatchRow';
+import ScheduleModal from './components/ScheduleModal';
+import TimelineView from './components/TimelineView';
+import {
+  ACCENT,
+  fmtDate,
+  fmtTimeHours,
+  getBatchProgress,
+  groupIntoUnits,
+  itemView,
+  statusBadge,
+  unitDndId,
+} from './queueHelpers';
 
 const TABS = [
   { id: 'activa',    label: 'Cola activa', icon: ListOrdered },
   { id: 'historial', label: 'Historial',   icon: Clock },
+  { id: 'timeline',  label: 'Timeline',    icon: GanttChartSquare },
 ];
-
-/**
- * Mapea el status del queue item a metadata `StatusPill` (label + tone + icon).
- *
- * Tonos:
- *   - `printing`  → en impresión (azul)
- *   - `done`      → completado (verde)
- *   - `danger`    → cancelado (rojo)
- *   - `pending`   → en espera (gris)
- */
-function statusBadge(status) {
-  const s = (status || '').toLowerCase();
-  if (s === 'printing')  return { label: 'Imprimiendo', tone: 'printing', icon: Play };
-  if (s === 'done')      return { label: 'Listo',       tone: 'done',     icon: CheckCircle2 };
-  if (s === 'cancelled') return { label: 'Cancelado',   tone: 'danger',   icon: XCircle };
-  return { label: 'Pendiente', tone: 'pending', icon: Pause };
-}
-
-const fmtDate = (iso) => {
-  if (!iso) return '—';
-  try {
-    return new Date(iso).toLocaleString('es-CO', {
-      month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
-    });
-  } catch {
-    return '—';
-  }
-};
-
-/**
- * Vista normalizada de un item de cola: unifica los campos visibles
- * que vienen de Quote (`item.quote`) y Vault (`item.vault`). Permite que
- * Card/Row/Body trabajen con un solo shape sin if/else en cada lectura.
- *
- * Si el item tiene ambos snapshots (no debería pasar) o ninguno, el
- * fallback es el item raw.
- */
-function itemView(item) {
-  if (!item) return null;
-  const q = item.quote;
-  const v = item.vault;
-  if (q) {
-    return {
-      source: 'quote',
-      piece_name: q.piece_name,
-      printer_name: q.printer_name,
-      printer_id: q.printer_id,
-      weight_grams: q.weight_grams,
-      print_time_hours: q.print_time_hours,
-      quantity: q.quantity,
-      total_price: q.total_price,
-      filament_name: null,
-      sliced_filament_type: null,
-    };
-  }
-  if (v) {
-    return {
-      source: 'vault',
-      piece_name: v.name,
-      printer_name: v.printer_name,
-      printer_id: v.printer_id,
-      weight_grams: v.weight_grams,
-      print_time_hours: v.print_time_hours,
-      quantity: v.quantity,
-      total_price: null,
-      filament_name: v.filament_name,
-      sliced_filament_type: v.sliced_filament_type,
-    };
-  }
-  return {
-    source: 'unknown',
-    piece_name: item.notes || `Item #${item.id}`,
-    printer_name: null,
-    weight_grams: null,
-    print_time_hours: null,
-    quantity: 1,
-    total_price: null,
-    filament_name: null,
-    sliced_filament_type: null,
-  };
-}
-
-const fmtTimeHours = (h) => {
-  if (h == null || !Number.isFinite(Number(h))) return '—';
-  return `${Number(h).toFixed(1)}h`;
-};
 
 // ── Form helpers a module-level (anti bug cursor jump — ver formFieldFocus.test.jsx)
 
@@ -177,22 +128,39 @@ function FormFieldRow({ label, hint, required, children }) {
 
 // ─── Card / row ─────────────────────────────────────────────────────────────
 
-function QueueCard({ item, onClick, onAction, busy }) {
+function QueueCard({
+  item, onClick, onAction, busy,
+  selectMode, selected, onToggleSelect, onDuplicate, onSchedule,
+}) {
   const badge = statusBadge(item.status);
   const v = itemView(item);
   return (
     <Card as="div" interactive className="p-4 flex flex-col gap-3" onClick={() => onClick(item)}>
       <div className="flex items-start gap-3">
-        <span
-          className="inline-flex items-center justify-center w-9 h-9 rounded-lg shrink-0"
-          style={{
-            background: `${ACCENT}1A`,
-            color: ACCENT,
-            border: `1px solid ${ACCENT}40`,
-          }}
-        >
-          <span className="mono text-xs font-semibold">#{item.position ?? '—'}</span>
-        </span>
+        {selectMode && item.status === 'pending' ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect(item.id);
+            }}
+            aria-label={selected ? 'Quitar de selección' : 'Seleccionar'}
+            className="shrink-0 text-teal-400"
+          >
+            {selected ? <CheckSquare size={22} /> : <Square size={22} className="text-gunmetal" />}
+          </button>
+        ) : (
+          <span
+            className="inline-flex items-center justify-center w-9 h-9 rounded-lg shrink-0"
+            style={{
+              background: `${ACCENT}1A`,
+              color: ACCENT,
+              border: `1px solid ${ACCENT}40`,
+            }}
+          >
+            <span className="mono text-xs font-semibold">#{item.position ?? '—'}</span>
+          </span>
+        )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
             <StatusPill tone={badge.tone} icon={badge.icon}>
@@ -201,6 +169,11 @@ function QueueCard({ item, onClick, onAction, busy }) {
             {v.source === 'vault' && (
               <StatusPill tone="info" icon={Archive}>
                 Vault
+              </StatusPill>
+            )}
+            {item.overdue && (
+              <StatusPill tone="danger" icon={CalendarClock}>
+                Atrasado
               </StatusPill>
             )}
             {v.printer_name && (
@@ -214,6 +187,7 @@ function QueueCard({ item, onClick, onAction, busy }) {
             {v.weight_grams != null ? `${Number(v.weight_grams).toFixed(0)}g` : '—'} ·{' '}
             {fmtTimeHours(v.print_time_hours)}
             {v.total_price != null ? ` · ${fmtCOP(v.total_price)}` : ''}
+            {item.scheduled_at ? ` · ${fmtDate(item.scheduled_at)}` : ''}
           </p>
         </div>
       </div>
@@ -264,30 +238,72 @@ function QueueCard({ item, onClick, onAction, busy }) {
             </Button>
           </>
         )}
+        {item.status === 'pending' && onSchedule && (
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={CalendarClock}
+            onClick={() => onSchedule(item)}
+            disabled={busy}
+            className="text-gunmetal hover:text-tech-white"
+          >
+            Programar
+          </Button>
+        )}
+        {onDuplicate && (
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={Copy}
+            onClick={() => onDuplicate(item)}
+            disabled={busy}
+            className="text-gunmetal hover:text-tech-white"
+          >
+            Duplicar
+          </Button>
+        )}
       </div>
     </Card>
   );
 }
 
-function QueueRow({ item, onClick }) {
+function QueueRow({ item, onClick, selectMode, selected, onToggleSelect }) {
   const badge = statusBadge(item.status);
   const v = itemView(item);
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onClick(item)}
-      className="w-full text-left flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border-soft)] hover:bg-[var(--color-surf-hover)]/50 transition-colors"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(item); }
+      }}
+      className="w-full text-left flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border-soft)] hover:bg-[var(--color-surf-hover)]/50 transition-colors cursor-pointer"
     >
-      <span
-        className="inline-flex items-center justify-center w-9 h-9 rounded-lg shrink-0"
-        style={{
-          background: `${ACCENT}1A`,
-          color: ACCENT,
-          border: `1px solid ${ACCENT}40`,
-        }}
-      >
-        <span className="mono text-xs">#{item.position ?? '—'}</span>
-      </span>
+      {selectMode && item.status === 'pending' ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect(item.id);
+          }}
+          aria-label={selected ? 'Quitar de selección' : 'Seleccionar'}
+          className="shrink-0 text-teal-400"
+        >
+          {selected ? <CheckSquare size={20} /> : <Square size={20} className="text-gunmetal" />}
+        </button>
+      ) : (
+        <span
+          className="inline-flex items-center justify-center w-9 h-9 rounded-lg shrink-0"
+          style={{
+            background: `${ACCENT}1A`,
+            color: ACCENT,
+            border: `1px solid ${ACCENT}40`,
+          }}
+        >
+          <span className="mono text-xs">#{item.position ?? '—'}</span>
+        </span>
+      )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
           <StatusPill tone={badge.tone} icon={badge.icon}>
@@ -298,6 +314,11 @@ function QueueRow({ item, onClick }) {
               Vault
             </StatusPill>
           )}
+          {item.overdue && (
+            <StatusPill tone="danger" icon={CalendarClock}>
+              Atrasado
+            </StatusPill>
+          )}
         </div>
         <p className="text-sm font-semibold text-tech-white truncate">
           {v.piece_name || item.notes || `Item #${item.id}`}
@@ -306,10 +327,113 @@ function QueueRow({ item, onClick }) {
           {v.printer_name || '—'} ·{' '}
           {v.weight_grams != null ? `${Number(v.weight_grams).toFixed(0)}g` : '—'} ·{' '}
           {fmtTimeHours(v.print_time_hours)}
+          {item.scheduled_at ? ` · ${fmtDate(item.scheduled_at)}` : ''}
         </p>
       </div>
       <ChevronRight size={14} className="text-gunmetal-dim shrink-0" />
-    </button>
+    </div>
+  );
+}
+
+// ─── Drag-and-drop reorder (issue #133) ────────────────────────────────────
+
+/**
+ * Envuelve una unidad draggable (item suelto o `BatchRow` completo) con
+ * `useSortable`. El "handle" de arrastre es el grip a la izquierda — el
+ * resto de la unidad conserva su propio `onClick` (abrir drawer) sin
+ * interferencia del drag.
+ */
+function SortableUnit({ id, children }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="relative">
+      <span
+        {...attributes}
+        {...listeners}
+        className="absolute left-1.5 top-1/2 -translate-y-1/2 z-10 cursor-grab active:cursor-grabbing text-gunmetal-dim hover:text-gunmetal touch-none"
+        aria-label="Arrastrar para reordenar"
+      >
+        <GripVertical size={15} />
+      </span>
+      <div className="pl-5">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * Sección "cola activa": `printing` fijos arriba (sin drag), luego
+ * `pending` en `SortableContext` — cada unidad es un item suelto o un
+ * lote completo (`BatchRow`). `variant` decide si los items sueltos se
+ * renderizan como `QueueCard` (grid desktop) o `QueueRow` (lista mobile).
+ */
+function ActiveQueueList({
+  variant, printingItems, pendingUnits, active, history, busy,
+  onClick, onAction, sensors, onDragEnd,
+  selectMode, selectedIds, onToggleSelect, onDuplicate, onSchedule, onUngroupBatch,
+}) {
+  const renderSingle = (item) =>
+    variant === 'card' ? (
+      <QueueCard
+        key={item.id}
+        item={item}
+        onClick={onClick}
+        onAction={onAction}
+        busy={busy}
+        selectMode={selectMode}
+        selected={selectedIds.has(item.id)}
+        onToggleSelect={onToggleSelect}
+        onDuplicate={onDuplicate}
+        onSchedule={onSchedule}
+      />
+    ) : (
+      <QueueRow
+        key={item.id}
+        item={item}
+        onClick={onClick}
+        selectMode={selectMode}
+        selected={selectedIds.has(item.id)}
+        onToggleSelect={onToggleSelect}
+      />
+    );
+
+  const gridCls = 'grid gap-3';
+  const gridStyle = { gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))' };
+
+  return (
+    <div className="flex flex-col gap-3">
+      {printingItems.length > 0 && (
+        <div className={variant === 'card' ? gridCls : 'flex flex-col'} style={variant === 'card' ? gridStyle : undefined}>
+          {printingItems.map((item) => renderSingle(item))}
+        </div>
+      )}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <SortableContext items={pendingUnits.map(unitDndId)} strategy={verticalListSortingStrategy}>
+          <div className={variant === 'card' ? gridCls : 'flex flex-col'} style={variant === 'card' ? gridStyle : undefined}>
+            {pendingUnits.map((unit) => (
+              <SortableUnit key={unitDndId(unit)} id={unitDndId(unit)}>
+                {unit.type === 'batch' ? (
+                  <BatchRow
+                    batchId={unit.batchId}
+                    items={unit.items}
+                    progress={getBatchProgress(unit.batchId, active, history)}
+                    renderItem={renderSingle}
+                    onUngroup={onUngroupBatch}
+                    busy={busy}
+                  />
+                ) : (
+                  renderSingle(unit.item)
+                )}
+              </SortableUnit>
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
+    </div>
   );
 }
 
@@ -355,6 +479,11 @@ function QueueDrawerBody({ item, projects, onAssignProject }) {
               Desde cotización
             </StatusPill>
           )}
+          {item.overdue && (
+            <StatusPill tone="danger" icon={CalendarClock} size="lg">
+              Atrasado
+            </StatusPill>
+          )}
         </div>
         <h2 className="text-lg font-semibold text-tech-white truncate">
           {v.piece_name || item.notes || `Item #${item.id}`}
@@ -384,6 +513,15 @@ function QueueDrawerBody({ item, projects, onAssignProject }) {
           <p className="mono text-sm text-tech-white mt-0.5">{v.quantity ?? 1}</p>
         </Card>
       </div>
+
+      {item.scheduled_at && (
+        <Card className="p-3">
+          <span className="lbl-eyebrow text-[9px]">Programado para</span>
+          <p className={`mono text-sm mt-0.5 ${item.overdue ? 'text-rose-400' : 'text-tech-white'}`}>
+            {fmtDate(item.scheduled_at)}
+          </p>
+        </Card>
+      )}
 
       {v.source === 'vault' && (v.filament_name || v.sliced_filament_type) && (
         <Card className="p-3">
@@ -423,11 +561,33 @@ function QueueDrawerBody({ item, projects, onAssignProject }) {
  * + eliminar. Se renderiza en el slot `footer` del `DetailDrawer` v2 (desktop)
  * o inline sticky dentro del `MobileSheet` (mobile).
  */
-function QueueDrawerFooter({ item, onAction, onDelete, onClose, busy }) {
+function QueueDrawerFooter({ item, onAction, onDelete, onClose, busy, onDuplicate, onSchedule }) {
   if (!item) return null;
   const isActive = item.status === 'pending' || item.status === 'printing';
   return (
     <>
+      {item.status === 'pending' && onSchedule && (
+        <Button
+          variant="ghost"
+          icon={CalendarClock}
+          onClick={() => onSchedule(item)}
+          disabled={busy}
+          className="text-gunmetal hover:text-tech-white"
+        >
+          Programar
+        </Button>
+      )}
+      {onDuplicate && (
+        <Button
+          variant="ghost"
+          icon={Copy}
+          onClick={() => onDuplicate(item)}
+          disabled={busy}
+          className="text-gunmetal hover:text-tech-white"
+        >
+          Duplicar
+        </Button>
+      )}
       {item.status === 'pending' && (
         <Button
           variant="ghost"
@@ -560,6 +720,7 @@ function VaultPickerDrawer({ open, onClose, onAdded, printers, filaments, projec
     quantity: 1,
     notes: '',
     project_id: '',
+    split_copies: false,
   });
   const [saving, setSaving] = useState(false);
 
@@ -574,6 +735,7 @@ function VaultPickerDrawer({ open, onClose, onAdded, printers, filaments, projec
       quantity: 1,
       notes: '',
       project_id: '',
+      split_copies: false,
     });
     setLoadingModels(true);
     // Issue #62: mostrar TODOS los modelos (no solo print_ready). Los
@@ -606,15 +768,21 @@ function VaultPickerDrawer({ open, onClose, onAdded, printers, filaments, projec
     if (!canSubmit) return;
     setSaving(true);
     try {
+      const quantity = Math.max(1, Math.min(999, parseInt(form.quantity, 10) || 1));
       const res = await addToQueueFromVault({
         vault_model_id: selectedModel.id,
         printer_id: parseInt(form.printer_id, 10),
         filament_id: form.filament_id ? parseInt(form.filament_id, 10) : null,
-        quantity: Math.max(1, Math.min(999, parseInt(form.quantity, 10) || 1)),
+        quantity,
         notes: form.notes.trim() || null,
         project_id: form.project_id ? parseInt(form.project_id, 10) : null,
+        split_copies: form.split_copies && quantity > 1,
       });
-      toast.success(`Agregado a cola en posición #${res.data.position}`);
+      toast.success(
+        form.split_copies && quantity > 1
+          ? `${quantity} copias agregadas a la cola en lote`
+          : `Agregado a cola en posición #${res.data.position}`,
+      );
       onAdded?.();
     } catch (err) {
       toast.error(err.response?.data?.detail ?? 'No se pudo agregar a la cola');
@@ -727,6 +895,21 @@ function VaultPickerDrawer({ open, onClose, onAdded, printers, filaments, projec
               </p>
             </FormFieldRow>
           </div>
+          {Number(form.quantity) > 1 && (
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.split_copies}
+                onChange={(e) => setForm((p) => ({ ...p, split_copies: e.target.checked }))}
+                className="mt-0.5"
+              />
+              <span className="text-xs text-steel">
+                Separar copias — crea {form.quantity} items independientes (en vez de uno con
+                cantidad {form.quantity}) agrupados como lote, para repartirlos entre impresoras
+                u horarios distintos.
+              </span>
+            </label>
+          )}
           <FormFieldRow label="Notas">
             <textarea
               rows={2}
@@ -978,7 +1161,122 @@ export default function QueuePage() {
     return q ? sorted.filter((i) => _matchesQuery(i, q)) : sorted;
   }, [history, query]);
 
-  const counts = { activa: active.length, historial: history.length };
+  const counts = {
+    activa: active.length,
+    historial: history.length,
+    timeline: active.filter((it) => it.scheduled_at).length,
+  };
+
+  // ── Queue avanzada: unidades draggable (item suelto o lote completo) —
+  // issue #133. Los `printing` van pinneados arriba, fuera del drag-drop.
+  const printingItems = useMemo(
+    () => filteredActive.filter((it) => it.status === 'printing'),
+    [filteredActive],
+  );
+  const pendingItems = useMemo(
+    () => filteredActive.filter((it) => it.status === 'pending'),
+    [filteredActive],
+  );
+  const pendingUnits = useMemo(() => groupIntoUnits(pendingItems), [pendingItems]);
+
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [scheduleTarget, setScheduleTarget] = useState(null);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  const handleDragEnd = async (event) => {
+    const { active: activeEl, over } = event;
+    if (!over || activeEl.id === over.id) return;
+    const oldIndex = pendingUnits.findIndex((u) => unitDndId(u) === activeEl.id);
+    const newIndex = pendingUnits.findIndex((u) => unitDndId(u) === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(pendingUnits, oldIndex, newIndex);
+    const newOrderIds = reordered.flatMap((u) =>
+      u.type === 'batch' ? u.items.map((i) => i.id) : [u.item.id],
+    );
+
+    const previousActive = active;
+    const positionById = new Map(newOrderIds.map((id, idx) => [id, idx]));
+    setActive((cur) =>
+      cur.map((it) => (positionById.has(it.id) ? { ...it, position: positionById.get(it.id) } : it)),
+    );
+
+    try {
+      await reorderQueue(newOrderIds);
+    } catch {
+      toast.error('No se pudo reordenar');
+      setActive(previousActive);
+    }
+  };
+
+  const handleToggleSelect = (itemId) => {
+    setSelectedIds((cur) => {
+      const next = new Set(cur);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  };
+
+  const handleGroupSelected = async () => {
+    if (selectedIds.size < 2) return;
+    setBusy(true);
+    try {
+      await createQueueBatch([...selectedIds]);
+      toast.success('Items agrupados como lote');
+      setSelectedIds(new Set());
+      setSelectMode(false);
+      await load();
+    } catch (err) {
+      toast.error(err.response?.data?.detail ?? 'No se pudo agrupar');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleUngroupBatch = async (batchId) => {
+    setBusy(true);
+    try {
+      await deleteQueueBatch(batchId);
+      toast.success('Lote desagrupado');
+      await load();
+    } catch {
+      toast.error('No se pudo desagrupar');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDuplicate = async (item) => {
+    setBusy(true);
+    try {
+      await duplicateQueueItem(item.id);
+      toast.success('Item duplicado al final de la cola');
+      await load();
+    } catch {
+      toast.error('No se pudo duplicar');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleConfirmSchedule = async (scheduledAt) => {
+    const item = scheduleTarget;
+    setScheduleTarget(null);
+    setBusy(true);
+    try {
+      const res = await scheduleQueueItem(item.id, scheduledAt);
+      setSelected((cur) => (cur?.id === item.id ? res.data : cur));
+      toast.success(scheduledAt ? 'Impresión programada' : 'Programación quitada');
+      await load();
+    } catch {
+      toast.error('No se pudo programar');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const handleAction = async (item, status, extra = {}) => {
     setBusy(true);
@@ -1158,8 +1456,32 @@ export default function QueuePage() {
             />
           </div>
         </div>
+        {tab === 'activa' && (
+          <div className="px-4 mt-3 flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={selectMode ? X : CheckSquare}
+              onClick={() => {
+                setSelectMode((v) => !v);
+                setSelectedIds(new Set());
+              }}
+            >
+              {selectMode ? 'Cancelar selección' : 'Seleccionar'}
+            </Button>
+            {selectMode && selectedIds.size >= 2 && (
+              <Button variant="primary" size="sm" icon={Layers} onClick={handleGroupSelected} disabled={busy}>
+                Agrupar como lote ({selectedIds.size})
+              </Button>
+            )}
+          </div>
+        )}
         {loading ? (
           <p className="px-4 py-12 text-center text-gunmetal text-sm">Cargando cola…</p>
+        ) : tab === 'timeline' ? (
+          <div className="mt-3 pb-28">
+            <TimelineView items={active} printers={printers} />
+          </div>
         ) : (tab === 'activa' ? filteredActive : filteredHistory).length === 0 ? (
           <div className="mt-3 pb-28">
             <EmptyState
@@ -1173,9 +1495,30 @@ export default function QueuePage() {
               }
             />
           </div>
+        ) : tab === 'activa' ? (
+          <div className="mt-3 px-4 pb-28">
+            <ActiveQueueList
+              variant="row"
+              printingItems={printingItems}
+              pendingUnits={pendingUnits}
+              active={active}
+              history={history}
+              busy={busy}
+              onClick={setSelected}
+              onAction={handleActionRequest}
+              sensors={sensors}
+              onDragEnd={handleDragEnd}
+              selectMode={selectMode}
+              selectedIds={selectedIds}
+              onToggleSelect={handleToggleSelect}
+              onDuplicate={handleDuplicate}
+              onSchedule={setScheduleTarget}
+              onUngroupBatch={handleUngroupBatch}
+            />
+          </div>
         ) : (
           <ul className="mt-3 pb-28">
-            {(tab === 'activa' ? filteredActive : filteredHistory).map((it) => (
+            {filteredHistory.map((it) => (
               <li key={it.id}>
                 <QueueRow item={it} onClick={setSelected} />
               </li>
@@ -1215,6 +1558,8 @@ export default function QueuePage() {
                 onDelete={handleDelete}
                 onClose={() => setSelected(null)}
                 busy={busy}
+                onDuplicate={handleDuplicate}
+                onSchedule={setScheduleTarget}
               />
             </div>
           )}
@@ -1235,6 +1580,11 @@ export default function QueuePage() {
           item={cancelTarget}
           onConfirm={handleConfirmCancel}
           onClose={() => setCancelTarget(null)}
+        />
+        <ScheduleModal
+          item={scheduleTarget}
+          onConfirm={handleConfirmSchedule}
+          onClose={() => setScheduleTarget(null)}
         />
       </div>
     );
@@ -1281,6 +1631,26 @@ export default function QueuePage() {
           />
         </div>
         <span className="flex-1" />
+        {tab === 'activa' && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={selectMode ? X : CheckSquare}
+              onClick={() => {
+                setSelectMode((v) => !v);
+                setSelectedIds(new Set());
+              }}
+            >
+              {selectMode ? 'Cancelar selección' : 'Seleccionar'}
+            </Button>
+            {selectMode && selectedIds.size >= 2 && (
+              <Button variant="primary" size="sm" icon={Layers} onClick={handleGroupSelected} disabled={busy}>
+                Agrupar como lote ({selectedIds.size})
+              </Button>
+            )}
+          </div>
+        )}
         <span className="mono text-[11px] text-gunmetal">
           {(tab === 'activa' ? filteredActive : filteredHistory).length} de{' '}
           {(tab === 'activa' ? active : history).length}
@@ -1289,6 +1659,8 @@ export default function QueuePage() {
 
       {loading ? (
         <p className="px-6 py-16 text-center text-gunmetal text-sm">Cargando cola…</p>
+      ) : tab === 'timeline' ? (
+        <TimelineView items={active} printers={printers} />
       ) : (tab === 'activa' ? filteredActive : filteredHistory).length === 0 ? (
         <EmptyState
           icon={tab === 'activa' ? ListOrdered : Clock}
@@ -1312,12 +1684,33 @@ export default function QueuePage() {
             ) : null
           }
         />
+      ) : tab === 'activa' ? (
+        <div className="px-6 pb-8">
+          <ActiveQueueList
+            variant="card"
+            printingItems={printingItems}
+            pendingUnits={pendingUnits}
+            active={active}
+            history={history}
+            busy={busy}
+            onClick={setSelected}
+            onAction={handleActionRequest}
+            sensors={sensors}
+            onDragEnd={handleDragEnd}
+            selectMode={selectMode}
+            selectedIds={selectedIds}
+            onToggleSelect={handleToggleSelect}
+            onDuplicate={handleDuplicate}
+            onSchedule={setScheduleTarget}
+            onUngroupBatch={handleUngroupBatch}
+          />
+        </div>
       ) : (
         <div
           className="px-6 pb-8 grid gap-3"
           style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))' }}
         >
-          {(tab === 'activa' ? filteredActive : filteredHistory).map((it) => (
+          {filteredHistory.map((it) => (
             <QueueCard
               key={it.id}
               item={it}
@@ -1349,6 +1742,8 @@ export default function QueuePage() {
               onDelete={handleDelete}
               onClose={() => setSelected(null)}
               busy={busy}
+              onDuplicate={handleDuplicate}
+              onSchedule={setScheduleTarget}
             />
           )
         }
@@ -1372,6 +1767,11 @@ export default function QueuePage() {
         item={cancelTarget}
         onConfirm={handleConfirmCancel}
         onClose={() => setCancelTarget(null)}
+      />
+      <ScheduleModal
+        item={scheduleTarget}
+        onConfirm={handleConfirmSchedule}
+        onClose={() => setScheduleTarget(null)}
       />
 
       <footer className="mt-auto px-6 py-2.5 border-t border-[var(--color-border-soft)] bg-[var(--color-surf-sidebar)] flex flex-wrap items-center gap-4 text-[11px] text-gunmetal">

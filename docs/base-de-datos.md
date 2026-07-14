@@ -66,7 +66,10 @@ Las migraciones están en `backend/alembic/versions/`. Se aplican con `alembic u
 | `m7n8o9p0q1r2` | `m7n8o9p0q1r2_vault_dual_files.py` | Slots dual `source_file` + `print_file` en `model_files` |
 | `n8o9p0q1r2s3` | `n8o9p0q1r2s3_queue_vault_link.py` | FK `model_file_id` en `print_queue` |
 | `o9p0q1r2s3t4` | `o9p0q1r2s3t4_rename_storage_columns_to_minio_keys.py` | Renombra `local_thumbnail_path → thumbnail_key`, `logo_url → logo_key`, `image_url → image_key` (los binarios ahora viven en MinIO, no en `/app/static`). NULLea filas existentes |
-| `t4u5v6w7x8y9` | `t4u5v6w7x8y9_drop_slicer_and_tracker.py` | **Head actual** — Elimina tabla `slicing_jobs` y columnas `tracking_data`/`tracking_checked_at` de `purchase_orders` al quitar los microservicios `slicer` y `tracker` |
+| `t4u5v6w7x8y9` | `t4u5v6w7x8y9_drop_slicer_and_tracker.py` | Elimina tabla `slicing_jobs` y columnas `tracking_data`/`tracking_checked_at` de `purchase_orders` al quitar los microservicios `slicer` y `tracker` |
+| … | *(varias migraciones intermedias no documentadas aquí — ver `alembic history` para la cadena completa)* | |
+| `2787aa619580` | `2787aa619580_vault_photos_notes_failure_reason.py` | Tabla `model_file_photos`, `model_files.notes`, `print_queue.failure_reason`/`failure_category` (issue #130) |
+| `68c641f83b25` | `68c641f83b25_queue_batch_schedule.py` | **Head actual** — `print_queue.batch_id` + `scheduled_at` (issue #133) |
 
 **Aplicar todas las migraciones:**
 ```bash
@@ -363,6 +366,10 @@ Cada fila puede tener dos slots: `source_file` (`.3mf` editable) y
 | `added_at` | TIMESTAMP | — |
 | `started_at` | TIMESTAMP | — |
 | `completed_at` | TIMESTAMP | — |
+| `failure_reason` | VARCHAR(200) nullable | Motivo de cancelación en texto libre (issue #130) |
+| `failure_category` | VARCHAR(30) nullable | Categoría fija del motivo (issue #130) |
+| `batch_id` | UUID nullable, indexado | Agrupa items como lote — compartido entre miembros (issue #133) |
+| `scheduled_at` | TIMESTAMP nullable | Fecha/hora organizativa — NO dispara nada automático (issue #133) |
 
 ---
 
