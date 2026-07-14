@@ -32,7 +32,8 @@
  * - /cost/settings               → Tarifa eléctrica & ajustes
  * - /settings                    → Settings (Cuenta + Usuarios admin)
  * - /maintenance                 → Mantenimiento (Dashboard + Historial + CRUD)
- * - /queue                       → Cola de impresión (Activa + Historial)
+ * - /queue                       → Cola de impresión (Activa + Historial + Timeline)
+ * - /queue/log                   → Bitácora global de impresiones (issue #131)
  * - /vault                       → Vault de modelos (.3mf / .gcode.3mf)
  * - /vault/upload                → Subir modelo (admin)
  * - /company                     → Compañía (admin — Perfil / Marca / Templates)
@@ -63,6 +64,7 @@ const SettingsPage             = lazy(() => import('./pages/settings/SettingsPag
 const InventoryPage            = lazy(() => import('./pages/inventory/InventoryPage'));
 const CostPage                 = lazy(() => import('./pages/cost/CostPage'));
 const QueuePage                = lazy(() => import('./pages/queue/QueuePage'));
+const PrintLogPage             = lazy(() => import('./pages/queue/PrintLogPage'));
 const MaintenancePage          = lazy(() => import('./pages/maintenance/MaintenancePage'));
 const VaultPage                = lazy(() => import('./pages/vault/VaultPage'));
 const VaultUploadPage          = lazy(() => import('./pages/vault/VaultUploadPage'));
@@ -211,6 +213,7 @@ function AppRoutes() {
           <Route path="v2"       element={<RedirectPreservingSearch to="/queue" />} />
           <Route path="legacy"   element={<RedirectPreservingSearch to="/queue" />} />
           <Route path="history"  element={<RedirectPreservingSearch to="/queue" />} />
+          <Route path="log"      element={<PrintLogPage />} />
         </Route>
 
         {/* Compañía (solo admin) — `index` con drawers integrados

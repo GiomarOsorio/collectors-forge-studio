@@ -110,6 +110,10 @@ class PrintQueueItemResponse(BaseModel):
     #: Calculado (no vive en BD): True si `scheduled_at` ya pasó y el item
     #: sigue `pending`. Puramente informativo — no bloquea nada.
     overdue: bool = False
+    #: Usuario que creó el item (issue #131). None en items pre-migración
+    #: o si el usuario fue borrado después (ondelete=SET NULL).
+    created_by: Optional[int] = None
+    created_by_username: Optional[str] = None
     created_at: datetime
     quote: Optional[QueueQuoteSnapshot] = None
     vault: Optional[QueueVaultSnapshot] = None
@@ -169,3 +173,17 @@ class QueueScheduleUpdate(BaseModel):
     """Payload para programar (o quitar programación de) un ítem."""
 
     scheduled_at: Optional[datetime] = None
+
+
+class PrintQueueLogResponse(BaseModel):
+    """
+    Respuesta paginada de `GET /api/queue/log` (issue #131) — bitácora
+    global de impresiones con filtros. Endpoint separado de `/history`
+    (que solo filtra `done`/`cancelled` para el tab Historial de
+    QueuePage) porque el log necesita TODOS los estados.
+    """
+
+    items: List[PrintQueueItemResponse]
+    total: int
+    page: int
+    page_size: int

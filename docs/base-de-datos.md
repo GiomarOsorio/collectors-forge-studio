@@ -69,7 +69,8 @@ Las migraciones están en `backend/alembic/versions/`. Se aplican con `alembic u
 | `t4u5v6w7x8y9` | `t4u5v6w7x8y9_drop_slicer_and_tracker.py` | Elimina tabla `slicing_jobs` y columnas `tracking_data`/`tracking_checked_at` de `purchase_orders` al quitar los microservicios `slicer` y `tracker` |
 | … | *(varias migraciones intermedias no documentadas aquí — ver `alembic history` para la cadena completa)* | |
 | `2787aa619580` | `2787aa619580_vault_photos_notes_failure_reason.py` | Tabla `model_file_photos`, `model_files.notes`, `print_queue.failure_reason`/`failure_category` (issue #130) |
-| `68c641f83b25` | `68c641f83b25_queue_batch_schedule.py` | **Head actual** — `print_queue.batch_id` + `scheduled_at` (issue #133) |
+| `68c641f83b25` | `68c641f83b25_queue_batch_schedule.py` | `print_queue.batch_id` + `scheduled_at` (issue #133) |
+| `82717e0701b3` | `82717e0701b3_print_queue_created_by.py` | **Head actual** — `print_queue.created_by` FK→users (issue #131) |
 
 **Aplicar todas las migraciones:**
 ```bash
@@ -370,6 +371,7 @@ Cada fila puede tener dos slots: `source_file` (`.3mf` editable) y
 | `failure_category` | VARCHAR(30) nullable | Categoría fija del motivo (issue #130) |
 | `batch_id` | UUID nullable, indexado | Agrupa items como lote — compartido entre miembros (issue #133) |
 | `scheduled_at` | TIMESTAMP nullable | Fecha/hora organizativa — NO dispara nada automático (issue #133) |
+| `created_by` | INTEGER FK → users SET NULL, nullable | Usuario que creó el item — NULL en items pre-#131 (issue #131) |
 
 ---
 

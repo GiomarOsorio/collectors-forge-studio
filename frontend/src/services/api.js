@@ -707,6 +707,48 @@ export const duplicateQueueItem = (id) => api.post(`/queue/${id}/duplicate`);
 export const scheduleQueueItem = (id, scheduledAt) =>
   api.put(`/queue/${id}/schedule`, { scheduled_at: scheduledAt });
 
+/**
+ * Bitácora global de impresiones (issue #131) — TODOS los estados, con
+ * filtros + paginación server-side. Endpoint separado de `getQueueHistory`
+ * (que solo trae done/cancelled para el tab Historial de QueuePage).
+ *
+ * @param {Object} params
+ * @param {string} [params.q]
+ * @param {number} [params.printer_id]
+ * @param {string} [params.status] - CSV, ej. 'done,cancelled'
+ * @param {number} [params.user_id]
+ * @param {string} [params.date_from] - 'YYYY-MM-DD'
+ * @param {string} [params.date_to]   - 'YYYY-MM-DD'
+ * @param {number} [params.page=1]
+ * @param {number} [params.page_size=25]
+ */
+export const getPrintLog = (params) => api.get('/queue/log', { params });
+
+/**
+ * Descarga el CSV del log filtrado (set COMPLETO, sin paginar) y dispara
+ * el guardado en el navegador. No usa un `<a href>` directo porque la
+ * API se autentica con JWT Bearer vía interceptor de axios — un link
+ * plano no llevaría el header y el request daría 401. En vez de eso,
+ * pide el CSV como blob (con el token ya inyectado por el interceptor)
+ * y simula el click en un `<a>` temporal con `URL.createObjectURL`.
+ *
+ * @param {Object} params - Mismos filtros que `getPrintLog` (sin page/page_size).
+ */
+export const downloadPrintLogCsv = async (params) => {
+  const res = await api.get('/queue/log', {
+    params: { ...params, format: 'csv' },
+    responseType: 'blob',
+  });
+  const url = URL.createObjectURL(res.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'print_log.csv';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
+
 // ============================================================================
 // Vault — archivos .3mf
 // ============================================================================
