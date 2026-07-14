@@ -32,16 +32,28 @@ export default defineConfig({
     // npm ls + node require.resolve lo encuentran (bug ya verificado
     // en logs de deploy). El alias bypassa toda la magia de resolución
     // de package.json `module`/`exports` fields.
-    alias: {
-      '@dnd-kit/core': path.resolve(__dirname, 'node_modules/@dnd-kit/core/dist/index.js'),
-      '@dnd-kit/sortable': path.resolve(__dirname, 'node_modules/@dnd-kit/sortable/dist/index.js'),
-      '@dnd-kit/utilities': path.resolve(__dirname, 'node_modules/@dnd-kit/utilities/dist/index.js'),
-      '@dnd-kit/accessibility': path.resolve(__dirname, 'node_modules/@dnd-kit/accessibility/dist/index.js'),
+    alias: [
+      { find: '@dnd-kit/core', replacement: path.resolve(__dirname, 'node_modules/@dnd-kit/core/dist/index.js') },
+      { find: '@dnd-kit/sortable', replacement: path.resolve(__dirname, 'node_modules/@dnd-kit/sortable/dist/index.js') },
+      { find: '@dnd-kit/utilities', replacement: path.resolve(__dirname, 'node_modules/@dnd-kit/utilities/dist/index.js') },
+      { find: '@dnd-kit/accessibility', replacement: path.resolve(__dirname, 'node_modules/@dnd-kit/accessibility/dist/index.js') },
       // void-elements CJS sin exports field; html-parse-stringify (dep de
       // react-i18next) lo importa desde su ESM bundle — Rollup 7 no lo
       // resuelve sin alias explícito (mismo patrón que @dnd-kit).
-      'void-elements': path.resolve(__dirname, 'node_modules/void-elements/index.js'),
-    },
+      { find: 'void-elements', replacement: path.resolve(__dirname, 'node_modules/void-elements/index.js') },
+      // `gcode-preview` importa "three" desde su bundle ESM propio; en
+      // alpine (node:20) Rollup falla con "failed to resolve import three"
+      // pese a que npm ls + node require.resolve lo encuentran (mismo bug
+      // de @dnd-kit/void-elements de arriba). El alias también dedupea:
+      // gcode-preview declara three@^0.159.0 como dependencia propia, pero
+      // el resto de la app usa three@^0.175.0 (ver vendor-three en
+      // manualChunks) — forzar el mismo three.module.js para todos evita
+      // cargar dos copias de three.js (rompería contextos WebGL/instancias).
+      // find debe ser EXACTO (regex ^three$): "three" como prefix-string
+      // también matchearía "three/addons/*" (usado por ModelViewer3D) y
+      // rompería esos imports.
+      { find: /^three$/, replacement: path.resolve(__dirname, 'node_modules/three/build/three.module.js') },
+    ],
   },
   server: {
     proxy: {
