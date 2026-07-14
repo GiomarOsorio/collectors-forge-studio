@@ -215,6 +215,91 @@ class TestQueueStatusValidation:
 
 
 # ---------------------------------------------------------------------------
+# 3b. failure_reason / failure_category al cancelar (issue #130)
+# ---------------------------------------------------------------------------
+
+def _fake_db_pending_item_no_source(item_id=1):
+    """
+    Item 'pending' sin quote_id/vault_model_id/piece_name — la transición a
+    'cancelled' es válida y `_build_response` no dispara queries extra
+    (ambos snapshots quedan None).
+    """
+    fake_item = MagicMock()
+    fake_item.id = item_id
+    fake_item.status = "pending"
+    fake_item.quote_id = None
+    fake_item.vault_model_id = None
+    fake_item.project_id = None
+    fake_item.piece_name = None
+    fake_item.printer_id = None
+    fake_item.position = 0
+    fake_item.started_at = None
+    fake_item.completed_at = None
+    fake_item.notes = None
+    fake_item.failure_reason = None
+    fake_item.failure_category = None
+
+    async def _gen():
+        session = AsyncMock()
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = fake_item
+        session.execute.return_value = result
+        yield session
+
+    return _gen, fake_item
+
+
+class TestQueueCancelFailureReason:
+    async def test_cancelar_con_motivo_lo_guarda(self):
+        db_gen, fake_item = _fake_db_pending_item_no_source()
+        _set_overrides({get_db: db_gen, get_current_user: lambda: _fake_user()})
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.put(
+                    "/api/queue/1/status",
+                    json={
+                        "status": "cancelled",
+                        "failure_reason": "Se despegó de la cama en capa 40",
+                        "failure_category": "adhesion",
+                    },
+                )
+        finally:
+            _clear_overrides()
+        assert r.status_code == 200
+        assert fake_item.failure_reason == "Se despegó de la cama en capa 40"
+        assert fake_item.failure_category == "adhesion"
+        body = r.json()
+        assert body["failure_reason"] == "Se despegó de la cama en capa 40"
+        assert body["failure_category"] == "adhesion"
+
+    async def test_cancelar_sin_motivo_no_bloquea(self):
+        """failure_reason/category son opcionales — cancelar sin ellos sigue 200."""
+        db_gen, fake_item = _fake_db_pending_item_no_source()
+        _set_overrides({get_db: db_gen, get_current_user: lambda: _fake_user()})
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.put("/api/queue/1/status", json={"status": "cancelled"})
+        finally:
+            _clear_overrides()
+        assert r.status_code == 200
+        assert fake_item.failure_reason is None
+        assert fake_item.failure_category is None
+
+    async def test_failure_category_invalida_retorna_422(self):
+        """failure_category solo acepta las 6 categorías fijas."""
+        _set_overrides({get_db: _fake_db_empty, get_current_user: lambda: _fake_user()})
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.put(
+                    "/api/queue/1/status",
+                    json={"status": "cancelled", "failure_category": "not_a_real_category"},
+                )
+        finally:
+            _clear_overrides()
+        assert r.status_code == 422
+
+
+# ---------------------------------------------------------------------------
 # 4. Asignación de proyecto (PUT /{id}/project)
 # ---------------------------------------------------------------------------
 

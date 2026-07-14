@@ -766,6 +766,47 @@ export const setActiveVaultPlate = (id, plateIndex) =>
 export const updateVaultFile = (id, data) => api.put(`/vault/${id}`, data);
 
 /**
+ * Historial de impresiones de un modelo del Vault + gramos totales y tasa
+ * de éxito agregados (issue #130).
+ * @param {number} id - ID del archivo en el Vault
+ */
+export const getVaultPrintHistory = (id) => api.get(`/vault/${id}/print-history`);
+
+/**
+ * Lista las fotos adjuntas a un modelo del Vault.
+ * @param {number} id - ID del archivo en el Vault
+ */
+export const getVaultPhotos = (id) => api.get(`/vault/${id}/photos`);
+
+/**
+ * Sube hasta 5 fotos para un modelo del Vault (solo admins).
+ * @param {number} id - ID del archivo en el Vault
+ * @param {File[]} files - Archivos de imagen (jpeg/png/webp/gif, máx 10MB c/u)
+ * @param {Function} [onUploadProgress]
+ */
+export const uploadVaultPhotos = (id, files, onUploadProgress) => {
+  const formData = new FormData();
+  for (const file of files) formData.append('files', file);
+  return api.post(`/vault/${id}/photos`, formData, { onUploadProgress });
+};
+
+/**
+ * Edita el caption de una foto ya subida (solo admins).
+ * @param {number} id - ID del archivo en el Vault
+ * @param {number} photoId
+ * @param {string|null} caption
+ */
+export const updateVaultPhotoCaption = (id, photoId, caption) =>
+  api.patch(`/vault/${id}/photos/${photoId}`, { caption });
+
+/**
+ * Elimina una foto de un modelo del Vault (solo admins).
+ * @param {number} id - ID del archivo en el Vault
+ * @param {number} photoId
+ */
+export const deleteVaultPhoto = (id, photoId) => api.delete(`/vault/${id}/photos/${photoId}`);
+
+/**
  * Reemplaza el slot `source` (.3mf editable) conservando metadatos. Solo admins.
  * @param {number} id
  * @param {File} file - Nuevo .3mf editable

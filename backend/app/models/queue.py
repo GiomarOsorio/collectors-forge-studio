@@ -67,6 +67,8 @@ class PrintQueueItem(Base):
         started_at:               Momento en que pasó a 'printing'.
         completed_at:             Momento en que pasó a 'done' o 'cancelled'.
         notes:                    Notas libres sobre el trabajo.
+        failure_reason:           Motivo de cancelación en texto libre (opcional).
+        failure_category:         Categoría fija del motivo de cancelación (opcional).
         created_at:               Timestamp UTC de creación.
     """
 
@@ -131,6 +133,13 @@ class PrintQueueItem(Base):
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
+    # ── Motivo de cancelación (issue #130) — opcional, solo aplica cuando
+    # status='cancelled'. Alimenta el historial por modelo del Vault y el
+    # futuro epic de Stats. failure_category es una de 6 categorías fijas
+    # (ver schemas.queue.FailureCategory); failure_reason es texto libre.
+    failure_reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    failure_category: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),

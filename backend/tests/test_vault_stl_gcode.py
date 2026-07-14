@@ -97,6 +97,7 @@ def _fake_model_file(**kwargs):
     m.tags = kwargs.get("tags", [])
     m.source_url = kwargs.get("source_url")
     m.source_platform = kwargs.get("source_platform")
+    m.notes = kwargs.get("notes")
     m.creator_name = kwargs.get("creator_name")
     m.creator_url = kwargs.get("creator_url")
     m.folder_id = kwargs.get("folder_id")

@@ -32,6 +32,7 @@ import {
   Save,
   Search,
   Trash2,
+  X,
   XCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -59,6 +60,7 @@ import {
   getVaultFiles,
   updateQueueStatus,
 } from '../../services/api';
+import { FAILURE_CATEGORIES } from '../../utils/failureCategories';
 import { fmtCOP } from '../../utils/inventoryAdapter';
 import { getThumbnail } from '../../utils/thumbnail';
 
@@ -799,6 +801,68 @@ function VaultPickerDrawer({ open, onClose, onAdded, printers, filaments, projec
   );
 }
 
+/**
+ * Modal de motivo de cancelación (issue #130) — categoría + texto libre,
+ * ambos opcionales. "Cancelar sin motivo" no bloquea el flujo; alimenta
+ * el historial por modelo del Vault y el futuro epic de Stats.
+ */
+function CancelReasonModal({ item, onConfirm, onClose }) {
+  const [category, setCategory] = useState('');
+  const [reason, setReason] = useState('');
+
+  if (!item) return null;
+
+  return (
+    <div className="tf-modal-overlay" onClick={onClose}>
+      <div className="tf-modal max-w-sm" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-1">
+          <p className="tf-page-title text-base mb-0">Cancelar impresión</p>
+          <button type="button" onClick={onClose} className="text-gunmetal hover:text-tech-white" aria-label="Cerrar">
+            <X size={18} />
+          </button>
+        </div>
+        <p className="text-sm text-steel mb-4">
+          {item.vault?.name || item.quote?.piece_name || 'Este ítem'} — el motivo es opcional,
+          ayuda a llevar el historial de fallos.
+        </p>
+        <label className="tf-label">Categoría (opcional)</label>
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className="tf-input mb-3"
+        >
+          <option value="">Sin categoría</option>
+          {FAILURE_CATEGORIES.map((c) => (
+            <option key={c.value} value={c.value}>{c.label}</option>
+          ))}
+        </select>
+        <label className="tf-label">Detalle (opcional)</label>
+        <input
+          type="text"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          maxLength={200}
+          placeholder="Ej. se despegó de la cama en la capa 40"
+          className="tf-input mb-5"
+        />
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={() => onConfirm('', '')}>
+            Omitir y cancelar
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            icon={XCircle}
+            onClick={() => onConfirm(reason, category)}
+          >
+            Confirmar cancelación
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function QueuePage() {
@@ -916,10 +980,10 @@ export default function QueuePage() {
 
   const counts = { activa: active.length, historial: history.length };
 
-  const handleAction = async (item, status) => {
+  const handleAction = async (item, status, extra = {}) => {
     setBusy(true);
     try {
-      await updateQueueStatus(item.id, { status });
+      await updateQueueStatus(item.id, { status, ...extra });
       toast.success(
         status === 'done' ? 'Marcado como listo' : status === 'cancelled' ? 'Cancelado' : 'Actualizado',
       );
@@ -930,6 +994,28 @@ export default function QueuePage() {
     } finally {
       setBusy(false);
     }
+  };
+
+  // Item pendiente de confirmar cancelación — issue #130. 'cancelled' no
+  // llama a handleAction directo: abre el modal de motivo primero (opcional,
+  // no bloqueante — "Cancelar sin motivo" sigue disponible ahí mismo).
+  const [cancelTarget, setCancelTarget] = useState(null);
+
+  const handleActionRequest = (item, status) => {
+    if (status === 'cancelled') {
+      setCancelTarget(item);
+      return;
+    }
+    handleAction(item, status);
+  };
+
+  const handleConfirmCancel = (failureReason, failureCategory) => {
+    const item = cancelTarget;
+    setCancelTarget(null);
+    handleAction(item, 'cancelled', {
+      failure_reason: failureReason || null,
+      failure_category: failureCategory || null,
+    });
   };
 
   const handleAssignProject = async (item, projectId) => {
@@ -1125,7 +1211,7 @@ export default function QueuePage() {
             <div className="px-5 pt-3 pb-5 border-t border-[var(--color-border-soft)] flex flex-wrap gap-2 sticky bottom-0 bg-[var(--color-surf-sidebar)]">
               <QueueDrawerFooter
                 item={selected}
-                onAction={handleAction}
+                onAction={handleActionRequest}
                 onDelete={handleDelete}
                 onClose={() => setSelected(null)}
                 busy={busy}
@@ -1144,6 +1230,11 @@ export default function QueuePage() {
           filaments={filaments}
           projects={projects}
           isMobile
+        />
+        <CancelReasonModal
+          item={cancelTarget}
+          onConfirm={handleConfirmCancel}
+          onClose={() => setCancelTarget(null)}
         />
       </div>
     );
@@ -1231,7 +1322,7 @@ export default function QueuePage() {
               key={it.id}
               item={it}
               onClick={setSelected}
-              onAction={handleAction}
+              onAction={handleActionRequest}
               busy={busy}
             />
           ))}
@@ -1254,7 +1345,7 @@ export default function QueuePage() {
           selected && (
             <QueueDrawerFooter
               item={selected}
-              onAction={handleAction}
+              onAction={handleActionRequest}
               onDelete={handleDelete}
               onClose={() => setSelected(null)}
               busy={busy}
@@ -1276,6 +1367,11 @@ export default function QueuePage() {
         filaments={filaments}
         projects={projects}
         isMobile={false}
+      />
+      <CancelReasonModal
+        item={cancelTarget}
+        onConfirm={handleConfirmCancel}
+        onClose={() => setCancelTarget(null)}
       />
 
       <footer className="mt-auto px-6 py-2.5 border-t border-[var(--color-border-soft)] bg-[var(--color-surf-sidebar)] flex flex-wrap items-center gap-4 text-[11px] text-gunmetal">

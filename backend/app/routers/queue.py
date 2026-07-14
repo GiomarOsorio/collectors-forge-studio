@@ -154,6 +154,8 @@ async def _build_response(
         started_at=item.started_at,
         completed_at=item.completed_at,
         notes=item.notes,
+        failure_reason=item.failure_reason,
+        failure_category=item.failure_category,
         created_at=item.created_at,
         quote=quote_snapshot,
         vault=vault_snapshot,
@@ -277,6 +279,8 @@ async def _build_responses_bulk(
                 started_at=item.started_at,
                 completed_at=item.completed_at,
                 notes=item.notes,
+                failure_reason=item.failure_reason,
+                failure_category=item.failure_category,
                 created_at=item.created_at,
                 quote=quote_snapshot,
                 vault=vault_snapshot,
@@ -678,6 +682,9 @@ async def update_queue_status(
 
     elif new_status == "cancelled":
         item.completed_at = now
+        # Opcionales — no bloquean la cancelación (issue #130).
+        item.failure_reason = data.failure_reason
+        item.failure_category = data.failure_category
 
     elif new_status == "printing":
         item.started_at = now

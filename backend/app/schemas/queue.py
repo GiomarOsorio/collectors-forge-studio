@@ -11,9 +11,15 @@ traen `quote`; los nuevos desde el picker traen `vault`).
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 from pydantic import BaseModel, Field, PlainSerializer
+
+#: Categorías de motivo de fallo (issue #130) — alimentan el historial
+#: por modelo del Vault y el futuro epic de Stats.
+FailureCategory = Literal[
+    "adhesion", "clog", "filament_runout", "power_loss", "layer_shift", "other"
+]
 
 DecimalAsFloat = Annotated[
     Decimal,
@@ -91,6 +97,8 @@ class PrintQueueItemResponse(BaseModel):
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
     notes: Optional[str]
+    failure_reason: Optional[str] = None
+    failure_category: Optional[FailureCategory] = None
     created_at: datetime
     quote: Optional[QueueQuoteSnapshot] = None
     vault: Optional[QueueVaultSnapshot] = None
@@ -99,9 +107,17 @@ class PrintQueueItemResponse(BaseModel):
 
 
 class PrintQueueStatusUpdate(BaseModel):
-    """Payload para cambiar el estado de un ítem de la cola."""
+    """
+    Payload para cambiar el estado de un ítem de la cola.
+
+    `failure_reason`/`failure_category` solo se guardan cuando `status`
+    es `cancelled` — se ignoran silenciosamente en cualquier otra
+    transición (no bloquean el flujo, ambos campos son opcionales).
+    """
 
     status: str  # 'printing' | 'done' | 'cancelled'
+    failure_reason: Optional[str] = Field(default=None, max_length=200)
+    failure_category: Optional[FailureCategory] = None
 
 
 class PrintQueueProjectUpdate(BaseModel):
