@@ -73,6 +73,7 @@ class PrintQueueItem(Base):
         failure_category:         Categoría fija del motivo de cancelación (opcional).
         batch_id:                 UUID compartido entre items agrupados como lote (opcional).
         scheduled_at:             Fecha/hora organizativa de impresión (opcional, no dispara nada).
+        created_by:               FK al usuario que creó el item (opcional — NULL en items pre-#131).
         created_at:               Timestamp UTC de creación.
     """
 
@@ -155,6 +156,13 @@ class PrintQueueItem(Base):
         UUID(as_uuid=True), nullable=True, index=True
     )
     scheduled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    # ── Print Log (issue #131) ──────────────────────────────────────────────
+    # Usuario que creó el item (add_to_queue / add_to_queue_from_vault).
+    # Nullable: items pre-existentes a esta migración quedan sin atribución.
+    created_by: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime,

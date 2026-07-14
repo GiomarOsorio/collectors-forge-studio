@@ -833,6 +833,37 @@ independientes (`quantity=1` cada uno) con un `batch_id` compartido, en vez
 de un solo item con `quantity=N` — permite repartir las copias entre
 impresoras/horarios distintos.
 
+### Print Log (issue #131)
+
+#### `GET /queue/log`
+Bitácora global de impresiones — TODOS los estados (a diferencia de
+`/queue/history`, que solo trae `done`/`cancelled` sin filtros). Ordenado
+por `created_at` descendente.
+
+**Query params** (todos opcionales):
+```
+?q=&printer_id=&status=&user_id=&date_from=&date_to=&page=&page_size=&format=
+```
+- `q`: busca en el nombre de la pieza (ILIKE, cubre items de Quote y de Vault).
+- `status`: CSV de estados, ej. `done,cancelled`.
+- `date_from`/`date_to`: `YYYY-MM-DD`, día calendario América/Bogotá (ambos límites inclusive), comparado contra `created_at`.
+- `page`/`page_size` (default 1/25): ignorados si `format=csv`.
+- `format=csv`: descarga el set filtrado COMPLETO (sin paginar) como `text/csv`.
+
+**Response 200 (sin `format=csv`):**
+```json
+{
+  "items": [ /* mismo shape que GET /queue/ */ ],
+  "total": 137,
+  "page": 1,
+  "page_size": 25
+}
+```
+
+Cada item incluye `created_by` (id) y `created_by_username` — el usuario
+que creó el item (`POST /queue/` o `POST /queue/from-vault`). `null` en
+items anteriores a esta migración o si el usuario fue borrado después.
+
 ---
 
 ## Vault de modelos .3mf

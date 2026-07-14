@@ -240,6 +240,7 @@ def _fake_db_pending_item_no_source(item_id=1):
     fake_item.failure_category = None
     fake_item.batch_id = None
     fake_item.scheduled_at = None
+    fake_item.created_by = None
 
     async def _gen():
         session = AsyncMock()

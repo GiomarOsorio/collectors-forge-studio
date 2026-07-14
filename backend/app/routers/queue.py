@@ -19,15 +19,20 @@ Endpoints disponibles bajo el prefijo /api/queue:
     PUT    /{id}/project    — (Re)asigna o quita el proyecto de un ítem.
     DELETE /{id}            — Elimina un ítem (solo si pending o cancelled).
     GET    /history         — Historial done + cancelled (últimos 50, desc por completed_at).
+    GET    /log             — Bitácora global con filtros + paginación + export CSV (issue #131).
 """
 
+import csv
+import io
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import List, Optional
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, func
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy import and_, or_, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -42,6 +47,7 @@ from app.schemas.queue import (
     PrintQueueItemCreate,
     PrintQueueItemFromVaultCreate,
     PrintQueueItemResponse,
+    PrintQueueLogResponse,
     PrintQueueProjectUpdate,
     PrintQueueStatusUpdate,
     QueueBatchCreateRequest,
@@ -51,6 +57,8 @@ from app.schemas.queue import (
     QueueVaultSnapshot,
 )
 from app.services.auth import get_current_user, get_operator_user
+
+_BOGOTA_TZ = ZoneInfo("America/Bogota")
 
 router = APIRouter(prefix="/api/queue", tags=["queue"])
 
@@ -155,6 +163,12 @@ async def _build_response(
             print_file_name=print_file_name,
         )
 
+    created_by_username: Optional[str] = None
+    if item.created_by is not None:
+        u_result = await db.execute(select(User).where(User.id == item.created_by))
+        creator = u_result.scalar_one_or_none()
+        created_by_username = creator.username if creator else None
+
     return PrintQueueItemResponse(
         id=item.id,
         quote_id=item.quote_id,
@@ -169,6 +183,8 @@ async def _build_response(
         failure_category=item.failure_category,
         batch_id=item.batch_id,
         scheduled_at=item.scheduled_at,
+        created_by=item.created_by,
+        created_by_username=created_by_username,
         created_at=item.created_at,
         quote=quote_snapshot,
         vault=vault_snapshot,
@@ -230,6 +246,13 @@ async def _build_responses_bulk(
         )
         models_by_id = {m.id: m for m in m_result.scalars().all()}
 
+    # Batch 5: usuarios creadores (issue #131).
+    creator_ids = {item.created_by for item in items if item.created_by is not None}
+    users_by_id: dict = {}
+    if creator_ids:
+        u_result = await db.execute(select(User).where(User.id.in_(creator_ids)))
+        users_by_id = {u.id: u for u in u_result.scalars().all()}
+
     # Construir respuestas en memoria (0 queries adicionales).
     responses = []
     for item in items:
@@ -281,6 +304,8 @@ async def _build_responses_bulk(
                 print_file_name=model.print_file_name if model else None,
             )
 
+        creator = users_by_id.get(item.created_by) if item.created_by else None
+
         responses.append(
             PrintQueueItemResponse(
                 id=item.id,
@@ -296,6 +321,8 @@ async def _build_responses_bulk(
                 failure_category=item.failure_category,
                 batch_id=item.batch_id,
                 scheduled_at=item.scheduled_at,
+                created_by=item.created_by,
+                created_by_username=creator.username if creator else None,
                 created_at=item.created_at,
                 quote=quote_snapshot,
                 vault=vault_snapshot,
@@ -433,6 +460,92 @@ async def _deduct_inventory_and_update_printer(
     printer.updated_at = now
 
 
+def _bogota_day_bounds_to_utc(date_str: str) -> tuple:
+    """
+    Convierte 'YYYY-MM-DD' (día calendario en América/Bogotá) a un rango
+    `[inicio, fin)` en UTC naive — para comparar contra `created_at`
+    (issue #131).
+
+    Raises:
+        HTTPException 400: Si `date_str` no tiene formato YYYY-MM-DD.
+    """
+    try:
+        day = date.fromisoformat(date_str)
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail=f"Fecha inválida: '{date_str}'. Use YYYY-MM-DD."
+        )
+    start_local = datetime(day.year, day.month, day.day, tzinfo=_BOGOTA_TZ)
+    end_local = start_local + timedelta(days=1)
+    start_utc = start_local.astimezone(timezone.utc).replace(tzinfo=None)
+    end_utc = end_local.astimezone(timezone.utc).replace(tzinfo=None)
+    return start_utc, end_utc
+
+
+def _log_display_fields(item: PrintQueueItemResponse) -> dict:
+    """
+    Unifica los campos de display entre el snapshot `quote` y `vault` de
+    un `PrintQueueItemResponse` — para las columnas planas del CSV
+    (issue #131). Mismo criterio que `itemView()` en el frontend
+    (queueHelpers.js).
+    """
+    if item.quote is not None:
+        return {
+            "piece_name": item.quote.piece_name,
+            "source": "quote",
+            "printer_name": item.quote.printer_name,
+            "quantity": item.quote.quantity,
+            "weight_grams": item.quote.weight_grams,
+            "print_time_hours": item.quote.print_time_hours,
+            "total_price": item.quote.total_price,
+        }
+    if item.vault is not None:
+        return {
+            "piece_name": item.vault.name,
+            "source": "vault",
+            "printer_name": item.vault.printer_name,
+            "quantity": item.vault.quantity,
+            "weight_grams": item.vault.weight_grams,
+            "print_time_hours": item.vault.print_time_hours,
+            "total_price": None,
+        }
+    return {
+        "piece_name": item.notes or f"Item #{item.id}",
+        "source": "—",
+        "printer_name": None,
+        "quantity": 1,
+        "weight_grams": None,
+        "print_time_hours": None,
+        "total_price": None,
+    }
+
+
+def _log_rows_to_csv(items: List[PrintQueueItemResponse]) -> str:
+    """Serializa una lista de items del log a CSV (issue #131)."""
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        "id", "fecha", "pieza", "origen", "impresora", "usuario", "estado",
+        "cantidad", "peso_g", "tiempo_h", "costo",
+    ])
+    for item in items:
+        f = _log_display_fields(item)
+        writer.writerow([
+            item.id,
+            item.created_at.isoformat(),
+            f["piece_name"],
+            f["source"],
+            f["printer_name"] or "",
+            item.created_by_username or "",
+            item.status,
+            f["quantity"] if f["quantity"] is not None else "",
+            f["weight_grams"] if f["weight_grams"] is not None else "",
+            f["print_time_hours"] if f["print_time_hours"] is not None else "",
+            f["total_price"] if f["total_price"] is not None else "",
+        ])
+    return buf.getvalue()
+
+
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 @router.get("/history", response_model=List[PrintQueueItemResponse])
@@ -455,6 +568,101 @@ async def list_queue_history(
     )
     items = result.scalars().all()
     return await _build_responses_bulk(items, db)
+
+
+@router.get("/log")
+async def get_print_log(
+    q: Optional[str] = None,
+    printer_id: Optional[int] = None,
+    status_csv: Optional[str] = Query(default=None, alias="status"),
+    user_id: Optional[int] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
+    format: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Bitácora global de impresiones (issue #131) — TODOS los estados
+    (pending/printing/done/cancelled), con filtros + paginación.
+
+    Endpoint separado de `/history` (que solo trae done/cancelled para el
+    tab Historial de QueuePage, sin filtros) — extenderlo hubiera forzado
+    una respuesta de doble forma (lista plana vs paginada) para no romper
+    ese consumidor existente.
+
+    Query params:
+        q:          Busca en piece_name (vault-items) y Quote.piece_name
+                    (quote-items), ILIKE.
+        printer_id: Filtra por impresora (vault-items: columna directa;
+                    quote-items: Quote.printer_id).
+        status:     CSV de estados, ej. 'done,cancelled'.
+        user_id:    Filtra por `created_by` (items pre-#131 quedan fuera).
+        date_from/date_to: 'YYYY-MM-DD', día calendario América/Bogotá,
+                    ambos límites inclusive. Compara contra `created_at`.
+        page/page_size: Paginación (ignorada si format=csv).
+        format:     'csv' → descarga el set filtrado COMPLETO sin paginar.
+
+    Ordenado por created_at descendente (más reciente primero).
+    """
+    base_query = select(PrintQueueItem).outerjoin(
+        Quote, PrintQueueItem.quote_id == Quote.id
+    )
+
+    conditions = []
+    if q:
+        like = f"%{q}%"
+        conditions.append(
+            or_(PrintQueueItem.piece_name.ilike(like), Quote.piece_name.ilike(like))
+        )
+    if printer_id is not None:
+        conditions.append(
+            or_(PrintQueueItem.printer_id == printer_id, Quote.printer_id == printer_id)
+        )
+    if status_csv:
+        statuses = [s.strip() for s in status_csv.split(",") if s.strip()]
+        if statuses:
+            conditions.append(PrintQueueItem.status.in_(statuses))
+    if user_id is not None:
+        conditions.append(PrintQueueItem.created_by == user_id)
+    if date_from:
+        start_utc, _ = _bogota_day_bounds_to_utc(date_from)
+        conditions.append(PrintQueueItem.created_at >= start_utc)
+    if date_to:
+        _, end_utc = _bogota_day_bounds_to_utc(date_to)
+        conditions.append(PrintQueueItem.created_at < end_utc)
+
+    if conditions:
+        base_query = base_query.where(and_(*conditions))
+
+    if format == "csv":
+        full_query = base_query.order_by(PrintQueueItem.created_at.desc())
+        result = await db.execute(full_query)
+        items = result.scalars().all()
+        responses = await _build_responses_bulk(items, db)
+        csv_text = _log_rows_to_csv(responses)
+        return StreamingResponse(
+            iter([csv_text]),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=print_log.csv"},
+        )
+
+    count_result = await db.execute(
+        select(func.count()).select_from(base_query.subquery())
+    )
+    total = count_result.scalar_one()
+
+    paged_query = (
+        base_query.order_by(PrintQueueItem.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    result = await db.execute(paged_query)
+    items = result.scalars().all()
+    responses = await _build_responses_bulk(items, db)
+    return PrintQueueLogResponse(items=responses, total=total, page=page, page_size=page_size)
 
 
 @router.get("/", response_model=List[PrintQueueItemResponse])
@@ -558,6 +766,7 @@ async def add_to_queue(
         status="pending",
         position=max_pos + 1,
         notes=data.notes,
+        created_by=current_user.id,
     )
     db.add(item)
     await db.commit()
@@ -650,6 +859,7 @@ async def add_to_queue_from_vault(
         project_id=data.project_id,
         status="pending",
         notes=data.notes,
+        created_by=current_user.id,
     )
 
     # "Separar copias": en vez de un item con quantity=N, crea N items
@@ -852,6 +1062,8 @@ async def duplicate_queue_item(
     NO copia `batch_id`/`scheduled_at` (organizativos, no tiene sentido
     heredarlos) ni `started_at`/`completed_at`/`failure_reason`/
     `failure_category` (pertenecen al ciclo de vida del original).
+    `created_by` tampoco se hereda: es quien duplica (issue #131), no el
+    autor del original.
     """
     original = await _get_item(db, item_id)
 
@@ -876,6 +1088,7 @@ async def duplicate_queue_item(
         status="pending",
         position=max_pos + 1,
         notes=original.notes,
+        created_by=current_user.id,
     )
     db.add(clone)
     await db.commit()

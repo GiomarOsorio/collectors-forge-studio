@@ -82,6 +82,7 @@ def _fake_queue_item(item_id=1, status="pending", position=0):
     m.failure_category = None
     m.batch_id = None
     m.scheduled_at = None
+    m.created_by = None
     m.created_at = datetime.now(timezone.utc).replace(tzinfo=None)
     return m
 
@@ -322,7 +323,12 @@ class TestQueueDuplicate:
             result_item.scalar_one_or_none.return_value = original
             result_maxpos = MagicMock()
             result_maxpos.scalar.return_value = 5
-            session.execute.side_effect = [result_item, result_maxpos]
+            # El clone hereda created_by=current_user.id (issue #131) — eso
+            # dispara una query extra en _build_response para resolver el
+            # username (acá devolvemos None, no importa para este test).
+            result_creator = MagicMock()
+            result_creator.scalar_one_or_none.return_value = None
+            session.execute.side_effect = [result_item, result_maxpos, result_creator]
             _fake_refresh_assigns_id_and_created_at(session, start_id=42)
             yield session
 
@@ -471,11 +477,13 @@ class TestQueueSplitCopies:
             result_printer.scalar_one_or_none.return_value = printer
             result_maxpos = MagicMock()
             result_maxpos.scalar.return_value = 0
+            result_creator = MagicMock()
+            result_creator.scalar_one_or_none.return_value = None
             # Orden: modelo, impresora, maxpos, (dentro de _build_response del
-            # primer item) impresora de nuevo, modelo de nuevo.
+            # primer item) impresora de nuevo, modelo de nuevo, creador (#131).
             session.execute.side_effect = [
                 result_model, result_printer, result_maxpos,
-                result_printer, result_model,
+                result_printer, result_model, result_creator,
             ]
             _fake_refresh_assigns_id_and_created_at(session, start_id=200)
             captured["session"] = session
@@ -516,9 +524,11 @@ class TestQueueSplitCopies:
             result_printer.scalar_one_or_none.return_value = printer
             result_maxpos = MagicMock()
             result_maxpos.scalar.return_value = 0
+            result_creator = MagicMock()
+            result_creator.scalar_one_or_none.return_value = None
             session.execute.side_effect = [
                 result_model, result_printer, result_maxpos,
-                result_printer, result_model,
+                result_printer, result_model, result_creator,
             ]
             _fake_refresh_assigns_id_and_created_at(session, start_id=300)
             captured["session"] = session
@@ -656,3 +666,90 @@ class TestRegressionInventoryDeduction:
         with pytest.raises(HTTPException) as exc_info:
             await _deduct_inventory_and_update_printer(db, quote)
         assert exc_info.value.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# 7. created_by poblado al crear items (issue #131)
+# ---------------------------------------------------------------------------
+
+class TestCreatedByPopulation:
+    async def test_add_to_queue_from_vault_popula_created_by(self):
+        model = _fake_vault_model(sliced_time_seconds=None, sliced_weight_g=None)
+        printer = _fake_printer()
+        captured = {}
+
+        async def _gen():
+            session = AsyncMock()
+            result_model = MagicMock()
+            result_model.scalar_one_or_none.return_value = model
+            result_printer = MagicMock()
+            result_printer.scalar_one_or_none.return_value = printer
+            result_maxpos = MagicMock()
+            result_maxpos.scalar.return_value = 0
+            result_creator = MagicMock()
+            result_creator.scalar_one_or_none.return_value = None
+            session.execute.side_effect = [
+                result_model, result_printer, result_maxpos,
+                result_printer, result_model, result_creator,
+            ]
+            _fake_refresh_assigns_id_and_created_at(session, start_id=600)
+            captured["session"] = session
+            yield session
+
+        user = _fake_user()
+        user.id = 42
+        _set_overrides({get_db: _gen, get_current_user: lambda: user})
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.post(
+                    "/api/queue/from-vault",
+                    json={"vault_model_id": 1, "printer_id": 1, "quantity": 1},
+                )
+        finally:
+            _clear_overrides()
+        assert r.status_code == 201
+        created_item = captured["session"].add.call_args[0][0]
+        assert created_item.created_by == 42
+
+    async def test_duplicate_popula_created_by_de_quien_duplica_no_del_original(self):
+        """created_by del clone = quien duplica, NO se hereda del original."""
+        original = MagicMock()
+        original.id = 1
+        original.quote_id = None
+        original.vault_model_id = None
+        original.print_file_snapshot_path = None
+        original.piece_name = None
+        original.printer_id = None
+        original.filament_id = None
+        original.quantity = 1
+        original.weight_grams = None
+        original.print_time_hours = None
+        original.project_id = None
+        original.notes = None
+        original.created_by = 999  # el original lo creó OTRO usuario
+        captured = {}
+
+        async def _gen():
+            session = AsyncMock()
+            result_item = MagicMock()
+            result_item.scalar_one_or_none.return_value = original
+            result_maxpos = MagicMock()
+            result_maxpos.scalar.return_value = 0
+            result_creator = MagicMock()
+            result_creator.scalar_one_or_none.return_value = None
+            session.execute.side_effect = [result_item, result_maxpos, result_creator]
+            _fake_refresh_assigns_id_and_created_at(session, start_id=700)
+            captured["session"] = session
+            yield session
+
+        user = _fake_user()
+        user.id = 7
+        _set_overrides({get_db: _gen, get_current_user: lambda: user})
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.post("/api/queue/1/duplicate")
+        finally:
+            _clear_overrides()
+        assert r.status_code == 201
+        created_item = captured["session"].add.call_args[0][0]
+        assert created_item.created_by == 7

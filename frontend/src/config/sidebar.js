@@ -22,6 +22,7 @@ import {
   ListOrdered,
   Package,
   Printer,
+  ScrollText,
   Settings,
   ShoppingCart,
   Trash,
@@ -100,6 +101,7 @@ export const SIDEBAR_APPS = [
     badgeKey: 'pendingQueue',
     items: [
       { to: '/queue', icon: ListOrdered, label: 'Cola', end: true },
+      { to: '/queue/log', icon: ScrollText, label: 'Bitácora' },
     ],
   },
   {

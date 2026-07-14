@@ -20,6 +20,11 @@ pdfplumber==0.11.10
 slowapi==0.1.9
 boto3
 
+# Print Log (#131): zoneinfo necesita datos IANA — python:3.11-slim no
+# garantiza tzdata del sistema instalado, este paquete lo asegura sin
+# depender del SO del contenedor.
+tzdata==2025.2
+
 # Vault: thumbnail STL (#129) — matplotlib importa lazy dentro de la
 # función que lo usa, no paga costo de import en cada arranque.
 numpy-stl==3.1.2
