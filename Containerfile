@@ -32,7 +32,7 @@ RUN echo "── frontend package.json version ──" && \
 RUN npm ci --ignore-scripts
 
 # Verifica que las deps críticas estén realmente instaladas.
-RUN npm ls @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities react-router-dom axios react-i18next i18next \
+RUN npm ls @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities react-router-dom axios react-i18next i18next three gcode-preview \
     || (echo "ERROR: deps faltantes tras npm ci." && exit 1)
 
 # Verifica que Node puede RESOLVER (no solo listar) los packages críticos.
@@ -42,6 +42,8 @@ RUN node -e "console.log('resolved:', require.resolve('@dnd-kit/core'))" \
     || (echo "ERROR: Node no resuelve @dnd-kit/core." && exit 1)
 RUN node -e "console.log('resolved:', require.resolve('axios'))" \
     || (echo "ERROR: Node no resuelve axios. Build de Vite/Rollup va a fallar." && exit 1)
+RUN node -e "console.log('resolved:', require.resolve('three'))" \
+    || (echo "ERROR: Node no resuelve three. gcode-preview / ModelViewer3D van a fallar en build." && exit 1)
 
 RUN npm run build
 
