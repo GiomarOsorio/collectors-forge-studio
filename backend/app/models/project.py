@@ -8,15 +8,40 @@ inventario — es puramente organizativo.
 
 Metadata (issue #136, sub-ticket 1/3): cover photo, color, link externo
 y vínculo opcional a una cotización de cliente ya existente.
+
+Vínculo a Vault (issue #136, sub-ticket 2/3): puente N:M puro
+`project_model_files` — mismo patrón que `model_file_tags` de
+`app.models.vault_tag`. Un proyecto puede referenciar N archivos de
+Vault (ej. "todas las piezas de este encargo"); un archivo puede estar
+en N proyectos.
 """
 
 from datetime import datetime, timezone
-from typing import Optional
+from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Table, Text, text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+if TYPE_CHECKING:
+    from app.models.model_file import ModelFile
+
+# Tabla de asociación pura M2M — sin columnas propias más allá de las FKs.
+project_model_files = Table(
+    "project_model_files",
+    Base.metadata,
+    Column(
+        "project_id", Integer,
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "model_file_id", Integer,
+        ForeignKey("model_files.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+)
 
 
 class Project(Base):
@@ -68,4 +93,8 @@ class Project(Base):
         DateTime,
         default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
         onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
+
+    files: Mapped[List["ModelFile"]] = relationship(
+        "ModelFile", secondary=project_model_files, order_by="ModelFile.created_at.desc()"
     )

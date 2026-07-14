@@ -73,7 +73,8 @@ Las migraciones están en `backend/alembic/versions/`. Se aplican con `alembic u
 | `82717e0701b3` | `82717e0701b3_print_queue_created_by.py` | `print_queue.created_by` FK→users (issue #131) |
 | `8422a0c213e9` | `8422a0c213e9_inventory_spools.py` | Tabla `spools`, `print_queue.spool_id`, `app_settings.spool_low_stock_threshold_g` (issue #134) |
 | `9533b1d4f6a2` | `9533b1d4f6a2_maintenance_schedules.py` | Tabla `maintenance_schedules` (recordatorios de mantenimiento por intervalo, issue #138) |
-| `a1b2c3d4e5f7` | `a1b2c3d4e5f7_project_metadata.py` | **Head actual** — `projects.cover_photo_key`/`color`/`external_url`/`client_quote_id` (issue #136, sub-ticket 1/3) |
+| `a1b2c3d4e5f7` | `a1b2c3d4e5f7_project_metadata.py` | `projects.cover_photo_key`/`color`/`external_url`/`client_quote_id` (issue #136, sub-ticket 1/3) |
+| `b2c3d4e5f6a8` | `b2c3d4e5f6a8_project_model_files.py` | **Head actual** — Tabla puente `project_model_files` N:M Project↔ModelFile (issue #136, sub-ticket 2/3) |
 
 **Aplicar todas las migraciones:**
 ```bash
@@ -447,8 +448,8 @@ en gramos — ver docstring completo en `backend/app/models/spool.py`)**:
 
 Agrupador organizativo de ítems de la cola de impresión (`print_queue.project_id`,
 FK SET NULL) — no participa en cálculos de costo ni de inventario. Metadata
-agregada en issue #136 (sub-ticket 1/3 de 3 — el puente N:M con archivos de
-Vault y el export/import quedan en sub-tickets aparte).
+agregada en issue #136 sub-ticket 1/3; vínculo a Vault en sub-ticket 2/3
+(el export/import queda en el sub-ticket 3/3).
 
 | Columna | Tipo | Descripción |
 |---|---|---|
@@ -461,6 +462,19 @@ Vault y el export/import quedan en sub-tickets aparte).
 | `color` | VARCHAR(7) nullable | Hex `#RRGGBB` para el badge/acento de la card |
 | `external_url` | VARCHAR(500) nullable | Link externo (MakerWorld, Printables, pedido) |
 | `client_quote_id` | INTEGER FK → client_quotes SET NULL, indexado | Vínculo opcional a una cotización ya emitida. El código "COT-XXXX" se calcula desde el id, no se duplica como columna |
+
+### `project_model_files` (issue #136, sub-ticket 2/3)
+
+Puente N:M puro — mismo patrón que `model_file_tags` (`app.models.vault_tag`),
+sin columnas propias más allá de las FKs. Un proyecto puede vincular N
+archivos de Vault; un archivo puede estar en N proyectos.
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `project_id` | INTEGER FK → projects CASCADE | — |
+| `model_file_id` | INTEGER FK → model_files CASCADE, indexado | — |
+
+PK compuesta `(project_id, model_file_id)`.
 | `created_at` / `updated_at` | TIMESTAMP | — |
 
 ---

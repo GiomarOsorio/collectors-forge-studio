@@ -370,3 +370,119 @@ class TestProjectCover:
         finally:
             _clear_overrides()
         assert r.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Vínculo a Vault (issue #136, sub-ticket 2/3)
+# ---------------------------------------------------------------------------
+
+def _fake_model_file(file_id, name="Figura.3mf", thumbnail_key=None):
+    from datetime import datetime
+    f = MagicMock()
+    f.id = file_id
+    f.name = name
+    f.thumbnail_key = thumbnail_key
+    f.updated_at = datetime(2026, 1, 1)
+    f.is_print_ready = True
+    return f
+
+
+class TestProjectFiles:
+    async def test_get_files_proyecto_no_encontrado_retorna_404(self):
+        _set_overrides({
+            get_db: _fake_db_sequence(_exec_result(scalar_one_or_none=None)),
+            get_current_user: lambda: _fake_user(),
+        })
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.get("/api/projects/999/files")
+        finally:
+            _clear_overrides()
+        assert r.status_code == 404
+
+    async def test_get_files_lista_los_archivos_vinculados(self):
+        project = _fake_project(project_id=1)
+        project.files = [_fake_model_file(10, thumbnail_key="thumbnails/10.png"), _fake_model_file(11)]
+        _set_overrides({
+            get_db: _fake_db_sequence(_exec_result(scalar_one_or_none=project)),
+            get_current_user: lambda: _fake_user(),
+        })
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.get("/api/projects/1/files")
+        finally:
+            _clear_overrides()
+        assert r.status_code == 200
+        body = r.json()
+        assert len(body) == 2
+        assert body[0]["id"] == 10
+        assert body[0]["local_thumbnail_url"] is not None
+        assert body[1]["local_thumbnail_url"] is None
+
+    async def test_post_files_agrega_idempotente(self):
+        project = _fake_project(project_id=1)
+        project.files = [_fake_model_file(10)]  # ya vinculado
+        db = AsyncMock()
+
+        async def _refresh(obj, attribute_names=None):
+            return None
+        db.refresh = _refresh
+        db.execute = AsyncMock(side_effect=[
+            _exec_result(scalar_one_or_none=project),
+            _exec_result(scalars_all=[_fake_model_file(10), _fake_model_file(11)]),
+        ])
+
+        async def _gen():
+            yield db
+
+        _set_overrides({get_db: _gen, get_current_user: lambda: _fake_user(role="operator")})
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.post("/api/projects/1/files", json={"model_file_ids": [10, 11]})
+        finally:
+            _clear_overrides()
+        assert r.status_code == 200
+        ids = [f["id"] for f in r.json()]
+        assert ids == [10, 11]  # sin duplicar el 10 que ya estaba
+
+    async def test_post_files_ids_faltantes_retorna_404(self):
+        project = _fake_project(project_id=1)
+        project.files = []
+        _set_overrides({
+            get_db: _fake_db_sequence(
+                _exec_result(scalar_one_or_none=project),
+                _exec_result(scalars_all=[]),
+            ),
+            get_current_user: lambda: _fake_user(role="operator"),
+        })
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.post("/api/projects/1/files", json={"model_file_ids": [999]})
+        finally:
+            _clear_overrides()
+        assert r.status_code == 404
+        assert "999" in r.json()["detail"]
+
+    async def test_delete_file_no_operator_retorna_403(self):
+        _set_overrides({
+            get_db: _fake_db_empty,
+            get_current_user: lambda: _fake_user(role="viewer"),
+        })
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.delete("/api/projects/1/files/10")
+        finally:
+            _clear_overrides()
+        assert r.status_code == 403
+
+    async def test_delete_file_ok(self):
+        _set_overrides({
+            get_db: _fake_db_empty,
+            get_current_user: lambda: _fake_user(role="operator"),
+        })
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.delete("/api/projects/1/files/10")
+        finally:
+            _clear_overrides()
+        assert r.status_code == 204
