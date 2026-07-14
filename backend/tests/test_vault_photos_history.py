@@ -72,9 +72,9 @@ def _fake_photo(photo_id=1, model_file_id=1, minio_key="photos/1/abc.png", capti
 def _tiny_png_bytes() -> bytes:
     # 1x1 PNG real — pasa el magic-byte check de IMAGE_MAGIC_CHECKS.
     return bytes.fromhex(
-        "89504e470d0a1a0a0000000d494844520000000100000001080600000"
-        "01f15c4890000000a4944415478da6360000002000155020102980700"
-        "000000049454e44ae426082"
+        "89504e470d0a1a0a0000000d49484452000000010000000108060000"
+        "001f15c4890000000d49444154789c63606060600000000500"
+        "01a5f645400000000049454e44ae426082"
     )
 
 
