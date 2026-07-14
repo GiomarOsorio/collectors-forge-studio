@@ -53,6 +53,11 @@ export default defineConfig({
       // también matchearía "three/addons/*" (usado por ModelViewer3D) y
       // rompería esos imports.
       { find: /^three$/, replacement: path.resolve(__dirname, 'node_modules/three/build/three.module.js') },
+      // `gcode-preview` también importa "lil-gui" (dependencia transitiva
+      // suya, no directa de esta app) desde su bundle ESM — mismo bug de
+      // resolución en Alpine que "three" arriba. lil-gui expone `module`
+      // (ESM) y `main` (UMD) separados; forzar el ESM.
+      { find: /^lil-gui$/, replacement: path.resolve(__dirname, 'node_modules/lil-gui/dist/lil-gui.esm.js') },
     ],
   },
   server: {
