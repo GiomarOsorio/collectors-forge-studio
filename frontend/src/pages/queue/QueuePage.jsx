@@ -80,6 +80,7 @@ import {
   getProjects,
   getQueue,
   getQueueHistory,
+  getSpools,
   getVaultFiles,
   reorderQueue,
   scheduleQueueItem,
@@ -523,7 +524,7 @@ function QueueDrawerBody({ item, projects, onAssignProject }) {
         </Card>
       )}
 
-      {v.source === 'vault' && (v.filament_name || v.sliced_filament_type) && (
+      {v.source === 'vault' && (v.filament_name || v.sliced_filament_type || v.spool_label_code) && (
         <Card className="p-3">
           <span className="lbl-eyebrow text-[9px]">Filamento</span>
           <p className="text-sm text-tech-white mt-0.5 truncate">
@@ -534,6 +535,12 @@ function QueueDrawerBody({ item, projects, onAssignProject }) {
               </span>
             )}
           </p>
+          {v.spool_label_code && (
+            <p className="mono text-[11px] text-amber-300 mt-1">
+              Bobina {v.spool_label_code}
+              {v.spool_percent_remaining != null && ` · ${v.spool_percent_remaining.toFixed(0)}% restante`}
+            </p>
+          )}
         </Card>
       )}
 
@@ -717,12 +724,27 @@ function VaultPickerDrawer({ open, onClose, onAdded, printers, filaments, projec
   const [form, setForm] = useState({
     printer_id: '',
     filament_id: '',
+    spool_id: '',
     quantity: 1,
     notes: '',
     project_id: '',
     split_copies: false,
   });
   const [saving, setSaving] = useState(false);
+  const [spools, setSpools] = useState([]);
+
+  // Bobinas activas del filamento elegido (issue #134) — se recargan cada
+  // vez que cambia `filament_id`; `spool_id` se resetea porque una bobina
+  // pertenece a un solo ítem de inventario.
+  useEffect(() => {
+    if (!form.filament_id) {
+      setSpools([]);
+      return;
+    }
+    getSpools({ inventory_item_id: form.filament_id, status: 'active' })
+      .then((res) => setSpools(res.data || []))
+      .catch(() => setSpools([]));
+  }, [form.filament_id]);
 
   // Reset cuando abre/cierra.
   useEffect(() => {
@@ -732,6 +754,7 @@ function VaultPickerDrawer({ open, onClose, onAdded, printers, filaments, projec
     setForm({
       printer_id: printers[0]?.id ? String(printers[0].id) : '',
       filament_id: '',
+      spool_id: '',
       quantity: 1,
       notes: '',
       project_id: '',
@@ -773,6 +796,7 @@ function VaultPickerDrawer({ open, onClose, onAdded, printers, filaments, projec
         vault_model_id: selectedModel.id,
         printer_id: parseInt(form.printer_id, 10),
         filament_id: form.filament_id ? parseInt(form.filament_id, 10) : null,
+        spool_id: form.spool_id ? parseInt(form.spool_id, 10) : null,
         quantity,
         notes: form.notes.trim() || null,
         project_id: form.project_id ? parseInt(form.project_id, 10) : null,
@@ -867,7 +891,7 @@ function VaultPickerDrawer({ open, onClose, onAdded, printers, filaments, projec
             <select
               className={FORM_INPUT_CLS}
               value={form.filament_id}
-              onChange={(e) => setForm((p) => ({ ...p, filament_id: e.target.value }))}
+              onChange={(e) => setForm((p) => ({ ...p, filament_id: e.target.value, spool_id: '' }))}
             >
               <option value="">— Sin asignar —</option>
               {filaments.map((f) => (
@@ -875,6 +899,25 @@ function VaultPickerDrawer({ open, onClose, onAdded, printers, filaments, projec
               ))}
             </select>
           </FormFieldRow>
+          {form.filament_id && spools.length > 0 && (
+            <FormFieldRow
+              label="Bobina"
+              hint="Opcional — si eliges una, el consumo va a esta bobina específica (no al agregado)"
+            >
+              <select
+                className={FORM_INPUT_CLS}
+                value={form.spool_id}
+                onChange={(e) => setForm((p) => ({ ...p, spool_id: e.target.value }))}
+              >
+                <option value="">— Sin bobina específica —</option>
+                {spools.map((s) => (
+                  <option key={s.id} value={String(s.id)}>
+                    {s.label_code} · {s.percent_remaining.toFixed(0)}% ({Number(s.remaining_weight_g).toFixed(0)}g)
+                  </option>
+                ))}
+              </select>
+            </FormFieldRow>
+          )}
           <div className="grid grid-cols-2 gap-2.5">
             <FormFieldRow label="Cantidad" required>
               <input

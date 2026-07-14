@@ -568,6 +568,7 @@ class TestRegressionInventoryDeduction:
         item = MagicMock()
         item.quantity = 3
         item.filament_id = 10
+        item.spool_id = None
         item.weight_grams = Decimal("25.00")
         item.printer_id = 5
         item.print_time_hours = Decimal("2.5")
@@ -597,6 +598,7 @@ class TestRegressionInventoryDeduction:
         item = MagicMock()
         item.quantity = 100
         item.filament_id = 10
+        item.spool_id = None
         item.weight_grams = Decimal("25.00")
         item.printer_id = None
         item.print_time_hours = None

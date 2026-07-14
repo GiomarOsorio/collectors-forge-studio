@@ -605,6 +605,63 @@ Importa inventario desde JSON exportado previamente.
 
 ---
 
+## Bobinas individuales (Spools, issue #134)
+
+Tracking por-bobina física: peso restante, costo, colores/efectos
+visuales. Ver `docs/base-de-datos.md#spools-issue-134` para la regla
+completa de sincronía con el agregado (`InventoryItem.quantity`).
+
+### `GET /inventory/spools/`
+Lista bobinas con datos del ítem padre embebidos.
+
+**Query params** (todos opcionales): `inventory_item_id`, `status` (CSV,
+ej. `active,finished`), `material`, `q`.
+
+### `POST /inventory/spools/`
+Alta masiva (1-100 bobinas idénticas).
+
+**Body:**
+```json
+{
+  "inventory_item_id": 5,
+  "count": 5,
+  "initial_weight_g": 1000,
+  "cost": 25.50,
+  "visual_effect": "sparkle",
+  "extra_colors": { "stops": ["ff0000", "00ff00"] },
+  "add_to_stock": false
+}
+```
+`add_to_stock`: si `true`, suma `initial_weight_g × count` al agregado
+del padre (compra nueva). Default `false` (bobinas para stock ya contado).
+
+### `PUT /inventory/spools/{id}`
+Edita una bobina — peso restante manual ("pesé la bobina"), stops,
+efecto, notas o status. NO toca el agregado del padre.
+
+### `DELETE /inventory/spools/{id}`
+(admin) Elimina una bobina — bloqueado si algún ítem de la cola
+`printing` la referencia.
+
+### `GET /inventory/spools/low-stock`
+Gramos restantes de bobinas activas por `filament_type` vs. el umbral
+configurado (`AppSettings.spool_low_stock_threshold_g`).
+
+**Response 200:**
+```json
+[
+  { "filament_type": "PLA", "total_remaining_g": 150.0, "threshold_g": 200.0, "below": true }
+]
+```
+
+### `spool_id` en `POST /queue/from-vault`
+Si se setea, el consumo al marcar `done` va SOLO a esa bobina — reemplaza
+el descuento agregado normal. Debe pertenecer al mismo `inventory_item_id`
+que `filament_id` (si ambos vienen); si solo viene `spool_id`,
+`filament_id` se deriva automáticamente.
+
+---
+
 ## Pedidos de compra
 
 ### `GET /inventory/purchases/`

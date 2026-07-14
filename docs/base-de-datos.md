@@ -70,7 +70,8 @@ Las migraciones están en `backend/alembic/versions/`. Se aplican con `alembic u
 | … | *(varias migraciones intermedias no documentadas aquí — ver `alembic history` para la cadena completa)* | |
 | `2787aa619580` | `2787aa619580_vault_photos_notes_failure_reason.py` | Tabla `model_file_photos`, `model_files.notes`, `print_queue.failure_reason`/`failure_category` (issue #130) |
 | `68c641f83b25` | `68c641f83b25_queue_batch_schedule.py` | `print_queue.batch_id` + `scheduled_at` (issue #133) |
-| `82717e0701b3` | `82717e0701b3_print_queue_created_by.py` | **Head actual** — `print_queue.created_by` FK→users (issue #131) |
+| `82717e0701b3` | `82717e0701b3_print_queue_created_by.py` | `print_queue.created_by` FK→users (issue #131) |
+| `8422a0c213e9` | `8422a0c213e9_inventory_spools.py` | **Head actual** — Tabla `spools`, `print_queue.spool_id`, `app_settings.spool_low_stock_threshold_g` (issue #134) |
 
 **Aplicar todas las migraciones:**
 ```bash
@@ -277,6 +278,7 @@ Singleton — solo hay una fila (se consulta con `LIMIT 1`).
 | `labor_cost_per_hour` | NUMERIC(12,4) | USD/hora de trabajo |
 | `default_margin_percent` | NUMERIC(8,4) | % de margen por defecto |
 | `currency` | VARCHAR(10) | `USD` |
+| `spool_low_stock_threshold_g` | NUMERIC(8,1) | Umbral de alerta de bobinas bajas por material, en gramos (issue #134) |
 
 ### `electricity_tariffs`
 
@@ -372,6 +374,42 @@ Cada fila puede tener dos slots: `source_file` (`.3mf` editable) y
 | `batch_id` | UUID nullable, indexado | Agrupa items como lote — compartido entre miembros (issue #133) |
 | `scheduled_at` | TIMESTAMP nullable | Fecha/hora organizativa — NO dispara nada automático (issue #133) |
 | `created_by` | INTEGER FK → users SET NULL, nullable | Usuario que creó el item — NULL en items pre-#131 (issue #131) |
+| `spool_id` | INTEGER FK → spools SET NULL, nullable, indexado | Bobina física a consumir — reemplaza el descuento agregado normal (issue #134) |
+
+---
+
+### `spools` (issue #134)
+
+Bobina física individual de filamento, hija de un `InventoryItem` de
+categoría Filamento. **Regla de sincronía con el agregado (boundary-only,
+en gramos — ver docstring completo en `backend/app/models/spool.py`)**:
+
+- Alta: por defecto NO toca `InventoryItem.quantity` (bobinas creadas para
+  trackear stock YA contado). Con `add_to_stock=true`, suma
+  `initial_weight_g × count`.
+- Consumo (marcar `done` con `spool_id` asignado): descuenta SOLO
+  `remaining_weight_g` — el agregado NO se mueve. El descuento agregado
+  normal se omite por completo para ese item (evita doble descuento).
+- Agotamiento (`remaining_weight_g` llega a 0): `status='finished'` +
+  resta `initial_weight_g` (no `remaining_weight_g`) del agregado.
+- Insuficiente al consumir: floorea en 0 y devuelve un warning — NO bloquea
+  (a diferencia del camino sin bobina, que sí lanza 400).
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `inventory_item_id` | INTEGER FK → inventory_items CASCADE, indexado | Ítem de inventario padre |
+| `label_code` | VARCHAR(12) UNIQUE | Código corto para etiquetas físicas, ej. `SP-0042` — asignado post-flush |
+| `initial_weight_g` | NUMERIC(8,1) | Peso al abrir la bobina |
+| `remaining_weight_g` | NUMERIC(8,1) | Peso restante actual |
+| `cost` | NUMERIC(12,2) nullable | Costo de esta bobina; NULL hereda `price_per_kg` del padre |
+| `extra_colors` | JSONB nullable | `{"stops": ["RRGGBB", ...]}` para gradiente/multicolor |
+| `visual_effect` | VARCHAR(20) nullable | sparkle\|wood\|marble\|glow\|matte\|silk\|galaxy\|rainbow\|metal\|translucent\|gradient\|dual-color\|tri-color\|multicolor |
+| `status` | VARCHAR(12) | `active` \| `finished` \| `archived` |
+| `opened_at` | TIMESTAMP nullable | — |
+| `finished_at` | TIMESTAMP nullable | Poblado automáticamente al agotarse |
+| `notes` | VARCHAR(500) nullable | — |
+| `created_at` / `updated_at` | TIMESTAMP | — |
 
 ---
 

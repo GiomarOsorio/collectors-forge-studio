@@ -24,6 +24,7 @@
  * - /inventory/purchases         → Pedidos de compra (tabla)
  * - /inventory/prints            → Disponible para venta
  * - /inventory/io                → Importar / Exportar CSV
+ * - /inventory/spools            → Bobinas individuales (issue #134)
  * - /cost                        → Dashboard de costos (tabs Cotizaciones / Historial)
  * - /cost/calculator             → Calculadora de costos
  * - /cost/manual                 → Nueva cotización manual
@@ -75,6 +76,7 @@ const CompanyTemplateEditorPage= lazy(() => import('./pages/company/CompanyTempl
 const InventoryPurchasesPage   = lazy(() => import('./pages/inventory/InventoryPurchasesPage'));
 const InventoryPrintsPage      = lazy(() => import('./pages/inventory/InventoryPrintsPage'));
 const InventoryImportExportPage= lazy(() => import('./pages/inventory/InventoryImportExportPage'));
+const InventorySpoolsPage      = lazy(() => import('./pages/inventory/InventorySpoolsPage'));
 
 /**
  * Componente guardia de ruta privada.
@@ -170,6 +172,7 @@ function AppRoutes() {
           <Route path="purchases"    element={<InventoryPurchasesPage />} />
           <Route path="prints"       element={<InventoryPrintsPage />} />
           <Route path="io"           element={<InventoryImportExportPage />} />
+          <Route path="spools"       element={<InventorySpoolsPage />} />
         </Route>
 
         {/* Cost — `index` es el dashboard (tabs Cotizaciones / Historial).

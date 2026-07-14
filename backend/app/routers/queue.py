@@ -42,6 +42,7 @@ from app.models.printer import Printer
 from app.models.project import Project
 from app.models.queue import PrintQueueItem
 from app.models.quote import Quote
+from app.models.spool import Spool
 from app.models.user import User
 from app.schemas.queue import (
     PrintQueueItemCreate,
@@ -86,13 +87,17 @@ async def _get_item(db: AsyncSession, item_id: int) -> PrintQueueItem:
 
 
 async def _build_response(
-    item: PrintQueueItem, db: AsyncSession
+    item: PrintQueueItem, db: AsyncSession, spool_warning: Optional[str] = None
 ) -> PrintQueueItemResponse:
     """
     Construye la respuesta enriquecida con el snapshot de la fuente
     (Quote o Vault). Si la fuente fue eliminada después de encolar, el
     snapshot correspondiente queda None — el item sigue siendo válido en
     historial (terminales).
+
+    `spool_warning` (issue #134) es transitorio — solo lo pasa
+    `update_queue_status` justo después de descontar una bobina
+    insuficiente; en cualquier otro llamado queda None.
 
     Úsese para ítems individuales. Para listas usar `_build_responses_bulk`.
     """
@@ -149,6 +154,15 @@ async def _build_response(
                 sliced_filament_type = model.sliced_filament_type
                 print_file_name = model.print_file_name
 
+        spool_label_code: Optional[str] = None
+        spool_percent_remaining: Optional[float] = None
+        if item.spool_id is not None:
+            s_result = await db.execute(select(Spool).where(Spool.id == item.spool_id))
+            sp = s_result.scalar_one_or_none()
+            if sp is not None:
+                spool_label_code = sp.label_code
+                spool_percent_remaining = sp.percent_remaining
+
         vault_snapshot = QueueVaultSnapshot(
             vault_model_id=item.vault_model_id or 0,
             name=item.piece_name or "Modelo del Vault",
@@ -161,6 +175,9 @@ async def _build_response(
             print_time_hours=item.print_time_hours,
             quantity=int(item.quantity or 1),
             print_file_name=print_file_name,
+            spool_id=item.spool_id,
+            spool_label_code=spool_label_code,
+            spool_percent_remaining=spool_percent_remaining,
         )
 
     created_by_username: Optional[str] = None
@@ -185,6 +202,7 @@ async def _build_response(
         scheduled_at=item.scheduled_at,
         created_by=item.created_by,
         created_by_username=created_by_username,
+        spool_warning=spool_warning,
         created_at=item.created_at,
         quote=quote_snapshot,
         vault=vault_snapshot,
@@ -253,6 +271,13 @@ async def _build_responses_bulk(
         u_result = await db.execute(select(User).where(User.id.in_(creator_ids)))
         users_by_id = {u.id: u for u in u_result.scalars().all()}
 
+    # Batch 6: bobinas asignadas (issue #134).
+    spool_ids = {item.spool_id for item in items if item.spool_id is not None}
+    spools_by_id: dict = {}
+    if spool_ids:
+        sp_result = await db.execute(select(Spool).where(Spool.id.in_(spool_ids)))
+        spools_by_id = {s.id: s for s in sp_result.scalars().all()}
+
     # Construir respuestas en memoria (0 queries adicionales).
     responses = []
     for item in items:
@@ -290,6 +315,7 @@ async def _build_responses_bulk(
             model = (
                 models_by_id.get(item.vault_model_id) if item.vault_model_id else None
             )
+            spool = spools_by_id.get(item.spool_id) if item.spool_id else None
             vault_snapshot = QueueVaultSnapshot(
                 vault_model_id=item.vault_model_id or 0,
                 name=item.piece_name or "Modelo del Vault",
@@ -302,6 +328,9 @@ async def _build_responses_bulk(
                 print_time_hours=item.print_time_hours,
                 quantity=int(item.quantity or 1),
                 print_file_name=model.print_file_name if model else None,
+                spool_id=item.spool_id,
+                spool_label_code=spool.label_code if spool else None,
+                spool_percent_remaining=spool.percent_remaining if spool else None,
             )
 
         creator = users_by_id.get(item.created_by) if item.created_by else None
@@ -333,19 +362,60 @@ async def _build_responses_bulk(
 
 async def _deduct_vault_item(
     db: AsyncSession, item: PrintQueueItem
-) -> None:
+) -> Optional[str]:
     """
     Descuenta inventario y suma horas a la impresora para un item que vino
     del Vault (no de un Quote). Mucho más simple que el camino de Quote:
     no hay additional_filaments_detail ni supplies_detail.
 
-    - Si `filament_id` está seteado, descuenta `weight_grams * quantity` del item.
-    - Si `printer_id` está seteado, suma `print_time_hours * quantity` a current_hours.
+    - Si `spool_id` está seteado (issue #134): el descuento fino va SOLO
+      a `Spool.remaining_weight_g` — el descuento agregado de abajo se
+      OMITE por completo para evitar doble descuento (ver docstring de
+      `Spool` para la regla completa de sincronía con el agregado).
+      Insuficiente NO bloquea: floorea en 0 y devuelve un warning.
+    - Si NO hay spool pero sí `filament_id`, descuenta `weight_grams *
+      quantity` del agregado (comportamiento histórico, intacto).
+    - Si `printer_id` está seteado, suma `print_time_hours * quantity` a
+      current_hours (en AMBOS casos — el spool no afecta esto).
+
+    Returns:
+        Mensaje de advertencia si el consumo de la bobina excedió lo que
+        quedaba (no bloquea) — None en cualquier otro caso.
     """
     multiplier = Decimal(str(int(item.quantity or 1)))
     now = datetime.now(timezone.utc).replace(tzinfo=None)
+    warning: Optional[str] = None
 
-    if item.filament_id is not None and item.weight_grams is not None:
+    if item.spool_id is not None:
+        spool_result = await db.execute(
+            select(Spool).where(Spool.id == item.spool_id).with_for_update()
+        )
+        spool = spool_result.scalar_one_or_none()
+        if spool is not None and item.weight_grams is not None:
+            consumed = Decimal(str(item.weight_grams)) * multiplier
+            new_remaining = spool.remaining_weight_g - consumed
+            if new_remaining < 0:
+                warning = (
+                    f"Bobina {spool.label_code}: quedaban "
+                    f"{float(spool.remaining_weight_g):.1f}g, se consumieron "
+                    f"{float(consumed):.1f}g (posible error de pesaje)."
+                )
+                new_remaining = Decimal("0")
+            spool.remaining_weight_g = new_remaining
+            if spool.remaining_weight_g <= 0 and spool.status == "active":
+                spool.status = "finished"
+                spool.finished_at = now
+                parent_result = await db.execute(
+                    select(InventoryItem)
+                    .where(InventoryItem.id == spool.inventory_item_id)
+                    .with_for_update()
+                )
+                parent = parent_result.scalar_one_or_none()
+                if parent is not None:
+                    parent.quantity = max(
+                        Decimal("0"), (parent.quantity or Decimal("0")) - spool.initial_weight_g
+                    )
+    elif item.filament_id is not None and item.weight_grams is not None:
         inv_result = await db.execute(
             select(InventoryItem).where(InventoryItem.id == item.filament_id).with_for_update()
         )
@@ -374,6 +444,8 @@ async def _deduct_vault_item(
             Decimal(str(item.print_time_hours)) * multiplier
         )
         printer.updated_at = now
+
+    return warning
 
 
 async def _deduct_inventory_and_update_printer(
@@ -828,6 +900,26 @@ async def add_to_queue_from_vault(
         if f_result.scalar_one_or_none() is None:
             raise HTTPException(status_code=404, detail="Filamento no encontrado")
 
+    # Verificar bobina si se eligió (issue #134). Debe pertenecer al mismo
+    # ítem de inventario que `filament_id` (si ambos vienen); si solo
+    # viene `spool_id`, se deriva `filament_id` de su padre.
+    spool_item_id: Optional[int] = None
+    if data.spool_id is not None:
+        sp_result = await db.execute(select(Spool).where(Spool.id == data.spool_id))
+        spool = sp_result.scalar_one_or_none()
+        if spool is None:
+            raise HTTPException(status_code=404, detail="Bobina no encontrada")
+        if spool.status != "active":
+            raise HTTPException(
+                status_code=400, detail=f"La bobina {spool.label_code} no está activa"
+            )
+        spool_item_id = spool.inventory_item_id
+        if data.filament_id is not None and data.filament_id != spool_item_id:
+            raise HTTPException(
+                status_code=400,
+                detail="El filamento elegido no coincide con el ítem de inventario de la bobina",
+            )
+
     if data.project_id is not None:
         p_result = await db.execute(select(Project).where(Project.id == data.project_id))
         if p_result.scalar_one_or_none() is None:
@@ -853,7 +945,8 @@ async def add_to_queue_from_vault(
         print_file_snapshot_path=model.print_file_key,
         piece_name=model.name,
         printer_id=data.printer_id,
-        filament_id=data.filament_id,
+        filament_id=data.filament_id or spool_item_id,
+        spool_id=data.spool_id,
         weight_grams=model.sliced_weight_g,
         print_time_hours=print_time_hours,
         project_id=data.project_id,
@@ -1006,6 +1099,7 @@ async def update_queue_status(
         )
 
     # Lógica atómica al marcar como 'done'. Dos caminos según la fuente:
+    spool_warning: Optional[str] = None
     if new_status == "done":
         if item.quote_id is not None:
             q_result = await db.execute(
@@ -1019,10 +1113,11 @@ async def update_queue_status(
                 )
             await _deduct_inventory_and_update_printer(db, quote)
         elif item.vault_model_id is not None or item.printer_id is not None:
-            # Vault item: descontar filamento + sumar horas según los datos
-            # denormalizados del propio item (no dependen del ModelFile, así
-            # que sigue funcionando aunque el modelo haya sido borrado).
-            await _deduct_vault_item(db, item)
+            # Vault item: descontar filamento (o bobina, issue #134) + sumar
+            # horas según los datos denormalizados del propio item (no
+            # dependen del ModelFile, así que sigue funcionando aunque el
+            # modelo haya sido borrado).
+            spool_warning = await _deduct_vault_item(db, item)
         else:
             raise HTTPException(
                 status_code=400,
@@ -1042,7 +1137,7 @@ async def update_queue_status(
     item.status = new_status
     await db.commit()
     await db.refresh(item)
-    return await _build_response(item, db)
+    return await _build_response(item, db, spool_warning=spool_warning)
 
 
 @router.post(
@@ -1063,7 +1158,9 @@ async def duplicate_queue_item(
     heredarlos) ni `started_at`/`completed_at`/`failure_reason`/
     `failure_category` (pertenecen al ciclo de vida del original).
     `created_by` tampoco se hereda: es quien duplica (issue #131), no el
-    autor del original.
+    autor del original. `spool_id` SÍ se copia (issue #134) — igual que
+    `filament_id`, es parte del setup físico de impresión; si la bobina
+    ya no alcanza, el consumo lo avisa como warning sin bloquear.
     """
     original = await _get_item(db, item_id)
 
@@ -1081,6 +1178,7 @@ async def duplicate_queue_item(
         piece_name=original.piece_name,
         printer_id=original.printer_id,
         filament_id=original.filament_id,
+        spool_id=original.spool_id,
         quantity=original.quantity,
         weight_grams=original.weight_grams,
         print_time_hours=original.print_time_hours,

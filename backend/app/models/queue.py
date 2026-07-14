@@ -59,6 +59,9 @@ class PrintQueueItem(Base):
         printer_id:               FK a printers.id (solo vault items; en quote items
                                   se deriva del quote.printer_id).
         filament_id:              FK opcional a inventory_items.id (solo vault items).
+        spool_id:                 FK opcional a spools.id — bobina física a consumir
+                                  (issue #134, solo vault items). Si está seteada,
+                                  reemplaza el descuento agregado de filament_id.
         quantity:                 Cantidad de copias (solo vault items; quote items
                                   usan quote.quantity).
         weight_grams:             Peso por copia (solo vault items; quote items
@@ -114,6 +117,16 @@ class PrintQueueItem(Base):
         Integer,
         ForeignKey("inventory_items.id", ondelete="SET NULL"),
         nullable=True,
+    )
+    # Bobina física específica a consumir (issue #134). Si está seteada,
+    # el descuento al marcar 'done' va SOLO a `Spool.remaining_weight_g`
+    # — el descuento agregado normal de `filament_id` se omite para ese
+    # item (ver docstring de `Spool` para la regla completa).
+    spool_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("spools.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     quantity: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     weight_grams: Mapped[Optional[Decimal]] = mapped_column(
