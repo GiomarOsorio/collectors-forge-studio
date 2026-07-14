@@ -9,6 +9,7 @@
  */
 
 // v1 primitives (port inicial Claude Design)
+export { default as BarChart } from './BarChart';
 export { default as Button } from './Button';
 export { default as Card } from './Card';
 export { default as Chip } from './Chip';
@@ -19,6 +20,7 @@ export { default as FilamentSwatch } from './FilamentSwatch';
 export { default as Input } from './Input';
 export { default as KPI } from './KPI';
 export { default as Lightbox } from './Lightbox';
+export { default as LineChart } from './LineChart';
 export { default as MobileSheet } from './MobileSheet';
 export { default as Sparkline } from './Sparkline';
 export { default as Swatch } from './Swatch';

@@ -631,6 +631,54 @@ export const deleteMaintenanceSchedule = (id) => api.delete(`/maintenance/schedu
 export const completeMaintenanceSchedule = (id) => api.post(`/maintenance/schedules/${id}/complete`);
 
 // ============================================================================
+// Stats — dashboard de analytics de impresión y costos (issue #132)
+// ============================================================================
+
+/**
+ * Resumen agregado (tasa de éxito, horas, gramos/costo por filamento,
+ * por impresora, por usuario, fallos) del rango dado.
+ * @param {{date_from?: string, date_to?: string}} [params]
+ */
+export const getStatsOverview = (params = {}) => api.get('/stats/overview', { params });
+
+/**
+ * Serie temporal agrupada por bucket.
+ * @param {{bucket?: 'day'|'week'|'month', date_from?: string, date_to?: string}} [params]
+ */
+export const getStatsTrends = (params = {}) => api.get('/stats/trends', { params });
+
+/**
+ * Descarga el CSV del overview y dispara el guardado en el navegador.
+ * Mismo criterio que `downloadPrintLogCsv` (issue #131): blob + `<a>`
+ * temporal, porque un `<a href>` directo no llevaría el JWT Bearer.
+ * @param {Object} params - Mismos filtros que `getStatsOverview`.
+ */
+export const downloadStatsOverviewCsv = async (params = {}) => {
+  const res = await api.get('/stats/overview', { params: { ...params, format: 'csv' }, responseType: 'blob' });
+  const url = URL.createObjectURL(res.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'stats_overview.csv';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
+
+/** Descarga el CSV de tendencias — mismo criterio que `downloadStatsOverviewCsv`. */
+export const downloadStatsTrendsCsv = async (params = {}) => {
+  const res = await api.get('/stats/trends', { params: { ...params, format: 'csv' }, responseType: 'blob' });
+  const url = URL.createObjectURL(res.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'stats_trends.csv';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
+
+// ============================================================================
 // Empresa — Templates de cotización (Liquid + WeasyPrint)
 // ============================================================================
 

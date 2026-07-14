@@ -75,6 +75,7 @@
   --color-app-queue: #14B8A6;
   --color-app-vault: #F43F5E;
   --color-app-company: #6366F1;
+  --color-app-stats: #06B6D4;
 
   /* Superficies jerárquicas — reactivas al tema */
   --color-surf-sidebar: var(--cfs-surface-sidebar);

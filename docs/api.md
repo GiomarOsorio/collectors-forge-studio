@@ -852,6 +852,65 @@ automáticamente en la misma transacción. La response incluye
 
 ---
 
+## Stats — analytics de impresión y costos (issue #132)
+
+Agregación de solo-lectura sobre `PrintQueueItem` (status `done`/`cancelled`).
+Replica exactamente la lógica de descuento de `_deduct_inventory_and_update_printer`
+/ `_deduct_vault_item` (routers/queue.py) para que "gramos consumidos" coincida
+con lo que de verdad se descontó del inventario (no con `Quote.material_cost`,
+que es el costo de un solo plato, sin multiplicar por `quantity`).
+
+**Query params comunes:** `date_from`/`date_to` en formato `YYYY-MM-DD` (día
+calendario en América/Bogotá, mismo criterio que `/queue/log` de #131). Sin
+rango, se agregan TODOS los items done/cancelled históricos.
+
+### `GET /stats/overview`
+Resumen agregado: tasa de éxito, horas totales, gramos/costo por tipo de
+filamento, desglose por impresora y por usuario, fallos por categoría,
+costo de material y de electricidad. Acepta `?format=csv`.
+
+**Response 200:**
+```json
+{
+  "prints_done": 42,
+  "prints_cancelled": 5,
+  "success_rate_pct": 89.36,
+  "total_hours": 210.5,
+  "grams_by_filament_type": [
+    {"filament_type": "PLA", "grams": 4200.0, "cost_cop": 84000.0}
+  ],
+  "by_printer": [
+    {"printer_id": 1, "printer_name": "P2S del estudio", "prints": 30, "hours": 150.0}
+  ],
+  "by_user": [
+    {"user_id": 1, "username": "giomar", "prints": 42}
+  ],
+  "failure_breakdown": [
+    {"category": "warping", "count": 3}
+  ],
+  "material_cost_cop": 84000.0,
+  "electricity_cost_cop": 12000.0
+}
+```
+
+### `GET /stats/trends?bucket=day|week|month`
+Serie temporal de prints y gramos, agrupada por bucket (bucketing en
+zona horaria América/Bogotá). Acepta `?format=csv`.
+
+**Response 200:**
+```json
+{
+  "bucket": "day",
+  "series": [
+    {"bucket_start": "2026-01-15", "prints_done": 3, "prints_cancelled": 1, "grams": 350.0}
+  ]
+}
+```
+
+Auth: `get_current_user` (lectura para todos los roles).
+
+---
+
 ## Cola de impresión
 
 ### `GET /queue/`

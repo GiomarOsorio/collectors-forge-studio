@@ -7,7 +7,7 @@
  * @module config/apps
  */
 
-import { Archive, Building2, Calculator, FolderKanban, Package, Wrench, ListOrdered } from 'lucide-react';
+import { Archive, BarChart3, Building2, Calculator, FolderKanban, Package, Wrench, ListOrdered } from 'lucide-react';
 
 /**
  * @typedef {Object} AppDefinition
@@ -81,6 +81,16 @@ export const APPS = [
     icon: FolderKanban,
     route: '/projects',
     color: '#F59E0B',
+    badge: null,
+  },
+  {
+    id: 'stats',
+    name: 'Stats',
+    shortDescription: 'Analytics de impresión y costos',
+    description: 'Dashboard de tasa de éxito, tendencias, consumo de filamento por tipo, costos de material/electricidad y fallos por categoría, con export CSV.',
+    icon: BarChart3,
+    route: '/stats',
+    color: '#06B6D4',
     badge: null,
   },
   {
