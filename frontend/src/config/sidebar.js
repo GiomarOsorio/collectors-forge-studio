@@ -11,6 +11,7 @@
 import {
   Archive,
   ArrowLeftRight,
+  BarChart3,
   Building2,
   Calculator,
   Clock,
@@ -26,6 +27,7 @@ import {
   ScrollText,
   Settings,
   ShoppingCart,
+  TrendingUp,
   Trash,
   Upload,
   Wrench,
@@ -126,6 +128,16 @@ export const SIDEBAR_APPS = [
     activeClass: 'bg-amber-500/15 text-amber-400',
     items: [
       { to: '/projects', icon: FolderKanban, label: 'Proyectos', end: true },
+    ],
+  },
+  {
+    id: 'stats',
+    name: 'Stats',
+    icon: BarChart3,
+    color: '#06B6D4',
+    activeClass: 'bg-cyan-500/15 text-cyan-400',
+    items: [
+      { to: '/stats', icon: TrendingUp, label: 'Dashboard', end: true },
     ],
   },
   {

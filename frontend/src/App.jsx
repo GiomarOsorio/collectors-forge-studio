@@ -77,6 +77,7 @@ const InventoryPurchasesPage   = lazy(() => import('./pages/inventory/InventoryP
 const InventoryPrintsPage      = lazy(() => import('./pages/inventory/InventoryPrintsPage'));
 const InventoryImportExportPage= lazy(() => import('./pages/inventory/InventoryImportExportPage'));
 const InventorySpoolsPage      = lazy(() => import('./pages/inventory/InventorySpoolsPage'));
+const StatsPage                = lazy(() => import('./pages/stats/StatsPage'));
 
 /**
  * Componente guardia de ruta privada.
@@ -218,6 +219,9 @@ function AppRoutes() {
           <Route path="history"  element={<RedirectPreservingSearch to="/queue" />} />
           <Route path="log"      element={<PrintLogPage />} />
         </Route>
+
+        {/* Stats — dashboard de analytics de impresión y costos (issue #132). */}
+        <Route path="/stats" element={<StatsPage />} />
 
         {/* Compañía (solo admin) — `index` con drawers integrados
             (Perfil / Marca / Templates list). El editor de templates
