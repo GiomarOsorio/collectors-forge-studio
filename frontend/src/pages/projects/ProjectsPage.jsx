@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   Clock,
   ExternalLink,
+  FileBox,
   FileText,
   FolderKanban,
   MoreVertical,
@@ -26,6 +27,7 @@ import {
   Receipt,
   Trash2,
   Upload,
+  X,
   XCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -46,8 +48,10 @@ import {
   deleteProject,
   getClientQuotes,
   getProjectCoverUrl,
+  getProjectFiles,
   getProjectItems,
   getProjects,
+  removeProjectFile,
   updateProject,
   uploadProjectCover,
 } from '../../services/api';
@@ -399,7 +403,30 @@ function ProjectItemRow({ item }) {
   );
 }
 
-function ProjectDetailBody({ project, items, loadingItems }) {
+function ProjectFileThumb({ file, onRemove }) {
+  return (
+    <div className="relative group">
+      <div className="w-full aspect-square rounded-md bg-[var(--color-surf-sidebar)] overflow-hidden flex items-center justify-center">
+        {file.local_thumbnail_url ? (
+          <img src={file.local_thumbnail_url} alt={file.name} className="w-full h-full object-cover" />
+        ) : (
+          <FileBox size={20} className="text-gunmetal" />
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={() => onRemove(file.id)}
+        className="absolute top-1 right-1 p-0.5 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+        aria-label={`Quitar ${file.name} del proyecto`}
+      >
+        <X size={11} />
+      </button>
+      <p className="text-[10px] text-gunmetal truncate mt-1" title={file.name}>{file.name}</p>
+    </div>
+  );
+}
+
+function ProjectDetailBody({ project, items, loadingItems, linkedFiles, loadingFiles, onRemoveFile }) {
   if (!project) return null;
   return (
     <div className="flex flex-col gap-4">
@@ -444,6 +471,24 @@ function ProjectDetailBody({ project, items, loadingItems }) {
       <ProjectProgressBar project={project} />
       <div>
         <span className="lbl-eyebrow text-[9px] mb-1.5 block">
+          Archivos vinculados ({linkedFiles?.length || 0})
+        </span>
+        {loadingFiles ? (
+          <p className="text-xs text-gunmetal py-4 text-center">Cargando…</p>
+        ) : !linkedFiles || linkedFiles.length === 0 ? (
+          <p className="text-xs text-gunmetal py-3 text-center">
+            Sin archivos vinculados — asígnalos desde Vault (selección múltiple → "Asignar a proyecto").
+          </p>
+        ) : (
+          <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))' }}>
+            {linkedFiles.map((f) => (
+              <ProjectFileThumb key={f.id} file={f} onRemove={onRemoveFile} />
+            ))}
+          </div>
+        )}
+      </div>
+      <div>
+        <span className="lbl-eyebrow text-[9px] mb-1.5 block">
           Items de cola ({project.total_items || 0})
         </span>
         {loadingItems ? (
@@ -475,6 +520,8 @@ export default function ProjectsPage() {
   const [selected, setSelected] = useState(null);
   const [items, setItems] = useState([]);
   const [loadingItems, setLoadingItems] = useState(false);
+  const [linkedFiles, setLinkedFiles] = useState([]);
+  const [loadingFiles, setLoadingFiles] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -505,6 +552,7 @@ export default function ProjectsPage() {
   const openProject = async (project) => {
     setSelected(project);
     setLoadingItems(true);
+    setLoadingFiles(true);
     try {
       const res = await getProjectItems(project.id);
       setItems(res.data || []);
@@ -513,6 +561,24 @@ export default function ProjectsPage() {
       setItems([]);
     } finally {
       setLoadingItems(false);
+    }
+    try {
+      const res = await getProjectFiles(project.id);
+      setLinkedFiles(res.data || []);
+    } catch {
+      setLinkedFiles([]);
+    } finally {
+      setLoadingFiles(false);
+    }
+  };
+
+  const handleRemoveFile = async (fileId) => {
+    if (!selected) return;
+    try {
+      await removeProjectFile(selected.id, fileId);
+      setLinkedFiles((prev) => prev.filter((f) => f.id !== fileId));
+    } catch {
+      toast.error('No se pudo quitar el archivo del proyecto');
     }
   };
 
@@ -638,7 +704,10 @@ export default function ProjectsPage() {
         </button>
         <MobileSheet open={!!selected} onClose={() => setSelected(null)} title={selected?.name || ''} height="full">
           <div className="px-5 pt-4 pb-3">
-            <ProjectDetailBody project={selected} items={items} loadingItems={loadingItems} />
+            <ProjectDetailBody
+              project={selected} items={items} loadingItems={loadingItems}
+              linkedFiles={linkedFiles} loadingFiles={loadingFiles} onRemoveFile={handleRemoveFile}
+            />
           </div>
           {selected && (
             <div className="px-5 pt-3 pb-5 border-t border-[var(--color-border-soft)] flex gap-2 sticky bottom-0 bg-[var(--color-surf-sidebar)]">
@@ -697,7 +766,10 @@ export default function ProjectsPage() {
         width={460}
         footer={detailFooter}
       >
-        <ProjectDetailBody project={selected} items={items} loadingItems={loadingItems} />
+        <ProjectDetailBody
+              project={selected} items={items} loadingItems={loadingItems}
+              linkedFiles={linkedFiles} loadingFiles={loadingFiles} onRemoveFile={handleRemoveFile}
+            />
       </DetailDrawer>
 
       {formModal && (

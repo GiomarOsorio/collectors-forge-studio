@@ -11,6 +11,8 @@ const mockGetProjects = vi.fn();
 const mockCreateProject = vi.fn().mockResolvedValue({ data: {} });
 const mockGetClientQuotes = vi.fn();
 const mockUploadProjectCover = vi.fn();
+const mockGetProjectFiles = vi.fn().mockResolvedValue({ data: [] });
+const mockRemoveProjectFile = vi.fn().mockResolvedValue({});
 
 vi.mock('../services/api', () => ({
   getProjects: (...args) => mockGetProjects(...args),
@@ -21,6 +23,8 @@ vi.mock('../services/api', () => ({
   getClientQuotes: (...args) => mockGetClientQuotes(...args),
   uploadProjectCover: (...args) => mockUploadProjectCover(...args),
   getProjectCoverUrl: (id) => `/api/projects/${id}/cover`,
+  getProjectFiles: (...args) => mockGetProjectFiles(...args),
+  removeProjectFile: (...args) => mockRemoveProjectFile(...args),
 }));
 
 vi.mock('react-hot-toast', () => ({
@@ -42,6 +46,8 @@ beforeEach(() => {
   mockCreateProject.mockClear();
   mockGetClientQuotes.mockReset();
   mockUploadProjectCover.mockReset();
+  mockGetProjectFiles.mockReset();
+  mockRemoveProjectFile.mockClear();
 });
 
 describe('ProjectsPage — metadata', () => {
@@ -107,5 +113,27 @@ describe('ProjectsPage — metadata', () => {
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => expect(mockUploadProjectCover).toHaveBeenCalledWith(5, file));
+  });
+
+  it('abrir el detalle muestra archivos vinculados y quitar dispara removeProjectFile', async () => {
+    mockGetProjects.mockResolvedValue({
+      data: [{
+        id: 3, name: 'Encargo W', status: 'active', total_items: 0,
+        pending_count: 0, printing_count: 0, done_count: 0, cancelled_count: 0,
+        color: null, external_url: null, has_cover: false,
+      }],
+    });
+    mockGetProjectFiles.mockResolvedValue({
+      data: [{ id: 20, name: 'Pieza.3mf', local_thumbnail_url: null, is_print_ready: true }],
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Encargo W')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('Encargo W'));
+    await waitFor(() => expect(screen.getByText('Archivos vinculados (1)')).toBeInTheDocument());
+    expect(screen.getByText('Pieza.3mf')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Quitar Pieza.3mf del proyecto'));
+    await waitFor(() => expect(mockRemoveProjectFile).toHaveBeenCalledWith(3, 20));
   });
 });

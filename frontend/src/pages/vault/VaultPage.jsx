@@ -21,6 +21,7 @@ import {
   Download,
   FileBox,
   Folder,
+  FolderKanban,
   FolderPlus,
   HardDrive,
   MoreVertical,
@@ -52,6 +53,8 @@ import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../context/AuthContext';
 import { useConfirm } from '../../components/ConfirmDialog';
 import {
+  addProjectFiles,
+  createProject,
   createVaultFolder,
   createVaultTag,
   deleteVaultFile,
@@ -61,6 +64,7 @@ import {
   setActiveVaultPlate,
   downloadVaultPrint,
   downloadVaultSource,
+  getProjects,
   getVaultFiles,
   getVaultFolders,
   getVaultGcodeContent,
@@ -348,10 +352,27 @@ function TagsManageModal({ tags, onClose, onCreate, onRename, onDelete }) {
 
 // ─── Card / row ─────────────────────────────────────────────────────────────
 
-function VaultCard({ file, onClick, onShowHistory }) {
+function VaultCard({ file, onClick, onShowHistory, selectMode, selected, onToggleSelect }) {
   const thumb = getThumbnail(file);
+  // En modo selección la card es un <div> (no <button>) para poder anidar
+  // el checkbox sin invalidar el HTML (button dentro de button). El click
+  // en el resto de la card también togglea la selección.
+  const cardProps = selectMode
+    ? { as: 'div', interactive: true, onClick: () => onToggleSelect(file.id), className: 'text-left w-full overflow-hidden flex flex-col cursor-pointer' }
+    : { as: 'button', interactive: true, onClick: () => onClick(file), className: 'text-left w-full overflow-hidden flex flex-col' };
   return (
-    <Card as="button" interactive onClick={() => onClick(file)} className="text-left w-full overflow-hidden flex flex-col">
+    <Card {...cardProps}>
+      {selectMode && (
+        <div className="absolute top-2 left-2 z-10" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={!!selected}
+            onChange={() => onToggleSelect(file.id)}
+            aria-label={`Seleccionar ${file.name}`}
+            className="w-4 h-4"
+          />
+        </div>
+      )}
       <div className="h-40 bg-[var(--color-surf-sidebar)] flex items-center justify-center overflow-hidden">
         {thumb ? (
           <img
@@ -432,14 +453,25 @@ function VaultCard({ file, onClick, onShowHistory }) {
   );
 }
 
-function VaultRow({ file, onClick, onShowHistory }) {
+function VaultRow({ file, onClick, onShowHistory, selectMode, selected, onToggleSelect }) {
   const thumb = getThumbnail(file);
+  const Wrapper = selectMode ? 'div' : 'button';
   return (
-    <button
-      type="button"
-      onClick={() => onClick(file)}
-      className="w-full text-left flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border-soft)] hover:bg-[var(--color-surf-hover)]/50 transition-colors"
+    <Wrapper
+      type={selectMode ? undefined : 'button'}
+      onClick={() => (selectMode ? onToggleSelect(file.id) : onClick(file))}
+      className="w-full text-left flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border-soft)] hover:bg-[var(--color-surf-hover)]/50 transition-colors cursor-pointer"
     >
+      {selectMode && (
+        <input
+          type="checkbox"
+          checked={!!selected}
+          onChange={() => onToggleSelect(file.id)}
+          onClick={(e) => e.stopPropagation()}
+          aria-label={`Seleccionar ${file.name}`}
+          className="w-4 h-4 shrink-0"
+        />
+      )}
       <div
         className="w-12 h-12 rounded-md overflow-hidden bg-[var(--color-surf-sidebar)] flex items-center justify-center shrink-0"
         style={{ border: `1px solid ${ACCENT}40` }}
@@ -485,7 +517,7 @@ function VaultRow({ file, onClick, onShowHistory }) {
         </p>
       </div>
       <ChevronRight size={14} className="text-gunmetal-dim shrink-0" />
-    </button>
+    </Wrapper>
   );
 }
 
@@ -1230,6 +1262,114 @@ function VaultDrawerFooter({
   );
 }
 
+// ─── Asignar a proyecto (issue #136, sub-ticket 2/3) ───────────────────────
+
+/**
+ * Modal de "Asignar a proyecto": elegir un proyecto existente o crear uno
+ * nuevo inline, luego vincula los `fileIds` seleccionados al puente.
+ */
+function AssignToProjectModal({ fileIds, onClose, onAssigned }) {
+  const [projects, setProjects] = useState([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+  const [projectId, setProjectId] = useState('');
+  const [newProjectName, setNewProjectName] = useState('');
+  const [creatingNew, setCreatingNew] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    getProjects()
+      .then((res) => setProjects(res.data || []))
+      .catch(() => toast.error('No se pudieron cargar los proyectos'))
+      .finally(() => setLoadingProjects(false));
+  }, []);
+
+  const submit = async () => {
+    setSaving(true);
+    try {
+      let targetId = projectId ? parseInt(projectId, 10) : null;
+      if (creatingNew) {
+        if (!newProjectName.trim()) return;
+        const res = await createProject({ name: newProjectName.trim() });
+        targetId = res.data.id;
+      }
+      if (!targetId) return;
+      await addProjectFiles(targetId, fileIds);
+      toast.success(`${fileIds.length} archivo(s) asignado(s) al proyecto`);
+      onAssigned?.();
+    } catch {
+      toast.error('No se pudo asignar el proyecto');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const canSubmit = creatingNew ? newProjectName.trim().length > 0 : !!projectId;
+
+  return (
+    <div className="tf-modal-overlay" style={{ zIndex: 9999 }}>
+      <div className="tf-modal max-w-md">
+        <p className="text-tech-white text-sm font-semibold mb-4">
+          Asignar {fileIds.length} archivo{fileIds.length === 1 ? '' : 's'} a proyecto
+        </p>
+        {loadingProjects ? (
+          <p className="text-xs text-gunmetal py-4 text-center">Cargando proyectos…</p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {!creatingNew ? (
+              <>
+                <label className="block">
+                  <span className="block text-xs text-gunmetal mb-1">Proyecto</span>
+                  <select
+                    value={projectId}
+                    onChange={(e) => setProjectId(e.target.value)}
+                    className="w-full bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm"
+                  >
+                    <option value="">Selecciona un proyecto…</option>
+                    {projects.map((p) => (
+                      <option key={p.id} value={String(p.id)}>{p.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setCreatingNew(true)}
+                  className="text-xs text-amber-300 hover:text-amber-200 text-left"
+                >
+                  + Crear proyecto nuevo
+                </button>
+              </>
+            ) : (
+              <label className="block">
+                <span className="block text-xs text-gunmetal mb-1">Nombre del proyecto nuevo</span>
+                <input
+                  autoFocus
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  placeholder="ej. Encargo boda Ana & Luis"
+                  className="w-full bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm focus:outline-none focus:border-amber-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setCreatingNew(false)}
+                  className="text-xs text-gunmetal hover:text-tech-white mt-1.5"
+                >
+                  ← Elegir uno existente
+                </button>
+              </label>
+            )}
+          </div>
+        )}
+        <div className="flex justify-end gap-3 mt-5">
+          <button onClick={onClose} className="tf-btn-ghost" disabled={saving}>Cancelar</button>
+          <button onClick={submit} className="tf-btn-primary" disabled={saving || !canSubmit}>
+            {saving ? 'Asignando…' : 'Asignar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function VaultPage() {
@@ -1266,6 +1406,20 @@ export default function VaultPage() {
   const [tags, setTags] = useState([]);
   const [activeTagIds, setActiveTagIds] = useState([]);
   const [tagsModalOpen, setTagsModalOpen] = useState(false);
+
+  // Multi-selección → "Asignar a proyecto" (issue #136, sub-ticket 2/3).
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+
+  const toggleFileSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const childFolders = folders.filter((f) => (f.parent_id ?? null) === currentFolderId);
@@ -1724,7 +1878,10 @@ export default function VaultPage() {
             <ul className="mt-3">
               {files.map((f) => (
                 <li key={f.id}>
-                  <VaultRow file={f} onClick={setSelected} onShowHistory={setHistoryModalFile} />
+                  <VaultRow
+                    file={f} onClick={setSelected} onShowHistory={setHistoryModalFile}
+                    selectMode={selectMode} selected={selectedIds.has(f.id)} onToggleSelect={toggleFileSelect}
+                  />
                 </li>
               ))}
             </ul>
@@ -1837,6 +1994,16 @@ export default function VaultPage() {
             {total} modelos
           </span>
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            setSelectMode((v) => !v);
+            setSelectedIds(new Set());
+          }}
+          className={`btn btn-sm ${selectMode ? 'btn-primary' : 'btn-ghost'}`}
+        >
+          {selectMode ? 'Cancelar selección' : 'Seleccionar'}
+        </button>
         {isAdmin && (
           <Link
             to={currentFolderId ? `/vault/upload?folder=${currentFolderId}` : '/vault/upload'}
@@ -1846,6 +2013,17 @@ export default function VaultPage() {
           </Link>
         )}
       </header>
+
+      {selectMode && selectedIds.size > 0 && (
+        <div className="flex items-center gap-2 bg-amber-500/10 border-b border-amber-500/30 px-6 py-2">
+          <span className="text-xs text-amber-200 flex-1">
+            {selectedIds.size} archivo{selectedIds.size === 1 ? '' : 's'} seleccionado{selectedIds.size === 1 ? '' : 's'}
+          </span>
+          <button type="button" onClick={() => setAssignModalOpen(true)} className="btn btn-primary btn-sm">
+            <FolderKanban size={13} /> Asignar a proyecto
+          </button>
+        </div>
+      )}
 
       {KPIs}
       {FolderBreadcrumb}
@@ -1904,7 +2082,10 @@ export default function VaultPage() {
             style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}
           >
             {files.map((f) => (
-              <VaultCard key={f.id} file={f} onClick={setSelected} onShowHistory={setHistoryModalFile} />
+              <VaultCard
+                key={f.id} file={f} onClick={setSelected} onShowHistory={setHistoryModalFile}
+                selectMode={selectMode} selected={selectedIds.has(f.id)} onToggleSelect={toggleFileSelect}
+              />
             ))}
           </div>
           {totalPages > 1 && (
@@ -2046,6 +2227,17 @@ export default function VaultPage() {
           fileId={historyModalFile.id}
           fileName={historyModalFile.name}
           onClose={() => setHistoryModalFile(null)}
+        />
+      )}
+      {assignModalOpen && (
+        <AssignToProjectModal
+          fileIds={[...selectedIds]}
+          onClose={() => setAssignModalOpen(false)}
+          onAssigned={() => {
+            setAssignModalOpen(false);
+            setSelectMode(false);
+            setSelectedIds(new Set());
+          }}
         />
       )}
     </div>

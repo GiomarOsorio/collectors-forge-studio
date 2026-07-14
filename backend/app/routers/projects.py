@@ -15,6 +15,11 @@ Endpoints:
 Metadata (issue #136, sub-ticket 1/3):
     POST   /api/projects/{id}/cover — (admin) Sube/reemplaza la foto de portada.
     GET    /api/projects/{id}/cover — Proxy público de la foto de portada.
+
+Vínculo a Vault (issue #136, sub-ticket 2/3):
+    GET    /api/projects/{id}/files       — Archivos vinculados (vista mínima, read-only).
+    POST   /api/projects/{id}/files       — Añade archivos al puente (idempotente).
+    DELETE /api/projects/{id}/files/{mf_id} — Quita un archivo del puente.
 """
 
 from datetime import datetime, timezone
@@ -23,15 +28,19 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.client_quote import ClientQuote
-from app.models.project import Project
+from app.models.model_file import ModelFile
+from app.models.project import Project, project_model_files
 from app.models.queue import PrintQueueItem
 from app.models.user import User
 from app.routers.queue import _build_responses_bulk
 from app.schemas.project import (
     ProjectCreate,
+    ProjectFilesRequest,
+    ProjectLinkedFile,
     ProjectResponse,
     ProjectUpdate,
     ProjectWithProgress,
@@ -306,3 +315,91 @@ async def get_project_cover(
     ext = "." + project.cover_photo_key.rsplit(".", 1)[-1].lower() if "." in project.cover_photo_key else ".jpg"
     media_type = _COVER_MEDIA_TYPES.get(ext, "image/jpeg")
     return Response(content=data, media_type=media_type, headers={"Cache-Control": "public, max-age=86400"})
+
+
+# ─── Vínculo a Vault (issue #136, sub-ticket 2/3) ──────────────────────────
+
+def _model_file_to_linked(model: ModelFile) -> ProjectLinkedFile:
+    local_thumbnail_url = None
+    if model.thumbnail_key:
+        ts = model.updated_at.timestamp() if model.updated_at else 0
+        local_thumbnail_url = f"/api/vault/{model.id}/thumbnail?v={ts}"
+    return ProjectLinkedFile(
+        id=model.id, name=model.name,
+        local_thumbnail_url=local_thumbnail_url,
+        is_print_ready=model.is_print_ready,
+    )
+
+
+@router.get("/{project_id}/files", response_model=List[ProjectLinkedFile])
+async def list_project_files(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Archivos de Vault vinculados al proyecto (vista mínima, read-only)."""
+    result = await db.execute(
+        select(Project)
+        .options(selectinload(Project.files))
+        .where(Project.id == project_id)
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+    return [_model_file_to_linked(f) for f in project.files]
+
+
+@router.post("/{project_id}/files", response_model=List[ProjectLinkedFile])
+async def add_project_files(
+    project_id: int,
+    body: ProjectFilesRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_operator_user),
+):
+    """
+    Añade archivos al puente — idempotente (si ya estaba vinculado, se
+    ignora sin error). 404 con los ids de `model_file_ids` que no
+    existen en Vault.
+    """
+    result = await db.execute(
+        select(Project)
+        .options(selectinload(Project.files))
+        .where(Project.id == project_id)
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+
+    files_result = await db.execute(
+        select(ModelFile).where(ModelFile.id.in_(body.model_file_ids))
+    )
+    found = {f.id: f for f in files_result.scalars().all()}
+    missing = [mf_id for mf_id in body.model_file_ids if mf_id not in found]
+    if missing:
+        raise HTTPException(status_code=404, detail=f"Archivo(s) no encontrado(s) en Vault: {missing}")
+
+    existing_ids = {f.id for f in project.files}
+    for mf_id in body.model_file_ids:
+        if mf_id not in existing_ids:
+            project.files.append(found[mf_id])
+
+    await db.commit()
+    await db.refresh(project, attribute_names=["files"])
+    return [_model_file_to_linked(f) for f in project.files]
+
+
+@router.delete("/{project_id}/files/{model_file_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_project_file(
+    project_id: int,
+    model_file_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_operator_user),
+):
+    """Quita un archivo del puente. No borra el `ModelFile` de Vault."""
+    await db.execute(
+        project_model_files.delete().where(
+            project_model_files.c.project_id == project_id,
+            project_model_files.c.model_file_id == model_file_id,
+        )
+    )
+    await db.commit()

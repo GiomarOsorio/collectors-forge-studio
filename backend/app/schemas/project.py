@@ -2,7 +2,7 @@
 
 import re
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -75,3 +75,24 @@ class ProjectWithProgress(ProjectResponse):
     # hasta el próximo guardado del proyecto).
     client_quote_code: Optional[str] = None
     client_quote_client_name: Optional[str] = None
+
+
+# ─── Vínculo a Vault (issue #136, sub-ticket 2/3) ──────────────────────────
+
+class ProjectFilesRequest(BaseModel):
+    """Body de `POST /{id}/files` — añade archivos al puente (idempotente)."""
+    model_file_ids: List[int] = Field(..., min_length=1, max_length=200)
+
+
+class ProjectLinkedFile(BaseModel):
+    """
+    Vista mínima de solo-lectura de un `ModelFile` vinculado a un proyecto.
+
+    Deliberadamente NO reusa `ModelFileResponse` (Vault) — ese schema
+    carga metadata sliced/tags/print_count que el detalle de proyecto no
+    necesita; esto evita construir esas piezas solo para descartarlas.
+    """
+    id: int
+    name: str
+    local_thumbnail_url: Optional[str] = None
+    is_print_ready: bool

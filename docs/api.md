@@ -1080,12 +1080,12 @@ items anteriores a esta migración o si el usuario fue borrado después.
 
 ---
 
-## Proyectos (issue #136, sub-ticket 1/3)
+## Proyectos (issue #136)
 
 Agrupador organizativo de ítems de la cola (`print_queue.project_id`) — no
-afecta costos ni inventario. Este sub-ticket agrega metadata (cover,
-color, link externo, cotización vinculada); el puente a archivos de
-Vault y el export/import quedan en sub-tickets aparte (issue #136).
+afecta costos ni inventario. Metadata (cover, color, link externo,
+cotización vinculada) en sub-ticket 1/3; vínculo a archivos de Vault en
+sub-ticket 2/3; el export/import queda en el sub-ticket 3/3.
 
 ### `GET /projects/`
 Lista proyectos con conteo de items de cola por estado + `client_quote_code`/
@@ -1121,6 +1121,25 @@ colección). Máx. 10 MB, `image/jpeg`/`png`/`webp`.
 Proxy público de la foto de portada (sin JWT — los `<img>` no mandan
 `Authorization`, mismo criterio que el thumbnail de Vault). 404 si el
 proyecto no tiene portada.
+
+### `GET /projects/{id}/files` (issue #136, sub-ticket 2/3)
+Archivos de Vault vinculados al proyecto — vista mínima read-only
+(`id`, `name`, `local_thumbnail_url`, `is_print_ready`). No reusa
+`ModelFileResponse` de Vault (ese schema carga metadata sliced/tags/
+print_count que este detalle no necesita).
+
+### `POST /projects/{id}/files` (operator)
+Añade archivos al puente `project_model_files` — **idempotente** (si un
+id ya estaba vinculado, se ignora sin error).
+
+**Body:**
+```json
+{ "model_file_ids": [10, 11, 12] }
+```
+404 con los ids que no existen en Vault, listados en el detail.
+
+### `DELETE /projects/{id}/files/{model_file_id}` (operator)
+Quita un archivo del puente. No borra el `ModelFile` de Vault.
 
 ---
 

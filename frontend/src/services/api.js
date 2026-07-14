@@ -1125,6 +1125,19 @@ export const uploadProjectCover = (id, file) => {
 export const getProjectCoverUrl = (id, updatedAt) =>
   `/api/projects/${id}/cover${updatedAt ? `?v=${encodeURIComponent(updatedAt)}` : ''}`;
 
+// ─── Vínculo a Vault (issue #136, sub-ticket 2/3) ──────────────────────────
+
+/** Archivos de Vault vinculados al proyecto (vista mínima, read-only). */
+export const getProjectFiles = (id) => api.get(`/projects/${id}/files`);
+
+/** Añade archivos al puente proyecto↔Vault (idempotente). @param {number[]} modelFileIds */
+export const addProjectFiles = (id, modelFileIds) =>
+  api.post(`/projects/${id}/files`, { model_file_ids: modelFileIds });
+
+/** Quita un archivo del puente (no borra el archivo de Vault). */
+export const removeProjectFile = (id, modelFileId) =>
+  api.delete(`/projects/${id}/files/${modelFileId}`);
+
 /**
  * (Re)asigna o quita (projectId=null) el proyecto de un ítem ya encolado.
  * @param {number} itemId
