@@ -607,6 +607,29 @@ export const deleteMaintenanceLog = (id) => api.delete(`/maintenance/logs/${id}`
 /** Obtiene el resumen de mantenimiento por impresora (dashboard). */
 export const getMaintenanceSummary = () => api.get('/maintenance/summary/');
 
+// ─── Recordatorios por intervalo (schedules, issue #138) ──────────────────
+
+/** Lista recordatorios con progreso/status calculados. @param {number|null} printerId */
+export const getMaintenanceSchedules = (printerId = null) => {
+  const params = printerId != null ? { printer_id: printerId } : {};
+  return api.get('/maintenance/schedules/', { params });
+};
+
+/** Lista recordatorios habilitados con status distinto de 'ok' (badges). */
+export const getMaintenanceSchedulesDue = () => api.get('/maintenance/schedules/due');
+
+/** Crea un recordatorio de mantenimiento (admin). */
+export const createMaintenanceSchedule = (data) => api.post('/maintenance/schedules/', data);
+
+/** Edita un recordatorio (admin). */
+export const updateMaintenanceSchedule = (id, data) => api.put(`/maintenance/schedules/${id}`, data);
+
+/** Elimina un recordatorio (admin). */
+export const deleteMaintenanceSchedule = (id) => api.delete(`/maintenance/schedules/${id}`);
+
+/** Marca un recordatorio como completado (resetea progreso + crea log automático). */
+export const completeMaintenanceSchedule = (id) => api.post(`/maintenance/schedules/${id}/complete`);
+
 // ============================================================================
 // Empresa — Templates de cotización (Liquid + WeasyPrint)
 // ============================================================================

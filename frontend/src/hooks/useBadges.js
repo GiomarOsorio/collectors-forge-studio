@@ -9,41 +9,10 @@
  */
 
 import { useEffect, useState } from 'react';
-import { getQueue, getInventoryItems, getMaintenanceSummary } from '../services/api';
-import { MAINTENANCE_TYPES } from '../config/maintenance';
+import { getQueue, getInventoryItems, getMaintenanceSchedulesDue } from '../services/api';
 
 const QUEUE_INTERVAL_MS = 5_000;
 const SLOW_INTERVAL_MS = 60_000;
-
-const INTERVAL_BY_TYPE = MAINTENANCE_TYPES.reduce((acc, t) => {
-  if (t.interval_hours) acc[t.value] = t.interval_hours;
-  return acc;
-}, {});
-
-/**
- * Cuenta impresoras con al menos un tipo de mantenimiento vencido.
- *
- * `summary` es `[{ printer, last_per_type: { [tipo]: { hours_since } } }]`.
- * Un tipo está vencido si `hours_since >= INTERVAL_BY_TYPE[tipo]`.
- *
- * @param {Array} summary
- * @returns {number}
- */
-function countOverdue(summary) {
-  if (!Array.isArray(summary)) return 0;
-  let count = 0;
-  for (const entry of summary) {
-    const lastPerType = entry?.last_per_type ?? {};
-    const hasOverdue = Object.entries(lastPerType).some(([tipo, info]) => {
-      const limit = INTERVAL_BY_TYPE[tipo];
-      if (!limit) return false;
-      const hoursSince = Number(info?.hours_since ?? 0);
-      return hoursSince >= limit;
-    });
-    if (hasOverdue) count += 1;
-  }
-  return count;
-}
 
 /**
  * Hook que devuelve los conteos en vivo para badges de la sidebar.
@@ -86,10 +55,10 @@ export function useBadges() {
 
     const fetchMaintenance = async () => {
       try {
-        const res = await getMaintenanceSummary();
+        const res = await getMaintenanceSchedulesDue();
         if (cancelled) return;
-        const count = countOverdue(res?.data);
-        setBadges((prev) => ({ ...prev, overdueMaintenance: count }));
+        const list = Array.isArray(res?.data) ? res.data : [];
+        setBadges((prev) => ({ ...prev, overdueMaintenance: list.length }));
       } catch {
         /* idem */
       }
