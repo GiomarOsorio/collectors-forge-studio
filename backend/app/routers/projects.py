@@ -20,16 +20,27 @@ Vínculo a Vault (issue #136, sub-ticket 2/3):
     GET    /api/projects/{id}/files       — Archivos vinculados (vista mínima, read-only).
     POST   /api/projects/{id}/files       — Añade archivos al puente (idempotente).
     DELETE /api/projects/{id}/files/{mf_id} — Quita un archivo del puente.
+
+Export/Import (issue #136, sub-ticket 3/3):
+    GET    /api/projects/{id}/export — ZIP (manifest.json + binarios de MinIO).
+    POST   /api/projects/import      — (admin) Recrea un proyecto desde ese ZIP.
 """
 
+import io
+import json
+import re
+import uuid
+import zipfile
 from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import settings as app_config
 from app.database import get_db
 from app.models.client_quote import ClientQuote
 from app.models.model_file import ModelFile
@@ -37,6 +48,7 @@ from app.models.project import Project, project_model_files
 from app.models.queue import PrintQueueItem
 from app.models.user import User
 from app.routers.queue import _build_responses_bulk
+from app.routers.vault import _get_used_bytes, _resolve_tags, _source_content_type
 from app.schemas.project import (
     ProjectCreate,
     ProjectFilesRequest,
@@ -403,3 +415,224 @@ async def remove_project_file(
         )
     )
     await db.commit()
+
+
+# ─── Export / Import (issue #136, sub-ticket 3/3) ──────────────────────────
+
+MAX_IMPORT_ZIP_BYTES = 2 * 1024 * 1024 * 1024  # 2 GB, límite del doc local
+
+
+def _slugify(name: str) -> str:
+    """ASCII-only, minúsculas, guiones — para el filename del ZIP exportado."""
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", name).strip("-").lower()
+    return slug or "proyecto"
+
+
+@router.get("/{project_id}/export")
+async def export_project(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Exporta el proyecto a un ZIP: `manifest.json` (metadata del proyecto +
+    de cada archivo vinculado) y los binarios de MinIO bajo
+    `files/<idx>/source_<nombre>` / `files/<idx>/print_<nombre>`.
+
+    NO exporta `cover_photo_key` ni `client_quote_id` (datos locales de
+    esta instancia, sin sentido al reimportar en otro lado).
+    """
+    result = await db.execute(
+        select(Project)
+        .options(selectinload(Project.files).selectinload(ModelFile.tags))
+        .where(Project.id == project_id)
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+
+    manifest = {
+        "version": 1,
+        "project": {
+            "name": project.name,
+            "description": project.notes,
+            "color": project.color,
+            "external_url": project.external_url,
+        },
+        "files": [],
+    }
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for idx, f in enumerate(project.files):
+            entry = {
+                "name": f.name,
+                "description": f.description,
+                "notes": f.notes,
+                "tags": [t.name for t in f.tags],
+                "source_file_name": None,
+                "print_file_name": None,
+            }
+            if f.source_file_key:
+                try:
+                    data = await download_file(f.source_file_key)
+                    zf.writestr(f"files/{idx}/source_{f.source_file_name}", data)
+                    entry["source_file_name"] = f.source_file_name
+                except Exception:
+                    pass  # archivo ya no está en MinIO — se omite del export, no bloquea el resto
+            if f.print_file_key:
+                try:
+                    data = await download_file(f.print_file_key)
+                    zf.writestr(f"files/{idx}/print_{f.print_file_name}", data)
+                    entry["print_file_name"] = f.print_file_name
+                except Exception:
+                    pass
+            manifest["files"].append(entry)
+        zf.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+
+    zip_bytes = buf.getvalue()
+    filename = f"project-{project.id}-{_slugify(project.name)}.zip"
+    return StreamingResponse(
+        io.BytesIO(zip_bytes),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}",
+            "Content-Length": str(len(zip_bytes)),
+        },
+    )
+
+
+@router.post("/import", response_model=ProjectWithProgress, status_code=status.HTTP_201_CREATED)
+async def import_project(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """
+    Recrea un proyecto desde un ZIP exportado con `GET /{id}/export`.
+
+    Si ya existe un proyecto con el mismo nombre, el importado se crea
+    con sufijo " (importado)" — nunca sobreescribe uno existente. Los
+    archivos se re-suben a MinIO con keys nuevas (no reusa las del
+    proyecto original, que puede ser de otra instancia).
+    """
+    content = await file.read()
+    if len(content) > MAX_IMPORT_ZIP_BYTES:
+        raise HTTPException(status_code=413, detail="El ZIP supera el límite de 2 GB")
+
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(content))
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=400, detail="El archivo no es un ZIP válido")
+
+    try:
+        manifest = json.loads(zf.read("manifest.json"))
+    except KeyError:
+        raise HTTPException(status_code=400, detail="El ZIP no contiene manifest.json")
+    except (json.JSONDecodeError, ValueError):
+        raise HTTPException(status_code=400, detail="manifest.json no es JSON válido")
+
+    if manifest.get("version") != 1:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Versión de manifest no soportada: {manifest.get('version')!r}",
+        )
+
+    file_entries = manifest.get("files") or []
+    total_new_bytes = 0
+    for idx, entry in enumerate(file_entries):
+        for prefix, name_key in (("source", "source_file_name"), ("print", "print_file_name")):
+            fname = entry.get(name_key)
+            if fname:
+                try:
+                    total_new_bytes += len(zf.read(f"files/{idx}/{prefix}_{fname}"))
+                except KeyError:
+                    pass
+    used = await _get_used_bytes(db)
+    quota = app_config.VAULT_QUOTA_GB * 1024 * 1024 * 1024
+    if used + total_new_bytes > quota:
+        raise HTTPException(
+            status_code=507,
+            detail=f"Sin espacio disponible en el Vault. Cuota: {app_config.VAULT_QUOTA_GB} GB",
+        )
+
+    proj_data = manifest.get("project") or {}
+    name = (proj_data.get("name") or "Proyecto importado").strip() or "Proyecto importado"
+    existing = await db.execute(select(Project.id).where(Project.name == name))
+    if existing.scalar_one_or_none() is not None:
+        name = f"{name} (importado)"
+
+    project = Project(
+        name=name,
+        notes=proj_data.get("description"),
+        color=proj_data.get("color"),
+        external_url=proj_data.get("external_url"),
+    )
+    db.add(project)
+    await db.flush()  # id sin commitear, para poder poblar project.files
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    for idx, entry in enumerate(file_entries):
+        source_key = source_name = None
+        print_key = print_name = None
+        source_size = print_size = None
+
+        if entry.get("source_file_name"):
+            try:
+                data = zf.read(f"files/{idx}/source_{entry['source_file_name']}")
+                source_name = entry["source_file_name"]
+                source_key = f"{uuid.uuid4()}-{source_name.replace(' ', '_')}"
+                await upload_file(source_key, data, content_type=_source_content_type(source_name))
+                source_size = len(data)
+            except KeyError:
+                pass
+        if entry.get("print_file_name"):
+            try:
+                data = zf.read(f"files/{idx}/print_{entry['print_file_name']}")
+                print_name = entry["print_file_name"]
+                print_key = f"{uuid.uuid4()}-{print_name.replace(' ', '_')}"
+                await upload_file(print_key, data, content_type="model/3mf")
+                print_size = len(data)
+            except KeyError:
+                pass
+
+        if source_key is None and print_key is None:
+            continue  # entrada del manifest sin binarios recuperables — se omite
+
+        resolved_tags = await _resolve_tags(db, entry.get("tags") or [])
+        model = ModelFile(
+            uploaded_by=current_user.id,
+            source_file_key=source_key, source_file_name=source_name, source_file_size=source_size,
+            print_file_key=print_key, print_file_name=print_name, print_file_size=print_size,
+            name=entry.get("name") or source_name or print_name or "Modelo importado",
+            description=entry.get("description"),
+            notes=entry.get("notes"),
+            tags=resolved_tags,
+            created_at=now, updated_at=now,
+        )
+        db.add(model)
+        await db.flush()
+        project.files.append(model)
+
+    await db.commit()
+
+    counts_result = await db.execute(
+        select(PrintQueueItem.status, func.count())
+        .where(PrintQueueItem.project_id == project.id)
+        .group_by(PrintQueueItem.status)
+    )
+    by_status = {s: c for s, c in counts_result.all()}
+    return ProjectWithProgress(
+        id=project.id, name=project.name, client_name=project.client_name,
+        status=project.status, notes=project.notes,
+        color=project.color, external_url=project.external_url,
+        client_quote_id=project.client_quote_id, has_cover=project.cover_photo_key is not None,
+        created_at=project.created_at, updated_at=project.updated_at,
+        pending_count=by_status.get("pending", 0),
+        printing_count=by_status.get("printing", 0),
+        done_count=by_status.get("done", 0),
+        cancelled_count=by_status.get("cancelled", 0),
+        total_items=0,
+        client_quote_code=None,
+        client_quote_client_name=None,
+    )

@@ -13,6 +13,8 @@ const mockGetClientQuotes = vi.fn();
 const mockUploadProjectCover = vi.fn();
 const mockGetProjectFiles = vi.fn().mockResolvedValue({ data: [] });
 const mockRemoveProjectFile = vi.fn().mockResolvedValue({});
+const mockExportProject = vi.fn().mockResolvedValue(undefined);
+const mockImportProject = vi.fn();
 
 vi.mock('../services/api', () => ({
   getProjects: (...args) => mockGetProjects(...args),
@@ -25,6 +27,8 @@ vi.mock('../services/api', () => ({
   getProjectCoverUrl: (id) => `/api/projects/${id}/cover`,
   getProjectFiles: (...args) => mockGetProjectFiles(...args),
   removeProjectFile: (...args) => mockRemoveProjectFile(...args),
+  exportProject: (...args) => mockExportProject(...args),
+  importProject: (...args) => mockImportProject(...args),
 }));
 
 vi.mock('react-hot-toast', () => ({
@@ -48,6 +52,8 @@ beforeEach(() => {
   mockUploadProjectCover.mockReset();
   mockGetProjectFiles.mockReset();
   mockRemoveProjectFile.mockClear();
+  mockExportProject.mockClear();
+  mockImportProject.mockReset();
 });
 
 describe('ProjectsPage — metadata', () => {
@@ -109,7 +115,7 @@ describe('ProjectsPage — metadata', () => {
     await waitFor(() => expect(screen.getByText('Editar proyecto')).toBeInTheDocument());
 
     const file = new File(['fake'], 'cover.png', { type: 'image/png' });
-    const input = document.querySelector('input[type="file"]');
+    const input = screen.getByLabelText('Subir foto de portada');
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => expect(mockUploadProjectCover).toHaveBeenCalledWith(5, file));
@@ -135,5 +141,36 @@ describe('ProjectsPage — metadata', () => {
 
     fireEvent.click(screen.getByLabelText('Quitar Pieza.3mf del proyecto'));
     await waitFor(() => expect(mockRemoveProjectFile).toHaveBeenCalledWith(3, 20));
+  });
+
+  it('exportar desde el menú de la card dispara exportProject', async () => {
+    mockGetProjects.mockResolvedValue({
+      data: [{
+        id: 8, name: 'Encargo Export', status: 'active', total_items: 0,
+        pending_count: 0, printing_count: 0, done_count: 0, cancelled_count: 0,
+        color: null, external_url: null, has_cover: false,
+      }],
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Encargo Export')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByLabelText('Opciones de proyecto'));
+    fireEvent.click(screen.getByText('Exportar'));
+
+    await waitFor(() => expect(mockExportProject).toHaveBeenCalledWith(8, 'Encargo Export'));
+  });
+
+  it('importar un ZIP dispara importProject y recarga la lista', async () => {
+    mockGetProjects.mockResolvedValue({ data: [] });
+    mockImportProject.mockResolvedValue({ data: {} });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Sin proyectos todavía')).toBeInTheDocument());
+
+    const zipFile = new File(['zip-fake'], 'proyecto.zip', { type: 'application/zip' });
+    const input = screen.getByLabelText('Importar proyecto (ZIP)');
+    fireEvent.change(input, { target: { files: [zipFile] } });
+
+    await waitFor(() => expect(mockImportProject).toHaveBeenCalledWith(zipFile));
+    await waitFor(() => expect(mockGetProjects).toHaveBeenCalledTimes(2)); // carga inicial + reload post-import
   });
 });

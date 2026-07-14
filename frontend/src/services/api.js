@@ -1138,6 +1138,35 @@ export const addProjectFiles = (id, modelFileIds) =>
 export const removeProjectFile = (id, modelFileId) =>
   api.delete(`/projects/${id}/files/${modelFileId}`);
 
+// ─── Export / Import (issue #136, sub-ticket 3/3) ──────────────────────────
+
+/**
+ * Descarga el ZIP del proyecto (manifest.json + binarios) y dispara el
+ * guardado en el navegador. Mismo criterio que `downloadPrintLogCsv`
+ * (issue #131): blob + `<a>` temporal, porque un `<a href>` directo no
+ * llevaría el JWT Bearer.
+ */
+export const exportProject = async (id, name) => {
+  const res = await api.get(`/projects/${id}/export`, { responseType: 'blob' });
+  const url = URL.createObjectURL(res.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `project-${id}-${(name || 'proyecto').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.zip`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
+
+/** Recrea un proyecto desde un ZIP exportado con `exportProject`. @param {File} file */
+export const importProject = (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api.post('/projects/import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+
 /**
  * (Re)asigna o quita (projectId=null) el proyecto de un ítem ya encolado.
  * @param {number} itemId
