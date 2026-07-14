@@ -751,6 +751,15 @@ export const deleteSpool = (id) => api.delete(`/inventory/spools/${id}`);
 /** Gramos restantes por tipo de filamento vs. el umbral configurado. */
 export const getSpoolsLowStock = () => api.get('/inventory/spools/low-stock');
 
+/**
+ * Genera el PDF de etiquetas (con QR deep-link) para las bobinas dadas.
+ * Devuelve el blob crudo — el caller decide si abrirlo (`window.open`,
+ * ya que el servidor manda `Content-Disposition: inline`) o descargarlo.
+ * @param {{spool_ids: number[], template: string, monochrome?: boolean}} data
+ */
+export const printSpoolLabels = (data) =>
+  api.post('/inventory/spools/labels', data, { responseType: 'blob' });
+
 // ============================================================================
 // Cola de impresión (Queue)
 // ============================================================================

@@ -131,4 +131,50 @@ test.describe('Inventario — Bobinas (issue #134)', () => {
     expect(body.inventory_item_id).toBe(1);
     expect(body.count).toBe(1);
   });
+
+  test('imprimir etiquetas (issue #135) dispara la request con los ids seleccionados', async ({ page }) => {
+    await page.route('**/api/**', async (route) => {
+      const { pathname } = new URL(route.request().url());
+      const method = route.request().method();
+      if (method === 'GET' && /\/api\/inventory\/spools\/?$/.test(pathname)) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([fakeSpool(1), fakeSpool(2, { label_code: 'SP-0002' })]),
+        });
+      }
+      if (method === 'POST' && /\/api\/inventory\/spools\/labels$/.test(pathname)) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/pdf',
+          body: Buffer.from('%PDF-fake'),
+        });
+      }
+      return route.fallback();
+    });
+
+    await page.goto('/inventory/spools');
+    await page.waitForLoadState('networkidle');
+
+    await page.getByLabel('Seleccionar SP-0001').check();
+    await page.getByLabel('Seleccionar SP-0002').check();
+    await expect(page.getByText('2 bobinas seleccionadas')).toBeVisible();
+
+    await page.getByRole('button', { name: /imprimir etiquetas/i }).click();
+
+    const labelsRequest = page.waitForRequest(
+      (req) => /\/api\/inventory\/spools\/labels$/.test(new URL(req.url()).pathname) && req.method() === 'POST',
+    );
+
+    const [popup] = await Promise.all([
+      page.waitForEvent('popup'),
+      page.getByRole('button', { name: /^imprimir$/i }).click(),
+    ]);
+    expect(popup).toBeTruthy();
+
+    const req = await labelsRequest;
+    const body = req.postDataJSON();
+    expect(body.spool_ids).toEqual([1, 2]);
+    expect(body.template).toBe('box_62x29');
+  });
 });

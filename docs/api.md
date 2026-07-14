@@ -660,6 +660,34 @@ el descuento agregado normal. Debe pertenecer al mismo `inventory_item_id`
 que `filament_id` (si ambos vienen); si solo viene `spool_id`,
 `filament_id` se deriva automáticamente.
 
+### `POST /inventory/spools/labels` (issue #135)
+Genera un PDF de etiquetas con QR (deep-link a `/inventory/spools?spool=<id>`)
+para las bobinas pedidas. Adaptado de bambuddy
+(`backend/app/services/label_renderer.py`, AGPL-3.0) — 6 plantillas reales
+(no las 4 del README viejo de bambuddy, corregidas en su issue #1426):
+`ams_holder_74x33`, `ams_holder_75x55`, `box_40x30`, `box_62x29`,
+`avery_5160` (US Letter, 30/hoja), `avery_l7160` (A4, 21/hoja).
+
+**Body:**
+```json
+{
+  "spool_ids": [1, 2, 3],
+  "template": "avery_l7160",
+  "monochrome": false
+}
+```
+`monochrome`: quita el swatch de color (impresoras térmicas B/N) y
+ensancha la columna de texto. El orden de `spool_ids` se preserva en el
+PDF (una hoja Avery coincide con el orden elegido en pantalla).
+
+**Response:** `application/pdf`, `Content-Disposition: inline`, 404 si
+algún id no existe (lista los faltantes en el detail).
+
+El deep-link usa `PUBLIC_URL` (`.env`) si está configurado — necesario en
+prod porque `request.url` cae detrás del Cloudflare Tunnel y puede
+resolver a una dirección interna; sin `PUBLIC_URL`, usa
+`request.url.scheme://request.url.netloc` (suficiente en dev).
+
 ---
 
 ## Pedidos de compra
