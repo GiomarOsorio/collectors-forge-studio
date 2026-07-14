@@ -48,13 +48,27 @@ async def _fake_db_empty():
     yield session
 
 
+def _fake_project(project_id=1, status_="active", **overrides):
+    from datetime import datetime
+    p = MagicMock()
+    p.id = project_id
+    p.name = "Proyecto de prueba"
+    p.client_name = None
+    p.status = status_
+    p.notes = None
+    p.color = None
+    p.external_url = None
+    p.client_quote_id = None
+    p.cover_photo_key = None
+    p.created_at = datetime(2026, 1, 1)
+    p.updated_at = datetime(2026, 1, 1)
+    for k, v in overrides.items():
+        setattr(p, k, v)
+    return p
+
+
 def _fake_db_with_project(project_id=1, status_="active"):
-    fake_project = MagicMock()
-    fake_project.id = project_id
-    fake_project.name = "Proyecto de prueba"
-    fake_project.client_name = None
-    fake_project.status = status_
-    fake_project.notes = None
+    fake_project = _fake_project(project_id, status_)
 
     async def _gen():
         session = AsyncMock()
@@ -64,6 +78,21 @@ def _fake_db_with_project(project_id=1, status_="active"):
         session.execute.return_value = result
         yield session
 
+    return _gen
+
+
+def _exec_result(scalar_one_or_none=None, scalars_all=None):
+    r = MagicMock()
+    r.scalar_one_or_none.return_value = scalar_one_or_none
+    r.scalars.return_value.all.return_value = scalars_all or []
+    return r
+
+
+def _fake_db_sequence(*results):
+    async def _gen():
+        session = AsyncMock()
+        session.execute = AsyncMock(side_effect=list(results))
+        yield session
     return _gen
 
 
@@ -204,3 +233,140 @@ class TestProjectsDelete:
         finally:
             _clear_overrides()
         assert r.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Metadata (issue #136, sub-ticket 1/3): color, external_url, client_quote_id,
+# cover_photo_key
+# ---------------------------------------------------------------------------
+
+def _fake_db_create_with_refresh(quote_exists=None):
+    """
+    Simula `db.refresh()` poblando los defaults que en producción asigna
+    SQLAlchemy/Postgres al insertar de verdad (created_at/updated_at) —
+    ninguno se aplica sin una sesión real. Mismo patrón que
+    `_fake_db_bulk_create` de test_spools.py.
+    """
+    from datetime import datetime, timezone
+
+    async def _gen():
+        session = AsyncMock()
+        session.execute.return_value = _exec_result(scalar_one_or_none=quote_exists)
+
+        async def _refresh(obj):
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            if getattr(obj, "id", None) is None:
+                obj.id = 1
+            if getattr(obj, "status", None) is None:
+                obj.status = "active"
+            if getattr(obj, "created_at", None) is None:
+                obj.created_at = now
+            if getattr(obj, "updated_at", None) is None:
+                obj.updated_at = now
+
+        session.refresh = _refresh
+        yield session
+
+    return _gen
+
+
+class TestProjectMetadataCreate:
+    async def test_crea_con_color_external_url_y_sin_cotizacion(self):
+        _set_overrides({
+            get_db: _fake_db_create_with_refresh(),
+            get_current_user: lambda: _fake_user(role="operator"),
+        })
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.post("/api/projects/", json={
+                    "name": "Encargo X",
+                    "color": "#F59E0B",
+                    "external_url": "https://makerworld.com/models/123",
+                })
+        finally:
+            _clear_overrides()
+        assert r.status_code == 201
+        body = r.json()
+        assert body["color"] == "#F59E0B"
+        assert body["external_url"] == "https://makerworld.com/models/123"
+        assert body["has_cover"] is False
+
+    async def test_color_invalido_retorna_422(self):
+        _set_overrides({
+            get_db: _fake_db_create_with_refresh(),
+            get_current_user: lambda: _fake_user(role="operator"),
+        })
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.post("/api/projects/", json={"name": "Encargo X", "color": "rojo"})
+        finally:
+            _clear_overrides()
+        assert r.status_code == 422
+
+    async def test_client_quote_id_inexistente_retorna_404(self):
+        _set_overrides({
+            get_db: _fake_db_create_with_refresh(quote_exists=None),
+            get_current_user: lambda: _fake_user(role="operator"),
+        })
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.post("/api/projects/", json={"name": "Encargo X", "client_quote_id": 999})
+        finally:
+            _clear_overrides()
+        assert r.status_code == 404
+
+
+class TestProjectCover:
+    async def test_upload_cover_tipo_no_permitido_retorna_400(self):
+        _set_overrides({
+            get_db: _fake_db_with_project(project_id=1),
+            get_current_user: lambda: _fake_user(role="admin"),
+        })
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.post(
+                    "/api/projects/1/cover",
+                    files={"file": ("cover.txt", b"no es una imagen", "text/plain")},
+                )
+        finally:
+            _clear_overrides()
+        assert r.status_code == 400
+
+    async def test_upload_cover_no_admin_retorna_403(self):
+        _set_overrides({
+            get_db: _fake_db_with_project(project_id=1),
+            get_current_user: lambda: _fake_user(role="operator"),
+        })
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.post(
+                    "/api/projects/1/cover",
+                    files={"file": ("cover.png", b"fake", "image/png")},
+                )
+        finally:
+            _clear_overrides()
+        assert r.status_code == 403
+
+    async def test_get_cover_sin_cover_retorna_404(self):
+        _set_overrides({
+            get_db: _fake_db_with_project(project_id=1),
+            get_current_user: lambda: _fake_user(),
+        })
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.get("/api/projects/1/cover")
+        finally:
+            _clear_overrides()
+        assert r.status_code == 404
+
+    async def test_get_cover_proyecto_no_encontrado_retorna_404(self):
+        _set_overrides({
+            get_db: _fake_db_empty,
+            get_current_user: lambda: _fake_user(),
+        })
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.get("/api/projects/999/cover")
+        finally:
+            _clear_overrides()
+        assert r.status_code == 404

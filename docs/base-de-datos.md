@@ -72,7 +72,8 @@ Las migraciones están en `backend/alembic/versions/`. Se aplican con `alembic u
 | `68c641f83b25` | `68c641f83b25_queue_batch_schedule.py` | `print_queue.batch_id` + `scheduled_at` (issue #133) |
 | `82717e0701b3` | `82717e0701b3_print_queue_created_by.py` | `print_queue.created_by` FK→users (issue #131) |
 | `8422a0c213e9` | `8422a0c213e9_inventory_spools.py` | Tabla `spools`, `print_queue.spool_id`, `app_settings.spool_low_stock_threshold_g` (issue #134) |
-| `9533b1d4f6a2` | `9533b1d4f6a2_maintenance_schedules.py` | **Head actual** — Tabla `maintenance_schedules` (recordatorios de mantenimiento por intervalo, issue #138) |
+| `9533b1d4f6a2` | `9533b1d4f6a2_maintenance_schedules.py` | Tabla `maintenance_schedules` (recordatorios de mantenimiento por intervalo, issue #138) |
+| `a1b2c3d4e5f7` | `a1b2c3d4e5f7_project_metadata.py` | **Head actual** — `projects.cover_photo_key`/`color`/`external_url`/`client_quote_id` (issue #136, sub-ticket 1/3) |
 
 **Aplicar todas las migraciones:**
 ```bash
@@ -440,6 +441,26 @@ en gramos — ver docstring completo en `backend/app/models/spool.py`)**:
 | `opened_at` | TIMESTAMP nullable | — |
 | `finished_at` | TIMESTAMP nullable | Poblado automáticamente al agotarse |
 | `notes` | VARCHAR(500) nullable | — |
+| `created_at` / `updated_at` | TIMESTAMP | — |
+
+### `projects`
+
+Agrupador organizativo de ítems de la cola de impresión (`print_queue.project_id`,
+FK SET NULL) — no participa en cálculos de costo ni de inventario. Metadata
+agregada en issue #136 (sub-ticket 1/3 de 3 — el puente N:M con archivos de
+Vault y el export/import quedan en sub-tickets aparte).
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `name` | VARCHAR(200) | — |
+| `client_name` | VARCHAR(200) nullable | Texto libre (no existe entidad Cliente) |
+| `status` | VARCHAR(20) | `active` \| `completed` \| `archived` |
+| `notes` | TEXT nullable | — |
+| `cover_photo_key` | VARCHAR(500) nullable | Key en MinIO (`projects/{id}/cover.{ext}`), mismo patrón que `ModelFile.thumbnail_key` — un solo archivo, no colección |
+| `color` | VARCHAR(7) nullable | Hex `#RRGGBB` para el badge/acento de la card |
+| `external_url` | VARCHAR(500) nullable | Link externo (MakerWorld, Printables, pedido) |
+| `client_quote_id` | INTEGER FK → client_quotes SET NULL, indexado | Vínculo opcional a una cotización ya emitida. El código "COT-XXXX" se calcula desde el id, no se duplica como columna |
 | `created_at` / `updated_at` | TIMESTAMP | — |
 
 ---

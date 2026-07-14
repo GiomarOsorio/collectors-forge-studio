@@ -1080,6 +1080,50 @@ items anteriores a esta migración o si el usuario fue borrado después.
 
 ---
 
+## Proyectos (issue #136, sub-ticket 1/3)
+
+Agrupador organizativo de ítems de la cola (`print_queue.project_id`) — no
+afecta costos ni inventario. Este sub-ticket agrega metadata (cover,
+color, link externo, cotización vinculada); el puente a archivos de
+Vault y el export/import quedan en sub-tickets aparte (issue #136).
+
+### `GET /projects/`
+Lista proyectos con conteo de items de cola por estado + `client_quote_code`/
+`client_quote_client_name` si `client_quote_id` resuelve a una cotización real.
+
+### `POST /projects/` (operator)
+**Body:**
+```json
+{
+  "name": "Encargo boda Ana & Luis",
+  "client_name": "Ana Gómez",
+  "color": "#F59E0B",
+  "external_url": "https://makerworld.com/models/123",
+  "client_quote_id": 7,
+  "notes": null
+}
+```
+404 si `client_quote_id` no existe. `color` debe ser `#RRGGBB` (422 si no).
+
+### `GET /projects/{id}` · `PUT /projects/{id}` (operator) · `DELETE /projects/{id}` (operator)
+Mismos campos que `POST`, todos opcionales en `PUT`. `DELETE` no borra
+los items de cola, solo los desagrupa (`project_id=NULL`).
+
+### `GET /projects/{id}/items`
+Lista los ítems de cola (cualquier estado) asociados al proyecto.
+
+### `POST /projects/{id}/cover` (admin)
+Sube/reemplaza la foto de portada — multipart, un solo archivo por
+proyecto (a diferencia de las fotos de modelo de #130, que son una
+colección). Máx. 10 MB, `image/jpeg`/`png`/`webp`.
+
+### `GET /projects/{id}/cover`
+Proxy público de la foto de portada (sin JWT — los `<img>` no mandan
+`Authorization`, mismo criterio que el thumbnail de Vault). 404 si el
+proyecto no tiene portada.
+
+---
+
 ## Vault de modelos .3mf
 
 Almacenamiento de archivos `.3mf` en MinIO. Todas las operaciones de escritura requieren rol `admin`.

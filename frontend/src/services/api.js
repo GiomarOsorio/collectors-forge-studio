@@ -1107,6 +1107,24 @@ export const updateProject = (id, data) => api.put(`/projects/${id}`, data);
 /** Elimina un proyecto (los items de cola quedan sin agrupar). */
 export const deleteProject = (id) => api.delete(`/projects/${id}`);
 
+/** Sube/reemplaza la foto de portada de un proyecto (issue #136). @param {File} file */
+export const uploadProjectCover = (id, file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api.post(`/projects/${id}/cover`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+
+/**
+ * URL directa del proxy de portada — usar como `src` de `<img>` (no pasa
+ * por axios, el `<img>` no puede mandar el header Authorization; el
+ * endpoint es público en el backend por eso mismo). `updatedAt` como
+ * cache-buster para que un reemplazo de portada invalide la caché.
+ */
+export const getProjectCoverUrl = (id, updatedAt) =>
+  `/api/projects/${id}/cover${updatedAt ? `?v=${encodeURIComponent(updatedAt)}` : ''}`;
+
 /**
  * (Re)asigna o quita (projectId=null) el proyecto de un ítem ya encolado.
  * @param {number} itemId

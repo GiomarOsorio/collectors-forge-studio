@@ -15,6 +15,7 @@ import {
   Archive,
   CheckCircle2,
   Clock,
+  ExternalLink,
   FileText,
   FolderKanban,
   MoreVertical,
@@ -22,7 +23,9 @@ import {
   Pencil,
   Play,
   Plus,
+  Receipt,
   Trash2,
+  Upload,
   XCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -41,12 +44,21 @@ import { useConfirm } from '../../components/ConfirmDialog';
 import {
   createProject,
   deleteProject,
+  getClientQuotes,
+  getProjectCoverUrl,
   getProjectItems,
   getProjects,
   updateProject,
+  uploadProjectCover,
 } from '../../services/api';
 
 const ACCENT = '#F59E0B';
+
+//: Paleta sugerida — igual a `SUGGESTED_PROJECT_COLORS` del backend (schemas/project.py).
+const COLOR_PALETTE = [
+  '#F59E0B', '#3B82F6', '#8B5CF6', '#14B8A6',
+  '#F43F5E', '#22C55E', '#EAB308', '#6366F1',
+];
 
 const STATUS_META = {
   active:    { label: 'Activo',     tone: 'info',    icon: Play },
@@ -111,22 +123,50 @@ function ProjectProgressBar({ project }) {
 function ProjectCard({ project, onOpen, onEdit, onDelete }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const meta = STATUS_META[project.status] || STATUS_META.active;
+  const accent = project.color || ACCENT;
   return (
-    <Card as="div" interactive className="p-4 flex flex-col gap-3 cursor-pointer" onClick={() => onOpen(project)}>
+    <Card
+      as="div" interactive
+      className="p-4 flex flex-col gap-3 cursor-pointer"
+      style={{ borderLeft: `3px solid ${accent}` }}
+      onClick={() => onOpen(project)}
+    >
       <div className="flex items-start gap-3">
-        <span
-          className="inline-flex items-center justify-center w-9 h-9 rounded-lg shrink-0"
-          style={{ background: `${ACCENT}1A`, color: ACCENT, border: `1px solid ${ACCENT}40` }}
-        >
-          <FolderKanban size={16} />
-        </span>
+        {project.has_cover ? (
+          <img
+            src={getProjectCoverUrl(project.id, project.updated_at)}
+            alt=""
+            className="w-9 h-9 rounded-lg object-cover shrink-0"
+          />
+        ) : (
+          <span
+            className="inline-flex items-center justify-center w-9 h-9 rounded-lg shrink-0"
+            style={{ background: `${accent}1A`, color: accent, border: `1px solid ${accent}40` }}
+          >
+            <FolderKanban size={16} />
+          </span>
+        )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
             <StatusPill tone={meta.tone} icon={meta.icon}>{meta.label}</StatusPill>
+            {project.external_url && (
+              <a
+                href={project.external_url}
+                target="_blank" rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-gunmetal hover:text-tech-white"
+                aria-label="Link externo"
+              >
+                <ExternalLink size={12} />
+              </a>
+            )}
           </div>
           <p className="text-sm font-semibold text-tech-white truncate">{project.name}</p>
           {project.client_name && (
             <p className="mono text-[10.5px] text-gunmetal truncate">{project.client_name}</p>
+          )}
+          {project.client_quote_code && (
+            <p className="mono text-[10.5px] text-amber-300/80 truncate">{project.client_quote_code}</p>
           )}
         </div>
         <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -168,12 +208,23 @@ function ProjectCard({ project, onOpen, onEdit, onDelete }) {
 
 // ─── Form modal (crear/editar) ──────────────────────────────────────────────
 
-function ProjectFormModal({ mode, initial, onCancel, onSave }) {
+function ProjectFormModal({ mode, initial, onCancel, onSave, onCoverUploaded }) {
   const [name, setName] = useState(initial?.name || '');
   const [clientName, setClientName] = useState(initial?.client_name || '');
   const [status, setStatus] = useState(initial?.status || 'active');
   const [notes, setNotes] = useState(initial?.notes || '');
+  const [color, setColor] = useState(initial?.color || '');
+  const [externalUrl, setExternalUrl] = useState(initial?.external_url || '');
+  const [clientQuoteId, setClientQuoteId] = useState(initial?.client_quote_id ? String(initial.client_quote_id) : '');
+  const [quotes, setQuotes] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
+
+  useEffect(() => {
+    getClientQuotes()
+      .then((res) => setQuotes(res.data || []))
+      .catch(() => {});
+  }, []);
 
   const submit = async () => {
     if (!name.trim()) return;
@@ -184,9 +235,28 @@ function ProjectFormModal({ mode, initial, onCancel, onSave }) {
         client_name: clientName.trim() || null,
         ...(mode === 'edit' ? { status } : {}),
         notes: notes.trim() || null,
+        color: color || null,
+        external_url: externalUrl.trim() || null,
+        client_quote_id: clientQuoteId ? parseInt(clientQuoteId, 10) : null,
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleCoverChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !initial?.id) return;
+    setUploadingCover(true);
+    try {
+      const res = await uploadProjectCover(initial.id, file);
+      toast.success('Portada actualizada');
+      onCoverUploaded?.(res.data);
+    } catch {
+      toast.error('No se pudo subir la portada');
+    } finally {
+      setUploadingCover(false);
+      e.target.value = '';
     }
   };
 
@@ -216,6 +286,45 @@ function ProjectFormModal({ mode, initial, onCancel, onSave }) {
               className="w-full bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm focus:outline-none focus:border-amber-500"
             />
           </label>
+          <label className="block">
+            <span className="block text-xs text-gunmetal mb-1">Cotización vinculada</span>
+            <select
+              value={clientQuoteId}
+              onChange={(e) => setClientQuoteId(e.target.value)}
+              className="w-full bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm"
+            >
+              <option value="">Sin cotización vinculada</option>
+              {quotes.map((q) => (
+                <option key={q.id} value={String(q.id)}>
+                  {`COT-${String(q.id).padStart(4, '0')} · ${q.client_name}`}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="block text-xs text-gunmetal mb-1">Link externo</span>
+            <input
+              value={externalUrl}
+              onChange={(e) => setExternalUrl(e.target.value)}
+              placeholder="https://makerworld.com/models/…"
+              className="w-full bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm focus:outline-none focus:border-amber-500"
+            />
+          </label>
+          <div>
+            <span className="block text-xs text-gunmetal mb-1.5">Color</span>
+            <div className="flex flex-wrap gap-1.5">
+              {COLOR_PALETTE.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setColor(c === color ? '' : c)}
+                  className="w-6 h-6 rounded-full border-2 transition-transform"
+                  style={{ background: c, borderColor: color === c ? '#fff' : 'transparent', transform: color === c ? 'scale(1.15)' : 'scale(1)' }}
+                  aria-label={`Color ${c}`}
+                />
+              ))}
+            </div>
+          </div>
           {mode === 'edit' && (
             <label className="block">
               <span className="block text-xs text-gunmetal mb-1">Estado</span>
@@ -228,6 +337,25 @@ function ProjectFormModal({ mode, initial, onCancel, onSave }) {
                 <option value="completed">Completado</option>
                 <option value="archived">Archivado</option>
               </select>
+            </label>
+          )}
+          {mode === 'edit' && (
+            <label className="block">
+              <span className="block text-xs text-gunmetal mb-1">Foto de portada</span>
+              <div className="flex items-center gap-2">
+                {initial?.has_cover && (
+                  <img
+                    src={getProjectCoverUrl(initial.id, initial.updated_at)}
+                    alt=""
+                    className="w-9 h-9 rounded object-cover shrink-0"
+                  />
+                )}
+                <label className="tf-btn-ghost inline-flex items-center gap-1.5 cursor-pointer text-xs">
+                  <Upload size={12} />
+                  {uploadingCover ? 'Subiendo…' : initial?.has_cover ? 'Reemplazar' : 'Subir imagen'}
+                  <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleCoverChange} disabled={uploadingCover} />
+                </label>
+              </div>
             </label>
           )}
           <label className="block">
@@ -275,6 +403,32 @@ function ProjectDetailBody({ project, items, loadingItems }) {
   if (!project) return null;
   return (
     <div className="flex flex-col gap-4">
+      {project.has_cover && (
+        <img
+          src={getProjectCoverUrl(project.id, project.updated_at)}
+          alt=""
+          className="w-full h-32 rounded-lg object-cover"
+        />
+      )}
+      {project.external_url && (
+        <a
+          href={project.external_url}
+          target="_blank" rel="noreferrer"
+          className="inline-flex items-center gap-1.5 text-sm text-amber-300 hover:text-amber-200"
+        >
+          <ExternalLink size={13} /> Ver link externo
+        </a>
+      )}
+      {project.client_quote_code && (
+        <Card className="p-3">
+          <span className="lbl-eyebrow text-[9px]">Cotización vinculada</span>
+          <p className="text-sm text-tech-white mt-0.5 flex items-center gap-1.5">
+            <Receipt size={13} className="text-amber-300" />
+            {project.client_quote_code}
+            {project.client_quote_client_name ? ` · ${project.client_quote_client_name}` : ''}
+          </p>
+        </Card>
+      )}
       {project.client_name && (
         <Card className="p-3">
           <span className="lbl-eyebrow text-[9px]">Cliente</span>
@@ -498,6 +652,7 @@ export default function ProjectsPage() {
             initial={formModal.project}
             onCancel={() => setFormModal(null)}
             onSave={handleSave}
+            onCoverUploaded={load}
           />
         )}
       </div>
@@ -551,6 +706,7 @@ export default function ProjectsPage() {
           initial={formModal.project}
           onCancel={() => setFormModal(null)}
           onSave={handleSave}
+          onCoverUploaded={load}
         />
       )}
     </div>
