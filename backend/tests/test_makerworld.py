@@ -269,7 +269,11 @@ class TestMakerWorldClient:
         })
         c = mw.MakerWorldClient(client=client, auth_token="tok")
         data = await c.get_profile_download(55, "US2bb73")
-        assert data["url"].startswith("https://makerworld.bblmw.com")
+        # Igualdad exacta (no startswith) — evita el patrón que CodeQL
+        # marca como "incomplete URL substring sanitization"; acá es
+        # además irrelevante para seguridad real: es una aserción sobre
+        # datos de un mock, no una validación de URL antes de un request.
+        assert data["url"] == "https://makerworld.bblmw.com/x.3mf"
 
     async def test_download_3mf_rejects_non_allowed_host(self):
         c = mw.MakerWorldClient(client=_FakeAsyncClient())

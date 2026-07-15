@@ -43,6 +43,13 @@ def _detect_cloudflare_challenge(response: httpx.Response) -> Optional[str]:
         body = response.text or ""
     except Exception:
         body = ""
+    # lgtm[py/incomplete-url-substring-sanitization] — esto NO es una
+    # validación de URL de red (no hay ningún request que dependa de este
+    # resultado): es una búsqueda de texto sobre el HTML de la respuesta
+    # para detectar la página interstitial de Cloudflare y dar un mensaje
+    # accionable. `challenges.cloudflare.com` aparece como <script src="...">
+    # en esa página; un falso positivo aquí solo cambiaría el mensaje de
+    # error mostrado, nunca a qué host se conecta el cliente.
     if "Just a moment..." in body or "challenges.cloudflare.com" in body:
         return _CF_INTERSTITIAL_USER_MESSAGE
     status = response.status_code

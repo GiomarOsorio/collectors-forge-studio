@@ -31,7 +31,7 @@ import logging
 import re
 import uuid
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 import httpx
 from sqlalchemy import select
@@ -223,13 +223,21 @@ class MakerWorldClient:
             raise MakerWorldUnavailableError(f"Descarga del .3mf falló: {exc}") from exc
 
     async def fetch_thumbnail(self, url: str) -> tuple[bytes, str]:
-        """Proxy de imagen del CDN de MakerWorld — SSRF guard con allowlist de host."""
+        """
+        Proxy de imagen del CDN de MakerWorld — SSRF guard con allowlist de
+        host EXACTO. La URL saliente se reconstruye desde cero a partir de
+        `scheme` fijo ("https") + el host ya validado + path/query — nunca
+        se reenvía el string crudo recibido del caller, así ni un truco de
+        userinfo (`https://makerworld.bblmw.com@evil.com/`) ni de parsing
+        puede colar un host distinto al validado.
+        """
         parsed = urlparse(url)
         host = (parsed.hostname or "").lower()
-        if host not in MAKERWORLD_CDN_HOSTS:
+        if parsed.scheme not in ("http", "https") or host not in MAKERWORLD_CDN_HOSTS:
             raise MakerWorldUrlError(f"Host de thumbnail no permitido: {host!r}")
+        safe_url = urlunparse(("https", host, parsed.path, "", parsed.query, ""))
         try:
-            response = await self._client.get(url, headers=self._headers(), timeout=20.0, follow_redirects=False)
+            response = await self._client.get(safe_url, headers=self._headers(), timeout=20.0, follow_redirects=False)
         except httpx.HTTPError as exc:
             raise MakerWorldUnavailableError(f"Petición de thumbnail falló: {exc}") from exc
         if response.status_code != 200:
