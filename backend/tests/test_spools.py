@@ -70,6 +70,28 @@ def _fake_spool(spool_id=1, remaining=Decimal("500.0"), initial=Decimal("1000.0"
     return s
 
 
+def _no_crossing_results():
+    """
+    Resultados mock para las 3 queries que `_emit_spool_low_if_crossed`
+    (issue #137) dispara siempre tras tocar `remaining_weight_g`: settings,
+    InventoryItem padre (para filament_type) y suma agregada de otras
+    bobinas activas. Configurados para que el umbral NUNCA se cruce (así
+    estos tests de aritmética de consumo no disparan `emit()`).
+    """
+    settings_result = MagicMock()
+    settings_result.scalar_one_or_none.return_value = None  # usa threshold default 200
+
+    parent_result = MagicMock()
+    parent = MagicMock()
+    parent.filament_type = "PLA"
+    parent_result.scalar_one_or_none.return_value = parent
+
+    others_result = MagicMock()
+    others_result.scalar.return_value = Decimal("100000.0")  # bien por encima del threshold
+
+    return [settings_result, parent_result, others_result]
+
+
 def _fake_queue_item_for_deduct(quantity=1, weight_grams=Decimal("100.00"), spool_id=1, printer_id=None):
     item = MagicMock()
     item.quantity = quantity
@@ -94,15 +116,16 @@ class TestSpoolConsumptionRule:
         db = AsyncMock()
         spool_result = MagicMock()
         spool_result.scalar_one_or_none.return_value = spool
-        db.execute.return_value = spool_result
+        db.execute.side_effect = [spool_result, *_no_crossing_results()]
 
         warning = await _deduct_vault_item(db, item)
 
         assert warning is None
         assert spool.remaining_weight_g == Decimal("300.0")  # 500 - (100*2)
         assert spool.status == "active"  # no se agotó
-        # NO doble descuento: solo 1 query (la del spool), ninguna a InventoryItem.
-        assert db.execute.call_count == 1
+        # 1 query de deducción (spool) + 3 de lectura para el chequeo de
+        # cruce de umbral (issue #137, no vuelve a tocar el agregado).
+        assert db.execute.call_count == 4
 
     async def test_agotamiento_marca_finished_y_resta_initial_weight_del_agregado(self):
         """Criterio #2: al agotarse, se resta initial_weight_g (NO remaining, NO '-1') del padre."""
@@ -117,7 +140,7 @@ class TestSpoolConsumptionRule:
         spool_result.scalar_one_or_none.return_value = spool
         parent_result = MagicMock()
         parent_result.scalar_one_or_none.return_value = parent
-        db.execute.side_effect = [spool_result, parent_result]
+        db.execute.side_effect = [spool_result, *_no_crossing_results(), parent_result]
 
         warning = await _deduct_vault_item(db, item)
 
@@ -141,7 +164,7 @@ class TestSpoolConsumptionRule:
         spool_result.scalar_one_or_none.return_value = spool
         parent_result = MagicMock()
         parent_result.scalar_one_or_none.return_value = parent
-        db.execute.side_effect = [spool_result, parent_result]
+        db.execute.side_effect = [spool_result, *_no_crossing_results(), parent_result]
 
         # No debe lanzar — a diferencia de _deduct_inventory_and_update_printer
         # con stock insuficiente, que sí lanza HTTPException 400.
@@ -160,12 +183,13 @@ class TestSpoolConsumptionRule:
         db = AsyncMock()
         spool_result = MagicMock()
         spool_result.scalar_one_or_none.return_value = spool
-        db.execute.return_value = spool_result
+        db.execute.side_effect = [spool_result, *_no_crossing_results()]
 
         await _deduct_vault_item(db, item)
 
-        # No se dispara una segunda query al padre porque status != 'active'.
-        assert db.execute.call_count == 1
+        # No se dispara una query de agotamiento al padre porque status !=
+        # 'active' — solo las 3 lecturas del chequeo de cruce (issue #137).
+        assert db.execute.call_count == 4
 
     async def test_sin_spool_sigue_el_camino_agregado_intacto(self):
         """Regresión: item SIN spool_id sigue descontando el agregado como siempre."""

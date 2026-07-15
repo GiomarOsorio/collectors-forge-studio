@@ -74,7 +74,8 @@ Las migraciones están en `backend/alembic/versions/`. Se aplican con `alembic u
 | `8422a0c213e9` | `8422a0c213e9_inventory_spools.py` | Tabla `spools`, `print_queue.spool_id`, `app_settings.spool_low_stock_threshold_g` (issue #134) |
 | `9533b1d4f6a2` | `9533b1d4f6a2_maintenance_schedules.py` | Tabla `maintenance_schedules` (recordatorios de mantenimiento por intervalo, issue #138) |
 | `a1b2c3d4e5f7` | `a1b2c3d4e5f7_project_metadata.py` | `projects.cover_photo_key`/`color`/`external_url`/`client_quote_id` (issue #136, sub-ticket 1/3) |
-| `b2c3d4e5f6a8` | `b2c3d4e5f6a8_project_model_files.py` | **Head actual** — Tabla puente `project_model_files` N:M Project↔ModelFile (issue #136, sub-ticket 2/3) |
+| `b2c3d4e5f6a8` | `b2c3d4e5f6a8_project_model_files.py` | Tabla puente `project_model_files` N:M Project↔ModelFile (issue #136, sub-ticket 2/3) |
+| `c3d4e5f6a7b9` | `c3d4e5f6a7b9_notifications.py` | **Head actual** — Tablas `notification_channels`, `notification_templates`, `notification_digest_queue`; columnas SMTP + quiet hours + digest en `app_settings` (issue #137) |
 
 **Aplicar todas las migraciones:**
 ```bash
@@ -282,6 +283,9 @@ Singleton — solo hay una fila (se consulta con `LIMIT 1`).
 | `default_margin_percent` | NUMERIC(8,4) | % de margen por defecto |
 | `currency` | VARCHAR(10) | `USD` |
 | `spool_low_stock_threshold_g` | NUMERIC(8,1) | Umbral de alerta de bobinas bajas por material, en gramos (issue #134) |
+| `smtp_host` / `smtp_port` / `smtp_user` / `smtp_password` / `smtp_from` / `smtp_tls` | VARCHAR / INTEGER / BOOLEAN | Servidor SMTP único del estudio para el canal de notificaciones `email` (issue #137). `smtp_password` en texto plano — ver nota en `NotificationChannel`. |
+| `quiet_hours_start` / `quiet_hours_end` | VARCHAR(5) | Rango `"HH:MM"` (America/Bogota) en que las notificaciones se suprimen/difieren (issue #137). NULL en cualquiera de los dos = deshabilitado. |
+| `digest_hour` | INTEGER (0–23) | Hora del digest diario (America/Bogota). NULL = digest deshabilitado (issue #137). |
 
 ### `electricity_tariffs`
 
@@ -477,6 +481,53 @@ archivos de Vault; un archivo puede estar en N proyectos.
 
 PK compuesta `(project_id, model_file_id)`.
 | `created_at` / `updated_at` | TIMESTAMP | — |
+
+### `notification_channels` (issue #137)
+
+Canal de notificación configurado por el estudio (Telegram, Discord, ntfy,
+email o webhook). `config` guarda tokens/URLs en JSONB **sin cifrar**: CFS
+no tiene patrón de cifrado en reposo y la BD es privada — decisión
+consciente (ver docstring de `NotificationChannel`).
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `type` | VARCHAR(16) CHECK | `telegram` \| `discord` \| `ntfy` \| `email` \| `webhook` |
+| `name` | VARCHAR(100) | Nombre descriptivo |
+| `config` | JSONB | Campos según `type` (ver `app/services/notifier.py`) |
+| `enabled` | BOOLEAN | — |
+| `events` | JSONB | Lista de eventos suscritos (ver matriz abajo) |
+| `defer_to_digest` | BOOLEAN | Si difiere a digest diario en quiet hours (vs. descartar) |
+| `created_at` / `updated_at` | TIMESTAMP | — |
+
+**Matriz de eventos**: `queue.item_done`, `queue.item_cancelled`,
+`inventory.low_stock`, `inventory.spool_low`, `maintenance.due`,
+`purchase_order.status_changed`, `client_quote.created`.
+
+### `notification_templates` (issue #137)
+
+Plantilla Liquid personalizada por evento. Si no hay fila para un evento,
+se usa el template default hardcoded (`DEFAULT_TEMPLATES` en `notifier.py`).
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `event` | VARCHAR(50) UNIQUE | — |
+| `body` | TEXT | Código Liquid |
+| `updated_at` | TIMESTAMP | — |
+
+### `notification_digest_queue` (issue #137)
+
+Cola de eventos suprimidos en quiet hours con `defer_to_digest=true`,
+drenada por el loop de digest diario y luego eliminada.
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `channel_id` | INTEGER FK → notification_channels CASCADE, indexado | — |
+| `event` | VARCHAR(50) | — |
+| `rendered_text` | TEXT | Texto ya renderizado en el momento del evento original |
+| `created_at` | TIMESTAMP | — |
 
 ---
 

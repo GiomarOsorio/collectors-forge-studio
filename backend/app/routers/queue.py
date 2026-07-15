@@ -38,6 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.inventory import InventoryItem
 from app.models.model_file import ModelFile
+from app.models.settings import AppSettings
 from app.models.printer import Printer
 from app.models.project import Project
 from app.models.queue import PrintQueueItem
@@ -58,6 +59,7 @@ from app.schemas.queue import (
     QueueVaultSnapshot,
 )
 from app.services.auth import get_current_user, get_operator_user
+from app.services.notifier import emit
 
 _BOGOTA_TZ = ZoneInfo("America/Bogota")
 
@@ -360,6 +362,61 @@ async def _build_responses_bulk(
     return responses
 
 
+def _emit_low_stock_if_crossed(inv: InventoryItem, was_above_min: bool) -> None:
+    """
+    Emite `inventory.low_stock` SOLO en el cruce (estaba OK antes, quedó bajo
+    mínimo ahora) — evita spam en cada descuento sucesivo del mismo item ya
+    bajo. `was_above_min` debe capturarse ANTES de mutar `inv.quantity`.
+    """
+    if inv.min_quantity is None:
+        return
+    now_below = inv.quantity < inv.min_quantity
+    if now_below and was_above_min:
+        emit("inventory.low_stock", {
+            "item_name": inv.name,
+            "quantity": float(inv.quantity),
+            "min_quantity": float(inv.min_quantity),
+            "unit": "g",
+        })
+
+
+async def _emit_spool_low_if_crossed(db: AsyncSession, spool: Spool, old_remaining: Decimal) -> None:
+    """
+    Emite `inventory.spool_low` SOLO en el cruce del umbral agregado por
+    `filament_type` (mismo criterio que `GET /spools/low-stock`) — compara
+    la suma de bobinas activas antes/después de este consumo puntual.
+    """
+    settings_result = await db.execute(select(AppSettings).limit(1))
+    settings = settings_result.scalar_one_or_none()
+    threshold = settings.spool_low_stock_threshold_g if settings else Decimal("200")
+
+    parent_result = await db.execute(
+        select(InventoryItem).where(InventoryItem.id == spool.inventory_item_id)
+    )
+    parent = parent_result.scalar_one_or_none()
+    if parent is None:
+        return
+
+    others_result = await db.execute(
+        select(func.sum(Spool.remaining_weight_g))
+        .join(InventoryItem, Spool.inventory_item_id == InventoryItem.id)
+        .where(
+            Spool.status == "active",
+            Spool.id != spool.id,
+            InventoryItem.filament_type == parent.filament_type,
+        )
+    )
+    others_total = others_result.scalar() or Decimal("0")
+    before_total = others_total + old_remaining
+    after_total = others_total + spool.remaining_weight_g
+
+    if after_total < threshold and before_total >= threshold:
+        emit("inventory.spool_low", {
+            "spool_code": parent.filament_type or spool.label_code,
+            "remaining_g": float(after_total),
+        })
+
+
 async def _deduct_vault_item(
     db: AsyncSession, item: PrintQueueItem
 ) -> Optional[str]:
@@ -392,8 +449,9 @@ async def _deduct_vault_item(
         )
         spool = spool_result.scalar_one_or_none()
         if spool is not None and item.weight_grams is not None:
+            old_remaining = spool.remaining_weight_g
             consumed = Decimal(str(item.weight_grams)) * multiplier
-            new_remaining = spool.remaining_weight_g - consumed
+            new_remaining = old_remaining - consumed
             if new_remaining < 0:
                 warning = (
                     f"Bobina {spool.label_code}: quedaban "
@@ -402,6 +460,7 @@ async def _deduct_vault_item(
                 )
                 new_remaining = Decimal("0")
             spool.remaining_weight_g = new_remaining
+            await _emit_spool_low_if_crossed(db, spool, old_remaining)
             if spool.remaining_weight_g <= 0 and spool.status == "active":
                 spool.status = "finished"
                 spool.finished_at = now
@@ -421,6 +480,7 @@ async def _deduct_vault_item(
         )
         inv = inv_result.scalar_one_or_none()
         if inv is not None:
+            was_above_min = inv.min_quantity is None or inv.quantity >= inv.min_quantity
             deduct = Decimal(str(item.weight_grams)) * multiplier
             inv.quantity = (inv.quantity or Decimal("0")) - deduct
             if inv.quantity < 0:
@@ -430,6 +490,7 @@ async def _deduct_vault_item(
                 )
             if inv.min_quantity is not None and inv.quantity < inv.min_quantity:
                 inv.needs_purchase = True
+            _emit_low_stock_if_crossed(inv, was_above_min)
 
     if item.printer_id is not None and item.print_time_hours is not None:
         p_result = await db.execute(
@@ -471,6 +532,7 @@ async def _deduct_inventory_and_update_printer(
         )
         inv = inv_result.scalar_one_or_none()
         if inv is not None:
+            was_above_min = inv.min_quantity is None or inv.quantity >= inv.min_quantity
             deduct = Decimal(str(quote.weight_grams)) * multiplier
             inv.quantity = (inv.quantity or Decimal("0")) - deduct
             if inv.quantity < 0:
@@ -480,6 +542,7 @@ async def _deduct_inventory_and_update_printer(
                 )
             if inv.min_quantity is not None and inv.quantity < inv.min_quantity:
                 inv.needs_purchase = True
+            _emit_low_stock_if_crossed(inv, was_above_min)
 
     # 2. Filamentos adicionales (additional_filaments_detail JSONB)
     for af in (quote.additional_filaments_detail or []):
@@ -490,6 +553,7 @@ async def _deduct_inventory_and_update_printer(
             )
             inv = inv_result.scalar_one_or_none()
             if inv is not None:
+                was_above_min = inv.min_quantity is None or inv.quantity >= inv.min_quantity
                 deduct = Decimal(str(af["weight_grams"])) * multiplier
                 inv.quantity = (inv.quantity or Decimal("0")) - deduct
                 if inv.quantity < 0:
@@ -499,6 +563,7 @@ async def _deduct_inventory_and_update_printer(
                     )
                 if inv.min_quantity is not None and inv.quantity < inv.min_quantity:
                     inv.needs_purchase = True
+                _emit_low_stock_if_crossed(inv, was_above_min)
 
     # 3. Insumos (supplies_detail JSONB)
     for s in (quote.supplies_detail or []):
@@ -509,6 +574,7 @@ async def _deduct_inventory_and_update_printer(
             )
             inv = inv_result.scalar_one_or_none()
             if inv is not None:
+                was_above_min = inv.min_quantity is None or inv.quantity >= inv.min_quantity
                 deduct = Decimal(str(s["quantity"])) * multiplier
                 inv.quantity = (inv.quantity or Decimal("0")) - deduct
                 if inv.quantity < 0:
@@ -518,6 +584,7 @@ async def _deduct_inventory_and_update_printer(
                     )
                 if inv.min_quantity is not None and inv.quantity < inv.min_quantity:
                     inv.needs_purchase = True
+                _emit_low_stock_if_crossed(inv, was_above_min)
 
     # 4. Horas de impresora
     p_result = await db.execute(
@@ -1137,7 +1204,25 @@ async def update_queue_status(
     item.status = new_status
     await db.commit()
     await db.refresh(item)
-    return await _build_response(item, db, spool_warning=spool_warning)
+    response = await _build_response(item, db, spool_warning=spool_warning)
+
+    if new_status in ("done", "cancelled"):
+        display = _log_display_fields(response)
+        payload = {
+            "piece_name": display.get("piece_name") or "",
+            "printer": display.get("printer_name") or "",
+            "quantity": display.get("quantity") or 1,
+            "grams": float(display.get("weight_grams") or 0),
+            "hours": float(display.get("print_time_hours") or 0),
+            "user": current_user.username,
+        }
+        if new_status == "done":
+            emit("queue.item_done", payload)
+        else:
+            payload["failure_reason"] = item.failure_reason or ""
+            emit("queue.item_cancelled", payload)
+
+    return response
 
 
 @router.post(

@@ -47,6 +47,9 @@ from app.models.vault_folder import VaultFolder
 from app.models.filament_profile import FilamentProfile
 from app.models.project import Project
 from app.models.spool import Spool
+from app.models.notification import (
+    NotificationChannel, NotificationTemplate, NotificationDigestQueue,
+)
 
 __all__ = [
     "Company", "CompanyTemplate", "User", "Filament", "Printer", "AppSettings",
@@ -61,4 +64,5 @@ __all__ = [
     "FilamentProfile",
     "Project",
     "Spool",
+    "NotificationChannel", "NotificationTemplate", "NotificationDigestQueue",
 ]
