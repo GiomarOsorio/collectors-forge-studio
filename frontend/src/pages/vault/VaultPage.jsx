@@ -23,6 +23,7 @@ import {
   Folder,
   FolderKanban,
   FolderPlus,
+  Globe,
   HardDrive,
   MoreVertical,
   Pencil,
@@ -72,11 +73,13 @@ import {
   getVaultPrintHistory,
   getVaultStats,
   getVaultTags,
+  getMakerworldAuthStatus,
   updateVaultFile,
   updateVaultFolder,
   updateVaultTag,
   uploadVaultPhotos,
 } from '../../services/api';
+import MakerWorldImportModal from './components/MakerWorldImportModal';
 import { apiErrorMsg } from '../../utils/apiError';
 import { FAILURE_CATEGORY_LABELS } from '../../utils/failureCategories';
 import { getThumbnail } from '../../utils/thumbnail';
@@ -1412,6 +1415,10 @@ export default function VaultPage() {
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [assignModalOpen, setAssignModalOpen] = useState(false);
 
+  // Import de MakerWorld (issue #139).
+  const [makerworldModalOpen, setMakerworldModalOpen] = useState(false);
+  const [makerworldAuthed, setMakerworldAuthed] = useState(false);
+
   const toggleFileSelect = (id) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -1485,6 +1492,12 @@ export default function VaultPage() {
   useEffect(() => {
     loadFolders();
     loadTags();
+    if (isAdmin) {
+      getMakerworldAuthStatus()
+        .then((res) => setMakerworldAuthed(!!res.data.configured))
+        .catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -2005,6 +2018,11 @@ export default function VaultPage() {
           {selectMode ? 'Cancelar selección' : 'Seleccionar'}
         </button>
         {isAdmin && (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setMakerworldModalOpen(true)}>
+            <Globe size={13} /> MakerWorld
+          </button>
+        )}
+        {isAdmin && (
           <Link
             to={currentFolderId ? `/vault/upload?folder=${currentFolderId}` : '/vault/upload'}
             className="btn btn-primary btn-sm"
@@ -2237,6 +2255,17 @@ export default function VaultPage() {
             setAssignModalOpen(false);
             setSelectMode(false);
             setSelectedIds(new Set());
+          }}
+        />
+      )}
+      {makerworldModalOpen && (
+        <MakerWorldImportModal
+          hasCloudAuth={makerworldAuthed}
+          folders={folders}
+          onClose={() => setMakerworldModalOpen(false)}
+          onImported={() => {
+            setMakerworldModalOpen(false);
+            load();
           }}
         />
       )}

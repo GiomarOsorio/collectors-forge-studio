@@ -50,6 +50,8 @@ from app.models.spool import Spool
 from app.models.notification import (
     NotificationChannel, NotificationTemplate, NotificationDigestQueue,
 )
+from app.models.bambu_cloud_auth import BambuCloudAuth
+from app.models.makerworld_import import MakerworldImport
 
 __all__ = [
     "Company", "CompanyTemplate", "User", "Filament", "Printer", "AppSettings",
@@ -65,4 +67,5 @@ __all__ = [
     "Project",
     "Spool",
     "NotificationChannel", "NotificationTemplate", "NotificationDigestQueue",
+    "BambuCloudAuth", "MakerworldImport",
 ]

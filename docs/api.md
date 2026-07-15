@@ -1252,6 +1252,67 @@ cae en quiet hours se descarta, salvo que el canal tenga
 
 ---
 
+## MakerWorld / Bambu Cloud (issue #139)
+
+Import completo de modelos de MakerWorld al Vault (descarga el `.3mf` real,
+no solo metadata — a diferencia de `POST /vault/fetch-metadata` que ya
+existía). Requiere login con una cuenta de Bambu Lab. Adaptado de
+bambuddy (AGPL-3.0) — solo interoperabilidad, sin afiliación con
+MakerWorld/Bambu Lab.
+
+**Instancia vs. plate**: cada instancia de MakerWorld es un perfil de
+impresión distinto para el mismo diseño (no un plate dentro de un mismo
+`.3mf`). Importar una instancia descarga SU `.3mf` propio; "importar
+todas" crea un `ModelFile` por instancia.
+
+`resolve`/`recent`/`thumbnail` funcionan para cualquier usuario
+autenticado (metadata pública de MakerWorld). `import`/`import-all`/
+`auth/*` requieren admin. `thumbnail` es deliberadamente **público sin
+auth** — un `<img>` no puede mandar el header Authorization (mismo
+criterio que el proxy de portada de proyectos, #136); SSRF guard con
+allowlist de host del CDN de MakerWorld.
+
+### `GET /makerworld/auth/status`
+`{configured, email_masked, expires_at}`.
+
+### `POST /makerworld/auth/login`
+`{email, password}` → `{status: "ok"|"verify_code"|"tfa", message, tfa_key?}`.
+Bambu Cloud puede exigir un código por email o TOTP según la cuenta.
+
+### `POST /makerworld/auth/verify`
+`{code, tfa_key?}` — completa el login iniciado en `/auth/login`. Sin
+`tfa_key` se asume verificación por código de email.
+
+### `DELETE /makerworld/auth`
+Cierra sesión (borra tokens). 204.
+
+### `POST /makerworld/resolve`
+`{url}` → `{design_id, title, author, images: [], instances: [{id,
+profile_id, title, thumbnail}], already_imported_model_ids: []}`.
+Funciona sin credenciales (metadata pública de MakerWorld).
+
+### `POST /makerworld/import`
+`{design_id, profile_id?, folder_id?}` → `ModelFileResponse`-like con
+`was_existing`. Si `profile_id` se omite, usa la primera instancia
+disponible. Dedupe por `source_url` canónico
+(`https://makerworld.com/models/{id}#profileId-{n}`) — reimportar la
+misma instancia retorna el archivo existente sin volver a descargar.
+409 si no hay credenciales configuradas.
+
+### `POST /makerworld/import-all`
+`{design_id, folder_id?}` → `{imported: [], failed: []}`. Descarga TODAS
+las instancias del diseño, secuencialmente, con rate limit (semáforo 2
+concurrentes + 1s entre descargas — cortesía con la API de Bambu).
+
+### `GET /makerworld/recent?limit=10`
+Últimos imports (máx 50), más reciente primero.
+
+### `GET /makerworld/thumbnail?url=`
+Proxy de imagen del CDN de MakerWorld (`makerworld.bblmw.com` /
+`public-cdn.bblmw.com`) — evita hotlink directo (CSP `img-src`).
+
+---
+
 ## Vault de modelos .3mf
 
 Almacenamiento de archivos `.3mf` en MinIO. Todas las operaciones de escritura requieren rol `admin`.

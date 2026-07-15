@@ -29,6 +29,7 @@ vi.mock('../services/api', () => ({
   setActiveVaultPlate: vi.fn(), downloadVaultPrint: vi.fn(), downloadVaultSource: vi.fn(),
   getVaultGcodeContent: vi.fn(), getVaultPhotos: vi.fn(), getVaultPrintHistory: vi.fn(),
   updateVaultFile: vi.fn(), updateVaultFolder: vi.fn(), updateVaultTag: vi.fn(), uploadVaultPhotos: vi.fn(),
+  getMakerworldAuthStatus: vi.fn().mockResolvedValue({ data: { configured: false } }),
 }));
 
 vi.mock('react-hot-toast', () => ({

@@ -36,6 +36,7 @@ import {
   X,
 } from 'lucide-react';
 import NotificationsDrawer from './components/NotificationsDrawer';
+import IntegrationsDrawer from './components/IntegrationsDrawer';
 import { useTranslation } from 'react-i18next';
 import { SUPPORTED_LANGS, setLanguage } from '../../i18n';
 import toast from 'react-hot-toast';
@@ -639,6 +640,7 @@ export default function SettingsPage() {
   const [accountOpen, setAccountOpen] = useState(false);
   const [usersOpen, setUsersOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [integrationsOpen, setIntegrationsOpen] = useState(false);
 
   const loadUsers = async () => {
     if (!isAdmin) return;
@@ -732,6 +734,16 @@ export default function SettingsPage() {
         status: 'Configurar canales',
         complete: true,
         onClick: () => setNotificationsOpen(true),
+        visible: isAdmin,
+      },
+      {
+        id: 'integrations',
+        icon: Globe,
+        title: 'Integraciones',
+        desc: 'Conectá tu cuenta de Bambu Cloud para importar modelos de MakerWorld.',
+        status: 'Bambu Cloud',
+        complete: true,
+        onClick: () => setIntegrationsOpen(true),
         visible: isAdmin,
       },
     ];
@@ -865,6 +877,13 @@ export default function SettingsPage() {
         <NotificationsDrawer
           open={notificationsOpen}
           onClose={() => setNotificationsOpen(false)}
+          isMobile={isMobile}
+        />
+      )}
+      {isAdmin && (
+        <IntegrationsDrawer
+          open={integrationsOpen}
+          onClose={() => setIntegrationsOpen(false)}
           isMobile={isMobile}
         />
       )}
