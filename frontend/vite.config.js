@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { VitePWA } from 'vite-plugin-pwa'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -23,8 +24,47 @@ function cfAsyncFalse() {
   }
 }
 
+/**
+ * PWA (issue #140, pieza D) — solo instalabilidad + cache de assets
+ * estáticos del build. SIN offline real de datos: `navigateFallbackDenylist`
+ * excluye /api del fallback de navegación y no hay runtime caching de /api
+ * en absoluto — la app es inútil sin red (todo es data en vivo) y cachear
+ * /api causaría bugs fantasma (datos viejos sirviéndose como si fueran
+ * actuales). `registerType: 'autoUpdate'` — el SW se actualiza solo, sin
+ * pedirle confirmación al usuario.
+ */
+const pwaPlugin = VitePWA({
+  registerType: 'autoUpdate',
+  includeAssets: ['icons/icon-512.png'],
+  manifest: {
+    name: "Collector's Forge Studio",
+    short_name: 'CFS',
+    description: 'Gestión de negocio de impresión 3D — costos, inventario, cotizaciones, cola y mantenimiento.',
+    theme_color: '#0F1219',
+    background_color: '#0F1219',
+    display: 'standalone',
+    start_url: '/',
+    icons: [
+      { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: '/icons/icon-192-maskable.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+      { src: '/icons/icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+    ],
+  },
+  workbox: {
+    // Solo assets del build de Vite — nada de /api en ningún cache.
+    globPatterns: ['**/*.{js,css,html,woff,woff2,png,svg,ico}'],
+    // logo.png (wordmark, 2.4MB) no es parte del app-shell — no se
+    // referencia en runtime, solo existe como asset fuente para el
+    // generador de íconos. Excluirlo del precache evita superar el
+    // límite default de 2MB de workbox sin tener que subirlo.
+    globIgnores: ['logo.png'],
+    navigateFallbackDenylist: [/^\/api/],
+  },
+});
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), cfAsyncFalse()],
+  plugins: [react(), tailwindcss(), cfAsyncFalse(), pwaPlugin],
   resolve: {
     // Alias EXPLÍCITO a los entry points de @dnd-kit/* dentro de
     // node_modules. Sin esto, vite/rollup en alpine (node:20) falla
