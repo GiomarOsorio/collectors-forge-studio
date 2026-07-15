@@ -75,7 +75,8 @@ Las migraciones están en `backend/alembic/versions/`. Se aplican con `alembic u
 | `9533b1d4f6a2` | `9533b1d4f6a2_maintenance_schedules.py` | Tabla `maintenance_schedules` (recordatorios de mantenimiento por intervalo, issue #138) |
 | `a1b2c3d4e5f7` | `a1b2c3d4e5f7_project_metadata.py` | `projects.cover_photo_key`/`color`/`external_url`/`client_quote_id` (issue #136, sub-ticket 1/3) |
 | `b2c3d4e5f6a8` | `b2c3d4e5f6a8_project_model_files.py` | Tabla puente `project_model_files` N:M Project↔ModelFile (issue #136, sub-ticket 2/3) |
-| `c3d4e5f6a7b9` | `c3d4e5f6a7b9_notifications.py` | **Head actual** — Tablas `notification_channels`, `notification_templates`, `notification_digest_queue`; columnas SMTP + quiet hours + digest en `app_settings` (issue #137) |
+| `c3d4e5f6a7b9` | `c3d4e5f6a7b9_notifications.py` | Tablas `notification_channels`, `notification_templates`, `notification_digest_queue`; columnas SMTP + quiet hours + digest en `app_settings` (issue #137) |
+| `d4e5f6a7b8c0` | `d4e5f6a7b8c0_makerworld.py` | **Head actual** — Tablas `bambu_cloud_auth` (singleton) y `makerworld_imports` (historial) para el import completo de MakerWorld (issue #139) |
 
 **Aplicar todas las migraciones:**
 ```bash
@@ -528,6 +529,38 @@ drenada por el loop de digest diario y luego eliminada.
 | `event` | VARCHAR(50) | — |
 | `rendered_text` | TEXT | Texto ya renderizado en el momento del evento original |
 | `created_at` | TIMESTAMP | — |
+
+### `bambu_cloud_auth` (issue #139)
+
+Singleton (`LIMIT 1`) — credenciales de sesión de Bambu Cloud del estudio.
+**Password nunca se guarda** (solo en memoria durante el login). Región
+fija `global` (`api.bambulab.com`), sin soporte de región China.
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `email` | VARCHAR(255) nullable | Email de la cuenta Bambu conectada |
+| `access_token` | VARCHAR(2000) nullable | Bearer token, texto plano (mismo criterio que #137) |
+| `refresh_token` | VARCHAR(2000) nullable | — |
+| `token_expires_at` | TIMESTAMP nullable | Estimado (~30 días desde login) |
+| `updated_at` | TIMESTAMP | — |
+
+### `makerworld_imports` (issue #139)
+
+Historial de imports completados — alimenta `GET /makerworld/recent`.
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `design_id` | INTEGER | ID entero del diseño (`/models/{id}`) |
+| `profile_id` | INTEGER nullable | Instancia/plate importada |
+| `title` | VARCHAR(300) | Snapshot del título al momento del import |
+| `model_file_id` | INTEGER FK → model_files SET NULL | El archivo sigue "habiendo sido importado" aunque se borre |
+| `created_at` | TIMESTAMP | — |
+
+`model_files.source_url` / `source_platform` / `creator_name` /
+`creator_url` (ya existentes desde antes) se reutilizan para trazar el
+origen MakerWorld — sin migración adicional.
 
 ---
 

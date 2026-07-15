@@ -1199,5 +1199,31 @@ export const updateNotificationTemplate = (event, body) =>
 export const previewNotificationTemplate = (event, body) =>
   api.post(`/notifications/templates/${event}/preview`, { body });
 
+// ─── MakerWorld / Bambu Cloud (issue #139) ─────────────────────────────────
+
+export const getMakerworldAuthStatus = () => api.get('/makerworld/auth/status');
+
+export const loginMakerworld = (email, password) =>
+  api.post('/makerworld/auth/login', { email, password });
+
+export const verifyMakerworld = (code, tfaKey) =>
+  api.post('/makerworld/auth/verify', { code, tfa_key: tfaKey || undefined });
+
+export const logoutMakerworld = () => api.delete('/makerworld/auth');
+
+export const resolveMakerworldUrl = (url) => api.post('/makerworld/resolve', { url });
+
+export const importMakerworldInstance = (designId, profileId, folderId) =>
+  api.post('/makerworld/import', { design_id: designId, profile_id: profileId, folder_id: folderId });
+
+export const importAllMakerworld = (designId, folderId) =>
+  api.post('/makerworld/import-all', { design_id: designId, folder_id: folderId });
+
+export const getMakerworldRecent = (limit = 10) => api.get(`/makerworld/recent?limit=${limit}`);
+
+/** URL del proxy de thumbnail (evita hotlink directo al CDN de MakerWorld). */
+export const makerworldThumbnailUrl = (url) =>
+  `/api/makerworld/thumbnail?url=${encodeURIComponent(url)}`;
+
 export default api;
 

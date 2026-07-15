@@ -51,6 +51,7 @@ from app.routers.oidc import router as oidc_router
 from app.routers.spools import router as spools_router
 from app.routers.stats import router as stats_router
 from app.routers.notifications import router as notifications_router
+from app.routers.makerworld import router as makerworld_router
 from app.services.thumbnail_extractor import extract_plate_png, save_thumbnail
 from app.services.vault_storage import download_file, ensure_bucket
 from app.services.tariff_scraper import refresh_if_stale
@@ -299,6 +300,7 @@ app.include_router(projects_router)
 app.include_router(spools_router)
 app.include_router(stats_router)
 app.include_router(notifications_router)
+app.include_router(makerworld_router)
 
 # NOTA: el mount clásico de `/static` para binarios subidos por el usuario
 # (thumbnails de Vault, logos de empresa, imágenes de impresiones) no existe
