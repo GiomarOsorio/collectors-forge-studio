@@ -1,16 +1,22 @@
 /**
- * @file Tests del drawer de Sistema en Settings (issue #140, pieza C).
+ * @file Tests del drawer de Sistema en Settings (issue #140, piezas C + E).
  */
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockGetSystemInfo = vi.fn();
 const mockGetSystemLogs = vi.fn();
+const mockDownloadSystemBackup = vi.fn();
 
 vi.mock('../services/api', () => ({
   getSystemInfo: (...args) => mockGetSystemInfo(...args),
   getSystemLogs: (...args) => mockGetSystemLogs(...args),
+  downloadSystemBackup: (...args) => mockDownloadSystemBackup(...args),
+}));
+
+vi.mock('react-hot-toast', () => ({
+  default: { success: vi.fn(), error: vi.fn() },
 }));
 
 import SystemDrawer from '../pages/settings/components/SystemDrawer';
@@ -30,6 +36,7 @@ const INFO_FIXTURE = {
 beforeEach(() => {
   mockGetSystemInfo.mockReset();
   mockGetSystemLogs.mockReset();
+  mockDownloadSystemBackup.mockReset();
   mockGetSystemLogs.mockResolvedValue({ data: [] });
 });
 
@@ -62,5 +69,15 @@ describe('SystemDrawer', () => {
     render(<SystemDrawer open onClose={() => {}} isMobile={false} />);
     await waitFor(() => expect(screen.getByText('algo falló')).toBeInTheDocument());
     expect(mockGetSystemLogs).toHaveBeenCalledWith('', 200);
+  });
+
+  it('botón Descargar dispara downloadSystemBackup', async () => {
+    mockGetSystemInfo.mockResolvedValue({ data: INFO_FIXTURE });
+    mockDownloadSystemBackup.mockResolvedValue();
+    render(<SystemDrawer open onClose={() => {}} isMobile={false} />);
+    await waitFor(() => expect(screen.getByText('abc123def456')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Descargar' }));
+    await waitFor(() => expect(mockDownloadSystemBackup).toHaveBeenCalled());
   });
 });

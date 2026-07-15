@@ -524,6 +524,13 @@ podman run --rm \
 
 ### Backup de PostgreSQL
 
+> **Backup on-demand desde la UI** (issue #140): Settings → Sistema →
+> "Descargar backup" hace lo mismo que el comando "Backup comprimido" de
+> abajo (`pg_dump -Fc` streameado como descarga), para cuando alguien
+> necesita un dump puntual sin acceso SSH al servidor. **No reemplaza**
+> el backup automático por cron de esta sección — restore sigue siendo
+> exclusivamente por CLI (decisión consciente, ver PR de la pieza E).
+
 ```bash
 # Backup completo
 podman exec cfs-postgres \
