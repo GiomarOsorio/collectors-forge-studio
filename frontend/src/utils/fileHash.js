@@ -16,7 +16,7 @@ const BYTE_TO_HEX = Array.from({ length: 256 }, (_, i) => i.toString(16).padStar
  */
 export async function hashFile(file) {
   const buffer = await file.arrayBuffer();
-  const digest = await crypto.subtle.digest('SHA-256', buffer);
+  const digest = await crypto.subtle.digest('SHA-256', new Uint8Array(buffer));
   const bytes = new Uint8Array(digest);
   let hex = '';
   for (let i = 0; i < bytes.length; i += 1) {
