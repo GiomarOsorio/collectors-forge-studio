@@ -66,7 +66,18 @@ Las migraciones están en `backend/alembic/versions/`. Se aplican con `alembic u
 | `m7n8o9p0q1r2` | `m7n8o9p0q1r2_vault_dual_files.py` | Slots dual `source_file` + `print_file` en `model_files` |
 | `n8o9p0q1r2s3` | `n8o9p0q1r2s3_queue_vault_link.py` | FK `model_file_id` en `print_queue` |
 | `o9p0q1r2s3t4` | `o9p0q1r2s3t4_rename_storage_columns_to_minio_keys.py` | Renombra `local_thumbnail_path → thumbnail_key`, `logo_url → logo_key`, `image_url → image_key` (los binarios ahora viven en MinIO, no en `/app/static`). NULLea filas existentes |
-| `t4u5v6w7x8y9` | `t4u5v6w7x8y9_drop_slicer_and_tracker.py` | **Head actual** — Elimina tabla `slicing_jobs` y columnas `tracking_data`/`tracking_checked_at` de `purchase_orders` al quitar los microservicios `slicer` y `tracker` |
+| `t4u5v6w7x8y9` | `t4u5v6w7x8y9_drop_slicer_and_tracker.py` | Elimina tabla `slicing_jobs` y columnas `tracking_data`/`tracking_checked_at` de `purchase_orders` al quitar los microservicios `slicer` y `tracker` |
+| … | *(varias migraciones intermedias no documentadas aquí — ver `alembic history` para la cadena completa)* | |
+| `2787aa619580` | `2787aa619580_vault_photos_notes_failure_reason.py` | Tabla `model_file_photos`, `model_files.notes`, `print_queue.failure_reason`/`failure_category` (issue #130) |
+| `68c641f83b25` | `68c641f83b25_queue_batch_schedule.py` | `print_queue.batch_id` + `scheduled_at` (issue #133) |
+| `82717e0701b3` | `82717e0701b3_print_queue_created_by.py` | `print_queue.created_by` FK→users (issue #131) |
+| `8422a0c213e9` | `8422a0c213e9_inventory_spools.py` | Tabla `spools`, `print_queue.spool_id`, `app_settings.spool_low_stock_threshold_g` (issue #134) |
+| `9533b1d4f6a2` | `9533b1d4f6a2_maintenance_schedules.py` | Tabla `maintenance_schedules` (recordatorios de mantenimiento por intervalo, issue #138) |
+| `a1b2c3d4e5f7` | `a1b2c3d4e5f7_project_metadata.py` | `projects.cover_photo_key`/`color`/`external_url`/`client_quote_id` (issue #136, sub-ticket 1/3) |
+| `b2c3d4e5f6a8` | `b2c3d4e5f6a8_project_model_files.py` | Tabla puente `project_model_files` N:M Project↔ModelFile (issue #136, sub-ticket 2/3) |
+| `c3d4e5f6a7b9` | `c3d4e5f6a7b9_notifications.py` | Tablas `notification_channels`, `notification_templates`, `notification_digest_queue`; columnas SMTP + quiet hours + digest en `app_settings` (issue #137) |
+| `d4e5f6a7b8c0` | `d4e5f6a7b8c0_makerworld.py` | Tablas `bambu_cloud_auth` (singleton) y `makerworld_imports` (historial) para el import completo de MakerWorld (issue #139) |
+| `e5f6a7b8c9d1` | `e5f6a7b8c9d1_vault_file_hashes.py` | **Head actual** — Columnas `source_file_hash` / `print_file_hash` (indexadas) en `model_files` para detección de duplicados por SHA-256 (issue #128) |
 
 **Aplicar todas las migraciones:**
 ```bash
@@ -273,6 +284,10 @@ Singleton — solo hay una fila (se consulta con `LIMIT 1`).
 | `labor_cost_per_hour` | NUMERIC(12,4) | USD/hora de trabajo |
 | `default_margin_percent` | NUMERIC(8,4) | % de margen por defecto |
 | `currency` | VARCHAR(10) | `USD` |
+| `spool_low_stock_threshold_g` | NUMERIC(8,1) | Umbral de alerta de bobinas bajas por material, en gramos (issue #134) |
+| `smtp_host` / `smtp_port` / `smtp_user` / `smtp_password` / `smtp_from` / `smtp_tls` | VARCHAR / INTEGER / BOOLEAN | Servidor SMTP único del estudio para el canal de notificaciones `email` (issue #137). `smtp_password` en texto plano — ver nota en `NotificationChannel`. |
+| `quiet_hours_start` / `quiet_hours_end` | VARCHAR(5) | Rango `"HH:MM"` (America/Bogota) en que las notificaciones se suprimen/difieren (issue #137). NULL en cualquiera de los dos = deshabilitado. |
+| `digest_hour` | INTEGER (0–23) | Hora del digest diario (America/Bogota). NULL = digest deshabilitado (issue #137). |
 
 ### `electricity_tariffs`
 
@@ -313,6 +328,36 @@ Singleton — solo hay una fila (se consulta con `LIMIT 1`).
 | `inventory_item_id` | UUID FK → inventory_items | Ítem usado |
 | `quantity` | NUMERIC(12,4) | Cantidad usada (se descuenta del stock) |
 
+### `maintenance_schedules` (issue #138)
+
+Recordatorio recurrente de mantenimiento por impresora (ej. "Lubricar ejes
+XY cada 300h"). El progreso hacia el vencimiento (`progress_pct`, `status`)
+se calcula en el response del endpoint, no se persiste como columna.
+
+Baseline al crear un schedule nuevo: `last_done_at = created_at` y
+`last_done_hours = printer.current_hours` al momento de la creación —
+el progreso arranca en 0% sin necesitar NULL-handling especial.
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `printer_id` | INTEGER FK → printers CASCADE | — |
+| `task_name` | VARCHAR(120) | Nombre de la tarea. Ej: "Lubricar ejes XY" |
+| `description` | VARCHAR(500) NULL | — |
+| `interval_type` | VARCHAR(12) | `'print_hours'` o `'days'` (CHECK) |
+| `interval_value` | NUMERIC(8,1) | Magnitud del intervalo. > 0 (CHECK) |
+| `last_done_at` | TIMESTAMP | Fecha del último "hecho" |
+| `last_done_hours` | NUMERIC(10,2) | Horas de la impresora en el último "hecho" |
+| `enabled` | BOOLEAN | Si cuenta para vencidos/badges. Default `true` |
+| `last_notified_at` | TIMESTAMP NULL | Última notificación `maintenance.due` emitida (issue #137, evita spam) |
+| `created_at` / `updated_at` | TIMESTAMP | — |
+
+Al crear un `maintenance_logs` manual, los schedules habilitados de esa
+impresora cuyo `task_name` coincide (case-insensitive) con
+`maintenance_type`, o cuyo id esté en el parámetro `schedule_ids` del
+POST, se resetean (`last_done_at`/`last_done_hours`) en la misma
+transacción.
+
 ### `model_files`
 
 Archivos `.3mf` / `.gcode.3mf` almacenados en MinIO (Vault de modelos).
@@ -326,9 +371,11 @@ Cada fila puede tener dos slots: `source_file` (`.3mf` editable) y
 | `source_file_key` | VARCHAR(500) | Key MinIO del `.3mf` editable (nullable) |
 | `source_file_name` | VARCHAR(255) | Nombre original del `.3mf` editable |
 | `source_file_size` | BIGINT | Tamaño en bytes del `.3mf` editable |
+| `source_file_hash` | VARCHAR(64), indexado | SHA-256 hex del `.3mf` editable (issue #128) — `NULL` hasta subir/reemplazar o correr backfill |
 | `print_file_key` | VARCHAR(500) | Key MinIO del `.gcode.3mf` laminado (nullable) |
 | `print_file_name` | VARCHAR(255) | Nombre original del `.gcode.3mf` |
 | `print_file_size` | BIGINT | Tamaño en bytes del `.gcode.3mf` |
+| `print_file_hash` | VARCHAR(64), indexado | SHA-256 hex del `.gcode.3mf` laminado (issue #128) |
 | `sliced_weight_g` | NUMERIC(10,2) | Gramos de filamento (parseado del `.gcode.3mf`) |
 | `sliced_time_seconds` | INTEGER | Tiempo de impresión en segundos |
 | `sliced_printer_model` | VARCHAR(100) | Modelo de impresora declarado en el slice |
@@ -363,6 +410,160 @@ Cada fila puede tener dos slots: `source_file` (`.3mf` editable) y
 | `added_at` | TIMESTAMP | — |
 | `started_at` | TIMESTAMP | — |
 | `completed_at` | TIMESTAMP | — |
+| `failure_reason` | VARCHAR(200) nullable | Motivo de cancelación en texto libre (issue #130) |
+| `failure_category` | VARCHAR(30) nullable | Categoría fija del motivo (issue #130) |
+| `batch_id` | UUID nullable, indexado | Agrupa items como lote — compartido entre miembros (issue #133) |
+| `scheduled_at` | TIMESTAMP nullable | Fecha/hora organizativa — NO dispara nada automático (issue #133) |
+| `created_by` | INTEGER FK → users SET NULL, nullable | Usuario que creó el item — NULL en items pre-#131 (issue #131) |
+| `spool_id` | INTEGER FK → spools SET NULL, nullable, indexado | Bobina física a consumir — reemplaza el descuento agregado normal (issue #134) |
+
+---
+
+### `spools` (issue #134)
+
+Bobina física individual de filamento, hija de un `InventoryItem` de
+categoría Filamento. **Regla de sincronía con el agregado (boundary-only,
+en gramos — ver docstring completo en `backend/app/models/spool.py`)**:
+
+- Alta: por defecto NO toca `InventoryItem.quantity` (bobinas creadas para
+  trackear stock YA contado). Con `add_to_stock=true`, suma
+  `initial_weight_g × count`.
+- Consumo (marcar `done` con `spool_id` asignado): descuenta SOLO
+  `remaining_weight_g` — el agregado NO se mueve. El descuento agregado
+  normal se omite por completo para ese item (evita doble descuento).
+- Agotamiento (`remaining_weight_g` llega a 0): `status='finished'` +
+  resta `initial_weight_g` (no `remaining_weight_g`) del agregado.
+- Insuficiente al consumir: floorea en 0 y devuelve un warning — NO bloquea
+  (a diferencia del camino sin bobina, que sí lanza 400).
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `inventory_item_id` | INTEGER FK → inventory_items CASCADE, indexado | Ítem de inventario padre |
+| `label_code` | VARCHAR(12) UNIQUE | Código corto para etiquetas físicas, ej. `SP-0042` — asignado post-flush |
+| `initial_weight_g` | NUMERIC(8,1) | Peso al abrir la bobina |
+| `remaining_weight_g` | NUMERIC(8,1) | Peso restante actual |
+| `cost` | NUMERIC(12,2) nullable | Costo de esta bobina; NULL hereda `price_per_kg` del padre |
+| `extra_colors` | JSONB nullable | `{"stops": ["RRGGBB", ...]}` para gradiente/multicolor |
+| `visual_effect` | VARCHAR(20) nullable | sparkle\|wood\|marble\|glow\|matte\|silk\|galaxy\|rainbow\|metal\|translucent\|gradient\|dual-color\|tri-color\|multicolor |
+| `status` | VARCHAR(12) | `active` \| `finished` \| `archived` |
+| `opened_at` | TIMESTAMP nullable | — |
+| `finished_at` | TIMESTAMP nullable | Poblado automáticamente al agotarse |
+| `notes` | VARCHAR(500) nullable | — |
+| `created_at` / `updated_at` | TIMESTAMP | — |
+
+### `projects`
+
+Agrupador organizativo de ítems de la cola de impresión (`print_queue.project_id`,
+FK SET NULL) — no participa en cálculos de costo ni de inventario. Issue
+#136 completo en 3 sub-tickets: metadata, vínculo a Vault
+(`project_model_files`) y export/import ZIP (`GET /{id}/export`,
+`POST /import` — sin migración propia, son solo endpoints).
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `name` | VARCHAR(200) | — |
+| `client_name` | VARCHAR(200) nullable | Texto libre (no existe entidad Cliente) |
+| `status` | VARCHAR(20) | `active` \| `completed` \| `archived` |
+| `notes` | TEXT nullable | — |
+| `cover_photo_key` | VARCHAR(500) nullable | Key en MinIO (`projects/{id}/cover.{ext}`), mismo patrón que `ModelFile.thumbnail_key` — un solo archivo, no colección |
+| `color` | VARCHAR(7) nullable | Hex `#RRGGBB` para el badge/acento de la card |
+| `external_url` | VARCHAR(500) nullable | Link externo (MakerWorld, Printables, pedido) |
+| `client_quote_id` | INTEGER FK → client_quotes SET NULL, indexado | Vínculo opcional a una cotización ya emitida. El código "COT-XXXX" se calcula desde el id, no se duplica como columna |
+
+### `project_model_files` (issue #136, sub-ticket 2/3)
+
+Puente N:M puro — mismo patrón que `model_file_tags` (`app.models.vault_tag`),
+sin columnas propias más allá de las FKs. Un proyecto puede vincular N
+archivos de Vault; un archivo puede estar en N proyectos.
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `project_id` | INTEGER FK → projects CASCADE | — |
+| `model_file_id` | INTEGER FK → model_files CASCADE, indexado | — |
+
+PK compuesta `(project_id, model_file_id)`.
+| `created_at` / `updated_at` | TIMESTAMP | — |
+
+### `notification_channels` (issue #137)
+
+Canal de notificación configurado por el estudio (Telegram, Discord, ntfy,
+email o webhook). `config` guarda tokens/URLs en JSONB **sin cifrar**: CFS
+no tiene patrón de cifrado en reposo y la BD es privada — decisión
+consciente (ver docstring de `NotificationChannel`).
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `type` | VARCHAR(16) CHECK | `telegram` \| `discord` \| `ntfy` \| `email` \| `webhook` |
+| `name` | VARCHAR(100) | Nombre descriptivo |
+| `config` | JSONB | Campos según `type` (ver `app/services/notifier.py`) |
+| `enabled` | BOOLEAN | — |
+| `events` | JSONB | Lista de eventos suscritos (ver matriz abajo) |
+| `defer_to_digest` | BOOLEAN | Si difiere a digest diario en quiet hours (vs. descartar) |
+| `created_at` / `updated_at` | TIMESTAMP | — |
+
+**Matriz de eventos**: `queue.item_done`, `queue.item_cancelled`,
+`inventory.low_stock`, `inventory.spool_low`, `maintenance.due`,
+`purchase_order.status_changed`, `client_quote.created`.
+
+### `notification_templates` (issue #137)
+
+Plantilla Liquid personalizada por evento. Si no hay fila para un evento,
+se usa el template default hardcoded (`DEFAULT_TEMPLATES` en `notifier.py`).
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `event` | VARCHAR(50) UNIQUE | — |
+| `body` | TEXT | Código Liquid |
+| `updated_at` | TIMESTAMP | — |
+
+### `notification_digest_queue` (issue #137)
+
+Cola de eventos suprimidos en quiet hours con `defer_to_digest=true`,
+drenada por el loop de digest diario y luego eliminada.
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `channel_id` | INTEGER FK → notification_channels CASCADE, indexado | — |
+| `event` | VARCHAR(50) | — |
+| `rendered_text` | TEXT | Texto ya renderizado en el momento del evento original |
+| `created_at` | TIMESTAMP | — |
+
+### `bambu_cloud_auth` (issue #139)
+
+Singleton (`LIMIT 1`) — credenciales de sesión de Bambu Cloud del estudio.
+**Password nunca se guarda** (solo en memoria durante el login). Región
+fija `global` (`api.bambulab.com`), sin soporte de región China.
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `email` | VARCHAR(255) nullable | Email de la cuenta Bambu conectada |
+| `access_token` | VARCHAR(2000) nullable | Bearer token, texto plano (mismo criterio que #137) |
+| `refresh_token` | VARCHAR(2000) nullable | — |
+| `token_expires_at` | TIMESTAMP nullable | Estimado (~30 días desde login) |
+| `updated_at` | TIMESTAMP | — |
+
+### `makerworld_imports` (issue #139)
+
+Historial de imports completados — alimenta `GET /makerworld/recent`.
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | — |
+| `design_id` | INTEGER | ID entero del diseño (`/models/{id}`) |
+| `profile_id` | INTEGER nullable | Instancia/plate importada |
+| `title` | VARCHAR(300) | Snapshot del título al momento del import |
+| `model_file_id` | INTEGER FK → model_files SET NULL | El archivo sigue "habiendo sido importado" aunque se borre |
+| `created_at` | TIMESTAMP | — |
+
+`model_files.source_url` / `source_platform` / `creator_name` /
+`creator_url` (ya existentes desde antes) se reutilizan para trazar el
+origen MakerWorld — sin migración adicional.
 
 ---
 

@@ -45,10 +45,19 @@ from app.routers.maintenance import router as maintenance_router
 from app.routers.queue import router as queue_router
 from app.routers.inventory_categories import router as inventory_categories_router
 from app.routers.vault import router as vault_router
+from app.routers.filament_profiles import router as filament_profiles_router
+from app.routers.projects import router as projects_router
 from app.routers.oidc import router as oidc_router
+from app.routers.spools import router as spools_router
+from app.routers.stats import router as stats_router
+from app.routers.notifications import router as notifications_router
+from app.routers.makerworld import router as makerworld_router
+from app.routers.system import router as system_router
 from app.services.thumbnail_extractor import extract_plate_png, save_thumbnail
 from app.services.vault_storage import download_file, ensure_bucket
 from app.services.tariff_scraper import refresh_if_stale
+from app.services.notifier import digest_loop, maintenance_due_loop
+from app.services import log_buffer
 
 # UUID fijo de la empresa por defecto — coincide con la migración f4a1b9c2d8e7
 DEFAULT_COMPANY_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
@@ -148,6 +157,9 @@ async def lifespan(app: FastAPI):
     Yields:
         Control al servidor para empezar a atender solicitudes.
     """
+    # Buffer de log en memoria para System Info (issue #140) — instalado
+    # primero para capturar lo que sigue en el arranque.
+    log_buffer.install()
     await create_default_data()
     # Inicializar bucket MinIO del Vault (no-fatal si MinIO no está disponible)
     await ensure_bucket()
@@ -160,12 +172,19 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error("Refresh inicial de tarifa EPM falló: %s", e)
     tariff_task = asyncio.create_task(_periodic_tariff_refresh())
+    # Notificaciones (issue #137): digest diario + chequeo de mantenimiento vencido.
+    digest_task = asyncio.create_task(digest_loop())
+    maintenance_due_task = asyncio.create_task(maintenance_due_loop())
     yield
     tariff_task.cancel()
-    try:
-        await tariff_task
-    except asyncio.CancelledError:
-        pass
+    digest_task.cancel()
+    maintenance_due_task.cancel()
+    for task in (tariff_task, digest_task, maintenance_due_task):
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+    log_buffer.uninstall()
 
 
 # Instancia principal de la aplicación FastAPI con metadatos para la documentación
@@ -282,6 +301,13 @@ app.include_router(maintenance_router)
 app.include_router(queue_router)
 app.include_router(inventory_categories_router)
 app.include_router(vault_router)
+app.include_router(filament_profiles_router)
+app.include_router(projects_router)
+app.include_router(spools_router)
+app.include_router(stats_router)
+app.include_router(notifications_router)
+app.include_router(makerworld_router)
+app.include_router(system_router)
 
 # NOTA: el mount clásico de `/static` para binarios subidos por el usuario
 # (thumbnails de Vault, logos de empresa, imágenes de impresiones) no existe

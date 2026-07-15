@@ -363,9 +363,23 @@ Obtiene la configuración de la empresa.
   "failure_rate_percent": 5.0,
   "labor_cost_per_hour": 10.0,
   "default_margin_percent": 30.0,
-  "currency": "USD"
+  "currency": "USD",
+  "spool_low_stock_threshold_g": 200.0,
+  "smtp_host": null,
+  "smtp_port": null,
+  "smtp_user": null,
+  "smtp_password": null,
+  "smtp_from": null,
+  "smtp_tls": true,
+  "quiet_hours_start": null,
+  "quiet_hours_end": null,
+  "digest_hour": null
 }
 ```
+
+Campos `smtp_*` / `quiet_hours_*` / `digest_hour` son de notificaciones
+(issue #137, ver sección dedicada abajo) — un solo servidor SMTP y un solo
+rango de quiet hours para todo el estudio, no por canal.
 
 ### `PUT /settings/`
 Actualiza la configuración.
@@ -605,6 +619,91 @@ Importa inventario desde JSON exportado previamente.
 
 ---
 
+## Bobinas individuales (Spools, issue #134)
+
+Tracking por-bobina física: peso restante, costo, colores/efectos
+visuales. Ver `docs/base-de-datos.md#spools-issue-134` para la regla
+completa de sincronía con el agregado (`InventoryItem.quantity`).
+
+### `GET /inventory/spools/`
+Lista bobinas con datos del ítem padre embebidos.
+
+**Query params** (todos opcionales): `inventory_item_id`, `status` (CSV,
+ej. `active,finished`), `material`, `q`.
+
+### `POST /inventory/spools/`
+Alta masiva (1-100 bobinas idénticas).
+
+**Body:**
+```json
+{
+  "inventory_item_id": 5,
+  "count": 5,
+  "initial_weight_g": 1000,
+  "cost": 25.50,
+  "visual_effect": "sparkle",
+  "extra_colors": { "stops": ["ff0000", "00ff00"] },
+  "add_to_stock": false
+}
+```
+`add_to_stock`: si `true`, suma `initial_weight_g × count` al agregado
+del padre (compra nueva). Default `false` (bobinas para stock ya contado).
+
+### `PUT /inventory/spools/{id}`
+Edita una bobina — peso restante manual ("pesé la bobina"), stops,
+efecto, notas o status. NO toca el agregado del padre.
+
+### `DELETE /inventory/spools/{id}`
+(admin) Elimina una bobina — bloqueado si algún ítem de la cola
+`printing` la referencia.
+
+### `GET /inventory/spools/low-stock`
+Gramos restantes de bobinas activas por `filament_type` vs. el umbral
+configurado (`AppSettings.spool_low_stock_threshold_g`).
+
+**Response 200:**
+```json
+[
+  { "filament_type": "PLA", "total_remaining_g": 150.0, "threshold_g": 200.0, "below": true }
+]
+```
+
+### `spool_id` en `POST /queue/from-vault`
+Si se setea, el consumo al marcar `done` va SOLO a esa bobina — reemplaza
+el descuento agregado normal. Debe pertenecer al mismo `inventory_item_id`
+que `filament_id` (si ambos vienen); si solo viene `spool_id`,
+`filament_id` se deriva automáticamente.
+
+### `POST /inventory/spools/labels` (issue #135)
+Genera un PDF de etiquetas con QR (deep-link a `/inventory/spools?spool=<id>`)
+para las bobinas pedidas. Adaptado de bambuddy
+(`backend/app/services/label_renderer.py`, AGPL-3.0) — 6 plantillas reales
+(no las 4 del README viejo de bambuddy, corregidas en su issue #1426):
+`ams_holder_74x33`, `ams_holder_75x55`, `box_40x30`, `box_62x29`,
+`avery_5160` (US Letter, 30/hoja), `avery_l7160` (A4, 21/hoja).
+
+**Body:**
+```json
+{
+  "spool_ids": [1, 2, 3],
+  "template": "avery_l7160",
+  "monochrome": false
+}
+```
+`monochrome`: quita el swatch de color (impresoras térmicas B/N) y
+ensancha la columna de texto. El orden de `spool_ids` se preserva en el
+PDF (una hoja Avery coincide con el orden elegido en pantalla).
+
+**Response:** `application/pdf`, `Content-Disposition: inline`, 404 si
+algún id no existe (lista los faltantes en el detail).
+
+El deep-link usa `PUBLIC_URL` (`.env`) si está configurado — necesario en
+prod porque `request.url` cae detrás del Cloudflare Tunnel y puede
+resolver a una dirección interna; sin `PUBLIC_URL`, usa
+`request.url.scheme://request.url.netloc` (suficiente en dev).
+
+---
+
 ## Pedidos de compra
 
 ### `GET /inventory/purchases/`
@@ -725,6 +824,135 @@ Elimina un registro.
 
 ---
 
+## Recordatorios de mantenimiento (Schedules, issue #138)
+
+Recordatorio recurrente por impresora, por horas de impresión o por días.
+El progreso (`progress_pct`) y `status` (`ok` | `due_soon` ≥80% | `overdue`
+≥100%) se calculan en cada response, no se persisten.
+
+### `GET /maintenance/schedules/`
+Lista recordatorios con progreso calculado. **Query params:** `?printer_id=1` (opcional).
+
+### `GET /maintenance/schedules/due`
+Lista global de recordatorios habilitados con `status != 'ok'` (para badges de sidebar/home).
+
+**Response 200:**
+```json
+[
+  {
+    "id": 1,
+    "printer_id": 1,
+    "printer_name": "P2S del estudio",
+    "task_name": "Lubricar ejes XY",
+    "description": null,
+    "interval_type": "print_hours",
+    "interval_value": 300,
+    "last_done_at": "2026-01-01T00:00:00",
+    "last_done_hours": 0,
+    "enabled": true,
+    "created_at": "2026-01-01T00:00:00",
+    "updated_at": "2026-01-01T00:00:00",
+    "progress_pct": 83.3,
+    "status": "due_soon"
+  }
+]
+```
+
+### `POST /maintenance/schedules/` (admin)
+Crea un recordatorio. Baseline: `last_done_at`/`last_done_hours` se fijan
+al momento de creación (progreso arranca en 0%).
+
+**Body:**
+```json
+{
+  "printer_id": 1,
+  "task_name": "Lubricar ejes XY",
+  "description": null,
+  "interval_type": "print_hours",
+  "interval_value": 300
+}
+```
+
+### `PUT /maintenance/schedules/{id}` (admin)
+Edita campos del recordatorio (no reasigna la impresora). Todos los campos son opcionales.
+
+### `DELETE /maintenance/schedules/{id}` (admin)
+Elimina un recordatorio.
+
+### `POST /maintenance/schedules/{id}/complete`
+Marca el recordatorio como hecho: resetea `last_done_at`/`last_done_hours`
+al estado actual de la impresora y crea un `MaintenanceLog` automático
+(`maintenance_type=task_name`, sin ítems) para no perder trazabilidad.
+
+### Integración con `POST /maintenance/logs/`
+
+El body de `POST /maintenance/logs/` acepta `schedule_ids: [int]` opcional.
+Además, cualquier schedule habilitado de esa impresora cuyo `task_name`
+coincida (case-insensitive) con `maintenance_type` se resetea
+automáticamente en la misma transacción. La response incluye
+`matched_schedules: [int]` con los ids efectivamente reseteados.
+
+---
+
+## Stats — analytics de impresión y costos (issue #132)
+
+Agregación de solo-lectura sobre `PrintQueueItem` (status `done`/`cancelled`).
+Replica exactamente la lógica de descuento de `_deduct_inventory_and_update_printer`
+/ `_deduct_vault_item` (routers/queue.py) para que "gramos consumidos" coincida
+con lo que de verdad se descontó del inventario (no con `Quote.material_cost`,
+que es el costo de un solo plato, sin multiplicar por `quantity`).
+
+**Query params comunes:** `date_from`/`date_to` en formato `YYYY-MM-DD` (día
+calendario en América/Bogotá, mismo criterio que `/queue/log` de #131). Sin
+rango, se agregan TODOS los items done/cancelled históricos.
+
+### `GET /stats/overview`
+Resumen agregado: tasa de éxito, horas totales, gramos/costo por tipo de
+filamento, desglose por impresora y por usuario, fallos por categoría,
+costo de material y de electricidad. Acepta `?format=csv`.
+
+**Response 200:**
+```json
+{
+  "prints_done": 42,
+  "prints_cancelled": 5,
+  "success_rate_pct": 89.36,
+  "total_hours": 210.5,
+  "grams_by_filament_type": [
+    {"filament_type": "PLA", "grams": 4200.0, "cost_cop": 84000.0}
+  ],
+  "by_printer": [
+    {"printer_id": 1, "printer_name": "P2S del estudio", "prints": 30, "hours": 150.0}
+  ],
+  "by_user": [
+    {"user_id": 1, "username": "giomar", "prints": 42}
+  ],
+  "failure_breakdown": [
+    {"category": "warping", "count": 3}
+  ],
+  "material_cost_cop": 84000.0,
+  "electricity_cost_cop": 12000.0
+}
+```
+
+### `GET /stats/trends?bucket=day|week|month`
+Serie temporal de prints y gramos, agrupada por bucket (bucketing en
+zona horaria América/Bogotá). Acepta `?format=csv`.
+
+**Response 200:**
+```json
+{
+  "bucket": "day",
+  "series": [
+    {"bucket_start": "2026-01-15", "prints_done": 3, "prints_cancelled": 1, "grams": 350.0}
+  ]
+}
+```
+
+Auth: `get_current_user` (lectura para todos los roles).
+
+---
+
 ## Cola de impresión
 
 ### `GET /queue/`
@@ -789,6 +1017,299 @@ Elimina un ítem de la cola (solo si está en estado `pending` o `cancelled`).
 
 ### `GET /queue/history`
 Lista los últimos 50 ítems completados o cancelados.
+
+### Queue avanzada (issue #133)
+
+#### `PUT /queue/reorder`
+Reordena la cola de `pending` por drag-and-drop. `item_ids` debe ser la lista
+COMPLETA de ids `pending` actuales, en el nuevo orden — se valida que sea
+exactamente el mismo conjunto antes de aplicar ningún cambio.
+
+**Body:**
+```json
+{ "item_ids": [3, 1, 2] }
+```
+
+#### `POST /queue/batch`
+Agrupa ≥2 ítems `pending` como lote — asigna un `batch_id` (UUID) nuevo y
+compartido a todos.
+
+**Body:**
+```json
+{ "item_ids": [1, 2, 3] }
+```
+
+#### `DELETE /queue/batch/{batch_id}`
+Desagrupa un lote — pone `batch_id=NULL` a todos sus miembros.
+
+#### `POST /queue/{id}/duplicate`
+Clona un ítem de la cola (de cualquier estado) como uno nuevo `pending` al
+final de la cola.
+
+#### `PUT /queue/{id}/schedule`
+Programa (o quita programación de, con `scheduled_at: null`) un ítem.
+Puramente organizativo — no dispara nada automático.
+
+**Body:**
+```json
+{ "scheduled_at": "2026-08-01T10:00:00" }
+```
+
+#### `split_copies` en `POST /queue/from-vault`
+Si `split_copies: true` y `quantity > 1`, crea `quantity` items
+independientes (`quantity=1` cada uno) con un `batch_id` compartido, en vez
+de un solo item con `quantity=N` — permite repartir las copias entre
+impresoras/horarios distintos.
+
+### Print Log (issue #131)
+
+#### `GET /queue/log`
+Bitácora global de impresiones — TODOS los estados (a diferencia de
+`/queue/history`, que solo trae `done`/`cancelled` sin filtros). Ordenado
+por `created_at` descendente.
+
+**Query params** (todos opcionales):
+```
+?q=&printer_id=&status=&user_id=&date_from=&date_to=&page=&page_size=&format=
+```
+- `q`: busca en el nombre de la pieza (ILIKE, cubre items de Quote y de Vault).
+- `status`: CSV de estados, ej. `done,cancelled`.
+- `date_from`/`date_to`: `YYYY-MM-DD`, día calendario América/Bogotá (ambos límites inclusive), comparado contra `created_at`.
+- `page`/`page_size` (default 1/25): ignorados si `format=csv`.
+- `format=csv`: descarga el set filtrado COMPLETO (sin paginar) como `text/csv`.
+
+**Response 200 (sin `format=csv`):**
+```json
+{
+  "items": [ /* mismo shape que GET /queue/ */ ],
+  "total": 137,
+  "page": 1,
+  "page_size": 25
+}
+```
+
+Cada item incluye `created_by` (id) y `created_by_username` — el usuario
+que creó el item (`POST /queue/` o `POST /queue/from-vault`). `null` en
+items anteriores a esta migración o si el usuario fue borrado después.
+
+---
+
+## Proyectos (issue #136)
+
+Agrupador organizativo de ítems de la cola (`print_queue.project_id`) — no
+afecta costos ni inventario. Implementado en 3 sub-tickets: metadata
+(cover, color, link externo, cotización vinculada), vínculo a archivos
+de Vault, y export/import ZIP.
+
+### `GET /projects/`
+Lista proyectos con conteo de items de cola por estado + `client_quote_code`/
+`client_quote_client_name` si `client_quote_id` resuelve a una cotización real.
+
+### `POST /projects/` (operator)
+**Body:**
+```json
+{
+  "name": "Encargo boda Ana & Luis",
+  "client_name": "Ana Gómez",
+  "color": "#F59E0B",
+  "external_url": "https://makerworld.com/models/123",
+  "client_quote_id": 7,
+  "notes": null
+}
+```
+404 si `client_quote_id` no existe. `color` debe ser `#RRGGBB` (422 si no).
+
+### `GET /projects/{id}` · `PUT /projects/{id}` (operator) · `DELETE /projects/{id}` (operator)
+Mismos campos que `POST`, todos opcionales en `PUT`. `DELETE` no borra
+los items de cola, solo los desagrupa (`project_id=NULL`).
+
+### `GET /projects/{id}/items`
+Lista los ítems de cola (cualquier estado) asociados al proyecto.
+
+### `POST /projects/{id}/cover` (admin)
+Sube/reemplaza la foto de portada — multipart, un solo archivo por
+proyecto (a diferencia de las fotos de modelo de #130, que son una
+colección). Máx. 10 MB, `image/jpeg`/`png`/`webp`.
+
+### `GET /projects/{id}/cover`
+Proxy público de la foto de portada (sin JWT — los `<img>` no mandan
+`Authorization`, mismo criterio que el thumbnail de Vault). 404 si el
+proyecto no tiene portada.
+
+### `GET /projects/{id}/files` (issue #136, sub-ticket 2/3)
+Archivos de Vault vinculados al proyecto — vista mínima read-only
+(`id`, `name`, `local_thumbnail_url`, `is_print_ready`). No reusa
+`ModelFileResponse` de Vault (ese schema carga metadata sliced/tags/
+print_count que este detalle no necesita).
+
+### `POST /projects/{id}/files` (operator)
+Añade archivos al puente `project_model_files` — **idempotente** (si un
+id ya estaba vinculado, se ignora sin error).
+
+**Body:**
+```json
+{ "model_file_ids": [10, 11, 12] }
+```
+404 con los ids que no existen en Vault, listados en el detail.
+
+### `DELETE /projects/{id}/files/{model_file_id}` (operator)
+Quita un archivo del puente. No borra el `ModelFile` de Vault.
+
+### `GET /projects/{id}/export` (issue #136, sub-ticket 3/3)
+Exporta el proyecto a un ZIP: `manifest.json` (metadata del proyecto +
+de cada archivo vinculado, incluyendo tags) + los binarios de MinIO bajo
+`files/<idx>/source_<nombre>` / `files/<idx>/print_<nombre>`. NO exporta
+`cover_photo_key` ni `client_quote_id` (datos locales de esta instancia).
+Si un archivo ya no está en MinIO, se omite del ZIP sin bloquear el resto.
+
+**Formato del manifest (version 1):**
+```json
+{
+  "version": 1,
+  "project": { "name": "...", "description": "...", "color": "#F59E0B", "external_url": "..." },
+  "files": [
+    { "name": "...", "description": null, "notes": null, "tags": ["Halloween"],
+      "source_file_name": "calabaza.3mf", "print_file_name": null }
+  ]
+}
+```
+
+### `POST /projects/import` (admin)
+Recrea un proyecto desde un ZIP exportado con `GET /{id}/export` — multipart,
+límite 2 GB. Si ya existe un proyecto con el mismo nombre, el importado se
+crea con sufijo " (importado)" (nunca sobreescribe). Los archivos se
+re-suben a MinIO con keys nuevas. 400 si el ZIP es inválido, falta
+`manifest.json`, o la versión no es soportada; 507 si excede la cuota
+configurada del Vault (`VAULT_QUOTA_GB`).
+
+---
+
+## Notificaciones (issue #137)
+
+Sistema multi-canal de avisos (Telegram, Discord, ntfy, email, webhook)
+para eventos de negocio. Todo el módulo es admin-only. El dispatcher
+(`app/services/notifier.py`) es fire-and-forget (`asyncio.create_task`) —
+un evento nunca bloquea ni puede reventar la request que lo originó.
+
+**Matriz de eventos**: `queue.item_done`, `queue.item_cancelled`,
+`inventory.low_stock`, `inventory.spool_low`, `maintenance.due`,
+`purchase_order.status_changed`, `client_quote.created`.
+
+### `GET /notifications/events`
+Lista la matriz de eventos disponibles (array de strings).
+
+### `GET /notifications/channels`
+Lista todos los canales configurados.
+
+### `POST /notifications/channels`
+Crea un canal. `config` se valida según `type` (schemas discriminados:
+`TelegramConfig{bot_token,chat_id}`, `DiscordConfig{webhook_url}`,
+`NtfyConfig{server,topic,priority?,token?}`,
+`EmailChannelConfig{recipients:[]}`, `WebhookConfig{url,secret?}`).
+
+**Request:**
+```json
+{
+  "type": "ntfy",
+  "name": "Avisos del taller",
+  "config": {"server": "https://ntfy.sh", "topic": "cfs-estudio"},
+  "enabled": true,
+  "events": ["queue.item_done", "inventory.low_stock"],
+  "defer_to_digest": false
+}
+```
+
+### `PUT /notifications/channels/{id}`
+Actualización parcial (`exclude_unset`).
+
+### `DELETE /notifications/channels/{id}`
+204 sin contenido.
+
+### `POST /notifications/channels/{id}/test`
+Envía un mensaje de prueba real de forma síncrona.
+
+**Response 200:** `{"ok": true, "error": null}` — `ok: false` con `error`
+poblado si el provider falló (nunca lanza 4xx/5xx por fallo del canal).
+
+### `GET /notifications/templates/{event}`
+Template Liquid del evento. Si no hay uno personalizado, retorna el
+default hardcoded con `is_default: true`.
+
+### `PUT /notifications/templates/{event}`
+Guarda un template personalizado. 400 si la sintaxis Liquid es inválida o
+falla al renderizar contra el payload de muestra del evento.
+
+### `POST /notifications/templates/{event}/preview`
+`{"body": "..."}` → `{"ok": bool, "rendered": str|null, "error": str|null}`
+— renderiza contra datos dummy del evento sin guardar.
+
+**Quiet hours + digest**: configurados en `AppSettings` (`quiet_hours_start`,
+`quiet_hours_end`, `digest_hour`, ver sección Configuración). Un evento que
+cae en quiet hours se descarta, salvo que el canal tenga
+`defer_to_digest: true` — en ese caso se encola en
+`notification_digest_queue` y se envía agrupado a la hora de `digest_hour`
+(America/Bogota).
+
+---
+
+## MakerWorld / Bambu Cloud (issue #139)
+
+Import completo de modelos de MakerWorld al Vault (descarga el `.3mf` real,
+no solo metadata — a diferencia de `POST /vault/fetch-metadata` que ya
+existía). Requiere login con una cuenta de Bambu Lab. Adaptado de
+bambuddy (AGPL-3.0) — solo interoperabilidad, sin afiliación con
+MakerWorld/Bambu Lab.
+
+**Instancia vs. plate**: cada instancia de MakerWorld es un perfil de
+impresión distinto para el mismo diseño (no un plate dentro de un mismo
+`.3mf`). Importar una instancia descarga SU `.3mf` propio; "importar
+todas" crea un `ModelFile` por instancia.
+
+`resolve`/`recent`/`thumbnail` funcionan para cualquier usuario
+autenticado (metadata pública de MakerWorld). `import`/`import-all`/
+`auth/*` requieren admin. `thumbnail` es deliberadamente **público sin
+auth** — un `<img>` no puede mandar el header Authorization (mismo
+criterio que el proxy de portada de proyectos, #136); SSRF guard con
+allowlist de host del CDN de MakerWorld.
+
+### `GET /makerworld/auth/status`
+`{configured, email_masked, expires_at}`.
+
+### `POST /makerworld/auth/login`
+`{email, password}` → `{status: "ok"|"verify_code"|"tfa", message, tfa_key?}`.
+Bambu Cloud puede exigir un código por email o TOTP según la cuenta.
+
+### `POST /makerworld/auth/verify`
+`{code, tfa_key?}` — completa el login iniciado en `/auth/login`. Sin
+`tfa_key` se asume verificación por código de email.
+
+### `DELETE /makerworld/auth`
+Cierra sesión (borra tokens). 204.
+
+### `POST /makerworld/resolve`
+`{url}` → `{design_id, title, author, images: [], instances: [{id,
+profile_id, title, thumbnail}], already_imported_model_ids: []}`.
+Funciona sin credenciales (metadata pública de MakerWorld).
+
+### `POST /makerworld/import`
+`{design_id, profile_id?, folder_id?}` → `ModelFileResponse`-like con
+`was_existing`. Si `profile_id` se omite, usa la primera instancia
+disponible. Dedupe por `source_url` canónico
+(`https://makerworld.com/models/{id}#profileId-{n}`) — reimportar la
+misma instancia retorna el archivo existente sin volver a descargar.
+409 si no hay credenciales configuradas.
+
+### `POST /makerworld/import-all`
+`{design_id, folder_id?}` → `{imported: [], failed: []}`. Descarga TODAS
+las instancias del diseño, secuencialmente, con rate limit (semáforo 2
+concurrentes + 1s entre descargas — cortesía con la API de Bambu).
+
+### `GET /makerworld/recent?limit=10`
+Últimos imports (máx 50), más reciente primero.
+
+### `GET /makerworld/thumbnail?url=`
+Proxy de imagen del CDN de MakerWorld (`makerworld.bblmw.com` /
+`public-cdn.bblmw.com`) — evita hotlink directo (CSP `img-src`).
 
 ---
 
@@ -903,6 +1424,73 @@ Límite: 1 GB. Verifica cuota antes de subir.
 
 ---
 
+### `POST /vault/upload-zip` (admin, issue #127)
+Sube un `.zip` y extrae su contenido al Vault, replicando la estructura de
+subcarpetas del ZIP como `VaultFolder`s. Solo procesa entries `.3mf`,
+`.stl` y `.gcode.3mf` — el resto se ignora en silencio (no rompe el resto
+del import). Cada archivo pasa por el mismo camino que `POST /upload`
+(parseo de header gcode + plates para `.gcode.3mf`, extracción/render de
+thumbnail para `.3mf`/`.stl`) — a diferencia del upload normal, cada entry
+del ZIP se convierte en su propio `ModelFile` (un solo slot poblado, no
+source+print juntos).
+
+**Body** (`multipart/form-data`):
+```
+file: modelos.zip
+folder_id: 12          # opcional, null/omitido = raíz del Vault
+create_folder: true    # opcional, default false — crea una carpeta nueva
+                        # con el nombre del ZIP (sin extensión) y todo
+                        # cuelga de ahí, en vez de ir directo a folder_id
+```
+
+**Protección zip-bomb**: rechaza si hay más de 500 entries o si la suma de
+tamaños descomprimidos supera 4 GB. Paths con `..` se ignoran. Límite del
+`.zip` en sí: 1 GB (mismo `MAX_VAULT_UPLOAD_BYTES` que el upload normal).
+
+**Response 201:**
+```json
+{"folders_created": 3, "files_created": 12, "skipped_entries": 2, "root_folder_id": 45}
+```
+
+**Errors:**
+- `400`: no es `.zip` / ZIP corrupto / demasiadas entries / supera el
+  tamaño descomprimido máximo
+- `413`: el `.zip` en sí supera 1 GB
+- `507`: sin espacio disponible (cuota excedida) — chequeado antes de
+  extraer nada, sumando solo los archivos soportados que se van a guardar
+
+---
+
+### `POST /vault/check-duplicate` (issue #128)
+Chequea si un hash SHA-256 (calculado client-side sobre el `File` con
+`crypto.subtle.digest`, ANTES de subir) ya existe en algún archivo del
+Vault no borrado, en cualquiera de los dos slots. El frontend llama esto
+al elegir un archivo en `VaultUploadPage` — si hay match, muestra un
+modal "Ya existe como X" con opciones "Subir igual" / "Ir al existente".
+
+**Body:** `{"sha256": "<64 hex chars>"}`
+
+**Response 200:**
+```json
+{"duplicate": true, "file": {"id": 42, "name": "Figura ya subida"}}
+```
+`file` es `null` si `duplicate` es `false`.
+
+### `POST /vault/backfill-hashes` (admin, issue #128)
+Calcula el hash SHA-256 de archivos ya existentes que no lo tienen
+(subidos antes de que existiera esta columna) — descarga los bytes de
+MinIO, en lotes de 20 por llamada (para no bloquear el request
+descargando potencialmente cientos de archivos de una sola vez). La UI
+lo llama repetido hasta que `remaining` llegue a 0. Un fallo de MinIO en
+un archivo puntual se loguea y no bloquea el resto del lote.
+
+**Response 200:**
+```json
+{"processed": 20, "remaining": 8}
+```
+
+---
+
 ### `GET /vault/{id}/download/source`
 Descarga el slot `source_file` (`.3mf` editable). 404 si el modelo no
 tiene ese slot.
@@ -952,10 +1540,59 @@ Elimina el archivo de MinIO y el registro en DB.
 
 ---
 
+## System Info (issue #140, pieza C)
+
+Todo el módulo es admin-only. Consultas de solo lectura al catálogo de
+PostgreSQL (`pg_database_size`, `pg_stat_user_tables`) — sin parámetros de
+usuario en el SQL crudo.
+
+### `GET /system/info`
+```json
+{
+  "version": "a1b2c3d4e5f6",
+  "uptime_seconds": 12345.6,
+  "db": {
+    "size_pretty": "145 MB",
+    "top_tables": [{"name": "print_queue", "size_pretty": "12.3 MB", "size_bytes": 12894720}]
+  },
+  "minio": {"used_bytes": 524288000},
+  "counts": {"model_files": 42, "queue_items_done": 310, "client_quotes": 58, "spools": 15},
+  "migrations": {"current": "d4e5f6a7b8c0", "head": "d4e5f6a7b8c0", "up_to_date": true}
+}
+```
+`version` = SHA del commit embebido en el build (`ARG GIT_SHA` en el
+Containerfile, inyectado por CI vía `--build-arg`) — `"dev"` si no está
+seteado (build local sin el arg).
+
+### `GET /system/logs?level=&limit=200`
+Snapshot del buffer de log en memoria (`collections.deque(maxlen=500)`,
+registrado como `logging.Handler` en el lifespan) — sin streaming, refresh
+manual desde la UI. `level` filtra por severidad mínima (`WARNING` incluye
+`WARNING`/`ERROR`/`CRITICAL`). `limit` clamped a `[1, 500]`.
+
+```json
+[{"ts": "2026-07-15T10:00:00+00:00", "level": "ERROR", "logger": "app.routers.queue", "msg": "..."}]
+```
+
+### `GET /system/backup` (issue #140, pieza E — recortada)
+Descarga un dump de la BD (`pg_dump -Fc`, restaurable con `pg_restore`)
+streameado como `application/octet-stream`, filename
+`cfs-backup-YYYYMMDD-HHMM.dump`. **Solo descarga on-demand** — sin restore
+ni schedule desde la UI (`docs/despliegue.md` ya documenta backup
+programado por cron + restore por CLI; duplicar eso en la UI agregaría
+superficie de riesgo sin sumar nada). DSN derivado de
+`settings.DATABASE_URL` quitando el driver `+asyncpg` (`pg_dump` usa
+libpq, no entiende el driver de SQLAlchemy).
+
+---
+
 ## Health Check
 
 ### `GET /api/health`
-Verifica que la API está funcionando.
+Verifica que el proceso de la API está arriba y respondiendo. No toca la
+base de datos ni MinIO — siempre responde 200 si el proceso vive, aunque
+sus dependencias estén caídas. Útil como liveness check básico, no como
+señal de "todo funciona".
 
 **Response 200:**
 ```json
@@ -964,6 +1601,50 @@ Verifica que la API está funcionando.
   "app": "Collector's Forge Studio"
 }
 ```
+
+### `GET /api/health/full`
+Health check completo — verifica Postgres, MinIO y la versión de Alembic
+aplicada. Pensado para monitores externos (Uptime Kuma, etc.) que necesitan
+saber si el servicio está *realmente* sano, no solo si el proceso responde.
+No requiere autenticación.
+
+**Response 200 (`status: ok`)** — Postgres y MinIO respondieron bien:
+```json
+{
+  "status": "ok",
+  "checks": {
+    "db": "ok",
+    "minio": "ok",
+    "alembic": "5f3a2b1c9d0e"
+  }
+}
+```
+
+**Response 503 (`status: degraded`)** — si Postgres o MinIO fallan, el
+código HTTP baja a 503 y el campo del check que falló trae
+`"error: <NombreDeLaExcepción>"` en vez de `"ok"`:
+```json
+{
+  "status": "degraded",
+  "checks": {
+    "db": "error: OperationalError",
+    "minio": "ok",
+    "alembic": "5f3a2b1c9d0e"
+  }
+}
+```
+
+- `db`: `"ok"` o `"error: <ExceptionType>"` — `SELECT 1` contra Postgres.
+- `minio`: `"ok"` o `"error: <ExceptionType>"` — `head_bucket` contra el bucket configurado.
+- `alembic`: la revisión actual aplicada (string), o `"error: <ExceptionType>"` si no se pudo leer la tabla `alembic_version`.
+- `status` es `"degraded"` si `db` o `minio` fallan (`alembic` no baja el status, es informativo).
+
+**Monitoreo con Uptime Kuma:** un monitor HTTP simple a este endpoint
+(esperando 200) solo distingue "sano" de "degradado", sin decir cuál
+falló. Para alertas que sí indiquen el componente exacto, usar 3 monitores
+tipo **Json Query** (Kuma ≥1.21) apuntando todos a `/api/health/full`, cada
+uno evaluando `checks.db`, `checks.minio` y `checks.alembic` contra `"ok"`
+respectivamente.
 
 ---
 

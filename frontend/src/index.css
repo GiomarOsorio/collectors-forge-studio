@@ -1,18 +1,73 @@
 @import "tailwindcss";
 
+/* Habilita variant `dark:` basado en clase (no media query) — Tailwind v4.
+   La clase `dark` se aplica a <html> desde ThemeContext (o el script
+   anti-flash en index.html antes del primer paint). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Variables de runtime — indirección para theming claro/oscuro ──────────
+   Estas NO son tokens de Tailwind directamente: son la capa que los tokens
+   `@theme` de abajo referencian vía var(). Cambiar de tema = cambiar estos
+   valores; todo lo que usa las utilidades (bg-forge-black, text-steel,
+   tf-card, etc.) se actualiza solo, sin tocar markup ni @apply.
+
+   Los valores de `.dark` son EXACTOS a la paleta original (pre-theming)
+   para no romper snapshots visuales existentes. */
+:root {
+  --cfs-text: #171B24;
+  --cfs-text-secondary: #55606E;
+  --cfs-text-tertiary: #7C8792;
+  --cfs-text-tertiary-dim: #AFB6BE;
+
+  --cfs-bg: #F5F6F8;
+  --cfs-surface-sidebar: #FFFFFF;
+  --cfs-surface-card: #FFFFFF;
+  --cfs-surface-card-2: #EEF0F4;
+  --cfs-surface-hover: #E7EAF0;
+  --cfs-surface-panel: #FFFFFF;
+
+  --cfs-border-soft: #E2E6EC;
+  --cfs-border: #E5E9EF;
+  --cfs-border-strong: #D3D9E0;
+  --cfs-border-bright: #C2CAD3;
+  --cfs-border-legacy: #E2E6EC;
+}
+
+.dark {
+  --cfs-text: #E4E8ED;
+  --cfs-text-secondary: #94A0AE;
+  --cfs-text-tertiary: #7A8494;
+  --cfs-text-tertiary-dim: #5A6573;
+
+  --cfs-bg: #0F1219;
+  --cfs-surface-sidebar: #0A0E16;
+  --cfs-surface-card: #111520;
+  --cfs-surface-card-2: #161B27;
+  --cfs-surface-hover: #1A2030;
+  --cfs-surface-panel: #1A1D25;
+
+  --cfs-border-soft: #1C2230;
+  --cfs-border: #222630;
+  --cfs-border-strong: #303642;
+  --cfs-border-bright: #3B4150;
+  --cfs-border-legacy: #2A2F38;
+}
+
 @theme {
-  /* Brand */
+  /* Brand — fijo en ambos temas (identidad, no estructura) */
   --color-forge-teal: #2DD4BF;
   --color-deep-teal: #14B8A6;
   --color-forge-amber: #FBBF24;
   --color-forge-rose: #F43F5E;
-  --color-steel: #94A0AE;
-  --color-gunmetal: #7A8494;
-  --color-gunmetal-dim: #5A6573;
-  --color-forge-black: #0F1219;
-  --color-tech-white: #E4E8ED;
 
-  /* App accents (alineados con SIDEBAR_APPS) */
+  /* Texto — reactivo al tema vía --cfs-* */
+  --color-steel: var(--cfs-text-secondary);
+  --color-gunmetal: var(--cfs-text-tertiary);
+  --color-gunmetal-dim: var(--cfs-text-tertiary-dim);
+  --color-forge-black: var(--cfs-bg);
+  --color-tech-white: var(--cfs-text);
+
+  /* App accents (alineados con SIDEBAR_APPS) — fijos, identidad por app */
   --color-app-cost: #2DD4BF;
   --color-app-inventory: #3B82F6;
   --color-app-slicer: #F59E0B;
@@ -20,18 +75,24 @@
   --color-app-queue: #14B8A6;
   --color-app-vault: #F43F5E;
   --color-app-company: #6366F1;
+  --color-app-stats: #06B6D4;
 
-  /* Superficies jerárquicas */
-  --color-surf-sidebar: #0A0E16;
-  --color-surf-card: #111520;
-  --color-surf-card-2: #161B27;
-  --color-surf-hover: #1A2030;
+  /* Superficies jerárquicas — reactivas al tema */
+  --color-surf-sidebar: var(--cfs-surface-sidebar);
+  --color-surf-card: var(--cfs-surface-card);
+  --color-surf-card-2: var(--cfs-surface-card-2);
+  --color-surf-hover: var(--cfs-surface-hover);
+  /* Superficie de paneles legacy .tf-* (card/tabla/modal) — valor propio
+     distinto de surf-card para no alterar el pixel-match de dark existente. */
+  --color-surf-panel: var(--cfs-surface-panel);
 
-  /* Bordes */
-  --color-border-soft: #1C2230;
-  --color-border: #222630;
-  --color-border-strong: #303642;
-  --color-border-bright: #3B4150;
+  /* Bordes — reactivos al tema */
+  --color-border-soft: var(--cfs-border-soft);
+  --color-border: var(--cfs-border);
+  --color-border-strong: var(--cfs-border-strong);
+  --color-border-bright: var(--cfs-border-bright);
+  /* Borde legacy .tf-* — distinto de --color-border, mismo motivo que arriba. */
+  --color-border-legacy: var(--cfs-border-legacy);
 
   --font-sans: 'Space Grotesk', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
@@ -40,12 +101,12 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background-color: #0F1219;
-  color: #E4E8ED;
+  background-color: var(--color-forge-black);
+  color: var(--color-tech-white);
   font-family: var(--font-sans);
 }
 
-/* Focus visible global — accesibilidad teclado */
+/* Focus visible global — accesibilidad teclado. Accent fijo (no cambia con el tema). */
 *:focus-visible {
   outline: 2px solid #2DD4BF;
   outline-offset: 2px;
@@ -53,13 +114,13 @@ body {
 }
 
 select option {
-  background-color: #1A1D25;
-  color: #E4E8ED;
+  background-color: var(--color-surf-panel);
+  color: var(--color-tech-white);
 }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #0F1219; }
-::-webkit-scrollbar-thumb { background: #2A2F38; border-radius: 3px; }
+::-webkit-scrollbar-track { background: var(--color-forge-black); }
+::-webkit-scrollbar-thumb { background: var(--color-border-legacy); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #2DD4BF; }
 
 /* Animación shimmer para skeleton loaders */
@@ -90,10 +151,10 @@ select option {
 
 @layer components {
   .tf-card {
-    @apply bg-[#1A1D25] border border-[#2A2F38] rounded-xl;
+    @apply bg-surf-panel border border-border-legacy rounded-xl;
   }
   .tf-input {
-    @apply w-full px-3 py-2 bg-[#0A0E16] border border-[#303642] rounded-lg text-tech-white placeholder:text-gunmetal outline-none focus:ring-1 focus:ring-forge-teal focus:border-forge-teal transition-colors text-sm;
+    @apply w-full px-3 py-2 bg-surf-sidebar border border-border-strong rounded-lg text-tech-white placeholder:text-gunmetal outline-none focus:ring-1 focus:ring-forge-teal focus:border-forge-teal transition-colors text-sm;
   }
   .tf-label {
     @apply block text-sm font-medium text-steel mb-1;
@@ -105,7 +166,7 @@ select option {
     @apply inline-flex items-center justify-center gap-2 bg-forge-teal text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-deep-teal transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer;
   }
   .tf-btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 bg-transparent text-steel border border-[#2A2F38] px-4 py-2 rounded-lg font-medium text-sm hover:bg-[#222630] hover:text-tech-white transition-colors cursor-pointer;
+    @apply inline-flex items-center justify-center gap-2 bg-transparent text-steel border border-border-legacy px-4 py-2 rounded-lg font-medium text-sm hover:bg-border hover:text-tech-white transition-colors cursor-pointer;
   }
   .tf-btn-ghost {
     @apply inline-flex items-center justify-center text-gunmetal hover:text-tech-white transition-colors min-w-[44px] min-h-[44px];
@@ -114,7 +175,7 @@ select option {
     @apply inline-flex items-center justify-center text-gunmetal hover:text-red-400 transition-colors min-w-[44px] min-h-[44px];
   }
   .tf-btn-icon {
-    @apply inline-flex items-center justify-center rounded-lg text-gunmetal hover:text-tech-white hover:bg-[#222630] transition-colors min-w-[36px] min-h-[36px];
+    @apply inline-flex items-center justify-center rounded-lg text-gunmetal hover:text-tech-white hover:bg-border transition-colors min-w-[36px] min-h-[36px];
   }
   .tf-page-title {
     @apply text-2xl font-bold text-tech-white mb-6;
@@ -123,13 +184,13 @@ select option {
     @apply text-base font-semibold text-tech-white;
   }
   .tf-hr {
-    @apply border-[#222630] my-4;
+    @apply border-border my-4;
   }
   .tf-table-wrap {
-    @apply bg-[#1A1D25] border border-[#2A2F38] rounded-xl overflow-x-auto;
+    @apply bg-surf-panel border border-border-legacy rounded-xl overflow-x-auto;
   }
   .tf-thead {
-    @apply bg-[#222630] border-b border-[#2A2F38];
+    @apply bg-border border-b border-border-legacy;
   }
   .tf-th {
     @apply text-left px-5 py-3 text-xs font-semibold text-gunmetal uppercase tracking-wider;
@@ -138,7 +199,7 @@ select option {
     @apply text-right px-5 py-3 text-xs font-semibold text-gunmetal uppercase tracking-wider;
   }
   .tf-tr {
-    @apply border-b border-[#222630] hover:bg-[#222630] transition-colors last:border-0;
+    @apply border-b border-border hover:bg-border transition-colors last:border-0;
   }
   .tf-td {
     @apply px-5 py-3.5 text-sm text-steel;
@@ -150,7 +211,7 @@ select option {
     @apply fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto xl:pl-64;
   }
   .tf-modal {
-    @apply bg-[#1A1D25] border border-[#2A2F38] rounded-xl p-6 w-full max-h-[90vh] overflow-y-auto;
+    @apply bg-surf-panel border border-border-legacy rounded-xl p-6 w-full max-h-[90vh] overflow-y-auto;
   }
   .tf-badge-green {
     @apply text-xs font-medium px-2 py-0.5 rounded-full bg-forge-teal/15 text-forge-teal;
@@ -160,7 +221,7 @@ select option {
   }
   /* Skeleton loader base */
   .tf-skeleton {
-    background: linear-gradient(90deg, #222630 25%, #2C3140 50%, #222630 75%);
+    background: linear-gradient(90deg, var(--color-border) 25%, var(--color-border-bright) 50%, var(--color-border) 75%);
     background-size: 200% 100%;
     animation: shimmer 1.5s infinite;
     border-radius: 6px;

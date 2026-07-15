@@ -3,15 +3,16 @@
  *
  * Soporta los dos slots de archivo definidos en `ModelFile`:
  *
- * - **source_file** (`.3mf` editable) — proyecto OrcaSlicer/BambuStudio.
+ * - **source_file** (`.3mf` o `.stl` editable) — proyecto OrcaSlicer/
+ *   BambuStudio o mesh STL sin laminar.
  * - **print_file** (`.gcode.3mf` laminado) — paquete con G-code listo para
  *   imprimir. El backend parsea su header y autollena
  *   `sliced_weight_g` / `sliced_time_seconds` / `sliced_filament_type` para
  *   que el picker de Queue pueda meterlo directo a cola.
  *
  * Al menos uno de los dos slots tiene que estar presente. Si solo se
- * sube `.3mf` editable, "Agregar a cola" estará deshabilitado (con tooltip
- * "lamina primero con tu slicer y vuelve a subir").
+ * sube el editable (`.3mf`/`.stl`), "Agregar a cola" estará deshabilitado
+ * (con tooltip "lamina primero con tu slicer y vuelve a subir").
  *
  * Los no-admins son redirigidos a /vault al montar el componente.
  *
@@ -41,13 +42,17 @@ import MobileAppHeader from '../../components/MobileAppHeader';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../context/AuthContext';
 import {
+  checkVaultDuplicate,
   fetchVaultMetadata,
   getVaultFile,
+  getVaultFolders,
   replaceVaultPrint,
   replaceVaultSource,
   updateVaultFile,
   uploadVaultFile,
 } from '../../services/api';
+import { hashFile } from '../../utils/fileHash';
+import DuplicateWarningModal from './components/DuplicateWarningModal';
 
 const ACCENT = '#F43F5E';
 const ACCENT_PRINT = '#34D399';
@@ -138,6 +143,19 @@ export default function VaultUploadPage() {
   const [existing, setExisting] = useState(null); // ModelFile original en edit-mode
   const [loadingExisting, setLoadingExisting] = useState(isEditMode);
 
+  // Carpeta destino. En upload-mode toma el `?folder=<id>` de la carpeta
+  // donde estaba parado el admin al hacer click en "Subir modelo"; en
+  // edit-mode se sobreescribe con `existing.folder_id` al cargar.
+  const folderParam = searchParams.get('folder');
+  const [folders, setFolders] = useState([]);
+  const [folderId, setFolderId] = useState(folderParam ? Number(folderParam) : null);
+
+  useEffect(() => {
+    getVaultFolders()
+      .then((res) => setFolders(res.data || []))
+      .catch(() => {});
+  }, []);
+
   // Redirigir si no es admin (mismo flujo que la V1).
   useEffect(() => {
     if (user && user.role !== 'admin') {
@@ -159,8 +177,10 @@ export default function VaultUploadPage() {
     tags: '',
   });
 
-  const [sourceFile, setSourceFile] = useState(null); // .3mf editable nuevo (reemplaza)
+  const [sourceFile, setSourceFile] = useState(null); // .3mf/.stl editable nuevo (reemplaza)
   const [printFile, setPrintFile] = useState(null);   // .gcode.3mf laminado nuevo (reemplaza)
+  // Aviso de duplicado por hash (issue #128) — { slot, fileName, existing } | null
+  const [duplicateWarning, setDuplicateWarning] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [done, setDone] = useState(false);
@@ -188,6 +208,7 @@ export default function VaultUploadPage() {
           creator_url: m.creator_url ?? '',
           tags: Array.isArray(m.tags) ? m.tags.join(', ') : '',
         });
+        setFolderId(m.folder_id ?? null);
       })
       .catch(() => {
         toast.error('No se pudo cargar el modelo a editar');
@@ -246,9 +267,29 @@ export default function VaultUploadPage() {
   };
 
   /**
-   * Acepta archivos del DropZone source. Valida extensión .3mf (rechaza
-   * .gcode.3mf, que pertenece al slot print). Si no hay name aún, lo
-   * deriva del filename para que el admin no tenga que tipearlo.
+   * Hashea `file` client-side y, si coincide con un archivo ya en el Vault
+   * (distinto del que se está editando, en edit-mode), abre el modal de
+   * aviso. Fire-and-forget — no bloquea la selección del archivo.
+   */
+  const checkForDuplicate = (slot, file) => {
+    hashFile(file)
+      .then((sha256) => checkVaultDuplicate(sha256))
+      .then((res) => {
+        const { duplicate, file: existing } = res.data;
+        if (duplicate && existing && existing.id !== replaceId) {
+          setDuplicateWarning({ slot, fileName: file.name, existing });
+        }
+      })
+      .catch(() => {
+        // Best-effort — si falla el chequeo (red, SubtleCrypto no disponible
+        // en contexto no-seguro, etc.) simplemente no se avisa, no bloquea.
+      });
+  };
+
+  /**
+   * Acepta archivos del DropZone source. Valida extensión .3mf o .stl
+   * (rechaza .gcode.3mf, que pertenece al slot print). Si no hay name
+   * aún, lo deriva del filename para que el admin no tenga que tipearlo.
    */
   const handleSourceFiles = (files) => {
     const f = files?.[0];
@@ -258,15 +299,16 @@ export default function VaultUploadPage() {
       toast.error('Ese archivo es laminado, súbelo al slot "Laminado"');
       return;
     }
-    if (!lower.endsWith('.3mf')) {
-      toast.error('El editable debe terminar en .3mf');
+    if (!lower.endsWith('.3mf') && !lower.endsWith('.stl')) {
+      toast.error('El editable debe terminar en .3mf o .stl');
       return;
     }
     setSourceFile(f);
     if (!form.name.trim()) {
-      const base = f.name.replace(/\.3mf$/i, '');
+      const base = f.name.replace(/\.(3mf|stl)$/i, '');
       setForm((prev) => ({ ...prev, name: base }));
     }
+    checkForDuplicate('source', f);
   };
 
   /**
@@ -284,6 +326,7 @@ export default function VaultUploadPage() {
       const base = f.name.replace(/\.gcode\.3mf$/i, '');
       setForm((prev) => ({ ...prev, name: base }));
     }
+    checkForDuplicate('print', f);
   };
 
   const handleSubmit = async (e) => {
@@ -304,6 +347,7 @@ export default function VaultUploadPage() {
       creator_name:    form.creator_name.trim() || null,
       creator_url:     form.creator_url.trim() || null,
       tags:            tagsArr,
+      folder_id:       folderId,
       // Issue #71 — fallback al link. Backend usa estos campos como
       // respaldo si el parser local del .gcode.3mf no encuentra los datos.
       weight_g:        form.link_weight_g ?? null,
@@ -375,11 +419,13 @@ export default function VaultUploadPage() {
         creator_url: existing.creator_url ?? '',
         tags: Array.isArray(existing.tags) ? existing.tags.join(', ') : '',
       });
+      setFolderId(existing.folder_id ?? null);
     } else {
       setForm({
         name: '', description: '', thumbnail_url: '', source_url: '',
         source_platform: '', creator_name: '', creator_url: '', tags: '',
       });
+      setFolderId(folderParam ? Number(folderParam) : null);
     }
     setSourceFile(null);
     setPrintFile(null);
@@ -583,19 +629,19 @@ export default function VaultUploadPage() {
               {sourceFile ? (
                 <FilePreviewCard
                   file={sourceFile}
-                  label={isEditMode ? 'Reemplazar editable · .3mf' : 'Editable · .3mf'}
+                  label={isEditMode ? 'Reemplazar editable · .3mf/.stl' : 'Editable · .3mf/.stl'}
                   accent={ACCENT}
                   icon={FileBox}
                   onClear={() => setSourceFile(null)}
                 />
               ) : (
                 <DropZone
-                  accept=".3mf"
+                  accept=".3mf,.stl"
                   accent={ACCENT}
                   icon={FileBox}
-                  hint={isEditMode ? 'Suelta para reemplazar el .3mf editable' : 'Suelta el .3mf editable'}
-                  meta="OrcaSlicer / BambuStudio · proyecto editable"
-                  cta="Examinar .3mf"
+                  hint={isEditMode ? 'Suelta para reemplazar el .3mf/.stl editable' : 'Suelta el .3mf o .stl editable'}
+                  meta="OrcaSlicer / BambuStudio / mesh STL · proyecto editable"
+                  cta="Examinar .3mf/.stl"
                   onFiles={handleSourceFiles}
                 />
               )}
@@ -641,6 +687,18 @@ export default function VaultUploadPage() {
                 value={form.description}
                 onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
               />
+            </FormFieldRow>
+            <FormFieldRow label="Carpeta" hint="Dónde se guarda dentro del Vault">
+              <select
+                className={FORM_INPUT_CLS}
+                value={folderId ?? ''}
+                onChange={(e) => setFolderId(e.target.value === '' ? null : Number(e.target.value))}
+              >
+                <option value="">Raíz (Vault)</option>
+                {folders.map((f) => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </select>
             </FormFieldRow>
 
             <FormSectionTitle>Origen</FormSectionTitle>
@@ -728,6 +786,19 @@ export default function VaultUploadPage() {
           </div>
         </div>
       </div>
+      {duplicateWarning && (
+        <DuplicateWarningModal
+          fileName={duplicateWarning.fileName}
+          existing={duplicateWarning.existing}
+          onUploadAnyway={() => setDuplicateWarning(null)}
+          onGoToExisting={() => navigate(`/vault/upload?replace=${duplicateWarning.existing.id}`)}
+          onCancel={() => {
+            if (duplicateWarning.slot === 'source') setSourceFile(null);
+            else setPrintFile(null);
+            setDuplicateWarning(null);
+          }}
+        />
+      )}
     </div>
   );
 }

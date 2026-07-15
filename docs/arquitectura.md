@@ -69,6 +69,7 @@ Cada "app" es una sección de la SPA React con su propio layout y rutas:
 | Mantenimiento | `#8B5CF6` | `/maintenance/` | Registro de mantenimiento |
 | Queue | `#14B8A6` | `/queue/` | Cola de impresión |
 | Vault | `#F43F5E` | `/vault/` | Biblioteca de modelos `.3mf` / `.gcode.3mf` |
+| Stats | `#06B6D4` | `/stats/` | Analytics de impresión y costos (issue #132) |
 | Compañía | `#6366F1` | `/company/` | Perfil, branding y templates PDF |
 | Settings | `#2DD4BF` | `/settings/` | Configuración global (electricidad, gastos fijos, etc.) |
 

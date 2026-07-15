@@ -32,7 +32,7 @@ RUN echo "── frontend package.json version ──" && \
 RUN npm ci --ignore-scripts
 
 # Verifica que las deps críticas estén realmente instaladas.
-RUN npm ls @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities react-router-dom axios react-i18next i18next \
+RUN npm ls @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities react-router-dom axios react-i18next i18next three gcode-preview \
     || (echo "ERROR: deps faltantes tras npm ci." && exit 1)
 
 # Verifica que Node puede RESOLVER (no solo listar) los packages críticos.
@@ -42,11 +42,34 @@ RUN node -e "console.log('resolved:', require.resolve('@dnd-kit/core'))" \
     || (echo "ERROR: Node no resuelve @dnd-kit/core." && exit 1)
 RUN node -e "console.log('resolved:', require.resolve('axios'))" \
     || (echo "ERROR: Node no resuelve axios. Build de Vite/Rollup va a fallar." && exit 1)
+RUN node -e "console.log('resolved:', require.resolve('three'))" \
+    || (echo "ERROR: Node no resuelve three. gcode-preview / ModelViewer3D van a fallar en build." && exit 1)
 
-RUN npm run build
+# `npm run build` falla de forma INTERMITENTE en Alpine (musl) con
+# "Rollup failed to resolve import X" para paquetes que sí están
+# instalados y sí resuelven con `node -e require.resolve(...)` (mismo
+# síntoma ya visto con @dnd-kit/*, void-elements, three, lil-gui,
+# @react-three/fiber — cada vez un paquete distinto). Es una condición
+# de carrera de Rollup, no un problema real de resolución: agregar un
+# alias por cada paquete nuevo que la sufra no escala. Reintentar es más
+# robusto: si el build vuelve a fallar por esta causa, un segundo o
+# tercer intento típicamente pasa limpio.
+RUN for i in 1 2 3; do \
+        npm run build && break; \
+        echo "npm run build falló (intento $i/3) — reintentando en 5s..."; \
+        sleep 5; \
+        rm -rf dist; \
+        if [ "$i" = "3" ]; then exit 1; fi; \
+    done
 
 # Production stage — backend (FastAPI sirve la API + el SPA compilado)
 FROM docker.io/python:3.11-slim
+
+# SHA del commit embebido en el build (issue #140, system info). Sin
+# --build-arg (ej. build local) queda vacío y el backend cae al fallback
+# "dev" (ver app/routers/system.py).
+ARG GIT_SHA=""
+ENV GIT_SHA=${GIT_SHA}
 
 WORKDIR /app
 
@@ -56,6 +79,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpangocairo-1.0-0 \
     libgdk-pixbuf-2.0-0 \
     libcairo2 \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --no-create-home --shell /bin/false --uid 1000 appuser
 

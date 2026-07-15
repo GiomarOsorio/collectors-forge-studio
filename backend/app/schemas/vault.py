@@ -34,6 +34,7 @@ class ModelFileCreate(BaseModel):
     source_platform: Optional[str] = Field(default=None, max_length=50)
     creator_name: Optional[str] = Field(default=None, max_length=200)
     creator_url: Optional[str] = Field(default=None, max_length=1000)
+    folder_id: Optional[int] = None
 
 
 class ModelFileUpdate(BaseModel):
@@ -46,6 +47,8 @@ class ModelFileUpdate(BaseModel):
     source_platform: Optional[str] = Field(default=None, max_length=50)
     creator_name: Optional[str] = Field(default=None, max_length=200)
     creator_url: Optional[str] = Field(default=None, max_length=1000)
+    folder_id: Optional[int] = None
+    notes: Optional[str] = None
 
 
 class PlateInfo(BaseModel):
@@ -94,6 +97,12 @@ class ModelFileResponse(BaseModel):
     source_platform: Optional[str]
     creator_name: Optional[str]
     creator_url: Optional[str]
+    folder_id: Optional[int] = None
+    notes: Optional[str] = None
+    # Cuántos PrintQueueItem (done/cancelled/printing) referencian este
+    # modelo — badge "N impresiones" en el grid (issue #130). Se calcula
+    # con un outerjoin agregado en el listado, nunca query por archivo.
+    print_count: int = 0
 
     # Multi-plate (issue #68). `active_plate_index` indica cuál plate
     # actualmente sincroniza `sliced_*` + thumbnail principal.
@@ -102,6 +111,9 @@ class ModelFileResponse(BaseModel):
 
     created_at: datetime
     updated_at: datetime
+    # NULL = activo. Con fecha = está en la papelera (usado por la vista
+    # de papelera para mostrar "eliminado el X").
+    deleted_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 
@@ -119,6 +131,44 @@ class VaultStatsResponse(BaseModel):
     used_bytes: int
     quota_bytes: int
     percent: float
+
+
+class ModelFilePhotoResponse(BaseModel):
+    """Foto adjunta a un archivo del Vault (issue #130)."""
+    id: int
+    caption: Optional[str] = None
+    photo_url: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ModelFilePhotoCaptionUpdate(BaseModel):
+    """Payload para editar el caption de una foto ya subida."""
+    caption: Optional[str] = Field(default=None, max_length=300)
+
+
+class PrintHistoryEntry(BaseModel):
+    """Una fila del historial de impresiones de un modelo (issue #130)."""
+    id: int
+    status: str
+    quantity: int
+    piece_name: Optional[str] = None
+    printer_name: Optional[str] = None
+    filament_name: Optional[str] = None
+    weight_grams: Optional[DecimalAsFloat] = None
+    print_time_hours: Optional[DecimalAsFloat] = None
+    failure_reason: Optional[str] = None
+    failure_category: Optional[str] = None
+    created_at: datetime
+    completed_at: Optional[datetime] = None
+
+
+class PrintHistoryResponse(BaseModel):
+    """Historial completo + agregados de un modelo del Vault."""
+    items: List[PrintHistoryEntry]
+    total_grams: float
+    success_rate_pct: Optional[float] = None
 
 
 class VaultMetadataRequest(BaseModel):
@@ -139,3 +189,32 @@ class VaultMetadataResponse(BaseModel):
     weight_g: Optional[float] = None
     time_seconds: Optional[int] = None
     filament_type: Optional[str] = None
+
+
+class VaultZipImportResponse(BaseModel):
+    """Resumen de un import de ZIP al Vault (issue #127)."""
+    folders_created: int
+    files_created: int
+    skipped_entries: int
+    root_folder_id: Optional[int] = None
+
+
+class CheckDuplicateRequest(BaseModel):
+    """Hash SHA-256 calculado client-side sobre el `File` antes de subir (issue #128)."""
+    sha256: str = Field(min_length=64, max_length=64)
+
+
+class DuplicateFileInfo(BaseModel):
+    id: int
+    name: str
+
+
+class CheckDuplicateResponse(BaseModel):
+    duplicate: bool
+    file: Optional[DuplicateFileInfo] = None
+
+
+class BackfillHashesResponse(BaseModel):
+    """Resultado de un lote de `POST /vault/backfill-hashes` (issue #128)."""
+    processed: int
+    remaining: int

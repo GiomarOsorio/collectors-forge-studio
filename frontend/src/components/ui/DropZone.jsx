@@ -21,6 +21,8 @@ import { Upload } from 'lucide-react';
  * @param {string}   [props.accent='var(--page-accent)']
  * @param {string}   [props.cta='Examinar archivos']
  * @param {string}   [props.meta] - Texto bajo el hint (default deriva del accept)
+ * @param {boolean}  [props.multiple=false] - Permite seleccionar varios archivos al hacer click
+ *   (drag&drop ya soporta múltiples archivos sin esto — solo afecta el diálogo del navegador)
  * @param {(files: FileList) => void} [props.onFiles] - Callback con archivos drop/select
  */
 export default function DropZone({
@@ -30,6 +32,7 @@ export default function DropZone({
   accent = 'var(--page-accent)',
   cta = 'Examinar archivos',
   meta,
+  multiple = false,
   onFiles,
 }) {
   const [hover, setHover] = useState(false);
@@ -64,6 +67,7 @@ export default function DropZone({
         ref={inputRef}
         type="file"
         accept={accept}
+        multiple={multiple}
         className="hidden"
         onChange={(e) => handleFiles(e.target.files)}
       />

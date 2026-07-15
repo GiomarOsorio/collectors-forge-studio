@@ -24,6 +24,7 @@
  * - /inventory/purchases         → Pedidos de compra (tabla)
  * - /inventory/prints            → Disponible para venta
  * - /inventory/io                → Importar / Exportar CSV
+ * - /inventory/spools            → Bobinas individuales (issue #134)
  * - /cost                        → Dashboard de costos (tabs Cotizaciones / Historial)
  * - /cost/calculator             → Calculadora de costos
  * - /cost/manual                 → Nueva cotización manual
@@ -32,7 +33,8 @@
  * - /cost/settings               → Tarifa eléctrica & ajustes
  * - /settings                    → Settings (Cuenta + Usuarios admin)
  * - /maintenance                 → Mantenimiento (Dashboard + Historial + CRUD)
- * - /queue                       → Cola de impresión (Activa + Historial)
+ * - /queue                       → Cola de impresión (Activa + Historial + Timeline)
+ * - /queue/log                   → Bitácora global de impresiones (issue #131)
  * - /vault                       → Vault de modelos (.3mf / .gcode.3mf)
  * - /vault/upload                → Subir modelo (admin)
  * - /company                     → Compañía (admin — Perfil / Marca / Templates)
@@ -47,6 +49,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DirtyStateProvider } from './context/DirtyStateContext';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { ConfirmProvider } from './components/ConfirmDialog';
 import AppLayout from './components/AppLayout';
 import Login from './pages/Login';
@@ -62,14 +65,19 @@ const SettingsPage             = lazy(() => import('./pages/settings/SettingsPag
 const InventoryPage            = lazy(() => import('./pages/inventory/InventoryPage'));
 const CostPage                 = lazy(() => import('./pages/cost/CostPage'));
 const QueuePage                = lazy(() => import('./pages/queue/QueuePage'));
+const PrintLogPage             = lazy(() => import('./pages/queue/PrintLogPage'));
 const MaintenancePage          = lazy(() => import('./pages/maintenance/MaintenancePage'));
 const VaultPage                = lazy(() => import('./pages/vault/VaultPage'));
 const VaultUploadPage          = lazy(() => import('./pages/vault/VaultUploadPage'));
+const VaultTrashPage           = lazy(() => import('./pages/vault/VaultTrashPage'));
+const ProjectsPage             = lazy(() => import('./pages/projects/ProjectsPage'));
 const CompanyPage              = lazy(() => import('./pages/company/CompanyPage'));
 const CompanyTemplateEditorPage= lazy(() => import('./pages/company/CompanyTemplateEditorPage'));
 const InventoryPurchasesPage   = lazy(() => import('./pages/inventory/InventoryPurchasesPage'));
 const InventoryPrintsPage      = lazy(() => import('./pages/inventory/InventoryPrintsPage'));
 const InventoryImportExportPage= lazy(() => import('./pages/inventory/InventoryImportExportPage'));
+const InventorySpoolsPage      = lazy(() => import('./pages/inventory/InventorySpoolsPage'));
+const StatsPage                = lazy(() => import('./pages/stats/StatsPage'));
 
 /**
  * Componente guardia de ruta privada.
@@ -165,6 +173,7 @@ function AppRoutes() {
           <Route path="purchases"    element={<InventoryPurchasesPage />} />
           <Route path="prints"       element={<InventoryPrintsPage />} />
           <Route path="io"           element={<InventoryImportExportPage />} />
+          <Route path="spools"       element={<InventorySpoolsPage />} />
         </Route>
 
         {/* Cost — `index` es el dashboard (tabs Cotizaciones / Historial).
@@ -208,7 +217,11 @@ function AppRoutes() {
           <Route path="v2"       element={<RedirectPreservingSearch to="/queue" />} />
           <Route path="legacy"   element={<RedirectPreservingSearch to="/queue" />} />
           <Route path="history"  element={<RedirectPreservingSearch to="/queue" />} />
+          <Route path="log"      element={<PrintLogPage />} />
         </Route>
+
+        {/* Stats — dashboard de analytics de impresión y costos (issue #132). */}
+        <Route path="/stats" element={<StatsPage />} />
 
         {/* Compañía (solo admin) — `index` con drawers integrados
             (Perfil / Marca / Templates list). El editor de templates
@@ -233,9 +246,38 @@ function AppRoutes() {
           <Route path="legacy"   element={<RedirectPreservingSearch to="/vault" />} />
           <Route path="upload"   element={<VaultUploadPage />} />
           <Route path="upload/v2" element={<RedirectPreservingSearch to="/vault/upload" />} />
+          <Route path="trash"   element={<VaultTrashPage />} />
         </Route>
+
+        {/* Proyectos — agrupador de items de la cola de impresión. */}
+        <Route path="/projects" element={<ProjectsPage />} />
       </Route>
     </Routes>
+  );
+}
+
+/**
+ * Toaster con estilo reactivo al tema claro/oscuro.
+ * Componente separado porque `useTheme()` solo puede llamarse dentro del
+ * árbol de `ThemeProvider`, no en `App()` antes de montarlo.
+ *
+ * @returns {JSX.Element}
+ */
+function ThemedToaster() {
+  const { resolvedMode } = useTheme();
+  const isDark = resolvedMode === 'dark';
+  return (
+    <Toaster
+      position="top-right"
+      toastOptions={{
+        style: {
+          background: isDark ? '#1A1D25' : '#FFFFFF',
+          color: isDark ? '#F2F4F6' : '#171B24',
+          border: `1px solid ${isDark ? '#2A2F38' : '#E2E6EC'}`,
+        },
+        success: { iconTheme: { primary: '#2DD4BF', secondary: isDark ? '#F2F4F6' : '#FFFFFF' } },
+      }}
+    />
   );
 }
 
@@ -246,18 +288,17 @@ function AppRoutes() {
  */
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <DirtyStateProvider>
-          <ConfirmProvider>
-            <AppRoutes />
-            <Toaster position="top-right" toastOptions={{
-            style: { background: '#1A1D25', color: '#F2F4F6', border: '1px solid #2A2F38' },
-            success: { iconTheme: { primary: '#2DD4BF', secondary: '#F2F4F6' } },
-          }} />
-          </ConfirmProvider>
-        </DirtyStateProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <DirtyStateProvider>
+            <ConfirmProvider>
+              <AppRoutes />
+              <ThemedToaster />
+            </ConfirmProvider>
+          </DirtyStateProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }

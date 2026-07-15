@@ -90,6 +90,14 @@ export const login = (username, password) => {
 export const getMe = () => api.get('/auth/me');
 
 /**
+ * Indica si el backend tiene habilitado el bypass de login de dev
+ * (DEV_LOGIN_ENABLED — solo true en el deploy de cfs-app-dev, nunca en prod).
+ *
+ * @returns {Promise<import('axios').AxiosResponse>} Respuesta con { enabled: boolean }
+ */
+export const getDevLoginStatus = () => api.get('/auth/oidc/dev-login-status');
+
+/**
  * Registra un nuevo usuario en el sistema.
  *
  * @param {Object} data - Datos del nuevo usuario
@@ -599,6 +607,77 @@ export const deleteMaintenanceLog = (id) => api.delete(`/maintenance/logs/${id}`
 /** Obtiene el resumen de mantenimiento por impresora (dashboard). */
 export const getMaintenanceSummary = () => api.get('/maintenance/summary/');
 
+// ─── Recordatorios por intervalo (schedules, issue #138) ──────────────────
+
+/** Lista recordatorios con progreso/status calculados. @param {number|null} printerId */
+export const getMaintenanceSchedules = (printerId = null) => {
+  const params = printerId != null ? { printer_id: printerId } : {};
+  return api.get('/maintenance/schedules/', { params });
+};
+
+/** Lista recordatorios habilitados con status distinto de 'ok' (badges). */
+export const getMaintenanceSchedulesDue = () => api.get('/maintenance/schedules/due');
+
+/** Crea un recordatorio de mantenimiento (admin). */
+export const createMaintenanceSchedule = (data) => api.post('/maintenance/schedules/', data);
+
+/** Edita un recordatorio (admin). */
+export const updateMaintenanceSchedule = (id, data) => api.put(`/maintenance/schedules/${id}`, data);
+
+/** Elimina un recordatorio (admin). */
+export const deleteMaintenanceSchedule = (id) => api.delete(`/maintenance/schedules/${id}`);
+
+/** Marca un recordatorio como completado (resetea progreso + crea log automático). */
+export const completeMaintenanceSchedule = (id) => api.post(`/maintenance/schedules/${id}/complete`);
+
+// ============================================================================
+// Stats — dashboard de analytics de impresión y costos (issue #132)
+// ============================================================================
+
+/**
+ * Resumen agregado (tasa de éxito, horas, gramos/costo por filamento,
+ * por impresora, por usuario, fallos) del rango dado.
+ * @param {{date_from?: string, date_to?: string}} [params]
+ */
+export const getStatsOverview = (params = {}) => api.get('/stats/overview', { params });
+
+/**
+ * Serie temporal agrupada por bucket.
+ * @param {{bucket?: 'day'|'week'|'month', date_from?: string, date_to?: string}} [params]
+ */
+export const getStatsTrends = (params = {}) => api.get('/stats/trends', { params });
+
+/**
+ * Descarga el CSV del overview y dispara el guardado en el navegador.
+ * Mismo criterio que `downloadPrintLogCsv` (issue #131): blob + `<a>`
+ * temporal, porque un `<a href>` directo no llevaría el JWT Bearer.
+ * @param {Object} params - Mismos filtros que `getStatsOverview`.
+ */
+export const downloadStatsOverviewCsv = async (params = {}) => {
+  const res = await api.get('/stats/overview', { params: { ...params, format: 'csv' }, responseType: 'blob' });
+  const url = URL.createObjectURL(res.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'stats_overview.csv';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
+
+/** Descarga el CSV de tendencias — mismo criterio que `downloadStatsOverviewCsv`. */
+export const downloadStatsTrendsCsv = async (params = {}) => {
+  const res = await api.get('/stats/trends', { params: { ...params, format: 'csv' }, responseType: 'blob' });
+  const url = URL.createObjectURL(res.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'stats_trends.csv';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
+
 // ============================================================================
 // Empresa — Templates de cotización (Liquid + WeasyPrint)
 // ============================================================================
@@ -647,6 +726,41 @@ export const updateInventoryCategory = (id, data) => api.put(`/inventory/categor
 export const deleteInventoryCategory = (id) => api.delete(`/inventory/categories/${id}`);
 
 // ============================================================================
+// Inventario - Bobinas individuales (spools, issue #134)
+// ============================================================================
+
+/**
+ * Lista bobinas con filtros opcionales.
+ * @param {Object} [params]
+ * @param {number} [params.inventory_item_id]
+ * @param {string} [params.status] - CSV, ej. 'active,finished'
+ * @param {string} [params.material]
+ * @param {string} [params.q]
+ */
+export const getSpools = (params) => api.get('/inventory/spools/', { params });
+
+/** Alta masiva de bobinas (1-100). `add_to_stock` suma al agregado del padre. */
+export const createSpools = (data) => api.post('/inventory/spools/', data);
+
+/** Edita una bobina (peso manual, stops, efecto, notas, status). */
+export const updateSpool = (id, data) => api.put(`/inventory/spools/${id}`, data);
+
+/** Elimina una bobina (admin) — bloqueado si algún item 'printing' la referencia. */
+export const deleteSpool = (id) => api.delete(`/inventory/spools/${id}`);
+
+/** Gramos restantes por tipo de filamento vs. el umbral configurado. */
+export const getSpoolsLowStock = () => api.get('/inventory/spools/low-stock');
+
+/**
+ * Genera el PDF de etiquetas (con QR deep-link) para las bobinas dadas.
+ * Devuelve el blob crudo — el caller decide si abrirlo (`window.open`,
+ * ya que el servidor manda `Content-Disposition: inline`) o descargarlo.
+ * @param {{spool_ids: number[], template: string, monochrome?: boolean}} data
+ */
+export const printSpoolLabels = (data) =>
+  api.post('/inventory/spools/labels', data, { responseType: 'blob' });
+
+// ============================================================================
 // Cola de impresión (Queue)
 // ============================================================================
 
@@ -680,6 +794,67 @@ export const updateQueueStatus = (id, data) => api.put(`/queue/${id}/status`, da
 /** Elimina un ítem de la cola (solo si pending o cancelled). */
 export const deleteQueueItem = (id) => api.delete(`/queue/${id}`);
 
+/**
+ * Reordena la cola por drag-and-drop (issue #133). `itemIds` debe ser la
+ * lista COMPLETA de ids `pending` actuales, en el nuevo orden deseado.
+ */
+export const reorderQueue = (itemIds) => api.put('/queue/reorder', { item_ids: itemIds });
+
+/** Agrupa ≥2 ítems pending como lote — devuelve los items con batch_id asignado. */
+export const createQueueBatch = (itemIds) => api.post('/queue/batch', { item_ids: itemIds });
+
+/** Desagrupa un lote — pone batch_id=NULL a todos sus miembros. */
+export const deleteQueueBatch = (batchId) => api.delete(`/queue/batch/${batchId}`);
+
+/** Clona un ítem de la cola como uno nuevo pending al final. */
+export const duplicateQueueItem = (id) => api.post(`/queue/${id}/duplicate`);
+
+/** Programa (o quita programación de, con `null`) un ítem. Puramente organizativo. */
+export const scheduleQueueItem = (id, scheduledAt) =>
+  api.put(`/queue/${id}/schedule`, { scheduled_at: scheduledAt });
+
+/**
+ * Bitácora global de impresiones (issue #131) — TODOS los estados, con
+ * filtros + paginación server-side. Endpoint separado de `getQueueHistory`
+ * (que solo trae done/cancelled para el tab Historial de QueuePage).
+ *
+ * @param {Object} params
+ * @param {string} [params.q]
+ * @param {number} [params.printer_id]
+ * @param {string} [params.status] - CSV, ej. 'done,cancelled'
+ * @param {number} [params.user_id]
+ * @param {string} [params.date_from] - 'YYYY-MM-DD'
+ * @param {string} [params.date_to]   - 'YYYY-MM-DD'
+ * @param {number} [params.page=1]
+ * @param {number} [params.page_size=25]
+ */
+export const getPrintLog = (params) => api.get('/queue/log', { params });
+
+/**
+ * Descarga el CSV del log filtrado (set COMPLETO, sin paginar) y dispara
+ * el guardado en el navegador. No usa un `<a href>` directo porque la
+ * API se autentica con JWT Bearer vía interceptor de axios — un link
+ * plano no llevaría el header y el request daría 401. En vez de eso,
+ * pide el CSV como blob (con el token ya inyectado por el interceptor)
+ * y simula el click en un `<a>` temporal con `URL.createObjectURL`.
+ *
+ * @param {Object} params - Mismos filtros que `getPrintLog` (sin page/page_size).
+ */
+export const downloadPrintLogCsv = async (params) => {
+  const res = await api.get('/queue/log', {
+    params: { ...params, format: 'csv' },
+    responseType: 'blob',
+  });
+  const url = URL.createObjectURL(res.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'print_log.csv';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
+
 // ============================================================================
 // Vault — archivos .3mf
 // ============================================================================
@@ -712,7 +887,39 @@ export const uploadVaultFile = (formData, onUploadProgress) =>
   api.post('/vault/upload', formData, { onUploadProgress });
 
 /**
- * Descarga el .3mf editable de un modelo. 404 si el modelo no lo tiene.
+ * Sube un `.zip` y extrae su contenido al Vault, replicando la estructura
+ * de subcarpetas (issue #127). Solo procesa `.3mf`/`.stl`/`.gcode.3mf` —
+ * el resto se ignora en silencio.
+ *
+ * @param {File} file - El `.zip`
+ * @param {Object} [opts]
+ * @param {number|null} [opts.folderId] - Carpeta destino (null = raíz)
+ * @param {boolean} [opts.createFolder] - Si true, crea una carpeta nueva con el nombre del ZIP
+ * @param {Function} [onUploadProgress]
+ */
+export const uploadVaultZip = (file, { folderId, createFolder } = {}, onUploadProgress) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (folderId != null) formData.append('folder_id', String(folderId));
+  formData.append('create_folder', createFolder ? 'true' : 'false');
+  return api.post('/vault/upload-zip', formData, { onUploadProgress });
+};
+
+/**
+ * Chequea si `sha256` (calculado client-side con `hashFile`, issue #128)
+ * ya existe en algún archivo del Vault. `{duplicate, file?: {id, name}}`.
+ * @param {string} sha256
+ */
+export const checkVaultDuplicate = (sha256) => api.post('/vault/check-duplicate', { sha256 });
+
+/**
+ * Corre un lote de backfill de hashes en archivos ya existentes que no
+ * lo tienen. `{processed, remaining}` — llamar repetido hasta remaining=0.
+ */
+export const backfillVaultHashes = () => api.post('/vault/backfill-hashes');
+
+/**
+ * Descarga el .3mf/.stl editable de un modelo. 404 si el modelo no lo tiene.
  * @param {number} id - ID del archivo en el Vault
  */
 export const downloadVaultSource = (id) =>
@@ -724,6 +931,15 @@ export const downloadVaultSource = (id) =>
  */
 export const downloadVaultPrint = (id) =>
   api.get(`/vault/${id}/download/print`, { responseType: 'blob' });
+
+/**
+ * Extrae el G-code plano del plate activo de un `.gcode.3mf` (issue #129).
+ * Usado por el visor `GCodeViewerModal` (gcode-preview). 404 si el modelo
+ * no tiene print_file, 413 si el G-code supera 80 MB.
+ * @param {number} id - ID del archivo en el Vault
+ */
+export const getVaultGcodeContent = (id) =>
+  api.get(`/vault/${id}/gcode-content`, { responseType: 'text' });
 
 /**
  * Obtiene un solo archivo del Vault por ID. Usado por el editor para
@@ -747,6 +963,47 @@ export const setActiveVaultPlate = (id, plateIndex) =>
  * @param {Object} data - Campos a actualizar
  */
 export const updateVaultFile = (id, data) => api.put(`/vault/${id}`, data);
+
+/**
+ * Historial de impresiones de un modelo del Vault + gramos totales y tasa
+ * de éxito agregados (issue #130).
+ * @param {number} id - ID del archivo en el Vault
+ */
+export const getVaultPrintHistory = (id) => api.get(`/vault/${id}/print-history`);
+
+/**
+ * Lista las fotos adjuntas a un modelo del Vault.
+ * @param {number} id - ID del archivo en el Vault
+ */
+export const getVaultPhotos = (id) => api.get(`/vault/${id}/photos`);
+
+/**
+ * Sube hasta 5 fotos para un modelo del Vault (solo admins).
+ * @param {number} id - ID del archivo en el Vault
+ * @param {File[]} files - Archivos de imagen (jpeg/png/webp/gif, máx 10MB c/u)
+ * @param {Function} [onUploadProgress]
+ */
+export const uploadVaultPhotos = (id, files, onUploadProgress) => {
+  const formData = new FormData();
+  for (const file of files) formData.append('files', file);
+  return api.post(`/vault/${id}/photos`, formData, { onUploadProgress });
+};
+
+/**
+ * Edita el caption de una foto ya subida (solo admins).
+ * @param {number} id - ID del archivo en el Vault
+ * @param {number} photoId
+ * @param {string|null} caption
+ */
+export const updateVaultPhotoCaption = (id, photoId, caption) =>
+  api.patch(`/vault/${id}/photos/${photoId}`, { caption });
+
+/**
+ * Elimina una foto de un modelo del Vault (solo admins).
+ * @param {number} id - ID del archivo en el Vault
+ * @param {number} photoId
+ */
+export const deleteVaultPhoto = (id, photoId) => api.delete(`/vault/${id}/photos/${photoId}`);
 
 /**
  * Reemplaza el slot `source` (.3mf editable) conservando metadatos. Solo admins.
@@ -773,10 +1030,255 @@ export const replaceVaultPrint = (id, file, onUploadProgress) => {
 };
 
 /**
- * Elimina un archivo del Vault y su objeto en MinIO (solo admins).
+ * Mueve un archivo del Vault a la papelera (soft-delete, solo admins).
+ * Los bytes en MinIO no se borran — eso pasa recién en `purgeVaultFile`.
  * @param {number} id - ID del archivo
  */
 export const deleteVaultFile = (id) => api.delete(`/vault/${id}`);
+
+// ── Tags del Vault ───────────────────────────────────────────────────────────
+
+/** Lista el catálogo de tags del Vault (con conteo de archivos activos). */
+export const getVaultTags = () => api.get('/vault/tags');
+
+/** Crea un tag nuevo en el catálogo (solo admins). */
+export const createVaultTag = (name) => api.post('/vault/tags', { name });
+
+/** Renombra un tag existente — aplica a todos los archivos que lo usan (solo admins). */
+export const updateVaultTag = (id, name) => api.patch(`/vault/tags/${id}`, { name });
+
+/** Elimina un tag del catálogo (no borra los archivos, solo la etiqueta) (solo admins). */
+export const deleteVaultTag = (id) => api.delete(`/vault/tags/${id}`);
+
+// ── Papelera del Vault ───────────────────────────────────────────────────────
+
+/** Lista los archivos en la papelera (paginado). */
+export const getVaultTrash = (params) => api.get('/vault/trash', { params });
+
+/** Restaura un archivo de la papelera (solo admins). */
+export const restoreVaultFile = (id) => api.post(`/vault/trash/${id}/restore`);
+
+/** Borrado permanente: bytes de MinIO + fila. Solo si ya está en la papelera (solo admins). */
+export const purgeVaultFile = (id) => api.delete(`/vault/trash/${id}`);
+
+/** Vacía toda la papelera — borrado permanente de todo lo que hay en ella (solo admins). */
+export const emptyVaultTrash = () => api.delete('/vault/trash');
+
+// ── Carpetas del Vault ──────────────────────────────────────────────────────
+
+/** Lista todas las carpetas del Vault (plana, con parent_id + file_count). */
+export const getVaultFolders = () => api.get('/vault/folders');
+
+/**
+ * Crea una carpeta nueva. Solo admins.
+ * @param {{name: string, parent_id?: number|null}} data
+ */
+export const createVaultFolder = (data) => api.post('/vault/folders', data);
+
+/**
+ * Renombra y/o mueve una carpeta. Solo admins.
+ * `move_to_root: true` es la única forma de poner parent_id=null.
+ * @param {number} id
+ * @param {{name?: string, parent_id?: number, move_to_root?: boolean}} data
+ */
+export const updateVaultFolder = (id, data) => api.put(`/vault/folders/${id}`, data);
+
+/** Elimina una carpeta (sus archivos suben a la raíz; subcarpetas se borran en cascada). Solo admins. */
+export const deleteVaultFolder = (id) => api.delete(`/vault/folders/${id}`);
+
+// ============================================================================
+// Filament Profiles — parámetros de slicer por filamento (referencia)
+// ============================================================================
+
+/**
+ * Obtiene el perfil de slicer de un filamento. 404 si no tiene uno guardado
+ * — el caller debe capturar el error y tratarlo como "sin perfil todavía".
+ * @param {number} inventoryItemId
+ */
+export const getFilamentProfile = (inventoryItemId) =>
+  api.get(`/filament-profiles/${inventoryItemId}`);
+
+/**
+ * Crea o actualiza (upsert) el perfil de slicer de un filamento.
+ * @param {number} inventoryItemId
+ * @param {Object} data - Campos de FilamentProfileUpsert
+ */
+export const upsertFilamentProfile = (inventoryItemId, data) =>
+  api.put(`/filament-profiles/${inventoryItemId}`, data);
+
+/** Elimina el perfil de slicer de un filamento. */
+export const deleteFilamentProfile = (inventoryItemId) =>
+  api.delete(`/filament-profiles/${inventoryItemId}`);
+
+// ============================================================================
+// Proyectos — agrupador de ítems de la cola de impresión
+// ============================================================================
+
+/** Lista todos los proyectos con conteo de items de cola por estado. */
+export const getProjects = () => api.get('/projects/');
+
+/**
+ * Crea un proyecto nuevo.
+ * @param {{name: string, client_name?: string, notes?: string}} data
+ */
+export const createProject = (data) => api.post('/projects/', data);
+
+/** Detalle de un proyecto (con progreso agregado). */
+export const getProject = (id) => api.get(`/projects/${id}`);
+
+/** Lista los ítems de cola (cualquier estado) asociados al proyecto. */
+export const getProjectItems = (id) => api.get(`/projects/${id}/items`);
+
+/**
+ * Edita nombre/cliente/estado/notas de un proyecto.
+ * @param {number} id
+ * @param {Object} data - Campos de ProjectUpdate
+ */
+export const updateProject = (id, data) => api.put(`/projects/${id}`, data);
+
+/** Elimina un proyecto (los items de cola quedan sin agrupar). */
+export const deleteProject = (id) => api.delete(`/projects/${id}`);
+
+/** Sube/reemplaza la foto de portada de un proyecto (issue #136). @param {File} file */
+export const uploadProjectCover = (id, file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api.post(`/projects/${id}/cover`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+
+/**
+ * URL directa del proxy de portada — usar como `src` de `<img>` (no pasa
+ * por axios, el `<img>` no puede mandar el header Authorization; el
+ * endpoint es público en el backend por eso mismo). `updatedAt` como
+ * cache-buster para que un reemplazo de portada invalide la caché.
+ */
+export const getProjectCoverUrl = (id, updatedAt) =>
+  `/api/projects/${id}/cover${updatedAt ? `?v=${encodeURIComponent(updatedAt)}` : ''}`;
+
+// ─── Vínculo a Vault (issue #136, sub-ticket 2/3) ──────────────────────────
+
+/** Archivos de Vault vinculados al proyecto (vista mínima, read-only). */
+export const getProjectFiles = (id) => api.get(`/projects/${id}/files`);
+
+/** Añade archivos al puente proyecto↔Vault (idempotente). @param {number[]} modelFileIds */
+export const addProjectFiles = (id, modelFileIds) =>
+  api.post(`/projects/${id}/files`, { model_file_ids: modelFileIds });
+
+/** Quita un archivo del puente (no borra el archivo de Vault). */
+export const removeProjectFile = (id, modelFileId) =>
+  api.delete(`/projects/${id}/files/${modelFileId}`);
+
+// ─── Export / Import (issue #136, sub-ticket 3/3) ──────────────────────────
+
+/**
+ * Descarga el ZIP del proyecto (manifest.json + binarios) y dispara el
+ * guardado en el navegador. Mismo criterio que `downloadPrintLogCsv`
+ * (issue #131): blob + `<a>` temporal, porque un `<a href>` directo no
+ * llevaría el JWT Bearer.
+ */
+export const exportProject = async (id, name) => {
+  const res = await api.get(`/projects/${id}/export`, { responseType: 'blob' });
+  const url = URL.createObjectURL(res.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `project-${id}-${(name || 'proyecto').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.zip`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
+
+/** Recrea un proyecto desde un ZIP exportado con `exportProject`. @param {File} file */
+export const importProject = (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api.post('/projects/import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+
+/**
+ * (Re)asigna o quita (projectId=null) el proyecto de un ítem ya encolado.
+ * @param {number} itemId
+ * @param {number|null} projectId
+ */
+export const assignQueueItemProject = (itemId, projectId) =>
+  api.put(`/queue/${itemId}/project`, { project_id: projectId });
+
+// ─── Notificaciones multi-canal (issue #137) ───────────────────────────────
+
+/** Matriz de eventos disponibles para suscribir canales. */
+export const getNotificationEvents = () => api.get('/notifications/events');
+
+export const getNotificationChannels = () => api.get('/notifications/channels');
+
+export const createNotificationChannel = (data) => api.post('/notifications/channels', data);
+
+export const updateNotificationChannel = (id, data) => api.put(`/notifications/channels/${id}`, data);
+
+export const deleteNotificationChannel = (id) => api.delete(`/notifications/channels/${id}`);
+
+/** Envía un mensaje de prueba real por el canal. Devuelve `{ok, error}` — nunca lanza por fallo del canal. */
+export const testNotificationChannel = (id) => api.post(`/notifications/channels/${id}/test`);
+
+export const getNotificationTemplate = (event) => api.get(`/notifications/templates/${event}`);
+
+export const updateNotificationTemplate = (event, body) =>
+  api.put(`/notifications/templates/${event}`, { body });
+
+export const previewNotificationTemplate = (event, body) =>
+  api.post(`/notifications/templates/${event}/preview`, { body });
+
+// ─── MakerWorld / Bambu Cloud (issue #139) ─────────────────────────────────
+
+export const getMakerworldAuthStatus = () => api.get('/makerworld/auth/status');
+
+export const loginMakerworld = (email, password) =>
+  api.post('/makerworld/auth/login', { email, password });
+
+export const verifyMakerworld = (code, tfaKey) =>
+  api.post('/makerworld/auth/verify', { code, tfa_key: tfaKey || undefined });
+
+export const logoutMakerworld = () => api.delete('/makerworld/auth');
+
+export const resolveMakerworldUrl = (url) => api.post('/makerworld/resolve', { url });
+
+export const importMakerworldInstance = (designId, profileId, folderId) =>
+  api.post('/makerworld/import', { design_id: designId, profile_id: profileId, folder_id: folderId });
+
+export const importAllMakerworld = (designId, folderId) =>
+  api.post('/makerworld/import-all', { design_id: designId, folder_id: folderId });
+
+export const getMakerworldRecent = (limit = 10) => api.get(`/makerworld/recent?limit=${limit}`);
+
+/** URL del proxy de thumbnail (evita hotlink directo al CDN de MakerWorld). */
+export const makerworldThumbnailUrl = (url) =>
+  `/api/makerworld/thumbnail?url=${encodeURIComponent(url)}`;
+
+// ─── System Info (issue #140, pieza C) ─────────────────────────────────────
+
+export const getSystemInfo = () => api.get('/system/info');
+
+export const getSystemLogs = (level, limit = 200) =>
+  api.get('/system/logs', { params: { level: level || undefined, limit } });
+
+/** Descarga el dump de la BD (`pg_dump -Fc`) y dispara el guardado en el navegador. */
+export const downloadSystemBackup = async () => {
+  const res = await api.get('/system/backup', { responseType: 'blob' });
+  const disposition = res.headers['content-disposition'] || '';
+  const match = disposition.match(/filename="([^"]+)"/);
+  const filename = match ? match[1] : `cfs-backup-${Date.now()}.dump`;
+  const url = URL.createObjectURL(res.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
 
 export default api;
 

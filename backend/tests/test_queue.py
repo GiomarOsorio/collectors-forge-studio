@@ -212,3 +212,239 @@ class TestQueueStatusValidation:
             _clear_overrides()
         # 'pending' no es un destino válido; 'done_already', '', 'DONE' tampoco
         assert r.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# 3b. failure_reason / failure_category al cancelar (issue #130)
+# ---------------------------------------------------------------------------
+
+def _fake_db_pending_item_no_source(item_id=1):
+    """
+    Item 'pending' sin quote_id/vault_model_id/piece_name — la transición a
+    'cancelled' es válida y `_build_response` no dispara queries extra
+    (ambos snapshots quedan None).
+    """
+    fake_item = MagicMock()
+    fake_item.id = item_id
+    fake_item.status = "pending"
+    fake_item.quote_id = None
+    fake_item.vault_model_id = None
+    fake_item.project_id = None
+    fake_item.piece_name = None
+    fake_item.printer_id = None
+    fake_item.position = 0
+    fake_item.started_at = None
+    fake_item.completed_at = None
+    fake_item.notes = None
+    fake_item.failure_reason = None
+    fake_item.failure_category = None
+    fake_item.batch_id = None
+    fake_item.scheduled_at = None
+    fake_item.created_by = None
+
+    async def _gen():
+        session = AsyncMock()
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = fake_item
+        session.execute.return_value = result
+        yield session
+
+    return _gen, fake_item
+
+
+class TestQueueCancelFailureReason:
+    async def test_cancelar_con_motivo_lo_guarda(self):
+        db_gen, fake_item = _fake_db_pending_item_no_source()
+        _set_overrides({get_db: db_gen, get_current_user: lambda: _fake_user()})
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.put(
+                    "/api/queue/1/status",
+                    json={
+                        "status": "cancelled",
+                        "failure_reason": "Se despegó de la cama en capa 40",
+                        "failure_category": "adhesion",
+                    },
+                )
+        finally:
+            _clear_overrides()
+        assert r.status_code == 200
+        assert fake_item.failure_reason == "Se despegó de la cama en capa 40"
+        assert fake_item.failure_category == "adhesion"
+        body = r.json()
+        assert body["failure_reason"] == "Se despegó de la cama en capa 40"
+        assert body["failure_category"] == "adhesion"
+
+    async def test_cancelar_sin_motivo_no_bloquea(self):
+        """failure_reason/category son opcionales — cancelar sin ellos sigue 200."""
+        db_gen, fake_item = _fake_db_pending_item_no_source()
+        _set_overrides({get_db: db_gen, get_current_user: lambda: _fake_user()})
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.put("/api/queue/1/status", json={"status": "cancelled"})
+        finally:
+            _clear_overrides()
+        assert r.status_code == 200
+        assert fake_item.failure_reason is None
+        assert fake_item.failure_category is None
+
+    async def test_failure_category_invalida_retorna_422(self):
+        """failure_category solo acepta las 6 categorías fijas."""
+        _set_overrides({get_db: _fake_db_empty, get_current_user: lambda: _fake_user()})
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.put(
+                    "/api/queue/1/status",
+                    json={"status": "cancelled", "failure_category": "not_a_real_category"},
+                )
+        finally:
+            _clear_overrides()
+        assert r.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# 4. Asignación de proyecto (PUT /{id}/project)
+# ---------------------------------------------------------------------------
+
+def _fake_db_item_found_project_missing(item_id=1):
+    """
+    Primera query (_get_item) devuelve un item fake; la segunda (buscar el
+    Project) devuelve None — simula "item existe, proyecto no".
+    """
+    fake_item = MagicMock()
+    fake_item.id = item_id
+    fake_item.project_id = None
+
+    async def _gen():
+        session = AsyncMock()
+        result_item = MagicMock()
+        result_item.scalar_one_or_none.return_value = fake_item
+        result_missing = MagicMock()
+        result_missing.scalar_one_or_none.return_value = None
+        session.execute.side_effect = [result_item, result_missing]
+        yield session
+
+    return _gen
+
+
+class TestQueueProjectAssignment:
+    """Cubre PUT /api/queue/{id}/project — (re)asignar proyecto a un item."""
+
+    async def test_assign_project_item_no_encontrado_retorna_404(self):
+        _set_overrides({
+            get_db: _fake_db_empty,
+            get_current_user: lambda: _fake_user(),
+        })
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.put("/api/queue/999/project", json={"project_id": 1})
+        finally:
+            _clear_overrides()
+        assert r.status_code == 404
+
+    async def test_assign_project_proyecto_no_encontrado_retorna_404(self):
+        """Item existe pero el project_id dado no corresponde a ningún proyecto."""
+        _set_overrides({
+            get_db: _fake_db_item_found_project_missing(),
+            get_current_user: lambda: _fake_user(),
+        })
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.put("/api/queue/1/project", json={"project_id": 999})
+        finally:
+            _clear_overrides()
+        assert r.status_code == 404
+
+    async def test_assign_project_sin_token_retorna_401(self):
+        _set_overrides({get_db: _fake_db_empty})
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.put("/api/queue/1/project", json={"project_id": 1})
+        finally:
+            _clear_overrides()
+        assert r.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# 5. project_id opcional al crear un item (POST / y POST /from-vault)
+# ---------------------------------------------------------------------------
+
+def _fake_db_quote_found_project_missing():
+    """Quote existe (POST /); el project_id dado no corresponde a nada."""
+    fake_quote = MagicMock()
+    fake_quote.id = 1
+
+    async def _gen():
+        session = AsyncMock()
+        result_quote = MagicMock()
+        result_quote.scalar_one_or_none.return_value = fake_quote
+        result_missing = MagicMock()
+        result_missing.scalar_one_or_none.return_value = None
+        session.execute.side_effect = [result_quote, result_missing]
+        yield session
+
+    return _gen
+
+
+def _fake_db_vault_model_and_printer_found_project_missing():
+    """Modelo del Vault + impresora existen (POST /from-vault); proyecto no."""
+    fake_model = MagicMock()
+    fake_model.id = 1
+    fake_model.print_file_key = "some-key.gcode.3mf"
+    fake_model.sliced_time_seconds = None
+    fake_model.sliced_weight_g = None
+    fake_model.name = "Modelo de prueba"
+
+    fake_printer = MagicMock()
+    fake_printer.id = 1
+
+    async def _gen():
+        session = AsyncMock()
+        result_model = MagicMock()
+        result_model.scalar_one_or_none.return_value = fake_model
+        result_printer = MagicMock()
+        result_printer.scalar_one_or_none.return_value = fake_printer
+        result_missing = MagicMock()
+        result_missing.scalar_one_or_none.return_value = None
+        session.execute.side_effect = [result_model, result_printer, result_missing]
+        yield session
+
+    return _gen
+
+
+class TestQueueCreateWithProject:
+    """POST / y POST /from-vault validan project_id si viene en el body."""
+
+    async def test_post_queue_project_id_no_encontrado_retorna_404(self):
+        _set_overrides({
+            get_db: _fake_db_quote_found_project_missing(),
+            get_current_user: lambda: _fake_user(),
+        })
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.post(
+                    "/api/queue/", json={"quote_id": 1, "project_id": 999}
+                )
+        finally:
+            _clear_overrides()
+        assert r.status_code == 404
+
+    async def test_post_queue_from_vault_project_id_no_encontrado_retorna_404(self):
+        _set_overrides({
+            get_db: _fake_db_vault_model_and_printer_found_project_missing(),
+            get_current_user: lambda: _fake_user(),
+        })
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.post(
+                    "/api/queue/from-vault",
+                    json={
+                        "vault_model_id": 1,
+                        "printer_id": 1,
+                        "quantity": 1,
+                        "project_id": 999,
+                    },
+                )
+        finally:
+            _clear_overrides()
+        assert r.status_code == 404

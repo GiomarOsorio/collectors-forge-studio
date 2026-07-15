@@ -1,0 +1,7 @@
+name: "Collector's Forge Studio CodeQL Configuration"
+
+# Sin exclusiones todavía — a diferencia de un proyecto hermano (bambuddy-cfs)
+# que acumuló exclusiones documentadas tras revisar cada falso positivo real
+# en SU propio código, este es el primer run de CodeQL sobre CFS. Cualquier
+# exclusión debe agregarse acá solo después de revisar el finding real y
+# confirmar que es un falso positivo — no copiarse de otro repo a ciegas.

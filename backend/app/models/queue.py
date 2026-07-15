@@ -19,6 +19,7 @@ Al marcar como 'done' se descuenta el inventario del filamento elegido y
 se suman las horas a la impresora — funciona para ambos caminos.
 """
 
+import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
@@ -32,6 +33,7 @@ from sqlalchemy import (
     String,
     text,
 )
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -57,6 +59,9 @@ class PrintQueueItem(Base):
         printer_id:               FK a printers.id (solo vault items; en quote items
                                   se deriva del quote.printer_id).
         filament_id:              FK opcional a inventory_items.id (solo vault items).
+        spool_id:                 FK opcional a spools.id — bobina física a consumir
+                                  (issue #134, solo vault items). Si está seteada,
+                                  reemplaza el descuento agregado de filament_id.
         quantity:                 Cantidad de copias (solo vault items; quote items
                                   usan quote.quantity).
         weight_grams:             Peso por copia (solo vault items; quote items
@@ -67,6 +72,11 @@ class PrintQueueItem(Base):
         started_at:               Momento en que pasó a 'printing'.
         completed_at:             Momento en que pasó a 'done' o 'cancelled'.
         notes:                    Notas libres sobre el trabajo.
+        failure_reason:           Motivo de cancelación en texto libre (opcional).
+        failure_category:         Categoría fija del motivo de cancelación (opcional).
+        batch_id:                 UUID compartido entre items agrupados como lote (opcional).
+        scheduled_at:             Fecha/hora organizativa de impresión (opcional, no dispara nada).
+        created_by:               FK al usuario que creó el item (opcional — NULL en items pre-#131).
         created_at:               Timestamp UTC de creación.
     """
 
@@ -108,12 +118,27 @@ class PrintQueueItem(Base):
         ForeignKey("inventory_items.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # Bobina física específica a consumir (issue #134). Si está seteada,
+    # el descuento al marcar 'done' va SOLO a `Spool.remaining_weight_g`
+    # — el descuento agregado normal de `filament_id` se omite para ese
+    # item (ver docstring de `Spool` para la regla completa).
+    spool_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("spools.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     quantity: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     weight_grams: Mapped[Optional[Decimal]] = mapped_column(
         Numeric(10, 2), nullable=True
     )
     print_time_hours: Mapped[Optional[Decimal]] = mapped_column(
         Numeric(10, 4), nullable=True
+    )
+
+    # ── Proyecto (agrupador opcional, aplica a items de cualquier fuente) ──
+    project_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
     # ── Estado de cola ──────────────────────────────────────────────────────
@@ -126,6 +151,32 @@ class PrintQueueItem(Base):
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
+    # ── Motivo de cancelación (issue #130) — opcional, solo aplica cuando
+    # status='cancelled'. Alimenta el historial por modelo del Vault y el
+    # futuro epic de Stats. failure_category es una de 6 categorías fijas
+    # (ver schemas.queue.FailureCategory); failure_reason es texto libre.
+    failure_reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    failure_category: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+
+    # ── Queue avanzada (issue #133) ─────────────────────────────────────────
+    # batch_id: UUID compartido entre items agrupados como "lote" en la UI
+    # (agrupar/desagrupar es puramente organizativo, no afecta el flujo de
+    # estados). scheduled_at: fecha/hora organizativa — NO dispara nada
+    # automático (CFS no habla con la impresora); solo ordena la vista y
+    # marca "atrasado" si pasó y sigue pending.
+    batch_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
+    scheduled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    # ── Print Log (issue #131) ──────────────────────────────────────────────
+    # Usuario que creó el item (add_to_queue / add_to_queue_from_vault).
+    # Nullable: items pre-existentes a esta migración quedan sin atribución.
+    created_by: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),

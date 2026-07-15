@@ -60,12 +60,30 @@ class Settings(BaseSettings):
     OIDC_REDIRECT_URI: str = ""       # https://3d.turtledev.dev/api/auth/oidc/callback
     SESSION_SECRET_KEY: str = ""      # clave para SessionMiddleware; usa SECRET_KEY si está vacía
 
+    # Bypass de login exclusivo para el deploy de dev (nunca seteado en prod)
+    # — el redirect_uri de OIDC en dev coincide con el de prod (Infisical solo
+    # tiene el environment "prod" poblado, ver service-deployments/deploy.sh),
+    # así que el flujo OIDC real no funciona ahí. Ver routers/oidc.py.
+    DEV_LOGIN_ENABLED: bool = False
+
     # MinIO (Vault)
     MINIO_ENDPOINT: str = "http://cfs-minio:9000"
     MINIO_ACCESS_KEY: str = "minioadmin"
     MINIO_SECRET_KEY: str = "minioadmin"
     MINIO_BUCKET: str = "cfs-models"
     VAULT_QUOTA_GB: int = 50
+
+    # URL pública de la instancia (issue #135) — el deep-link del QR de las
+    # etiquetas de bobinas necesita la URL que un teléfono puede alcanzar de
+    # verdad. En prod, `request.url` cae detrás del Cloudflare Tunnel y
+    # puede resolver a una dirección interna; con PUBLIC_URL seteado se usa
+    # ese valor en vez de adivinar desde el request. Vacío = usar
+    # `request.url.scheme://request.url.netloc` (suficiente en dev).
+    PUBLIC_URL: str = ""
+
+    # SHA del commit embebido en el build (issue #140, system info) — el
+    # Containerfile lo inyecta vía --build-arg GIT_SHA. Vacío en dev local.
+    GIT_SHA: str = ""
 
     model_config = {"env_file": ".env"}
 

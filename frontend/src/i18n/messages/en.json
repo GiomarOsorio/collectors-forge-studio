@@ -31,17 +31,34 @@
     "tabs": {
       "account": "Account",
       "users": "Users",
-      "language": "Language"
+      "language": "Language",
+      "appearance": "Appearance"
     },
     "language": {
       "title": "Interface language",
       "description": "Pick the language used across the app. Applies instantly.",
       "current": "Current language"
+    },
+    "appearance": {
+      "title": "Appearance",
+      "description": "Choose how the app looks. \"System\" follows your device's preference.",
+      "current": "Current theme",
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
     }
   },
   "auth": {
     "logout": "Log out",
     "login": "Sign in",
     "bypassDev": "Bypass dev (local development only)"
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "help": "Show this help",
+    "navigation": "Navigation",
+    "navigationHint": "Press {{g}} then the letter",
+    "search": "Focus search",
+    "closeHint": "or click outside to close"
   }
 }

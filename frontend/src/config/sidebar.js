@@ -11,18 +11,24 @@
 import {
   Archive,
   ArrowLeftRight,
+  BarChart3,
   Building2,
   Calculator,
   Clock,
+  Disc,
   FileEdit,
   FileText,
+  FolderKanban,
   Layers,
   LayoutDashboard,
   ListOrdered,
   Package,
   Printer,
+  ScrollText,
   Settings,
   ShoppingCart,
+  TrendingUp,
+  Trash,
   Upload,
   Wrench,
 } from 'lucide-react';
@@ -75,6 +81,7 @@ export const SIDEBAR_APPS = [
       { to: '/inventory',           icon: Layers,         label: 'Resumen', end: true },
       { to: '/inventory/purchases', icon: ShoppingCart,   label: 'Pedidos' },
       { to: '/inventory/prints',    icon: Printer,        label: 'Disponible para venta' },
+      { to: '/inventory/spools',    icon: Disc,           label: 'Bobinas' },
       { to: '/inventory/io',        icon: ArrowLeftRight, label: 'Importar / Exportar' },
     ],
   },
@@ -98,6 +105,7 @@ export const SIDEBAR_APPS = [
     badgeKey: 'pendingQueue',
     items: [
       { to: '/queue', icon: ListOrdered, label: 'Cola', end: true },
+      { to: '/queue/log', icon: ScrollText, label: 'Bitácora' },
     ],
   },
   {
@@ -109,6 +117,27 @@ export const SIDEBAR_APPS = [
     items: [
       { to: '/vault',        icon: Archive, label: 'Galería', end: true },
       { to: '/vault/upload', icon: Upload,  label: 'Subir modelo', adminOnly: true },
+      { to: '/vault/trash',  icon: Trash,   label: 'Papelera' },
+    ],
+  },
+  {
+    id: 'projects',
+    name: 'Proyectos',
+    icon: FolderKanban,
+    color: '#F59E0B',
+    activeClass: 'bg-amber-500/15 text-amber-400',
+    items: [
+      { to: '/projects', icon: FolderKanban, label: 'Proyectos', end: true },
+    ],
+  },
+  {
+    id: 'stats',
+    name: 'Stats',
+    icon: BarChart3,
+    color: '#06B6D4',
+    activeClass: 'bg-cyan-500/15 text-cyan-400',
+    items: [
+      { to: '/stats', icon: TrendingUp, label: 'Dashboard', end: true },
     ],
   },
   {

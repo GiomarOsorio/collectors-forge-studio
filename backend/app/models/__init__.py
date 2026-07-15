@@ -38,15 +38,34 @@ from app.models.inventory_category import InventoryCategory
 from app.models.purchase_order import PurchaseOrder, PurchaseOrderItem
 from app.models.printed_item import PrintedItem
 from app.models.maintenance import MaintenanceLog, MaintenanceLogItem
+from app.models.maintenance_schedule import MaintenanceSchedule
 from app.models.queue import PrintQueueItem
+from app.models.vault_tag import VaultTag
 from app.models.model_file import ModelFile, ModelFilePlate
+from app.models.model_file_photo import ModelFilePhoto
+from app.models.vault_folder import VaultFolder
+from app.models.filament_profile import FilamentProfile
+from app.models.project import Project
+from app.models.spool import Spool
+from app.models.notification import (
+    NotificationChannel, NotificationTemplate, NotificationDigestQueue,
+)
+from app.models.bambu_cloud_auth import BambuCloudAuth
+from app.models.makerworld_import import MakerworldImport
 
 __all__ = [
     "Company", "CompanyTemplate", "User", "Filament", "Printer", "AppSettings",
     "Quote", "ClientQuote", "Supply", "ElectricityTariff",
     "InventoryItem", "InventoryCategory", "PurchaseOrder", "PurchaseOrderItem",
     "PrintedItem",
-    "MaintenanceLog", "MaintenanceLogItem",
+    "MaintenanceLog", "MaintenanceLogItem", "MaintenanceSchedule",
     "PrintQueueItem",
-    "ModelFile", "ModelFilePlate",
+    "VaultTag",
+    "ModelFile", "ModelFilePlate", "ModelFilePhoto",
+    "VaultFolder",
+    "FilamentProfile",
+    "Project",
+    "Spool",
+    "NotificationChannel", "NotificationTemplate", "NotificationDigestQueue",
+    "BambuCloudAuth", "MakerworldImport",
 ]

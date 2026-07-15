@@ -9,11 +9,18 @@ Cada response trae uno de los dos no-nulo (los items pre-existentes solo
 traen `quote`; los nuevos desde el picker traen `vault`).
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Annotated, Optional
+from typing import Annotated, List, Literal, Optional
+from uuid import UUID
 
-from pydantic import BaseModel, Field, PlainSerializer
+from pydantic import BaseModel, Field, PlainSerializer, model_validator
+
+#: Categorías de motivo de fallo (issue #130) — alimentan el historial
+#: por modelo del Vault y el futuro epic de Stats.
+FailureCategory = Literal[
+    "adhesion", "clog", "filament_runout", "power_loss", "layer_shift", "other"
+]
 
 DecimalAsFloat = Annotated[
     Decimal,
@@ -26,6 +33,7 @@ class PrintQueueItemCreate(BaseModel):
 
     quote_id: int
     notes: Optional[str] = None
+    project_id: Optional[int] = None
 
 
 class PrintQueueItemFromVaultCreate(BaseModel):
@@ -38,8 +46,18 @@ class PrintQueueItemFromVaultCreate(BaseModel):
     vault_model_id: int
     printer_id: int
     filament_id: Optional[int] = None
+    #: Bobina física específica a consumir (issue #134). Si se setea, el
+    #: descuento al marcar 'done' va SOLO a esta bobina — reemplaza el
+    #: descuento agregado normal de `filament_id`.
+    spool_id: Optional[int] = None
     quantity: int = Field(default=1, ge=1, le=999)
     notes: Optional[str] = None
+    project_id: Optional[int] = None
+    #: Si True y quantity > 1, crea `quantity` items independientes
+    #: (quantity=1 cada uno) compartiendo un `batch_id` autogenerado, en
+    #: vez de un solo item con quantity=N. Permite repartir copias entre
+    #: impresoras/horarios distintos (issue #133).
+    split_copies: bool = False
 
 
 class QueueQuoteSnapshot(BaseModel):
@@ -75,6 +93,10 @@ class QueueVaultSnapshot(BaseModel):
     print_time_hours: Optional[DecimalAsFloat]
     quantity: int
     print_file_name: Optional[str] = None
+    # Bobina física asignada (issue #134) — reemplaza el descuento agregado.
+    spool_id: Optional[int] = None
+    spool_label_code: Optional[str] = None
+    spool_percent_remaining: Optional[float] = None
 
 
 class PrintQueueItemResponse(BaseModel):
@@ -83,19 +105,97 @@ class PrintQueueItemResponse(BaseModel):
     id: int
     quote_id: Optional[int]
     vault_model_id: Optional[int] = None
+    project_id: Optional[int] = None
     status: str
     position: int
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
     notes: Optional[str]
+    failure_reason: Optional[str] = None
+    failure_category: Optional[FailureCategory] = None
+    batch_id: Optional[UUID] = None
+    scheduled_at: Optional[datetime] = None
+    #: Calculado (no vive en BD): True si `scheduled_at` ya pasó y el item
+    #: sigue `pending`. Puramente informativo — no bloquea nada.
+    overdue: bool = False
+    #: Usuario que creó el item (issue #131). None en items pre-migración
+    #: o si el usuario fue borrado después (ondelete=SET NULL).
+    created_by: Optional[int] = None
+    created_by_username: Optional[str] = None
+    #: Transitorio (issue #134) — solo viene poblado justo después de
+    #: marcar 'done' con una bobina insuficiente (no bloquea, solo avisa).
+    #: None en cualquier otro momento/respuesta.
+    spool_warning: Optional[str] = None
     created_at: datetime
     quote: Optional[QueueQuoteSnapshot] = None
     vault: Optional[QueueVaultSnapshot] = None
 
     model_config = {"from_attributes": True}
 
+    @model_validator(mode="after")
+    def _compute_overdue(self) -> "PrintQueueItemResponse":
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        self.overdue = (
+            self.status == "pending"
+            and self.scheduled_at is not None
+            and self.scheduled_at < now
+        )
+        return self
+
 
 class PrintQueueStatusUpdate(BaseModel):
-    """Payload para cambiar el estado de un ítem de la cola."""
+    """
+    Payload para cambiar el estado de un ítem de la cola.
+
+    `failure_reason`/`failure_category` solo se guardan cuando `status`
+    es `cancelled` — se ignoran silenciosamente en cualquier otra
+    transición (no bloquean el flujo, ambos campos son opcionales).
+    """
 
     status: str  # 'printing' | 'done' | 'cancelled'
+    failure_reason: Optional[str] = Field(default=None, max_length=200)
+    failure_category: Optional[FailureCategory] = None
+
+
+class PrintQueueProjectUpdate(BaseModel):
+    """Payload para (re)asignar o quitar el proyecto de un ítem ya encolado."""
+
+    project_id: Optional[int] = None
+
+
+class QueueReorderRequest(BaseModel):
+    """
+    Payload para reordenar la cola por drag-and-drop.
+
+    `item_ids` es la lista COMPLETA de ids pending en el nuevo orden — el
+    backend asigna `position` = índice en la lista. Todos deben existir y
+    estar en estado `pending`.
+    """
+
+    item_ids: List[int] = Field(min_length=1)
+
+
+class QueueBatchCreateRequest(BaseModel):
+    """Payload para agrupar ≥2 items pending como lote."""
+
+    item_ids: List[int] = Field(min_length=2)
+
+
+class QueueScheduleUpdate(BaseModel):
+    """Payload para programar (o quitar programación de) un ítem."""
+
+    scheduled_at: Optional[datetime] = None
+
+
+class PrintQueueLogResponse(BaseModel):
+    """
+    Respuesta paginada de `GET /api/queue/log` (issue #131) — bitácora
+    global de impresiones con filtros. Endpoint separado de `/history`
+    (que solo filtra `done`/`cancelled` para el tab Historial de
+    QueuePage) porque el log necesita TODOS los estados.
+    """
+
+    items: List[PrintQueueItemResponse]
+    total: int
+    page: int
+    page_size: int

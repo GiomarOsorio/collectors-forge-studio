@@ -1,26 +1,39 @@
 /**
- * @file Página de la app Vault — galería de modelos `.3mf` / `.gcode.3mf`.
+ * @file Página de la app Vault — galería de modelos `.3mf` / `.stl` / `.gcode.3mf`.
  *
- * Thumbnails locales (extraídos del ZIP del modelo) con prioridad sobre el
- * `thumbnail_url` externo. Cada modelo puede tener un slot `source_file`
- * (`.3mf` editable) y/o `print_file` (`.gcode.3mf` laminado, listo para
- * imprimir desde la cola).
+ * Thumbnails locales (extraídos del ZIP del modelo, o renderizados
+ * server-side para `.stl`) con prioridad sobre el `thumbnail_url` externo.
+ * Cada modelo puede tener un slot `source_file` (`.3mf` o `.stl` editable)
+ * y/o `print_file` (`.gcode.3mf` laminado, listo para imprimir desde la
+ * cola). Los `.stl` obtienen un preview 3D interactivo en el detalle
+ * (`StlLivePreview` + `ModelViewer3D`) en vez del thumbnail estático.
  *
  * @module pages/vault/VaultPage
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   Archive,
+  Boxes,
+  Camera,
   ChevronRight,
   Download,
+  FileArchive,
   FileBox,
+  Folder,
+  FolderKanban,
+  FolderPlus,
+  Globe,
   HardDrive,
+  Hash,
+  MoreVertical,
   Pencil,
   Plus,
   Printer,
   Search,
+  Tag,
+  Trash,
   Trash2,
   Upload,
   X,
@@ -30,23 +43,49 @@ import {
   Button,
   Card,
   DetailDrawer,
+  DropZone,
   EmptyState,
   KPI,
+  Lightbox,
   MobileSheet,
   StatusPill,
 } from '../../components/ui';
 import MobileAppHeader from '../../components/MobileAppHeader';
+import ModelViewer3D from '../../components/ModelViewer3D';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../context/AuthContext';
 import { useConfirm } from '../../components/ConfirmDialog';
 import {
+  addProjectFiles,
+  backfillVaultHashes,
+  createProject,
+  createVaultFolder,
+  createVaultTag,
   deleteVaultFile,
+  deleteVaultFolder,
+  deleteVaultPhoto,
+  deleteVaultTag,
   setActiveVaultPlate,
   downloadVaultPrint,
   downloadVaultSource,
+  getProjects,
   getVaultFiles,
+  getVaultFolders,
+  getVaultGcodeContent,
+  getVaultPhotos,
+  getVaultPrintHistory,
   getVaultStats,
+  getVaultTags,
+  getMakerworldAuthStatus,
+  updateVaultFile,
+  updateVaultFolder,
+  updateVaultTag,
+  uploadVaultPhotos,
 } from '../../services/api';
+import MakerWorldImportModal from './components/MakerWorldImportModal';
+import UploadZipModal from './components/UploadZipModal';
+import { apiErrorMsg } from '../../utils/apiError';
+import { FAILURE_CATEGORY_LABELS } from '../../utils/failureCategories';
 import { getThumbnail } from '../../utils/thumbnail';
 
 const ACCENT = '#F43F5E';
@@ -83,12 +122,264 @@ const fmtTime = (seconds) => {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 };
 
+/** Camino de carpetas desde la raíz hasta `folderId` (excluida la raíz). */
+const buildBreadcrumb = (folders, folderId) => {
+  const byId = new Map(folders.map((f) => [f.id, f]));
+  const path = [];
+  let current = folderId != null ? byId.get(folderId) : null;
+  while (current) {
+    path.unshift(current);
+    current = current.parent_id != null ? byId.get(current.parent_id) : null;
+  }
+  return path;
+};
+
+/**
+ * IDs de todos los descendientes de `folderId` (hijos, nietos, etc.) —
+ * usado para excluir del picker "mover a…" los destinos que el backend
+ * (`_assert_not_own_descendant`) siempre va a rechazar.
+ */
+const getDescendantIds = (folders, folderId) => {
+  const childrenOf = new Map();
+  for (const f of folders) {
+    if (f.parent_id != null) {
+      if (!childrenOf.has(f.parent_id)) childrenOf.set(f.parent_id, []);
+      childrenOf.get(f.parent_id).push(f.id);
+    }
+  }
+  const result = new Set();
+  const queue = [...(childrenOf.get(folderId) || [])];
+  while (queue.length > 0) {
+    const id = queue.shift();
+    if (result.has(id)) continue;
+    result.add(id);
+    queue.push(...(childrenOf.get(id) || []));
+  }
+  return result;
+};
+
+// ─── Carpetas ───────────────────────────────────────────────────────────────
+
+/**
+ * Tarjeta de carpeta — visualmente distinta de VaultCard (sin thumbnail),
+ * mismo tamaño para alinear en el grid. Click navega adentro; el menú
+ * "..." (solo admin) abre renombrar/mover/eliminar.
+ */
+function FolderCard({ folder, folders, isAdmin, onOpen, onRename, onMove, onDelete }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  // Excluye la carpeta misma Y sus descendientes — moverla ahí siempre
+  // lo rechaza el backend (_assert_not_own_descendant), así que no se
+  // ofrecen como destino válido en el picker.
+  const excludedIds = getDescendantIds(folders, folder.id);
+  const otherFolders = folders.filter((f) => f.id !== folder.id && !excludedIds.has(f.id));
+  return (
+    <Card className="relative text-left w-full overflow-hidden flex flex-col">
+      <button
+        type="button"
+        onClick={() => onOpen(folder.id)}
+        className="h-40 bg-[var(--color-surf-sidebar)] flex items-center justify-center w-full"
+      >
+        <Folder size={40} style={{ color: `${ACCENT}88` }} />
+      </button>
+      <div className="p-3 flex items-center gap-2">
+        <button type="button" onClick={() => onOpen(folder.id)} className="flex-1 min-w-0 text-left">
+          <p className="text-sm font-semibold text-tech-white truncate" title={folder.name}>
+            {folder.name}
+          </p>
+          <p className="mono text-[10.5px] text-gunmetal truncate">
+            {folder.file_count} archivo{folder.file_count === 1 ? '' : 's'}
+          </p>
+        </button>
+        {isAdmin && (
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o); }}
+              className="p-1.5 rounded text-gunmetal hover:text-tech-white hover:bg-white/5"
+              aria-label="Opciones de carpeta"
+            >
+              <MoreVertical size={14} />
+            </button>
+            {menuOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                <div className="absolute right-0 top-full mt-1 z-20 w-44 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surf-card)] shadow-xl py-1">
+                  <button
+                    type="button"
+                    className="w-full text-left px-3 py-1.5 text-xs text-tech-white hover:bg-white/5 flex items-center gap-2"
+                    onClick={() => { setMenuOpen(false); onRename(folder); }}
+                  >
+                    <Pencil size={12} /> Renombrar
+                  </button>
+                  {otherFolders.length > 0 && (
+                    <div className="px-3 py-1.5">
+                      <span className="block text-[10px] text-gunmetal mb-1">Mover a…</span>
+                      <select
+                        defaultValue=""
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setMenuOpen(false);
+                          if (val === '__root__') onMove(folder, null);
+                          else if (val) onMove(folder, Number(val));
+                        }}
+                        className="w-full bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded text-[11px] text-tech-white px-1.5 py-1"
+                      >
+                        <option value="" disabled>— elegir —</option>
+                        <option value="__root__">Raíz (Vault)</option>
+                        {otherFolders.map((f) => (
+                          <option key={f.id} value={f.id}>{f.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className="w-full text-left px-3 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10 flex items-center gap-2"
+                    onClick={() => { setMenuOpen(false); onDelete(folder); }}
+                  >
+                    <Trash2 size={12} /> Eliminar
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/** Modal simple (crear/renombrar carpeta) — reusa las clases globales tf-modal*. */
+function FolderNameModal({ mode, initialName, onCancel, onSave }) {
+  const [name, setName] = useState(initialName || '');
+  const submit = () => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    onSave(trimmed);
+  };
+  return (
+    <div className="tf-modal-overlay" style={{ zIndex: 9999 }}>
+      <div className="tf-modal max-w-sm">
+        <p className="text-tech-white text-sm font-semibold mb-3">
+          {mode === 'rename' ? 'Renombrar carpeta' : 'Nueva carpeta'}
+        </p>
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && submit()}
+          placeholder="Nombre de la carpeta"
+          className="w-full bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm focus:outline-none focus:border-rose-500 mb-5"
+        />
+        <div className="flex justify-end gap-3">
+          <button onClick={onCancel} className="tf-btn-ghost">Cancelar</button>
+          <button onClick={submit} className="tf-btn-primary" disabled={!name.trim()}>
+            {mode === 'rename' ? 'Guardar' : 'Crear'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Modal de gestión del catálogo de tags — crear nuevo, renombrar y
+ * eliminar. Cada fila existente es rename-inline (blur/Enter para
+ * guardar) + botón eliminar; arriba un input para crear uno nuevo.
+ */
+function TagsManageModal({ tags, onClose, onCreate, onRename, onDelete }) {
+  const [newName, setNewName] = useState('');
+  const [drafts, setDrafts] = useState({}); // { [tagId]: draftName }
+
+  const submitCreate = () => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    onCreate(trimmed);
+    setNewName('');
+  };
+
+  const submitRename = (tag) => {
+    const draft = (drafts[tag.id] ?? tag.name).trim();
+    if (!draft || draft === tag.name) return;
+    onRename(tag.id, draft);
+  };
+
+  return (
+    <div className="tf-modal-overlay" style={{ zIndex: 9999 }}>
+      <div className="tf-modal max-w-sm">
+        <p className="text-tech-white text-sm font-semibold mb-3">Gestionar tags</p>
+
+        <div className="flex gap-2 mb-4">
+          <input
+            autoFocus
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && submitCreate()}
+            placeholder="Nuevo tag…"
+            className="flex-1 bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm focus:outline-none focus:border-rose-500"
+          />
+          <button onClick={submitCreate} className="tf-btn-primary" disabled={!newName.trim()}>
+            Crear
+          </button>
+        </div>
+
+        {tags.length === 0 ? (
+          <p className="text-xs text-gunmetal text-center py-4">Sin tags todavía.</p>
+        ) : (
+          <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto mb-5">
+            {tags.map((t) => (
+              <div key={t.id} className="flex items-center gap-2">
+                <input
+                  value={drafts[t.id] ?? t.name}
+                  onChange={(e) => setDrafts((d) => ({ ...d, [t.id]: e.target.value }))}
+                  onBlur={() => submitRename(t)}
+                  onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
+                  className="flex-1 bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2 py-1 text-tech-white text-xs focus:outline-none focus:border-rose-500"
+                />
+                <span className="mono text-[10px] text-gunmetal shrink-0">{t.file_count}</span>
+                <button
+                  onClick={() => onDelete(t)}
+                  className="p-1 rounded text-gunmetal hover:text-rose-300 hover:bg-rose-500/10 shrink-0"
+                  aria-label={`Eliminar tag ${t.name}`}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex justify-end">
+          <button onClick={onClose} className="tf-btn-ghost">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Card / row ─────────────────────────────────────────────────────────────
 
-function VaultCard({ file, onClick }) {
+function VaultCard({ file, onClick, onShowHistory, selectMode, selected, onToggleSelect }) {
   const thumb = getThumbnail(file);
+  // En modo selección la card es un <div> (no <button>) para poder anidar
+  // el checkbox sin invalidar el HTML (button dentro de button). El click
+  // en el resto de la card también togglea la selección.
+  const cardProps = selectMode
+    ? { as: 'div', interactive: true, onClick: () => onToggleSelect(file.id), className: 'text-left w-full overflow-hidden flex flex-col cursor-pointer' }
+    : { as: 'button', interactive: true, onClick: () => onClick(file), className: 'text-left w-full overflow-hidden flex flex-col' };
   return (
-    <Card as="button" interactive onClick={() => onClick(file)} className="text-left w-full overflow-hidden flex flex-col">
+    <Card {...cardProps}>
+      {selectMode && (
+        <div className="absolute top-2 left-2 z-10" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={!!selected}
+            onChange={() => onToggleSelect(file.id)}
+            aria-label={`Seleccionar ${file.name}`}
+            className="w-4 h-4"
+          />
+        </div>
+      )}
       <div className="h-40 bg-[var(--color-surf-sidebar)] flex items-center justify-center overflow-hidden">
         {thumb ? (
           <img
@@ -119,6 +410,29 @@ function VaultCard({ file, onClick }) {
               Solo editable
             </StatusPill>
           )}
+          {/* Badge "N impresiones" (issue #130) — span, no button, para no
+              anidar interactivos dentro del Card as="button". */}
+          {file.print_count > 0 && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                onShowHistory?.(file);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onShowHistory?.(file);
+                }
+              }}
+              className="mono text-[9.5px] px-1.5 py-0.5 rounded-full border border-[var(--color-border)] text-steel hover:text-tech-white hover:border-[var(--color-border-bright)] transition-colors cursor-pointer"
+              title="Ver historial de impresiones"
+            >
+              {file.print_count} {file.print_count === 1 ? 'impresión' : 'impresiones'}
+            </span>
+          )}
         </div>
         <p className="text-sm font-semibold text-tech-white truncate" title={file.name}>
           {file.name}
@@ -146,14 +460,25 @@ function VaultCard({ file, onClick }) {
   );
 }
 
-function VaultRow({ file, onClick }) {
+function VaultRow({ file, onClick, onShowHistory, selectMode, selected, onToggleSelect }) {
   const thumb = getThumbnail(file);
+  const Wrapper = selectMode ? 'div' : 'button';
   return (
-    <button
-      type="button"
-      onClick={() => onClick(file)}
-      className="w-full text-left flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border-soft)] hover:bg-[var(--color-surf-hover)]/50 transition-colors"
+    <Wrapper
+      type={selectMode ? undefined : 'button'}
+      onClick={() => (selectMode ? onToggleSelect(file.id) : onClick(file))}
+      className="w-full text-left flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border-soft)] hover:bg-[var(--color-surf-hover)]/50 transition-colors cursor-pointer"
     >
+      {selectMode && (
+        <input
+          type="checkbox"
+          checked={!!selected}
+          onChange={() => onToggleSelect(file.id)}
+          onClick={(e) => e.stopPropagation()}
+          aria-label={`Seleccionar ${file.name}`}
+          className="w-4 h-4 shrink-0"
+        />
+      )}
       <div
         className="w-12 h-12 rounded-md overflow-hidden bg-[var(--color-surf-sidebar)] flex items-center justify-center shrink-0"
         style={{ border: `1px solid ${ACCENT}40` }}
@@ -171,6 +496,27 @@ function VaultRow({ file, onClick }) {
           ) : (
             <StatusPill tone="neutral" icon={FileBox}>Editable</StatusPill>
           )}
+          {file.print_count > 0 && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                onShowHistory?.(file);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onShowHistory?.(file);
+                }
+              }}
+              className="mono text-[9.5px] px-1.5 py-0.5 rounded-full border border-[var(--color-border)] text-steel hover:text-tech-white transition-colors cursor-pointer"
+              title="Ver historial de impresiones"
+            >
+              {file.print_count}×
+            </span>
+          )}
         </div>
         <p className="text-sm font-semibold text-tech-white truncate">{file.name}</p>
         <p className="mono text-[10px] text-gunmetal mt-0.5">
@@ -178,7 +524,7 @@ function VaultRow({ file, onClick }) {
         </p>
       </div>
       <ChevronRight size={14} className="text-gunmetal-dim shrink-0" />
-    </button>
+    </Wrapper>
   );
 }
 
@@ -189,28 +535,485 @@ function VaultRow({ file, onClick }) {
  * `DetailDrawer` v2; las acciones viven en `VaultDrawerFooter`. Muestra
  * los dos slots (source / print) por separado + metadatos sliced si los hay.
  */
-function VaultDrawerBody({ file, onActivePlateChange }) {
+/**
+ * Preview 3D interactivo para archivos `.stl` en el detalle del Vault
+ * (issue #129). Descarga el `.stl` autenticado como blob — el `STLLoader`
+ * de three.js hace su propio `fetch` interno y no puede enviar el header
+ * `Authorization`, por eso no se le puede pasar la URL del endpoint
+ * directo (`/api/vault/{id}/download/source`), sino un blob: URL local.
+ */
+function StlLivePreview({ fileId, fileName }) {
+  const [blobUrl, setBlobUrl] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl = null;
+    setLoading(true);
+    setError(false);
+    downloadVaultSource(fileId)
+      .then((res) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(res.data);
+        setBlobUrl(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [fileId]);
+
+  if (error) return null;
+  if (loading || !blobUrl) {
+    return (
+      <div className="h-48 rounded-lg overflow-hidden bg-[var(--color-surf-sidebar)] border border-[var(--color-border)] flex items-center justify-center">
+        <div className="w-6 h-6 border-2 border-rose-500/20 border-t-rose-500 rounded-full animate-spin" />
+      </div>
+    );
+  }
+  return <ModelViewer3D url={blobUrl} fileName={fileName} />;
+}
+
+/**
+ * Modal del visor de G-code (`gcode-preview`, WebGL) para archivos con
+ * `.gcode.3mf` laminado (issue #129). Descarga el G-code plano del plate
+ * activo vía `getVaultGcodeContent` (autenticado, ya viene como texto) y
+ * lo renderiza capa por capa. `dispose()` en el cleanup evita acumular
+ * contextos WebGL si React StrictMode monta el efecto dos veces en dev.
+ */
+function GCodeViewerModal({ fileId, fileName, onClose }) {
+  const canvasRef = useRef(null);
+  const previewRef = useRef(null);
+  const [loading, setLoading] = useState(true);
+  const [maxLayer, setMaxLayer] = useState(0);
+  const [layer, setLayer] = useState(0);
+  const [showTravel, setShowTravel] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    // `gcode-preview` carga bundleado su propia copia de three.js (dep
+    // directa, no peer — versión distinta a la de @react-three/fiber) —
+    // import dinámico para que ese peso solo se pague al abrir el visor,
+    // no en cada carga de VaultPage.
+    Promise.all([getVaultGcodeContent(fileId), import('gcode-preview')])
+      .then(([res, { init }]) => {
+        if (cancelled || !canvasRef.current) return;
+        const preview = init({ canvas: canvasRef.current, renderTravel: false });
+        previewRef.current = preview;
+        preview.processGCode(res.data);
+        preview.render();
+        const top = preview.maxLayerIndex ?? 0;
+        setMaxLayer(top);
+        setLayer(top);
+      })
+      .catch((err) => {
+        if (!cancelled) toast.error(apiErrorMsg(err, 'No se pudo cargar el G-code'));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      previewRef.current?.dispose?.();
+      previewRef.current = null;
+    };
+  }, [fileId]);
+
+  // Slider de capas: no re-parsea el gcode, solo re-dibuja hasta `layer`.
+  useEffect(() => {
+    if (!previewRef.current) return;
+    previewRef.current.endLayer = layer;
+    previewRef.current.render();
+  }, [layer]);
+
+  // Toggle travel moves: los segmentos ya están parseados (processGCode los
+  // guarda a ambos), solo cambia si `render()` los dibuja o no.
+  useEffect(() => {
+    if (!previewRef.current) return;
+    previewRef.current.renderTravel = showTravel;
+    previewRef.current.render();
+  }, [showTravel]);
+
+  return (
+    <div className="tf-modal-overlay" onClick={onClose}>
+      <div
+        className="bg-surf-panel border border-border-legacy rounded-xl w-full max-w-3xl flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-soft)]">
+          <p className="text-sm font-semibold text-tech-white truncate">{fileName}</p>
+          <button type="button" onClick={onClose} className="text-gunmetal hover:text-tech-white" aria-label="Cerrar">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="relative w-full h-[420px] bg-black">
+          <canvas ref={canvasRef} className="w-full h-full block" />
+          {loading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+              <div className="w-7 h-7 border-2 border-rose-500/20 border-t-rose-500 rounded-full animate-spin" />
+            </div>
+          )}
+        </div>
+        <div className="p-4 flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <span className="mono text-[10.5px] text-gunmetal shrink-0 w-24">
+              Capa {layer + 1} / {maxLayer + 1}
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={maxLayer}
+              value={layer}
+              onChange={(e) => setLayer(Number(e.target.value))}
+              className="flex-1"
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm text-steel cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showTravel}
+              onChange={(e) => setShowTravel(e.target.checked)}
+            />
+            Mostrar movimientos de desplazamiento (travel)
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Modal de historial de impresiones de un modelo del Vault (issue #130):
+ * todas las filas done/cancelled/printing que lo referencian + gramos
+ * totales y tasa de éxito agregados (calculados server-side).
+ */
+function PrintHistoryModal({ fileId, fileName, onClose }) {
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getVaultPrintHistory(fileId)
+      .then((res) => {
+        if (!cancelled) setData(res.data);
+      })
+      .catch((err) => {
+        if (!cancelled) toast.error(apiErrorMsg(err, 'No se pudo cargar el historial'));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fileId]);
+
+  const statusTone = { done: 'done', cancelled: 'danger', printing: 'printing' };
+  const items = data?.items || [];
+
+  return (
+    <div className="tf-modal-overlay" onClick={onClose}>
+      <div
+        className="bg-surf-panel border border-border-legacy rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-soft)] shrink-0">
+          <p className="text-sm font-semibold text-tech-white truncate">
+            Historial · {fileName}
+          </p>
+          <button type="button" onClick={onClose} className="text-gunmetal hover:text-tech-white" aria-label="Cerrar">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">
+          {loading ? (
+            <p className="text-sm text-gunmetal text-center py-8">Cargando…</p>
+          ) : items.length === 0 ? (
+            <p className="text-sm text-gunmetal text-center py-8">Sin impresiones registradas todavía.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[10.5px] uppercase tracking-wider text-gunmetal">
+                  <th className="pb-2 font-medium">Fecha</th>
+                  <th className="pb-2 font-medium">Estado</th>
+                  <th className="pb-2 font-medium">Impresora</th>
+                  <th className="pb-2 font-medium">Filamento</th>
+                  <th className="pb-2 font-medium text-right">Gramos</th>
+                  <th className="pb-2 font-medium">Motivo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((it) => (
+                  <tr key={it.id} className="border-t border-[var(--color-border-soft)]">
+                    <td className="py-2 mono text-[11px] text-steel whitespace-nowrap">
+                      {fmtDate(it.created_at)}
+                    </td>
+                    <td className="py-2">
+                      <StatusPill tone={statusTone[it.status] || 'neutral'}>{it.status}</StatusPill>
+                    </td>
+                    <td className="py-2 text-steel">{it.printer_name || '—'}</td>
+                    <td className="py-2 text-steel">{it.filament_name || '—'}</td>
+                    <td className="py-2 text-right mono text-steel whitespace-nowrap">
+                      {it.weight_grams != null ? `${Math.round(it.weight_grams * it.quantity)}g` : '—'}
+                    </td>
+                    <td className="py-2 text-steel text-xs">
+                      {it.failure_category ? (FAILURE_CATEGORY_LABELS[it.failure_category] || it.failure_category) : ''}
+                      {it.failure_reason ? ` — ${it.failure_reason}` : ''}
+                      {!it.failure_category && !it.failure_reason ? '—' : ''}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        {items.length > 0 && (
+          <div className="px-4 py-3 border-t border-[var(--color-border-soft)] flex items-center justify-between text-xs shrink-0">
+            <span className="mono text-steel">{Math.round(data.total_grams)}g totales</span>
+            {data.success_rate_pct != null && (
+              <span className="mono text-steel">{data.success_rate_pct.toFixed(0)}% de éxito</span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Sección de fotos del detalle del Vault (issue #130) — dropzone (drag&drop
+ * + click + paste del portapapeles), grid de miniaturas, lightbox, borrar.
+ * Gestiona su propio fetch (keyed por `fileId`) para no acoplar el estado
+ * de fotos al resto de `VaultDrawerBody`.
+ */
+/**
+ * Notas de un modelo del Vault (issue #130) — texto libre, admin edita,
+ * viewer lee. Sin markdown: `whitespace-pre-wrap` alcanza y evita sumar
+ * una librería nueva solo para esto.
+ *
+ * Montado con `key={file.id}` desde `VaultDrawerBody` para que el
+ * `useState` inicial se resetee al cambiar de archivo sin cerrar el
+ * drawer (cambiar de `file` no desmonta `VaultDrawerBody` — el
+ * early-return `if (!file) return null` de arriba impide poner hooks
+ * ahí directamente, así que esta sección vive aparte).
+ */
+function VaultNotesSection({ file, isAdmin }) {
+  const [value, setValue] = useState(file.notes || '');
+  const [saving, setSaving] = useState(false);
+  const dirty = value !== (file.notes || '');
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateVaultFile(file.id, { notes: value || null });
+      toast.success('Notas guardadas');
+    } catch (err) {
+      toast.error(apiErrorMsg(err, 'No se pudieron guardar las notas'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!isAdmin) {
+    if (!file.notes) return null;
+    return (
+      <div>
+        <span className="lbl-eyebrow text-[9px]">Notas</span>
+        <p className="text-sm text-steel whitespace-pre-wrap mt-1">{file.notes}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <span className="lbl-eyebrow text-[9px] mb-1 block">Notas</span>
+      <textarea
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        rows={3}
+        placeholder="Notas sobre este modelo (fallos, ajustes de impresión, etc.)"
+        className="tf-input resize-y"
+      />
+      {dirty && (
+        <div className="flex justify-end mt-1.5">
+          <Button variant="primary" size="sm" onClick={handleSave} disabled={saving}>
+            {saving ? 'Guardando…' : 'Guardar notas'}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VaultPhotosSection({ fileId, isAdmin }) {
+  const [photos, setPhotos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(null);
+
+  const load = () => {
+    setLoading(true);
+    getVaultPhotos(fileId)
+      .then((res) => setPhotos(res.data || []))
+      .catch(() => setPhotos([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileId]);
+
+  const handleFiles = async (fileList) => {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      await uploadVaultPhotos(fileId, files);
+      toast.success(files.length > 1 ? `${files.length} fotos subidas` : 'Foto subida');
+      load();
+    } catch (err) {
+      toast.error(apiErrorMsg(err, 'No se pudieron subir las fotos'));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Paste de imágenes desde el portapapeles — issue #130.
+  useEffect(() => {
+    const handlePaste = (e) => {
+      const items = Array.from(e.clipboardData?.items || []);
+      const imageFiles = items
+        .filter((it) => it.type.startsWith('image/'))
+        .map((it) => it.getAsFile())
+        .filter(Boolean);
+      if (imageFiles.length) handleFiles(imageFiles);
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileId]);
+
+  const handleDelete = async (photoId) => {
+    try {
+      await deleteVaultPhoto(fileId, photoId);
+      setPhotos((prev) => prev.filter((p) => p.id !== photoId));
+    } catch (err) {
+      toast.error(apiErrorMsg(err, 'No se pudo borrar la foto'));
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="lbl-eyebrow text-[9px]">Fotos{photos.length > 0 ? ` (${photos.length})` : ''}</span>
+      {photos.length > 0 && (
+        <div className="grid grid-cols-4 gap-1.5">
+          {photos.map((p, idx) => (
+            <div key={p.id} className="relative group aspect-square">
+              <button
+                type="button"
+                onClick={() => setLightboxIndex(idx)}
+                className="w-full h-full rounded-md overflow-hidden bg-[var(--color-surf-sidebar)] border border-[var(--color-border)]"
+              >
+                <img src={p.photo_url} alt={p.caption || ''} className="w-full h-full object-cover" />
+              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => handleDelete(p.id)}
+                  className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-black/60 text-white/80 opacity-0 group-hover:opacity-100 hover:text-rose-400 transition-opacity"
+                  aria-label="Eliminar foto"
+                  title="Eliminar foto"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {isAdmin && (
+        <DropZone
+          accept="image/*"
+          multiple
+          icon={Camera}
+          accent={ACCENT}
+          hint={uploading ? 'Subiendo…' : 'Suelta fotos, pega del portapapeles o pulsa'}
+          meta="JPEG / PNG / WebP / GIF · máx. 10MB c/u · hasta 5 por vez"
+          cta="Examinar fotos"
+          onFiles={handleFiles}
+        />
+      )}
+      {!isAdmin && !loading && photos.length === 0 && (
+        <p className="text-xs text-gunmetal">Sin fotos adjuntas.</p>
+      )}
+      {lightboxIndex !== null && (
+        <Lightbox
+          images={photos.map((p) => ({ url: p.photo_url, caption: p.caption }))}
+          index={lightboxIndex}
+          onIndexChange={setLightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function VaultDrawerBody({ file, onActivePlateChange, isAdmin, folders, onMoveFile }) {
   if (!file) return null;
   const thumb = getThumbnail(file);
+  const isStlSource = file.source_file_name?.toLowerCase().endsWith('.stl');
   const sliceTime = fmtTime(file.sliced_time_seconds);
   const plates = Array.isArray(file.plates) ? file.plates : [];
   const hasMultiplePlates = plates.length > 1;
   const activeIdx = file.active_plate_index ?? 0;
+  const currentFolder = folders?.find((f) => f.id === file.folder_id);
   return (
     <div className="flex flex-col gap-4">
-      <div
-        className="h-48 rounded-lg overflow-hidden bg-[var(--color-surf-sidebar)] flex items-center justify-center border border-[var(--color-border)]"
-      >
-        {thumb ? (
-          // object-contain + object-center: el modelo siempre se ve completo
-          // y centrado aunque el container cambie de ancho (sidebar abriendo).
-          // Issue #72 — el bug previo era object-cover que recortaba y movía
-          // el "centro visible" cuando cambiaba el ancho del drawer.
-          <img src={thumb} alt={file.name} className="w-full h-full object-contain object-center" />
-        ) : (
-          <Archive size={50} style={{ color: `${ACCENT}55` }} />
-        )}
-      </div>
+      {isAdmin && Array.isArray(folders) && (
+        <div>
+          <span className="lbl-eyebrow text-[9px] mb-1.5 block">Carpeta</span>
+          <select
+            value={file.folder_id ?? ''}
+            onChange={(e) => onMoveFile?.(file, e.target.value === '' ? null : Number(e.target.value))}
+            className="w-full bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm focus:outline-none focus:border-rose-500"
+          >
+            <option value="">Raíz (Vault)</option>
+            {folders.map((f) => (
+              <option key={f.id} value={f.id}>{f.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      {!isAdmin && currentFolder && (
+        <p className="mono text-[10.5px] text-gunmetal -mb-2">📁 {currentFolder.name}</p>
+      )}
+      {isStlSource ? (
+        <StlLivePreview fileId={file.id} fileName={file.source_file_name} />
+      ) : (
+        <div
+          className="h-48 rounded-lg overflow-hidden bg-[var(--color-surf-sidebar)] flex items-center justify-center border border-[var(--color-border)]"
+        >
+          {thumb ? (
+            // object-contain + object-center: el modelo siempre se ve completo
+            // y centrado aunque el container cambie de ancho (sidebar abriendo).
+            // Issue #72 — el bug previo era object-cover que recortaba y movía
+            // el "centro visible" cuando cambiaba el ancho del drawer.
+            <img src={thumb} alt={file.name} className="w-full h-full object-contain object-center" />
+          ) : (
+            <Archive size={50} style={{ color: `${ACCENT}55` }} />
+          )}
+        </div>
+      )}
 
       {/* Plate picker — issue #68. Solo aparece si hay >1 plate. */}
       {hasMultiplePlates && (
@@ -276,7 +1079,7 @@ function VaultDrawerBody({ file, onActivePlateChange }) {
           />
           <div className="flex-1 min-w-0">
             <p className="text-sm text-tech-white truncate">
-              {file.source_file_name || 'Sin .3mf editable'}
+              {file.source_file_name || 'Sin .3mf/.stl editable'}
             </p>
             <p className="mono text-[10.5px] text-gunmetal mt-0.5">
               {file.source_file_size != null
@@ -382,6 +1185,8 @@ function VaultDrawerBody({ file, onActivePlateChange }) {
           </div>
         </div>
       )}
+      <VaultNotesSection key={file.id} file={file} isAdmin={isAdmin} />
+      <VaultPhotosSection fileId={file.id} isAdmin={isAdmin} />
     </div>
   );
 }
@@ -396,6 +1201,7 @@ function VaultDrawerFooter({
   isAdmin,
   onDownloadSource,
   onDownloadPrint,
+  onViewGcode,
   onDelete,
   onClose,
 }) {
@@ -414,6 +1220,17 @@ function VaultDrawerFooter({
           Descargar laminado
         </Button>
       )}
+      {file.is_print_ready && (
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={Boxes}
+          onClick={() => onViewGcode(file)}
+          title="Visor 3D del G-code, capa por capa"
+        >
+          Ver G-code
+        </Button>
+      )}
       {file.source_file_name && (
         <Button
           variant={file.is_print_ready ? 'ghost' : 'primary'}
@@ -421,7 +1238,7 @@ function VaultDrawerFooter({
           icon={Download}
           onClick={() => onDownloadSource(file)}
           className={file.is_print_ready ? '' : 'flex-1 justify-center'}
-          title=".3mf editable — para abrir en OrcaSlicer/BambuStudio"
+          title="Editable — .3mf para OrcaSlicer/BambuStudio, .stl para cualquier slicer"
         >
           {file.is_print_ready ? 'Editable' : 'Descargar editable'}
         </Button>
@@ -445,10 +1262,118 @@ function VaultDrawerFooter({
             if (ok) onClose();
           }}
           className="text-rose-400 hover:text-rose-300"
-          aria-label="Eliminar"
+          aria-label="Mover a papelera"
         />
       )}
     </>
+  );
+}
+
+// ─── Asignar a proyecto (issue #136, sub-ticket 2/3) ───────────────────────
+
+/**
+ * Modal de "Asignar a proyecto": elegir un proyecto existente o crear uno
+ * nuevo inline, luego vincula los `fileIds` seleccionados al puente.
+ */
+function AssignToProjectModal({ fileIds, onClose, onAssigned }) {
+  const [projects, setProjects] = useState([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+  const [projectId, setProjectId] = useState('');
+  const [newProjectName, setNewProjectName] = useState('');
+  const [creatingNew, setCreatingNew] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    getProjects()
+      .then((res) => setProjects(res.data || []))
+      .catch(() => toast.error('No se pudieron cargar los proyectos'))
+      .finally(() => setLoadingProjects(false));
+  }, []);
+
+  const submit = async () => {
+    setSaving(true);
+    try {
+      let targetId = projectId ? parseInt(projectId, 10) : null;
+      if (creatingNew) {
+        if (!newProjectName.trim()) return;
+        const res = await createProject({ name: newProjectName.trim() });
+        targetId = res.data.id;
+      }
+      if (!targetId) return;
+      await addProjectFiles(targetId, fileIds);
+      toast.success(`${fileIds.length} archivo(s) asignado(s) al proyecto`);
+      onAssigned?.();
+    } catch {
+      toast.error('No se pudo asignar el proyecto');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const canSubmit = creatingNew ? newProjectName.trim().length > 0 : !!projectId;
+
+  return (
+    <div className="tf-modal-overlay" style={{ zIndex: 9999 }}>
+      <div className="tf-modal max-w-md">
+        <p className="text-tech-white text-sm font-semibold mb-4">
+          Asignar {fileIds.length} archivo{fileIds.length === 1 ? '' : 's'} a proyecto
+        </p>
+        {loadingProjects ? (
+          <p className="text-xs text-gunmetal py-4 text-center">Cargando proyectos…</p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {!creatingNew ? (
+              <>
+                <label className="block">
+                  <span className="block text-xs text-gunmetal mb-1">Proyecto</span>
+                  <select
+                    value={projectId}
+                    onChange={(e) => setProjectId(e.target.value)}
+                    className="w-full bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm"
+                  >
+                    <option value="">Selecciona un proyecto…</option>
+                    {projects.map((p) => (
+                      <option key={p.id} value={String(p.id)}>{p.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setCreatingNew(true)}
+                  className="text-xs text-amber-300 hover:text-amber-200 text-left"
+                >
+                  + Crear proyecto nuevo
+                </button>
+              </>
+            ) : (
+              <label className="block">
+                <span className="block text-xs text-gunmetal mb-1">Nombre del proyecto nuevo</span>
+                <input
+                  autoFocus
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  placeholder="ej. Encargo boda Ana & Luis"
+                  className="w-full bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm focus:outline-none focus:border-amber-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setCreatingNew(false)}
+                  className="text-xs text-gunmetal hover:text-tech-white mt-1.5"
+                >
+                  ← Elegir uno existente
+                </button>
+              </label>
+            )}
+          </div>
+        )}
+        <div className="flex justify-end gap-3 mt-5">
+          <button onClick={onClose} className="tf-btn-ghost" disabled={saving}>Cancelar</button>
+          <button onClick={submit} className="tf-btn-primary" disabled={saving || !canSubmit}>
+            {saving ? 'Asignando…' : 'Asignar'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -473,8 +1398,72 @@ export default function VaultPage() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
+  const [gcodeViewerFile, setGcodeViewerFile] = useState(null);
+  const [historyModalFile, setHistoryModalFile] = useState(null);
+
+  // Carpetas — `currentFolderId=null` es la raíz del Vault. `folders` es
+  // la lista plana completa (para armar breadcrumb + subcarpetas + el
+  // selector "mover a carpeta" del drawer).
+  const [folders, setFolders] = useState([]);
+  const [currentFolderId, setCurrentFolderId] = useState(null);
+  const [folderModal, setFolderModal] = useState(null); // { mode: 'create'|'rename', folder? }
+
+  // Tags — catálogo global (independiente de la carpeta actual) + filtro
+  // activo (multi-select AND: el archivo debe tener TODOS los tags elegidos).
+  const [tags, setTags] = useState([]);
+  const [activeTagIds, setActiveTagIds] = useState([]);
+  const [tagsModalOpen, setTagsModalOpen] = useState(false);
+
+  // Multi-selección → "Asignar a proyecto" (issue #136, sub-ticket 2/3).
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+
+  // Import de MakerWorld (issue #139).
+  const [makerworldModalOpen, setMakerworldModalOpen] = useState(false);
+  const [uploadZipModalOpen, setUploadZipModalOpen] = useState(false);
+  const [backfillingHashes, setBackfillingHashes] = useState(false);
+  const [makerworldAuthed, setMakerworldAuthed] = useState(false);
+
+  const toggleFileSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  /**
+   * Backfill de hashes (issue #128) — llama el endpoint en lotes hasta que
+   * `remaining` llegue a 0. Cada lote es una llamada HTTP corta (20
+   * archivos), así que el loop no bloquea el server ni el navegador.
+   */
+  const runBackfillHashes = async () => {
+    setBackfillingHashes(true);
+    try {
+      let totalProcessed = 0;
+      for (;;) {
+        const res = await backfillVaultHashes();
+        const { processed, remaining } = res.data;
+        totalProcessed += processed;
+        if (processed === 0 || remaining === 0) break;
+      }
+      toast.success(
+        totalProcessed > 0
+          ? `Hashes calculados para ${totalProcessed} archivo(s)`
+          : 'No había archivos pendientes de hash',
+      );
+    } catch {
+      toast.error('No se pudo completar el backfill de hashes');
+    } finally {
+      setBackfillingHashes(false);
+    }
+  };
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const childFolders = folders.filter((f) => (f.parent_id ?? null) === currentFolderId);
+  const breadcrumb = buildBreadcrumb(folders, currentFolderId);
 
   // Reset a página 1 cada vez que cambia el query efectivo.
   useEffect(() => {
@@ -484,12 +1473,40 @@ export default function VaultPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedQuery, pageSize]);
+  }, [debouncedQuery, pageSize, currentFolderId, activeTagIds]);
+
+  const loadFolders = async () => {
+    try {
+      const res = await getVaultFolders();
+      setFolders(res.data || []);
+    } catch {
+      // Silencioso — el Vault sigue usable sin árbol de carpetas.
+    }
+  };
+
+  const loadTags = async () => {
+    try {
+      const res = await getVaultTags();
+      setTags(res.data || []);
+    } catch {
+      // Silencioso — el Vault sigue usable sin catálogo de tags.
+    }
+  };
 
   const load = async () => {
     setLoading(true);
     const params = { page, page_size: pageSize };
-    if (debouncedQuery) params.q = debouncedQuery;
+    if (debouncedQuery) {
+      // Una búsqueda activa ignora el filtro de carpeta — busca en todo
+      // el Vault. Si no, el usuario podría creer que un archivo se perdió
+      // solo porque está parado en otra carpeta.
+      params.q = debouncedQuery;
+    } else if (currentFolderId != null) {
+      params.folder_id = currentFolderId;
+    } else {
+      params.root_only = true;
+    }
+    if (activeTagIds.length > 0) params.tag_ids = activeTagIds.join(',');
     const [f, s] = await Promise.allSettled([
       getVaultFiles(params),
       getVaultStats(),
@@ -506,12 +1523,133 @@ export default function VaultPage() {
   };
 
   useEffect(() => {
+    loadFolders();
+    loadTags();
+    if (isAdmin) {
+      getMakerworldAuthStatus()
+        .then((res) => setMakerworldAuthed(!!res.data.configured))
+        .catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     load().catch(() => {
       toast.error('No se pudo cargar el Vault');
       setLoading(false);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize, debouncedQuery]);
+  }, [page, pageSize, debouncedQuery, currentFolderId, activeTagIds]);
+
+  const handleCreateFolder = async (name) => {
+    try {
+      await createVaultFolder({ name, parent_id: currentFolderId });
+      setFolderModal(null);
+      toast.success('Carpeta creada');
+      await loadFolders();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'No se pudo crear la carpeta');
+    }
+  };
+
+  const handleRenameFolder = async (name) => {
+    try {
+      await updateVaultFolder(folderModal.folder.id, { name });
+      setFolderModal(null);
+      toast.success('Carpeta renombrada');
+      await loadFolders();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'No se pudo renombrar la carpeta');
+    }
+  };
+
+  const handleMoveFolder = async (folder, newParentId) => {
+    try {
+      if (newParentId == null) {
+        await updateVaultFolder(folder.id, { move_to_root: true });
+      } else {
+        await updateVaultFolder(folder.id, { parent_id: newParentId });
+      }
+      toast.success('Carpeta movida');
+      await loadFolders();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'No se pudo mover la carpeta');
+    }
+  };
+
+  const handleDeleteFolder = async (folder) => {
+    const hasChildren = folders.some((f) => f.parent_id === folder.id);
+    const msg = hasChildren
+      ? `"${folder.name}" tiene subcarpetas — se eliminarán también. Los archivos dentro subirán a la raíz. ¿Continuar?`
+      : `¿Eliminar la carpeta "${folder.name}"? Los archivos dentro subirán a la raíz.`;
+    const ok = await confirm(msg, 'Eliminar');
+    if (!ok) return;
+    try {
+      await deleteVaultFolder(folder.id);
+      toast.success('Carpeta eliminada');
+      await loadFolders();
+      await load();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'No se pudo eliminar la carpeta');
+    }
+  };
+
+  const handleCreateTag = async (name) => {
+    try {
+      await createVaultTag(name);
+      toast.success('Tag creado');
+      await loadTags();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'No se pudo crear el tag');
+    }
+  };
+
+  const handleRenameTag = async (tagId, name) => {
+    try {
+      await updateVaultTag(tagId, name);
+      toast.success('Tag renombrado');
+      await loadTags();
+      await load();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'No se pudo renombrar el tag');
+    }
+  };
+
+  const handleDeleteTag = async (tag) => {
+    const ok = await confirm(
+      `¿Eliminar el tag "${tag.name}"? Los archivos que lo tienen no se borran, solo pierden esa etiqueta.`,
+      'Eliminar',
+    );
+    if (!ok) return;
+    try {
+      await deleteVaultTag(tag.id);
+      toast.success('Tag eliminado');
+      setActiveTagIds((cur) => cur.filter((id) => id !== tag.id));
+      await loadTags();
+      await load();
+    } catch {
+      toast.error('No se pudo eliminar el tag');
+    }
+  };
+
+  const handleToggleTagFilter = (tagId) => {
+    setActiveTagIds((cur) =>
+      cur.includes(tagId) ? cur.filter((id) => id !== tagId) : [...cur, tagId],
+    );
+  };
+
+  /** Mueve el archivo del drawer a otra carpeta (o a la raíz con folderId=null). */
+  const handleMoveFile = async (file, folderId) => {
+    try {
+      const res = await updateVaultFile(file.id, { folder_id: folderId });
+      setSelected(res.data);
+      toast.success('Archivo movido');
+      await load();
+      await loadFolders();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'No se pudo mover el archivo');
+    }
+  };
 
   /**
    * Descarga uno de los slots (source o print) del modelo y dispara la
@@ -554,11 +1692,11 @@ export default function VaultPage() {
   };
 
   const handleDelete = async (f) => {
-    const ok = await confirm(`¿Eliminar "${f.name}"?`, 'Eliminar');
+    const ok = await confirm(`¿Mover "${f.name}" a la papelera? Puedes restaurarlo después.`, 'Mover a papelera');
     if (!ok) return false;
     try {
       await deleteVaultFile(f.id);
-      toast.success('Archivo eliminado');
+      toast.success('Archivo movido a la papelera');
       // Si el item borrado era el único de la última página, retrocedemos
       // automáticamente para no quedar en una página vacía.
       if (files.length === 1 && page > 1) {
@@ -576,6 +1714,115 @@ export default function VaultPage() {
   const usedBytes = stats?.used_bytes ?? 0;
   const quotaBytes = stats?.quota_bytes ?? 1;
   const percent = stats?.percent ?? 0;
+
+  const FolderBreadcrumb = (
+    <div className="flex flex-wrap items-center gap-1.5 px-4 md:px-6 pt-1">
+      <button
+        type="button"
+        onClick={() => setCurrentFolderId(null)}
+        className={`mono text-[11px] px-1.5 py-0.5 rounded hover:bg-white/5 ${currentFolderId === null ? 'text-tech-white font-semibold' : 'text-gunmetal'}`}
+      >
+        Vault
+      </button>
+      {breadcrumb.map((f) => (
+        <span key={f.id} className="flex items-center gap-1.5">
+          <ChevronRight size={11} className="text-gunmetal-dim" />
+          <button
+            type="button"
+            onClick={() => setCurrentFolderId(f.id)}
+            className={`mono text-[11px] px-1.5 py-0.5 rounded hover:bg-white/5 ${f.id === currentFolderId ? 'text-tech-white font-semibold' : 'text-gunmetal'}`}
+          >
+            {f.name}
+          </button>
+        </span>
+      ))}
+      <span className="flex-1" />
+      {isAdmin && (
+        <button
+          type="button"
+          onClick={() => setFolderModal({ mode: 'create' })}
+          className="mono text-[11px] px-2 py-1 rounded-md border border-[var(--color-border-strong)] text-gunmetal hover:text-tech-white hover:border-rose-500/40 flex items-center gap-1.5"
+        >
+          <FolderPlus size={12} /> Nueva carpeta
+        </button>
+      )}
+    </div>
+  );
+
+  // Cuando hay búsqueda activa, `load()` ignora el filtro de carpeta y
+  // busca en todo el Vault — este aviso evita que el breadcrumb (que
+  // sigue mostrando la carpeta actual) parezca contradecir los resultados.
+  const SearchScopeHint = debouncedQuery && currentFolderId != null && (
+    <p className="px-4 md:px-6 -mt-0.5 mono text-[10.5px] text-gunmetal">
+      Buscando en todo el Vault, no solo en esta carpeta
+    </p>
+  );
+
+  // Copy del empty-state: distingue "el Vault entero está vacío" de
+  // "esta carpeta puntual está vacía" — antes ambos casos mostraban
+  // "Vault vacío", lo cual confunde en una carpeta reciente sin archivos.
+  const isEmptyNoQuery = total === 0 && !debouncedQuery;
+  const emptyTitle = isEmptyNoQuery ? (currentFolderId ? 'Carpeta vacía' : 'Vault vacío') : 'Sin resultados';
+  const emptyHint = isEmptyNoQuery
+    ? (currentFolderId
+        ? 'Sube un modelo aquí o muévelo desde otra carpeta.'
+        : 'Sube tu primer .3mf para tener tus modelos organizados aquí.')
+    : 'Cambia el filtro o limpia la búsqueda.';
+
+  const FolderGrid = childFolders.length > 0 && (
+    <div
+      className="px-4 md:px-6 pb-3 pt-2 grid gap-3"
+      style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}
+    >
+      {childFolders.map((f) => (
+        <FolderCard
+          key={f.id}
+          folder={f}
+          folders={folders}
+          isAdmin={isAdmin}
+          onOpen={setCurrentFolderId}
+          onRename={(folder) => setFolderModal({ mode: 'rename', folder })}
+          onMove={handleMoveFolder}
+          onDelete={handleDeleteFolder}
+        />
+      ))}
+    </div>
+  );
+
+  // Fila de chips de tags — filtro multi-select AND. Se omite por completo
+  // si el catálogo está vacío (nada que filtrar todavía).
+  const TagsFilterRail = tags.length > 0 && (
+    <div className="flex flex-wrap items-center gap-1.5 px-4 md:px-6 pt-1">
+      {tags.map((t) => {
+        const active = activeTagIds.includes(t.id);
+        return (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => handleToggleTagFilter(t.id)}
+            className={`inline-flex items-center gap-1 mono text-[10.5px] px-2 py-0.5 rounded-full border transition-colors ${
+              active
+                ? 'bg-rose-500/15 border-rose-500/50 text-rose-300'
+                : 'bg-transparent border-[var(--color-border)] text-gunmetal hover:text-tech-white'
+            }`}
+          >
+            <Tag size={10} />
+            {t.name}
+            {active && <X size={10} />}
+          </button>
+        );
+      })}
+      {isAdmin && (
+        <button
+          type="button"
+          onClick={() => setTagsModalOpen(true)}
+          className="mono text-[10.5px] text-gunmetal hover:text-tech-white underline underline-offset-2 ml-1"
+        >
+          gestionar tags
+        </button>
+      )}
+    </div>
+  );
 
   const KPIs = (
     <div className="flex flex-wrap gap-3 px-6 pt-4 pb-2">
@@ -644,38 +1891,43 @@ export default function VaultPage() {
             />
           </div>
         </div>
+        <div className="mt-3">{FolderBreadcrumb}</div>
+        {SearchScopeHint}
+        {TagsFilterRail}
+        {FolderGrid}
         {loading ? (
           <p className="px-4 py-12 text-center text-gunmetal text-sm">Cargando Vault…</p>
         ) : files.length === 0 ? (
           <div className="mt-3 pb-28">
-            <EmptyState
-              icon={Archive}
-              accent={ACCENT}
-              title={total === 0 && !debouncedQuery ? 'Vault vacío' : 'Sin resultados'}
-              hint={
-                total === 0 && !debouncedQuery
-                  ? 'Sube tu primer .3mf para tener tus modelos organizados aquí.'
-                  : 'Cambia el filtro o limpia la búsqueda.'
-              }
-              action={
-                isAdmin && total === 0 && !debouncedQuery ? (
-                  <button
-                    type="button"
-                    onClick={() => navigate('/vault/upload')}
-                    className="btn btn-primary btn-sm"
-                  >
-                    <Upload size={13} /> Subir primer modelo
-                  </button>
-                ) : null
-              }
-            />
+            {childFolders.length === 0 && (
+              <EmptyState
+                icon={Archive}
+                accent={ACCENT}
+                title={emptyTitle}
+                hint={emptyHint}
+                action={
+                  isAdmin && isEmptyNoQuery ? (
+                    <button
+                      type="button"
+                      onClick={() => navigate(currentFolderId ? `/vault/upload?folder=${currentFolderId}` : '/vault/upload')}
+                      className="btn btn-primary btn-sm"
+                    >
+                      <Upload size={13} /> Subir modelo
+                    </button>
+                  ) : null
+                }
+              />
+            )}
           </div>
         ) : (
           <>
             <ul className="mt-3">
               {files.map((f) => (
                 <li key={f.id}>
-                  <VaultRow file={f} onClick={setSelected} />
+                  <VaultRow
+                    file={f} onClick={setSelected} onShowHistory={setHistoryModalFile}
+                    selectMode={selectMode} selected={selectedIds.has(f.id)} onToggleSelect={toggleFileSelect}
+                  />
                 </li>
               ))}
             </ul>
@@ -712,7 +1964,7 @@ export default function VaultPage() {
         {isAdmin && (
           <button
             type="button"
-            onClick={() => navigate('/vault/upload')}
+            onClick={() => navigate(currentFolderId ? `/vault/upload?folder=${currentFolderId}` : '/vault/upload')}
             className="fixed bottom-20 right-4 z-40 inline-flex items-center gap-2 pl-4 pr-5 py-3.5 rounded-full font-semibold text-sm shadow-2xl active:scale-95 transition-transform"
             style={{ background: ACCENT, color: '#FFF', boxShadow: `0 8px 24px ${ACCENT}55` }}
             aria-label="Subir modelo"
@@ -728,7 +1980,13 @@ export default function VaultPage() {
           height="full"
         >
           <div className="px-5 pt-4 pb-3">
-            <VaultDrawerBody file={selected} onActivePlateChange={handleActivePlateChange} />
+            <VaultDrawerBody
+              file={selected}
+              onActivePlateChange={handleActivePlateChange}
+              isAdmin={isAdmin}
+              folders={folders}
+              onMoveFile={handleMoveFile}
+            />
           </div>
           {selected && (
             <div className="px-5 pt-3 pb-5 border-t border-[var(--color-border-soft)] flex flex-wrap gap-2 sticky bottom-0 bg-[var(--color-surf-sidebar)]">
@@ -737,12 +1995,30 @@ export default function VaultPage() {
                 isAdmin={isAdmin}
                 onDownloadSource={handleDownloadSource}
                 onDownloadPrint={handleDownloadPrint}
+                onViewGcode={setGcodeViewerFile}
                 onDelete={handleDelete}
                 onClose={() => setSelected(null)}
               />
             </div>
           )}
         </MobileSheet>
+        {folderModal && (
+          <FolderNameModal
+            mode={folderModal.mode}
+            initialName={folderModal.folder?.name}
+            onCancel={() => setFolderModal(null)}
+            onSave={folderModal.mode === 'rename' ? handleRenameFolder : handleCreateFolder}
+          />
+        )}
+        {tagsModalOpen && (
+          <TagsManageModal
+            tags={tags}
+            onClose={() => setTagsModalOpen(false)}
+            onCreate={handleCreateTag}
+            onRename={handleRenameTag}
+            onDelete={handleDeleteTag}
+          />
+        )}
       </div>
     );
   }
@@ -764,19 +2040,69 @@ export default function VaultPage() {
             {total} modelos
           </span>
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            setSelectMode((v) => !v);
+            setSelectedIds(new Set());
+          }}
+          className={`btn btn-sm ${selectMode ? 'btn-primary' : 'btn-ghost'}`}
+        >
+          {selectMode ? 'Cancelar selección' : 'Seleccionar'}
+        </button>
         {isAdmin && (
-          <Link to="/vault/upload" className="btn btn-primary btn-sm">
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setMakerworldModalOpen(true)}>
+            <Globe size={13} /> MakerWorld
+          </button>
+        )}
+        {isAdmin && (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setUploadZipModalOpen(true)}>
+            <FileArchive size={13} /> Subir ZIP
+          </button>
+        )}
+        {isAdmin && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={runBackfillHashes}
+            disabled={backfillingHashes}
+            title="Calcula el hash SHA-256 de archivos subidos antes de esta función (para detectar duplicados)"
+          >
+            <Hash size={13} /> {backfillingHashes ? 'Calculando…' : 'Hashes'}
+          </button>
+        )}
+        {isAdmin && (
+          <Link
+            to={currentFolderId ? `/vault/upload?folder=${currentFolderId}` : '/vault/upload'}
+            className="btn btn-primary btn-sm"
+          >
             <Upload size={13} /> Subir modelo
           </Link>
         )}
       </header>
 
+      {selectMode && selectedIds.size > 0 && (
+        <div className="flex items-center gap-2 bg-amber-500/10 border-b border-amber-500/30 px-6 py-2">
+          <span className="text-xs text-amber-200 flex-1">
+            {selectedIds.size} archivo{selectedIds.size === 1 ? '' : 's'} seleccionado{selectedIds.size === 1 ? '' : 's'}
+          </span>
+          <button type="button" onClick={() => setAssignModalOpen(true)} className="btn btn-primary btn-sm">
+            <FolderKanban size={13} /> Asignar a proyecto
+          </button>
+        </div>
+      )}
+
       {KPIs}
+      {FolderBreadcrumb}
+      {SearchScopeHint}
+      {TagsFilterRail}
+      {FolderGrid}
 
       <div className="flex flex-wrap gap-3 items-center px-6 py-3 sticky top-0 bg-forge-black/80 backdrop-blur z-10 border-b border-[var(--color-border-soft)]">
         <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 min-w-[260px] basis-[280px] flex-1 max-w-md">
           <Search size={13} className="text-gunmetal" />
           <input
+            data-search-input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar modelo, tag, descripción…"
@@ -799,23 +2125,24 @@ export default function VaultPage() {
       {loading ? (
         <p className="px-6 py-16 text-center text-gunmetal text-sm">Cargando Vault…</p>
       ) : files.length === 0 ? (
-        <EmptyState
-          icon={Archive}
-          accent={ACCENT}
-          title={total === 0 && !debouncedQuery ? 'Vault vacío' : 'Sin resultados'}
-          hint={
-            total === 0 && !debouncedQuery
-              ? 'Sube tu primer .3mf para tener tus modelos organizados aquí.'
-              : 'Cambia el filtro o limpia la búsqueda.'
-          }
-          action={
-            isAdmin && total === 0 && !debouncedQuery ? (
-              <Link to="/vault/upload" className="btn btn-primary btn-sm">
-                <Upload size={13} /> Subir primer modelo
-              </Link>
-            ) : null
-          }
-        />
+        childFolders.length === 0 && (
+          <EmptyState
+            icon={Archive}
+            accent={ACCENT}
+            title={emptyTitle}
+            hint={emptyHint}
+            action={
+              isAdmin && isEmptyNoQuery ? (
+                <Link
+                  to={currentFolderId ? `/vault/upload?folder=${currentFolderId}` : '/vault/upload'}
+                  className="btn btn-primary btn-sm"
+                >
+                  <Upload size={13} /> Subir modelo
+                </Link>
+              ) : null
+            }
+          />
+        )
       ) : (
         <>
           <div
@@ -823,7 +2150,10 @@ export default function VaultPage() {
             style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}
           >
             {files.map((f) => (
-              <VaultCard key={f.id} file={f} onClick={setSelected} />
+              <VaultCard
+                key={f.id} file={f} onClick={setSelected} onShowHistory={setHistoryModalFile}
+                selectMode={selectMode} selected={selectedIds.has(f.id)} onToggleSelect={toggleFileSelect}
+              />
             ))}
           </div>
           {totalPages > 1 && (
@@ -908,13 +2238,20 @@ export default function VaultPage() {
               isAdmin={isAdmin}
               onDownloadSource={handleDownloadSource}
               onDownloadPrint={handleDownloadPrint}
+              onViewGcode={setGcodeViewerFile}
               onDelete={handleDelete}
               onClose={() => setSelected(null)}
             />
           )
         }
       >
-        <VaultDrawerBody file={selected} onActivePlateChange={handleActivePlateChange} />
+        <VaultDrawerBody
+          file={selected}
+          onActivePlateChange={handleActivePlateChange}
+          isAdmin={isAdmin}
+          folders={folders}
+          onMoveFile={handleMoveFile}
+        />
       </DetailDrawer>
 
       <footer className="mt-auto px-6 py-2.5 border-t border-[var(--color-border-soft)] bg-[var(--color-surf-sidebar)] flex flex-wrap items-center gap-4 text-[11px] text-gunmetal">
@@ -928,6 +2265,71 @@ export default function VaultPage() {
         <span className="flex-1" />
         <span className="mono">es-CO</span>
       </footer>
+
+      {folderModal && (
+        <FolderNameModal
+          mode={folderModal.mode}
+          initialName={folderModal.folder?.name}
+          onCancel={() => setFolderModal(null)}
+          onSave={folderModal.mode === 'rename' ? handleRenameFolder : handleCreateFolder}
+        />
+      )}
+      {tagsModalOpen && (
+        <TagsManageModal
+          tags={tags}
+          onClose={() => setTagsModalOpen(false)}
+          onCreate={handleCreateTag}
+          onRename={handleRenameTag}
+          onDelete={handleDeleteTag}
+        />
+      )}
+      {gcodeViewerFile && (
+        <GCodeViewerModal
+          fileId={gcodeViewerFile.id}
+          fileName={gcodeViewerFile.print_file_name || gcodeViewerFile.name}
+          onClose={() => setGcodeViewerFile(null)}
+        />
+      )}
+      {historyModalFile && (
+        <PrintHistoryModal
+          fileId={historyModalFile.id}
+          fileName={historyModalFile.name}
+          onClose={() => setHistoryModalFile(null)}
+        />
+      )}
+      {assignModalOpen && (
+        <AssignToProjectModal
+          fileIds={[...selectedIds]}
+          onClose={() => setAssignModalOpen(false)}
+          onAssigned={() => {
+            setAssignModalOpen(false);
+            setSelectMode(false);
+            setSelectedIds(new Set());
+          }}
+        />
+      )}
+      {makerworldModalOpen && (
+        <MakerWorldImportModal
+          hasCloudAuth={makerworldAuthed}
+          folders={folders}
+          onClose={() => setMakerworldModalOpen(false)}
+          onImported={() => {
+            setMakerworldModalOpen(false);
+            load();
+          }}
+        />
+      )}
+      {uploadZipModalOpen && (
+        <UploadZipModal
+          currentFolderId={currentFolderId}
+          onClose={() => setUploadZipModalOpen(false)}
+          onImported={() => {
+            setUploadZipModalOpen(false);
+            loadFolders();
+            load();
+          }}
+        />
+      )}
     </div>
   );
 }

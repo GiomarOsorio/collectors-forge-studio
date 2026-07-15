@@ -7,7 +7,7 @@ app Cost; no hay schemas separados para impresoras de mantenimiento.
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, List, Optional, Dict
+from typing import Annotated, List, Literal, Optional, Dict
 
 from pydantic import BaseModel, Field, PlainSerializer
 
@@ -53,6 +53,9 @@ class MaintenanceLogCreate(BaseModel):
     description: Optional[str] = Field(default=None, max_length=1000)
     performed_at: Optional[datetime] = None
     items: List[MaintenanceLogItemCreate] = Field(default_factory=list)
+    # issue #138: schedules a marcar como "hechos" en la misma transacción
+    # (además del auto-match por task_name == maintenance_type).
+    schedule_ids: List[int] = Field(default_factory=list)
 
 
 class MaintenanceLogUpdate(BaseModel):
@@ -74,6 +77,7 @@ class MaintenanceLogResponse(BaseModel):
     created_at: datetime
     items: List[MaintenanceLogItemResponse] = []
     printer: Optional[PrinterResponse] = None
+    matched_schedules: List[int] = []
 
     model_config = {"from_attributes": True}
 
@@ -92,3 +96,46 @@ class MaintenancePrinterSummary(BaseModel):
     """Resumen de una impresora con el último mantenimiento por tipo."""
     printer: PrinterResponse
     last_per_type: Dict[str, MaintenanceLastEntry]
+
+
+# ─── MaintenanceSchedule (issue #138) ─────────────────────────────────────────
+
+ScheduleStatus = Literal["ok", "due_soon", "overdue"]
+
+
+class MaintenanceScheduleCreate(BaseModel):
+    """Datos para crear un recordatorio de mantenimiento."""
+    printer_id: int
+    task_name: str = Field(min_length=1, max_length=120)
+    description: Optional[str] = Field(default=None, max_length=500)
+    interval_type: Literal["print_hours", "days"]
+    interval_value: DecimalAsFloat = Field(gt=0)
+
+
+class MaintenanceScheduleUpdate(BaseModel):
+    """Campos editables de un recordatorio (no reasigna la impresora)."""
+    task_name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    description: Optional[str] = Field(default=None, max_length=500)
+    interval_type: Optional[Literal["print_hours", "days"]] = None
+    interval_value: Optional[DecimalAsFloat] = Field(default=None, gt=0)
+    enabled: Optional[bool] = None
+
+
+class MaintenanceScheduleResponse(BaseModel):
+    """Respuesta de un recordatorio con progreso calculado hacia el vencimiento."""
+    id: int
+    printer_id: int
+    printer_name: Optional[str] = None
+    task_name: str
+    description: Optional[str]
+    interval_type: Literal["print_hours", "days"]
+    interval_value: DecimalAsFloat
+    last_done_at: datetime
+    last_done_hours: DecimalAsFloat
+    enabled: bool
+    created_at: datetime
+    updated_at: datetime
+    progress_pct: DecimalAsFloat
+    status: ScheduleStatus
+
+    model_config = {"from_attributes": True}

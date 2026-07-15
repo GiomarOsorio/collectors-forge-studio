@@ -8,11 +8,12 @@
  * @module components/widgets
  */
 
-import { FileText, ListOrdered, PackageOpen, Wrench } from 'lucide-react';
+import { BarChart3, FileText, ListOrdered, PackageOpen, Wrench } from 'lucide-react';
 import QueueWidget from './QueueWidget';
 import LowStockWidget from './LowStockWidget';
 import QuotesWidget from './QuotesWidget';
 import MaintenanceWidget from './MaintenanceWidget';
+import StatsWidget from './StatsWidget';
 
 /**
  * @typedef {('quarter'|'half'|'full')} WidgetSize
@@ -68,6 +69,15 @@ export const WIDGETS = [
     icon: Wrench,
     color: '#8B5CF6',
     Component: MaintenanceWidget,
+    defaultVisible: true,
+    defaultSize: 'half',
+  },
+  {
+    id: 'stats',
+    title: 'Stats (últimos 30 días)',
+    icon: BarChart3,
+    color: '#06B6D4',
+    Component: StatsWidget,
     defaultVisible: true,
     defaultSize: 'half',
   },
