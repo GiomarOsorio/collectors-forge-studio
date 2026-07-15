@@ -94,11 +94,15 @@ class ModelFile(Base):
     source_file_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     source_file_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     source_file_size: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    # SHA-256 hex (issue #128) — calculado al subir/reemplazar. NULL en
+    # archivos pre-existentes hasta correr POST /vault/backfill-hashes.
+    source_file_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
 
     # ── Print (.gcode.3mf laminado) ─────────────────────────────────────────
     print_file_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     print_file_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     print_file_size: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    print_file_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
 
     # ── Metadatos pre-parseados del .gcode.3mf (slot print) ────────────────
     # Estos campos son CACHE del plate activo — sincronizados al cambiar

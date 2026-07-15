@@ -197,3 +197,24 @@ class VaultZipImportResponse(BaseModel):
     files_created: int
     skipped_entries: int
     root_folder_id: Optional[int] = None
+
+
+class CheckDuplicateRequest(BaseModel):
+    """Hash SHA-256 calculado client-side sobre el `File` antes de subir (issue #128)."""
+    sha256: str = Field(min_length=64, max_length=64)
+
+
+class DuplicateFileInfo(BaseModel):
+    id: int
+    name: str
+
+
+class CheckDuplicateResponse(BaseModel):
+    duplicate: bool
+    file: Optional[DuplicateFileInfo] = None
+
+
+class BackfillHashesResponse(BaseModel):
+    """Resultado de un lote de `POST /vault/backfill-hashes` (issue #128)."""
+    processed: int
+    remaining: int

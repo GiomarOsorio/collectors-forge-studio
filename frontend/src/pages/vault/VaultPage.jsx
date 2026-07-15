@@ -26,6 +26,7 @@ import {
   FolderPlus,
   Globe,
   HardDrive,
+  Hash,
   MoreVertical,
   Pencil,
   Plus,
@@ -56,6 +57,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useConfirm } from '../../components/ConfirmDialog';
 import {
   addProjectFiles,
+  backfillVaultHashes,
   createProject,
   createVaultFolder,
   createVaultTag,
@@ -1420,6 +1422,7 @@ export default function VaultPage() {
   // Import de MakerWorld (issue #139).
   const [makerworldModalOpen, setMakerworldModalOpen] = useState(false);
   const [uploadZipModalOpen, setUploadZipModalOpen] = useState(false);
+  const [backfillingHashes, setBackfillingHashes] = useState(false);
   const [makerworldAuthed, setMakerworldAuthed] = useState(false);
 
   const toggleFileSelect = (id) => {
@@ -1429,6 +1432,33 @@ export default function VaultPage() {
       else next.add(id);
       return next;
     });
+  };
+
+  /**
+   * Backfill de hashes (issue #128) — llama el endpoint en lotes hasta que
+   * `remaining` llegue a 0. Cada lote es una llamada HTTP corta (20
+   * archivos), así que el loop no bloquea el server ni el navegador.
+   */
+  const runBackfillHashes = async () => {
+    setBackfillingHashes(true);
+    try {
+      let totalProcessed = 0;
+      for (;;) {
+        const res = await backfillVaultHashes();
+        const { processed, remaining } = res.data;
+        totalProcessed += processed;
+        if (processed === 0 || remaining === 0) break;
+      }
+      toast.success(
+        totalProcessed > 0
+          ? `Hashes calculados para ${totalProcessed} archivo(s)`
+          : 'No había archivos pendientes de hash',
+      );
+    } catch {
+      toast.error('No se pudo completar el backfill de hashes');
+    } finally {
+      setBackfillingHashes(false);
+    }
   };
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -2028,6 +2058,17 @@ export default function VaultPage() {
         {isAdmin && (
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => setUploadZipModalOpen(true)}>
             <FileArchive size={13} /> Subir ZIP
+          </button>
+        )}
+        {isAdmin && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={runBackfillHashes}
+            disabled={backfillingHashes}
+            title="Calcula el hash SHA-256 de archivos subidos antes de esta función (para detectar duplicados)"
+          >
+            <Hash size={13} /> {backfillingHashes ? 'Calculando…' : 'Hashes'}
           </button>
         )}
         {isAdmin && (
