@@ -140,6 +140,16 @@ cd frontend
 npm test
 ```
 
+### Paridad de traducciones (i18n)
+
+CI falla si `src/i18n/messages/es.json` y `en.json` divergen en claves o en
+el set de placeholders `{{var}}` de cada clave (`es` es la referencia):
+
+```bash
+cd frontend
+npm run check:i18n
+```
+
 ### Importante sobre los tests
 
 Los tests del backend usan `MagicMock` para simular la base de datos (sin DB real). Esto significa que:
