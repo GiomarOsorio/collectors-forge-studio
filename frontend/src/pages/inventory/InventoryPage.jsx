@@ -204,6 +204,7 @@ function Toolbar({ query, onQuery, materialFilters, onToggleMat, view, onView, s
       <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 min-w-[260px] basis-[280px] flex-1 max-w-md">
         <Search size={13} className="text-gunmetal shrink-0" />
         <input
+          data-search-input
           value={query}
           onChange={(e) => onQuery(e.target.value)}
           placeholder="Buscar color, batch, ubicación…"

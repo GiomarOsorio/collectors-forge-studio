@@ -52,5 +52,13 @@
     "logout": "Log out",
     "login": "Sign in",
     "bypassDev": "Bypass dev (local development only)"
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "help": "Show this help",
+    "navigation": "Navigation",
+    "navigationHint": "Press {{g}} then the letter",
+    "search": "Focus search",
+    "closeHint": "or click outside to close"
   }
 }
