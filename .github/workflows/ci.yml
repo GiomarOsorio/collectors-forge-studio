@@ -216,6 +216,10 @@ jobs:
         working-directory: frontend
         run: npm test -- --coverage
 
+      - name: Check paridad i18n (es/en)
+        working-directory: frontend
+        run: npm run check:i18n
+
       - name: Subir reporte de coverage
         uses: actions/upload-artifact@v4
         if: always()
