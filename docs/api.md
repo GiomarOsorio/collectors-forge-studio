@@ -1424,6 +1424,43 @@ Límite: 1 GB. Verifica cuota antes de subir.
 
 ---
 
+### `POST /vault/upload-zip` (admin, issue #127)
+Sube un `.zip` y extrae su contenido al Vault, replicando la estructura de
+subcarpetas del ZIP como `VaultFolder`s. Solo procesa entries `.3mf`,
+`.stl` y `.gcode.3mf` — el resto se ignora en silencio (no rompe el resto
+del import). Cada archivo pasa por el mismo camino que `POST /upload`
+(parseo de header gcode + plates para `.gcode.3mf`, extracción/render de
+thumbnail para `.3mf`/`.stl`) — a diferencia del upload normal, cada entry
+del ZIP se convierte en su propio `ModelFile` (un solo slot poblado, no
+source+print juntos).
+
+**Body** (`multipart/form-data`):
+```
+file: modelos.zip
+folder_id: 12          # opcional, null/omitido = raíz del Vault
+create_folder: true    # opcional, default false — crea una carpeta nueva
+                        # con el nombre del ZIP (sin extensión) y todo
+                        # cuelga de ahí, en vez de ir directo a folder_id
+```
+
+**Protección zip-bomb**: rechaza si hay más de 500 entries o si la suma de
+tamaños descomprimidos supera 4 GB. Paths con `..` se ignoran. Límite del
+`.zip` en sí: 1 GB (mismo `MAX_VAULT_UPLOAD_BYTES` que el upload normal).
+
+**Response 201:**
+```json
+{"folders_created": 3, "files_created": 12, "skipped_entries": 2, "root_folder_id": 45}
+```
+
+**Errors:**
+- `400`: no es `.zip` / ZIP corrupto / demasiadas entries / supera el
+  tamaño descomprimido máximo
+- `413`: el `.zip` en sí supera 1 GB
+- `507`: sin espacio disponible (cuota excedida) — chequeado antes de
+  extraer nada, sumando solo los archivos soportados que se van a guardar
+
+---
+
 ### `GET /vault/{id}/download/source`
 Descarga el slot `source_file` (`.3mf` editable). 404 si el modelo no
 tiene ese slot.
