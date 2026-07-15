@@ -447,9 +447,10 @@ en gramos — ver docstring completo en `backend/app/models/spool.py`)**:
 ### `projects`
 
 Agrupador organizativo de ítems de la cola de impresión (`print_queue.project_id`,
-FK SET NULL) — no participa en cálculos de costo ni de inventario. Metadata
-agregada en issue #136 sub-ticket 1/3; vínculo a Vault en sub-ticket 2/3
-(el export/import queda en el sub-ticket 3/3).
+FK SET NULL) — no participa en cálculos de costo ni de inventario. Issue
+#136 completo en 3 sub-tickets: metadata, vínculo a Vault
+(`project_model_files`) y export/import ZIP (`GET /{id}/export`,
+`POST /import` — sin migración propia, son solo endpoints).
 
 | Columna | Tipo | Descripción |
 |---|---|---|

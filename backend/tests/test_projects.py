@@ -17,6 +17,9 @@ Cubre:
     - DELETE /{id} → 404 si el proyecto no existe
 """
 
+import io
+import json
+import zipfile
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -486,3 +489,215 @@ class TestProjectFiles:
         finally:
             _clear_overrides()
         assert r.status_code == 204
+
+
+# ---------------------------------------------------------------------------
+# Export / Import (issue #136, sub-ticket 3/3)
+# ---------------------------------------------------------------------------
+
+
+def _make_zip(manifest, files=None):
+    """Construye un ZIP real en memoria: manifest.json + binarios dados."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("manifest.json", json.dumps(manifest))
+        for path, data in (files or {}).items():
+            zf.writestr(path, data)
+    return buf.getvalue()
+
+
+class TestProjectExport:
+    async def test_export_proyecto_no_encontrado_retorna_404(self):
+        _set_overrides({
+            get_db: _fake_db_sequence(_exec_result(scalar_one_or_none=None)),
+            get_current_user: lambda: _fake_user(),
+        })
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.get("/api/projects/999/export")
+        finally:
+            _clear_overrides()
+        assert r.status_code == 404
+
+    async def test_export_genera_zip_con_manifest_y_archivos(self, monkeypatch):
+        project = _fake_project(project_id=1, name="Encargo X")
+        tag = MagicMock()
+        tag.name = "Halloween"
+        mf = MagicMock()
+        mf.name = "Calabaza"
+        mf.description = None
+        mf.notes = "frágil"
+        mf.tags = [tag]
+        mf.source_file_key = "src-key"
+        mf.source_file_name = "calabaza.3mf"
+        mf.print_file_key = None
+        mf.print_file_name = None
+        project.files = [mf]
+
+        async def _fake_download(key):
+            assert key == "src-key"
+            return b"contenido-3mf"
+
+        monkeypatch.setattr("app.routers.projects.download_file", _fake_download)
+        _set_overrides({
+            get_db: _fake_db_sequence(_exec_result(scalar_one_or_none=project)),
+            get_current_user: lambda: _fake_user(),
+        })
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.get("/api/projects/1/export")
+        finally:
+            _clear_overrides()
+
+        assert r.status_code == 200
+        assert r.headers["content-type"] == "application/zip"
+        zf = zipfile.ZipFile(io.BytesIO(r.content))
+        manifest = json.loads(zf.read("manifest.json"))
+        assert manifest["version"] == 1
+        assert manifest["project"]["name"] == "Encargo X"
+        assert manifest["files"][0]["source_file_name"] == "calabaza.3mf"
+        assert manifest["files"][0]["tags"] == ["Halloween"]
+        assert zf.read("files/0/source_calabaza.3mf") == b"contenido-3mf"
+
+
+class TestProjectImport:
+    async def test_zip_invalido_retorna_400(self):
+        _set_overrides({
+            get_db: _fake_db_empty,
+            get_current_user: lambda: _fake_user(role="admin"),
+        })
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.post(
+                    "/api/projects/import",
+                    files={"file": ("x.zip", b"no-es-un-zip", "application/zip")},
+                )
+        finally:
+            _clear_overrides()
+        assert r.status_code == 400
+
+    async def test_sin_manifest_retorna_400(self):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("otra_cosa.txt", "x")
+        _set_overrides({
+            get_db: _fake_db_empty,
+            get_current_user: lambda: _fake_user(role="admin"),
+        })
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.post(
+                    "/api/projects/import",
+                    files={"file": ("x.zip", buf.getvalue(), "application/zip")},
+                )
+        finally:
+            _clear_overrides()
+        assert r.status_code == 400
+
+    async def test_version_no_soportada_retorna_400(self):
+        zip_bytes = _make_zip({"version": 2, "project": {"name": "X"}, "files": []})
+        _set_overrides({
+            get_db: _fake_db_empty,
+            get_current_user: lambda: _fake_user(role="admin"),
+        })
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.post(
+                    "/api/projects/import",
+                    files={"file": ("x.zip", zip_bytes, "application/zip")},
+                )
+        finally:
+            _clear_overrides()
+        assert r.status_code == 400
+
+    async def test_no_admin_retorna_403(self):
+        _set_overrides({
+            get_db: _fake_db_empty,
+            get_current_user: lambda: _fake_user(role="operator"),
+        })
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.post(
+                    "/api/projects/import",
+                    files={"file": ("x.zip", b"x", "application/zip")},
+                )
+        finally:
+            _clear_overrides()
+        assert r.status_code == 403
+
+    async def test_import_exitoso_recrea_proyecto_y_archivo(self, monkeypatch):
+        manifest = {
+            "version": 1,
+            "project": {"name": "Encargo Importado", "description": "notas", "color": "#F59E0B", "external_url": None},
+            "files": [{
+                "name": "Calabaza", "description": None, "notes": None, "tags": ["Halloween"],
+                "source_file_name": "calabaza.3mf", "print_file_name": None,
+            }],
+        }
+        zip_bytes = _make_zip(manifest, {"files/0/source_calabaza.3mf": b"contenido"})
+
+        monkeypatch.setattr("app.routers.projects._get_used_bytes", AsyncMock(return_value=0))
+        monkeypatch.setattr("app.routers.projects._resolve_tags", AsyncMock(return_value=[]))
+        monkeypatch.setattr("app.routers.projects.upload_file", AsyncMock(return_value=None))
+
+        from datetime import datetime, timezone as tz
+
+        added = []
+        counter = {"next": 42}
+
+        session = AsyncMock()
+        name_check = _exec_result(scalar_one_or_none=None)
+        counts_result = _exec_result(scalars_all=[])
+        session.execute = AsyncMock(side_effect=[name_check, counts_result])
+        session.add = MagicMock(side_effect=lambda obj: added.append(obj))
+
+        async def _flush():
+            for obj in added:
+                if getattr(obj, "id", None) is None:
+                    obj.id = counter["next"]
+                    counter["next"] += 1
+                if getattr(obj, "status", None) is None:
+                    obj.status = "active"
+                now = datetime.now(tz.utc).replace(tzinfo=None)
+                if getattr(obj, "created_at", None) is None:
+                    obj.created_at = now
+                if getattr(obj, "updated_at", None) is None:
+                    obj.updated_at = now
+
+        session.flush = _flush
+
+        async def _gen():
+            yield session
+
+        _set_overrides({get_db: _gen, get_current_user: lambda: _fake_user(role="admin")})
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.post(
+                    "/api/projects/import",
+                    files={"file": ("x.zip", zip_bytes, "application/zip")},
+                )
+        finally:
+            _clear_overrides()
+        assert r.status_code == 201
+        assert r.json()["name"] == "Encargo Importado"
+
+    async def test_quota_excedida_retorna_507(self, monkeypatch):
+        manifest = {
+            "version": 1, "project": {"name": "X"},
+            "files": [{"name": "F", "source_file_name": "f.3mf", "print_file_name": None, "tags": []}],
+        }
+        zip_bytes = _make_zip(manifest, {"files/0/source_f.3mf": b"x" * 1000})
+        monkeypatch.setattr("app.routers.projects._get_used_bytes", AsyncMock(return_value=10**15))
+        _set_overrides({
+            get_db: _fake_db_empty,
+            get_current_user: lambda: _fake_user(role="admin"),
+        })
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.post(
+                    "/api/projects/import",
+                    files={"file": ("x.zip", zip_bytes, "application/zip")},
+                )
+        finally:
+            _clear_overrides()
+        assert r.status_code == 507

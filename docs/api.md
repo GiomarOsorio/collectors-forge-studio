@@ -1083,9 +1083,9 @@ items anteriores a esta migración o si el usuario fue borrado después.
 ## Proyectos (issue #136)
 
 Agrupador organizativo de ítems de la cola (`print_queue.project_id`) — no
-afecta costos ni inventario. Metadata (cover, color, link externo,
-cotización vinculada) en sub-ticket 1/3; vínculo a archivos de Vault en
-sub-ticket 2/3; el export/import queda en el sub-ticket 3/3.
+afecta costos ni inventario. Implementado en 3 sub-tickets: metadata
+(cover, color, link externo, cotización vinculada), vínculo a archivos
+de Vault, y export/import ZIP.
 
 ### `GET /projects/`
 Lista proyectos con conteo de items de cola por estado + `client_quote_code`/
@@ -1140,6 +1140,33 @@ id ya estaba vinculado, se ignora sin error).
 
 ### `DELETE /projects/{id}/files/{model_file_id}` (operator)
 Quita un archivo del puente. No borra el `ModelFile` de Vault.
+
+### `GET /projects/{id}/export` (issue #136, sub-ticket 3/3)
+Exporta el proyecto a un ZIP: `manifest.json` (metadata del proyecto +
+de cada archivo vinculado, incluyendo tags) + los binarios de MinIO bajo
+`files/<idx>/source_<nombre>` / `files/<idx>/print_<nombre>`. NO exporta
+`cover_photo_key` ni `client_quote_id` (datos locales de esta instancia).
+Si un archivo ya no está en MinIO, se omite del ZIP sin bloquear el resto.
+
+**Formato del manifest (version 1):**
+```json
+{
+  "version": 1,
+  "project": { "name": "...", "description": "...", "color": "#F59E0B", "external_url": "..." },
+  "files": [
+    { "name": "...", "description": null, "notes": null, "tags": ["Halloween"],
+      "source_file_name": "calabaza.3mf", "print_file_name": null }
+  ]
+}
+```
+
+### `POST /projects/import` (admin)
+Recrea un proyecto desde un ZIP exportado con `GET /{id}/export` — multipart,
+límite 2 GB. Si ya existe un proyecto con el mismo nombre, el importado se
+crea con sufijo " (importado)" (nunca sobreescribe). Los archivos se
+re-suben a MinIO con keys nuevas. 400 si el ZIP es inválido, falta
+`manifest.json`, o la versión no es soportada; 507 si excede la cuota
+configurada del Vault (`VAULT_QUOTA_GB`).
 
 ---
 

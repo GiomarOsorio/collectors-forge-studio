@@ -15,6 +15,7 @@ import {
   Archive,
   CheckCircle2,
   Clock,
+  Download,
   ExternalLink,
   FileBox,
   FileText,
@@ -46,11 +47,13 @@ import { useConfirm } from '../../components/ConfirmDialog';
 import {
   createProject,
   deleteProject,
+  exportProject,
   getClientQuotes,
   getProjectCoverUrl,
   getProjectFiles,
   getProjectItems,
   getProjects,
+  importProject,
   removeProjectFile,
   updateProject,
   uploadProjectCover,
@@ -124,7 +127,7 @@ function ProjectProgressBar({ project }) {
 
 // ─── Card ───────────────────────────────────────────────────────────────────
 
-function ProjectCard({ project, onOpen, onEdit, onDelete }) {
+function ProjectCard({ project, onOpen, onEdit, onDelete, onExport }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const meta = STATUS_META[project.status] || STATUS_META.active;
   const accent = project.color || ACCENT;
@@ -192,6 +195,13 @@ function ProjectCard({ project, onOpen, onEdit, onDelete }) {
                   onClick={() => { setMenuOpen(false); onEdit(project); }}
                 >
                   <Pencil size={12} /> Editar
+                </button>
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-1.5 text-xs text-tech-white hover:bg-white/5 flex items-center gap-2"
+                  onClick={() => { setMenuOpen(false); onExport(project); }}
+                >
+                  <Download size={12} /> Exportar
                 </button>
                 <button
                   type="button"
@@ -357,7 +367,11 @@ function ProjectFormModal({ mode, initial, onCancel, onSave, onCoverUploaded }) 
                 <label className="tf-btn-ghost inline-flex items-center gap-1.5 cursor-pointer text-xs">
                   <Upload size={12} />
                   {uploadingCover ? 'Subiendo…' : initial?.has_cover ? 'Reemplazar' : 'Subir imagen'}
-                  <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleCoverChange} disabled={uploadingCover} />
+                  <input
+                    type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+                    aria-label="Subir foto de portada"
+                    onChange={handleCoverChange} disabled={uploadingCover}
+                  />
                 </label>
               </div>
             </label>
@@ -614,6 +628,31 @@ export default function ProjectsPage() {
     }
   };
 
+  const handleExport = async (project) => {
+    try {
+      await exportProject(project.id, project.name);
+    } catch {
+      toast.error('No se pudo exportar el proyecto');
+    }
+  };
+
+  const [importing, setImporting] = useState(false);
+  const handleImportFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setImporting(true);
+    try {
+      await importProject(file);
+      toast.success('Proyecto importado');
+      await load();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'No se pudo importar el proyecto');
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const activeCount = projects.filter((p) => p.status === 'active').length;
   const completedCount = projects.filter((p) => p.status === 'completed').length;
   const totalItems = projects.reduce((acc, p) => acc + (p.total_items || 0), 0);
@@ -644,6 +683,7 @@ export default function ProjectsPage() {
           onOpen={openProject}
           onEdit={(proj) => setFormModal({ mode: 'edit', project: proj })}
           onDelete={handleDelete}
+          onExport={handleExport}
         />
       ))}
     </div>
@@ -743,6 +783,14 @@ export default function ProjectsPage() {
             {projects.length}
           </span>
         </div>
+        <label className="btn btn-ghost btn-sm cursor-pointer">
+          <Upload size={13} /> {importing ? 'Importando…' : 'Importar'}
+          <input
+            type="file" accept=".zip" className="hidden"
+            aria-label="Importar proyecto (ZIP)"
+            onChange={handleImportFile} disabled={importing}
+          />
+        </label>
         <Button variant="primary" size="sm" icon={Plus} onClick={() => setFormModal({ mode: 'create' })}>
           Nuevo proyecto
         </Button>
