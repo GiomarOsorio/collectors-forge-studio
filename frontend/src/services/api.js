@@ -1225,5 +1225,12 @@ export const getMakerworldRecent = (limit = 10) => api.get(`/makerworld/recent?l
 export const makerworldThumbnailUrl = (url) =>
   `/api/makerworld/thumbnail?url=${encodeURIComponent(url)}`;
 
+// ─── System Info (issue #140, pieza C) ─────────────────────────────────────
+
+export const getSystemInfo = () => api.get('/system/info');
+
+export const getSystemLogs = (level, limit = 200) =>
+  api.get('/system/logs', { params: { level: level || undefined, limit } });
+
 export default api;
 
