@@ -1473,6 +1473,42 @@ Elimina el archivo de MinIO y el registro en DB.
 
 ---
 
+## System Info (issue #140, pieza C)
+
+Todo el módulo es admin-only. Consultas de solo lectura al catálogo de
+PostgreSQL (`pg_database_size`, `pg_stat_user_tables`) — sin parámetros de
+usuario en el SQL crudo.
+
+### `GET /system/info`
+```json
+{
+  "version": "a1b2c3d4e5f6",
+  "uptime_seconds": 12345.6,
+  "db": {
+    "size_pretty": "145 MB",
+    "top_tables": [{"name": "print_queue", "size_pretty": "12.3 MB", "size_bytes": 12894720}]
+  },
+  "minio": {"used_bytes": 524288000},
+  "counts": {"model_files": 42, "queue_items_done": 310, "client_quotes": 58, "spools": 15},
+  "migrations": {"current": "d4e5f6a7b8c0", "head": "d4e5f6a7b8c0", "up_to_date": true}
+}
+```
+`version` = SHA del commit embebido en el build (`ARG GIT_SHA` en el
+Containerfile, inyectado por CI vía `--build-arg`) — `"dev"` si no está
+seteado (build local sin el arg).
+
+### `GET /system/logs?level=&limit=200`
+Snapshot del buffer de log en memoria (`collections.deque(maxlen=500)`,
+registrado como `logging.Handler` en el lifespan) — sin streaming, refresh
+manual desde la UI. `level` filtra por severidad mínima (`WARNING` incluye
+`WARNING`/`ERROR`/`CRITICAL`). `limit` clamped a `[1, 500]`.
+
+```json
+[{"ts": "2026-07-15T10:00:00+00:00", "level": "ERROR", "logger": "app.routers.queue", "msg": "..."}]
+```
+
+---
+
 ## Health Check
 
 ### `GET /api/health`

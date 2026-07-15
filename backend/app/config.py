@@ -81,6 +81,10 @@ class Settings(BaseSettings):
     # `request.url.scheme://request.url.netloc` (suficiente en dev).
     PUBLIC_URL: str = ""
 
+    # SHA del commit embebido en el build (issue #140, system info) — el
+    # Containerfile lo inyecta vía --build-arg GIT_SHA. Vacío en dev local.
+    GIT_SHA: str = ""
+
     model_config = {"env_file": ".env"}
 
     @model_validator(mode="after")

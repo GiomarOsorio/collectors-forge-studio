@@ -20,6 +20,7 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  Cpu,
   Eye,
   EyeOff,
   Globe,
@@ -37,6 +38,7 @@ import {
 } from 'lucide-react';
 import NotificationsDrawer from './components/NotificationsDrawer';
 import IntegrationsDrawer from './components/IntegrationsDrawer';
+import SystemDrawer from './components/SystemDrawer';
 import { useTranslation } from 'react-i18next';
 import { SUPPORTED_LANGS, setLanguage } from '../../i18n';
 import toast from 'react-hot-toast';
@@ -641,6 +643,7 @@ export default function SettingsPage() {
   const [usersOpen, setUsersOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
+  const [systemOpen, setSystemOpen] = useState(false);
 
   const loadUsers = async () => {
     if (!isAdmin) return;
@@ -744,6 +747,16 @@ export default function SettingsPage() {
         status: 'Bambu Cloud',
         complete: true,
         onClick: () => setIntegrationsOpen(true),
+        visible: isAdmin,
+      },
+      {
+        id: 'system',
+        icon: Cpu,
+        title: 'Sistema',
+        desc: 'Versión, tamaño de BD, espacio MinIO, conteos y estado de migraciones.',
+        status: 'Ver estado',
+        complete: true,
+        onClick: () => setSystemOpen(true),
         visible: isAdmin,
       },
     ];
@@ -884,6 +897,13 @@ export default function SettingsPage() {
         <IntegrationsDrawer
           open={integrationsOpen}
           onClose={() => setIntegrationsOpen(false)}
+          isMobile={isMobile}
+        />
+      )}
+      {isAdmin && (
+        <SystemDrawer
+          open={systemOpen}
+          onClose={() => setSystemOpen(false)}
           isMobile={isMobile}
         />
       )}

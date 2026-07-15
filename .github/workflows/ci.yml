@@ -388,7 +388,7 @@ jobs:
           echo "${REGISTRY_PASS}" | podman login "${REGISTRY_HOST}" -u "${REGISTRY_USER}" --password-stdin
 
           echo "→ Build ${IMAGE}:${SHA_TAG} (+ ${LATEST_TAG})..."
-          podman build -t "${IMAGE}:${SHA_TAG}" -t "${IMAGE}:${LATEST_TAG}" -f Containerfile .
+          podman build --build-arg GIT_SHA="${GITHUB_SHA}" -t "${IMAGE}:${SHA_TAG}" -t "${IMAGE}:${LATEST_TAG}" -f Containerfile .
 
           echo "→ Push..."
           podman push "${IMAGE}:${SHA_TAG}"

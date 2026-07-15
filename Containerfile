@@ -65,6 +65,12 @@ RUN for i in 1 2 3; do \
 # Production stage — backend (FastAPI sirve la API + el SPA compilado)
 FROM docker.io/python:3.11-slim
 
+# SHA del commit embebido en el build (issue #140, system info). Sin
+# --build-arg (ej. build local) queda vacío y el backend cae al fallback
+# "dev" (ver app/routers/system.py).
+ARG GIT_SHA=""
+ENV GIT_SHA=${GIT_SHA}
+
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
