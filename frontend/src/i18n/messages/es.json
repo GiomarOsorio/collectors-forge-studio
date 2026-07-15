@@ -52,5 +52,13 @@
     "logout": "Cerrar sesión",
     "login": "Iniciar sesión",
     "bypassDev": "Bypass dev (solo desarrollo local)"
+  },
+  "shortcuts": {
+    "title": "Atajos de teclado",
+    "help": "Mostrar esta ayuda",
+    "navigation": "Navegación",
+    "navigationHint": "Presiona {{g}} y luego la letra",
+    "search": "Enfocar búsqueda",
+    "closeHint": "o hacé click afuera para cerrar"
   }
 }

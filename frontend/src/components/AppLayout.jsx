@@ -17,9 +17,11 @@ import { Suspense, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import Breadcrumb from './Breadcrumb';
+import KeyboardShortcutsModal from './KeyboardShortcutsModal';
 import MobileBottomNav from './MobileBottomNav';
 import StudioSidebar from './StudioSidebar';
 import { useIsMobile } from '../hooks/useMediaQuery';
+import useKeyboardShortcuts from '../hooks/useKeyboardShortcuts';
 
 /** Spinner mientras carga un `lazy(() => import(...))`. */
 const PageFallback = () => (
@@ -39,6 +41,7 @@ export default function AppLayout() {
   // (md-lg, antes del cambio a 1024px) y como fija desde lg+.
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const closeSidebar = () => setSidebarOpen(false);
+  const { helpOpen, closeHelp } = useKeyboardShortcuts();
 
   // Contexto compartido para que las páginas puedan abrir la sidebar mobile
   // desde su propio botón de menú (replica el `onMenu` del design).
@@ -71,6 +74,7 @@ export default function AppLayout() {
           </Suspense>
         </main>
         <MobileBottomNav />
+        {helpOpen && <KeyboardShortcutsModal onClose={closeHelp} />}
       </div>
     );
   }
@@ -97,6 +101,7 @@ export default function AppLayout() {
           <p className="text-gunmetal text-xs">Collector's Forge Studio · Medellín, Colombia</p>
         </footer>
       </div>
+      {helpOpen && <KeyboardShortcutsModal onClose={closeHelp} />}
     </div>
   );
 }

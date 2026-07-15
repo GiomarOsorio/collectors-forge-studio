@@ -821,6 +821,7 @@ function VaultPickerDrawer({ open, onClose, onAdded, printers, filaments, projec
       <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5">
         <Search size={13} className="text-gunmetal" />
         <input
+          data-search-input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Buscar modelo o tag…"
