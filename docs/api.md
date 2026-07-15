@@ -1507,6 +1507,16 @@ manual desde la UI. `level` filtra por severidad mínima (`WARNING` incluye
 [{"ts": "2026-07-15T10:00:00+00:00", "level": "ERROR", "logger": "app.routers.queue", "msg": "..."}]
 ```
 
+### `GET /system/backup` (issue #140, pieza E — recortada)
+Descarga un dump de la BD (`pg_dump -Fc`, restaurable con `pg_restore`)
+streameado como `application/octet-stream`, filename
+`cfs-backup-YYYYMMDD-HHMM.dump`. **Solo descarga on-demand** — sin restore
+ni schedule desde la UI (`docs/despliegue.md` ya documenta backup
+programado por cron + restore por CLI; duplicar eso en la UI agregaría
+superficie de riesgo sin sumar nada). DSN derivado de
+`settings.DATABASE_URL` quitando el driver `+asyncpg` (`pg_dump` usa
+libpq, no entiende el driver de SQLAlchemy).
+
 ---
 
 ## Health Check

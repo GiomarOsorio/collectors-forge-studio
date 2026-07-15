@@ -1232,5 +1232,21 @@ export const getSystemInfo = () => api.get('/system/info');
 export const getSystemLogs = (level, limit = 200) =>
   api.get('/system/logs', { params: { level: level || undefined, limit } });
 
+/** Descarga el dump de la BD (`pg_dump -Fc`) y dispara el guardado en el navegador. */
+export const downloadSystemBackup = async () => {
+  const res = await api.get('/system/backup', { responseType: 'blob' });
+  const disposition = res.headers['content-disposition'] || '';
+  const match = disposition.match(/filename="([^"]+)"/);
+  const filename = match ? match[1] : `cfs-backup-${Date.now()}.dump`;
+  const url = URL.createObjectURL(res.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
+
 export default api;
 

@@ -1,15 +1,21 @@
 /**
- * @file Drawer "Sistema" de Settings (issue #140, pieza C) — versión,
- * uptime, tamaño de BD, espacio MinIO, conteos y estado de migraciones,
- * más un visor de logs (snapshot, sin streaming).
+ * @file Drawer "Sistema" de Settings (issue #140, piezas C + E) — versión,
+ * uptime, tamaño de BD, espacio MinIO, conteos, estado de migraciones,
+ * visor de logs (snapshot, sin streaming) y descarga de backup on-demand.
+ *
+ * Backup: solo botón "Descargar backup" (pg_dump). Restore sigue siendo
+ * exclusivamente por CLI (ver docs/despliegue.md) — decisión consciente
+ * para no duplicar el mecanismo de backup/restore que el deploy ya cubre.
  *
  * @module pages/settings/components/SystemDrawer
  */
 
 import { useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, Loader2, RefreshCw } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { Button, Card, DetailDrawer, MobileSheet } from '../../../components/ui';
-import { getSystemInfo, getSystemLogs } from '../../../services/api';
+import { downloadSystemBackup, getSystemInfo, getSystemLogs } from '../../../services/api';
+import { apiErrorMsg } from '../../../utils/apiError';
 
 const LEVELS = ['', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'];
 
@@ -99,6 +105,36 @@ function InfoSection({ info }) {
         </p>
       </Card>
     </div>
+  );
+}
+
+function BackupSection() {
+  const [downloading, setDownloading] = useState(false);
+
+  const runBackup = async () => {
+    setDownloading(true);
+    try {
+      await downloadSystemBackup();
+      toast.success('Backup descargado');
+    } catch (err) {
+      toast.error(apiErrorMsg(err, 'No se pudo descargar el backup'));
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <Card className="p-3 flex items-center justify-between">
+      <div>
+        <span className="lbl-eyebrow text-[9px] block">Backup</span>
+        <p className="text-[11px] text-gunmetal-dim mt-0.5">
+          Dump completo de la base (pg_dump). Restaurar sigue siendo por CLI.
+        </p>
+      </div>
+      <Button variant="ghost" size="sm" icon={Download} onClick={runBackup} disabled={downloading}>
+        {downloading ? <Loader2 size={13} className="animate-spin" /> : 'Descargar'}
+      </Button>
+    </Card>
   );
 }
 
@@ -193,6 +229,7 @@ export default function SystemDrawer({ open, onClose, isMobile }) {
       ) : (
         <InfoSection info={info} />
       )}
+      <BackupSection />
       <LogsSection />
     </div>
   );

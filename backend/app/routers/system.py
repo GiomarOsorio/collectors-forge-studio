@@ -11,15 +11,23 @@ Endpoints:
         migraciones Alembic (current vs. head).
     GET /api/system/logs?level=&limit=200 → snapshot del buffer en memoria
         (sin streaming — refresh manual desde la UI).
+    GET /api/system/backup → dump de la BD (pg_dump -Fc) streameado como
+        descarga (issue #140, pieza E — RECORTADA a solo esto, ver docstring
+        de `download_backup`).
 """
 
+import asyncio
+import logging
 import time
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import AsyncIterator, List, Optional
+from urllib.parse import urlparse, urlunparse
 
 from alembic.config import Config as AlembicConfig
 from alembic.script import ScriptDirectory
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -124,3 +132,66 @@ async def get_system_logs(
     current_user: User = Depends(get_admin_user),
 ):
     return get_logs(level=level, limit=limit)
+
+
+def _pg_dump_dsn() -> str:
+    """
+    Convierte `settings.DATABASE_URL` (`postgresql+asyncpg://...`) a un DSN
+    `postgresql://...` que `pg_dump`/libpq entienden — el driver `+asyncpg`
+    es específico de SQLAlchemy, `pg_dump` no lo reconoce.
+    """
+    parsed = urlparse(settings.DATABASE_URL)
+    scheme = parsed.scheme.split("+", 1)[0]
+    return urlunparse(parsed._replace(scheme=scheme))
+
+
+async def _stream_pg_dump() -> AsyncIterator[bytes]:
+    """
+    Corre `pg_dump -Fc` contra la DSN de la app y streamea stdout en chunks.
+
+    `-Fc` = custom format (comprimido, restaurable con `pg_restore` — igual
+    que el backup manual documentado en `docs/despliegue.md`). El proceso se
+    espera al final del generator; si termina con código != 0, se loguea
+    stderr (ya no hay forma de devolver un error HTTP limpio — la respuesta
+    ya empezó a streamear).
+    """
+    process = await asyncio.create_subprocess_exec(
+        "pg_dump", _pg_dump_dsn(), "-Fc",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    assert process.stdout is not None
+    try:
+        while True:
+            chunk = await process.stdout.read(65536)
+            if not chunk:
+                break
+            yield chunk
+    finally:
+        returncode = await process.wait()
+        if returncode != 0:
+            stderr = await process.stderr.read() if process.stderr else b""
+            logging.getLogger(__name__).error(
+                "pg_dump terminó con código %s: %s", returncode, stderr.decode(errors="replace")
+            )
+
+
+@router.get("/backup")
+async def download_backup(current_user: User = Depends(get_admin_user)):
+    """
+    Descarga un dump de la BD (`pg_dump -Fc`) — solo esto, on-demand.
+
+    **Recortado del alcance original del issue #140** (decisión ya tomada
+    en el doc del agente, ver `agent-docs/bambuddy-sync/140-polish.md`):
+    `docs/despliegue.md` ya documenta un backup programado (cron +
+    `pg_dump -Fc`) y su restore por CLI — duplicar ese mecanismo en la UI
+    (schedule + restore destructivo desde el navegador) no suma nada y sí
+    agrega superficie de riesgo. Esta pieza es solo el botón "Descargar
+    backup" — restore sigue siendo exclusivamente por CLI, como ya estaba.
+    """
+    filename = f"cfs-backup-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M')}.dump"
+    return StreamingResponse(
+        _stream_pg_dump(),
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

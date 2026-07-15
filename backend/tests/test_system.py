@@ -229,3 +229,92 @@ class TestSystemLogsEndpoint:
             _clear_overrides()
             log_buffer.uninstall()
             log_buffer._BUFFER.clear()
+
+
+# ---------------------------------------------------------------------------
+# 3. Backup (issue #140, pieza E)
+# ---------------------------------------------------------------------------
+
+class TestPgDumpDsn:
+    def test_convierte_asyncpg_a_dsn_plano(self):
+        from app.config import settings
+        from app.routers.system import _pg_dump_dsn
+
+        original = settings.DATABASE_URL
+        try:
+            settings.DATABASE_URL = "postgresql+asyncpg://user:pass@cfs-postgres:5432/collectorsforge"
+            assert _pg_dump_dsn() == "postgresql://user:pass@cfs-postgres:5432/collectorsforge"
+        finally:
+            settings.DATABASE_URL = original
+
+    def test_preserva_password_url_encoded(self):
+        from app.config import settings
+        from app.routers.system import _pg_dump_dsn
+
+        original = settings.DATABASE_URL
+        try:
+            settings.DATABASE_URL = "postgresql+asyncpg://user:p%40ss@host:5432/db"
+            assert _pg_dump_dsn() == "postgresql://user:p%40ss@host:5432/db"
+        finally:
+            settings.DATABASE_URL = original
+
+
+def _fake_pg_dump_process(chunks, returncode=0, stderr=b""):
+    """Simula el `Process` de `asyncio.create_subprocess_exec` para pg_dump."""
+    stdout = MagicMock()
+    remaining = list(chunks)
+
+    async def _read(n):
+        if remaining:
+            return remaining.pop(0)
+        return b""
+    stdout.read = AsyncMock(side_effect=_read)
+
+    stderr_mock = MagicMock()
+    stderr_mock.read = AsyncMock(return_value=stderr)
+
+    process = MagicMock()
+    process.stdout = stdout
+    process.stderr = stderr_mock
+    process.wait = AsyncMock(return_value=returncode)
+    return process
+
+
+class TestBackupEndpoint:
+    async def test_backup_streamea_bytes_del_dump(self):
+        fake_process = _fake_pg_dump_process([b"PGDMP-chunk-1", b"chunk-2"])
+        _set_overrides({get_admin_user: lambda: _fake_user("admin")})
+        try:
+            with patch("app.routers.system.asyncio.create_subprocess_exec", AsyncMock(return_value=fake_process)):
+                transport = ASGITransport(app=app)
+                async with AsyncClient(transport=transport, base_url="http://test") as client:
+                    resp = await client.get("/api/system/backup")
+            assert resp.status_code == 200
+            assert resp.content == b"PGDMP-chunk-1chunk-2"
+            assert resp.headers["content-type"] == "application/octet-stream"
+            assert "cfs-backup-" in resp.headers["content-disposition"]
+            assert ".dump" in resp.headers["content-disposition"]
+        finally:
+            _clear_overrides()
+
+    async def test_backup_no_admin_rechazado_403(self):
+        _set_overrides({get_admin_user: lambda: (_ for _ in ()).throw(
+            __import__("fastapi").HTTPException(status_code=403, detail="admin only")
+        )})
+        try:
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                resp = await client.get("/api/system/backup")
+            assert resp.status_code == 403
+        finally:
+            _clear_overrides()
+
+    async def test_stream_pg_dump_loguea_error_si_falla(self, caplog):
+        from app.routers.system import _stream_pg_dump
+
+        fake_process = _fake_pg_dump_process([], returncode=1, stderr=b"pg_dump: error: connection failed")
+        with patch("app.routers.system.asyncio.create_subprocess_exec", AsyncMock(return_value=fake_process)):
+            with caplog.at_level("ERROR"):
+                chunks = [c async for c in _stream_pg_dump()]
+        assert chunks == []
+        assert "connection failed" in caplog.text
