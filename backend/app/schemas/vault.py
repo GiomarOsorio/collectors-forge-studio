@@ -189,3 +189,11 @@ class VaultMetadataResponse(BaseModel):
     weight_g: Optional[float] = None
     time_seconds: Optional[int] = None
     filament_type: Optional[str] = None
+
+
+class VaultZipImportResponse(BaseModel):
+    """Resumen de un import de ZIP al Vault (issue #127)."""
+    folders_created: int
+    files_created: int
+    skipped_entries: int
+    root_folder_id: Optional[int] = None

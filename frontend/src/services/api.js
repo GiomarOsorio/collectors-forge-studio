@@ -887,6 +887,25 @@ export const uploadVaultFile = (formData, onUploadProgress) =>
   api.post('/vault/upload', formData, { onUploadProgress });
 
 /**
+ * Sube un `.zip` y extrae su contenido al Vault, replicando la estructura
+ * de subcarpetas (issue #127). Solo procesa `.3mf`/`.stl`/`.gcode.3mf` —
+ * el resto se ignora en silencio.
+ *
+ * @param {File} file - El `.zip`
+ * @param {Object} [opts]
+ * @param {number|null} [opts.folderId] - Carpeta destino (null = raíz)
+ * @param {boolean} [opts.createFolder] - Si true, crea una carpeta nueva con el nombre del ZIP
+ * @param {Function} [onUploadProgress]
+ */
+export const uploadVaultZip = (file, { folderId, createFolder } = {}, onUploadProgress) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (folderId != null) formData.append('folder_id', String(folderId));
+  formData.append('create_folder', createFolder ? 'true' : 'false');
+  return api.post('/vault/upload-zip', formData, { onUploadProgress });
+};
+
+/**
  * Descarga el .3mf/.stl editable de un modelo. 404 si el modelo no lo tiene.
  * @param {number} id - ID del archivo en el Vault
  */

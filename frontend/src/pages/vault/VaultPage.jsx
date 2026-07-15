@@ -19,6 +19,7 @@ import {
   Camera,
   ChevronRight,
   Download,
+  FileArchive,
   FileBox,
   Folder,
   FolderKanban,
@@ -80,6 +81,7 @@ import {
   uploadVaultPhotos,
 } from '../../services/api';
 import MakerWorldImportModal from './components/MakerWorldImportModal';
+import UploadZipModal from './components/UploadZipModal';
 import { apiErrorMsg } from '../../utils/apiError';
 import { FAILURE_CATEGORY_LABELS } from '../../utils/failureCategories';
 import { getThumbnail } from '../../utils/thumbnail';
@@ -1417,6 +1419,7 @@ export default function VaultPage() {
 
   // Import de MakerWorld (issue #139).
   const [makerworldModalOpen, setMakerworldModalOpen] = useState(false);
+  const [uploadZipModalOpen, setUploadZipModalOpen] = useState(false);
   const [makerworldAuthed, setMakerworldAuthed] = useState(false);
 
   const toggleFileSelect = (id) => {
@@ -2023,6 +2026,11 @@ export default function VaultPage() {
           </button>
         )}
         {isAdmin && (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setUploadZipModalOpen(true)}>
+            <FileArchive size={13} /> Subir ZIP
+          </button>
+        )}
+        {isAdmin && (
           <Link
             to={currentFolderId ? `/vault/upload?folder=${currentFolderId}` : '/vault/upload'}
             className="btn btn-primary btn-sm"
@@ -2266,6 +2274,17 @@ export default function VaultPage() {
           onClose={() => setMakerworldModalOpen(false)}
           onImported={() => {
             setMakerworldModalOpen(false);
+            load();
+          }}
+        />
+      )}
+      {uploadZipModalOpen && (
+        <UploadZipModal
+          currentFolderId={currentFolderId}
+          onClose={() => setUploadZipModalOpen(false)}
+          onImported={() => {
+            setUploadZipModalOpen(false);
+            loadFolders();
             load();
           }}
         />

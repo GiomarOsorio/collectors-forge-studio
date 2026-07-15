@@ -82,6 +82,7 @@ from app.schemas.vault import (
     VaultMetadataRequest,
     VaultMetadataResponse,
     VaultStatsResponse,
+    VaultZipImportResponse,
 )
 from app.schemas.vault_folder import (
     VaultFolderCreate,
@@ -1178,6 +1179,237 @@ async def upload_vault_file(
     )
     model = result.scalar_one()
     return _to_response(model, current_user.username)
+
+
+# ─── Import de ZIP con estructura de carpetas (issue #127) ────────────────
+
+MAX_ZIP_UNCOMPRESSED_BYTES = 4 * 1024 * 1024 * 1024  # 4 GB — protección zip-bomb
+MAX_ZIP_ENTRIES = 500
+
+_ZIP_PRINT_SUFFIXES = (".gcode.3mf",)
+_ZIP_SOURCE_SUFFIXES = (".3mf", ".stl")
+
+
+def _classify_zip_entry(filename: str) -> Optional[str]:
+    """
+    'print' | 'source' | None (no soportado, se ignora en silencio).
+
+    `.gcode.3mf` se chequea ANTES que `.3mf` — mismo orden que `_ext_ok` en
+    el upload normal, si no `.gcode.3mf` matchearía como source primero.
+    """
+    if _ext_ok(filename, _ZIP_PRINT_SUFFIXES):
+        return "print"
+    if _ext_ok(filename, _ZIP_SOURCE_SUFFIXES):
+        return "source"
+    return None
+
+
+async def _build_model_file_from_zip_entry(
+    db: AsyncSession,
+    current_user: User,
+    folder_id: Optional[int],
+    entry_name: str,
+    content: bytes,
+    kind: str,
+) -> ModelFile:
+    """
+    Construye y persiste un `ModelFile` a partir de UN archivo extraído del
+    ZIP — a diferencia del upload normal (que puede traer source+print
+    juntos en un mismo `ModelFile`), cada entry del ZIP es un archivo suelto
+    y se convierte en su propio `ModelFile` con un solo slot poblado.
+
+    Pasa por el mismo camino que `POST /upload` para ese slot: parseo de
+    header gcode + plates (print) o extracción/render de thumbnail (source).
+    """
+    base_filename = Path(entry_name).name
+    display_name = Path(base_filename).stem
+    if kind == "print" and display_name.lower().endswith(".gcode"):
+        display_name = display_name[: -len(".gcode")]
+    display_name = display_name or base_filename
+
+    key = f"{uuid.uuid4()}-{base_filename.replace(' ', '_')}"
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    model = ModelFile(
+        uploaded_by=current_user.id,
+        folder_id=folder_id,
+        name=display_name,
+        created_at=now,
+        updated_at=now,
+    )
+
+    if kind == "print":
+        await upload_file(key, content, content_type="model/3mf")
+        model.print_file_key = key
+        model.print_file_name = base_filename
+        model.print_file_size = len(content)
+        sliced = _parse_sliced_from_print_file(content)
+        model.sliced_weight_g = sliced.get("sliced_weight_g")
+        model.sliced_time_seconds = sliced.get("sliced_time_seconds")
+        model.sliced_printer_model = sliced.get("sliced_printer_model")
+        model.sliced_filament_type = sliced.get("sliced_filament_type")
+    else:
+        await upload_file(key, content, content_type=_source_content_type(base_filename))
+        model.source_file_key = key
+        model.source_file_name = base_filename
+        model.source_file_size = len(content)
+
+    db.add(model)
+    await db.commit()
+    await db.refresh(model)
+
+    if kind == "print":
+        try:
+            await _persist_plates_from_print_file(db, model, content)
+        except Exception as exc:
+            logger.warning("No se pudieron persistir plates del ZIP (%s): %s", entry_name, exc)
+    else:
+        png = await _extract_source_thumbnail_png(content, base_filename)
+        if png:
+            try:
+                model.thumbnail_key = await save_thumbnail(model.id, png)
+            except Exception as exc:
+                logger.warning("No se pudo guardar thumbnail del ZIP (%s): %s", entry_name, exc)
+
+    await db.commit()
+    return model
+
+
+async def _get_or_create_folder_path(
+    db: AsyncSession,
+    base_folder_id: Optional[int],
+    parts: tuple,
+    cache: dict,
+) -> Optional[int]:
+    """
+    Resuelve (creando si hace falta) la cadena de `VaultFolder` para `parts`
+    (segmentos de subcarpeta dentro del ZIP), bajo `base_folder_id`.
+
+    `cache` — `{parts_prefix: folder_id}` — evita crear la misma carpeta dos
+    veces cuando varios archivos del ZIP comparten directorio (o un prefijo
+    de directorios), y evita un roundtrip a DB por archivo.
+    """
+    if not parts:
+        return base_folder_id
+    if parts in cache:
+        return cache[parts]
+
+    parent_id = await _get_or_create_folder_path(db, base_folder_id, parts[:-1], cache)
+    name = parts[-1]
+
+    result = await db.execute(
+        select(VaultFolder).where(VaultFolder.parent_id == parent_id, VaultFolder.name == name)
+    )
+    folder = result.scalar_one_or_none()
+    if folder is None:
+        folder = VaultFolder(name=name, parent_id=parent_id)
+        db.add(folder)
+        await db.flush()
+    cache[parts] = folder.id
+    return folder.id
+
+
+@router.post("/upload-zip", response_model=VaultZipImportResponse, status_code=status.HTTP_201_CREATED)
+async def upload_vault_zip(
+    file: UploadFile = File(...),
+    folder_id: Optional[int] = Form(default=None),
+    create_folder: bool = Form(default=False),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """
+    Sube un `.zip` y extrae su contenido al Vault, replicando la estructura
+    de subcarpetas como `VaultFolder`s.
+
+    Reglas:
+      - Solo se procesan entries `.3mf`, `.stl` y `.gcode.3mf` — el resto se
+        ignora en silencio (no rompe el import de los demás archivos).
+      - `create_folder=true` crea una carpeta nueva con el nombre del ZIP
+        (sin extensión) bajo `folder_id`, y todo el contenido cuelga de ahí.
+        `create_folder=false` (default) usa `folder_id` directo como raíz
+        (`null` = raíz del Vault).
+      - Protección zip-bomb: se rechaza si el tamaño descomprimido total
+        supera 4 GB o si hay más de 500 entries. Paths con `..` se ignoran.
+
+    Solo admins.
+    """
+    if not _ext_ok(file.filename or "", (".zip",)):
+        raise HTTPException(status_code=400, detail="El archivo debe ser un .zip")
+
+    zip_bytes = await file.read()
+    if len(zip_bytes) > MAX_VAULT_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="El ZIP supera el límite de 1 GB")
+
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=400, detail="El archivo no es un ZIP válido")
+
+    infolist = zf.infolist()
+    if len(infolist) > MAX_ZIP_ENTRIES:
+        raise HTTPException(
+            status_code=400, detail=f"El ZIP tiene demasiadas entries ({len(infolist)} > {MAX_ZIP_ENTRIES})"
+        )
+    total_uncompressed = sum(zi.file_size for zi in infolist)
+    if total_uncompressed > MAX_ZIP_UNCOMPRESSED_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"El ZIP descomprimido supera el límite ({total_uncompressed // (1024*1024)} MB > "
+                   f"{MAX_ZIP_UNCOMPRESSED_BYTES // (1024*1024)} MB)",
+        )
+
+    if folder_id is not None:
+        await _get_folder(db, folder_id)  # 404 si no existe
+
+    root_folder_id = folder_id
+    if create_folder:
+        zip_display_name = Path(file.filename).stem if file.filename else "Import"
+        root_folder = VaultFolder(name=zip_display_name, parent_id=folder_id)
+        db.add(root_folder)
+        await db.flush()
+        root_folder_id = root_folder.id
+
+    # Cuota: suma solo de los entries soportados que realmente vamos a
+    # guardar (los ignorados no cuentan) — chequeo previo, fail-fast antes
+    # de escribir nada a MinIO.
+    supported_entries = [
+        (zi, _classify_zip_entry(zi.filename))
+        for zi in infolist
+        if not zi.is_dir() and ".." not in Path(zi.filename).parts
+    ]
+    accepted_size = sum(zi.file_size for zi, kind in supported_entries if kind is not None)
+    used = await _get_used_bytes(db)
+    quota = settings.VAULT_QUOTA_GB * 1024 * 1024 * 1024
+    if used + accepted_size > quota:
+        raise HTTPException(
+            status_code=507, detail=f"Sin espacio disponible. Cuota: {settings.VAULT_QUOTA_GB} GB",
+        )
+
+    folder_cache: dict = {}
+    files_created = 0
+    skipped_entries = 0
+
+    for zinfo, kind in supported_entries:
+        if kind is None:
+            skipped_entries += 1
+            continue
+
+        path = Path(zinfo.filename)
+        dir_parts = path.parts[:-1]
+        target_folder_id = await _get_or_create_folder_path(db, root_folder_id, dir_parts, folder_cache)
+
+        content = zf.read(zinfo)
+        await _build_model_file_from_zip_entry(
+            db, current_user, target_folder_id, zinfo.filename, content, kind,
+        )
+        files_created += 1
+
+    return VaultZipImportResponse(
+        folders_created=len(folder_cache) + (1 if create_folder else 0),
+        files_created=files_created,
+        skipped_entries=skipped_entries,
+        root_folder_id=root_folder_id,
+    )
 
 
 @router.get("/{file_id}/download/source")
