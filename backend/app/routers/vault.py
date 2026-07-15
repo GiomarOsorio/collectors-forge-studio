@@ -43,6 +43,7 @@ Endpoints:
 """
 
 import asyncio
+import hashlib
 import io
 import json
 import logging
@@ -72,6 +73,10 @@ from app.models.user import User
 from app.models.vault_folder import VaultFolder
 from app.models.vault_tag import VaultTag, model_file_tags
 from app.schemas.vault import (
+    BackfillHashesResponse,
+    CheckDuplicateRequest,
+    CheckDuplicateResponse,
+    DuplicateFileInfo,
     ModelFileListResponse,
     ModelFilePhotoCaptionUpdate,
     ModelFilePhotoResponse,
@@ -126,6 +131,11 @@ def _ext_ok(filename: str, allowed_suffixes: tuple) -> bool:
 def _source_content_type(filename: str) -> str:
     """Content-Type MinIO del slot source según su extensión (.stl vs .3mf)."""
     return "model/stl" if _ext_ok(filename, (".stl",)) else "model/3mf"
+
+
+def _sha256_hex(data: bytes) -> str:
+    """SHA-256 hex digest de `data` (issue #128 — dedup por hash de contenido)."""
+    return hashlib.sha256(data).hexdigest()
 
 
 async def _extract_source_thumbnail_png(source_bytes: bytes, source_name: str) -> Optional[bytes]:
@@ -1084,16 +1094,20 @@ async def upload_vault_file(
             detail=f"Sin espacio disponible. Cuota: {settings.VAULT_QUOTA_GB} GB",
         )
 
-    # Subir a MinIO con claves únicas por slot.
-    source_key = source_name = None
-    print_key = print_name = None
+    # Subir a MinIO con claves únicas por slot. Hash SHA-256 (issue #128)
+    # de los bytes ya en memoria, antes de subir — mismo criterio para
+    # ambos slots.
+    source_key = source_name = source_hash = None
+    print_key = print_name = print_hash = None
     if source_file is not None:
         source_key = f"{uuid.uuid4()}-{source_file.filename.replace(' ', '_')}"
         source_name = source_file.filename
+        source_hash = _sha256_hex(source_bytes)
         await upload_file(source_key, source_bytes, content_type=_source_content_type(source_name))
     if print_file is not None:
         print_key = f"{uuid.uuid4()}-{print_file.filename.replace(' ', '_')}"
         print_name = print_file.filename
+        print_hash = _sha256_hex(print_bytes)
         await upload_file(print_key, print_bytes, content_type="model/3mf")
 
     # Parsear sliced_* del print_file (si se subió).
@@ -1127,9 +1141,11 @@ async def upload_vault_file(
         source_file_key=source_key,
         source_file_name=source_name,
         source_file_size=source_size if source_file else None,
+        source_file_hash=source_hash,
         print_file_key=print_key,
         print_file_name=print_name,
         print_file_size=print_size if print_file else None,
+        print_file_hash=print_hash,
         sliced_weight_g=sliced_weight,
         sliced_time_seconds=sliced_time,
         sliced_printer_model=sliced.get("sliced_printer_model"),
@@ -1243,6 +1259,7 @@ async def _build_model_file_from_zip_entry(
         model.print_file_key = key
         model.print_file_name = base_filename
         model.print_file_size = len(content)
+        model.print_file_hash = _sha256_hex(content)
         sliced = _parse_sliced_from_print_file(content)
         model.sliced_weight_g = sliced.get("sliced_weight_g")
         model.sliced_time_seconds = sliced.get("sliced_time_seconds")
@@ -1253,6 +1270,7 @@ async def _build_model_file_from_zip_entry(
         model.source_file_key = key
         model.source_file_name = base_filename
         model.source_file_size = len(content)
+        model.source_file_hash = _sha256_hex(content)
 
     db.add(model)
     await db.commit()
@@ -1410,6 +1428,96 @@ async def upload_vault_zip(
         skipped_entries=skipped_entries,
         root_folder_id=root_folder_id,
     )
+
+
+# ─── Detección de duplicados por hash (issue #128) ─────────────────────────
+
+BACKFILL_HASHES_BATCH_SIZE = 20
+
+
+@router.post("/check-duplicate", response_model=CheckDuplicateResponse)
+async def check_duplicate(
+    data: CheckDuplicateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Chequea si `sha256` (calculado client-side sobre el `File`, antes de
+    subir) ya existe en algún archivo del Vault no borrado — en cualquiera
+    de los dos slots.
+
+    El frontend usa esto para avisar "Ya existe como X" ANTES de mandar el
+    archivo completo al servidor — evita subir potencialmente cientos de MB
+    solo para descubrir que es un duplicado.
+    """
+    sha = data.sha256.lower()
+    result = await db.execute(
+        select(ModelFile)
+        .where(
+            ModelFile.deleted_at.is_(None),
+            or_(ModelFile.source_file_hash == sha, ModelFile.print_file_hash == sha),
+        )
+        .limit(1)
+    )
+    match = result.scalar_one_or_none()
+    if match is None:
+        return CheckDuplicateResponse(duplicate=False)
+    return CheckDuplicateResponse(duplicate=True, file=DuplicateFileInfo(id=match.id, name=match.name))
+
+
+@router.post("/backfill-hashes", response_model=BackfillHashesResponse)
+async def backfill_hashes(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """
+    Calcula el hash SHA-256 de archivos ya existentes que no lo tienen
+    (subidos antes de que existiera esta columna) — en lotes de
+    `BACKFILL_HASHES_BATCH_SIZE`, para no bloquear el request descargando
+    potencialmente cientos de archivos de MinIO de una sola vez.
+
+    La UI puede llamarlo repetido hasta que `remaining` llegue a 0.
+    """
+    result = await db.execute(
+        select(ModelFile)
+        .where(
+            ModelFile.deleted_at.is_(None),
+            or_(
+                (ModelFile.source_file_key.is_not(None)) & (ModelFile.source_file_hash.is_(None)),
+                (ModelFile.print_file_key.is_not(None)) & (ModelFile.print_file_hash.is_(None)),
+            ),
+        )
+        .limit(BACKFILL_HASHES_BATCH_SIZE)
+    )
+    batch = result.scalars().all()
+
+    for model in batch:
+        if model.source_file_key and not model.source_file_hash:
+            try:
+                content = await download_file(model.source_file_key)
+                model.source_file_hash = _sha256_hex(content)
+            except Exception as exc:
+                logger.warning("Backfill hash falló (source, model=%s): %s", model.id, exc)
+        if model.print_file_key and not model.print_file_hash:
+            try:
+                content = await download_file(model.print_file_key)
+                model.print_file_hash = _sha256_hex(content)
+            except Exception as exc:
+                logger.warning("Backfill hash falló (print, model=%s): %s", model.id, exc)
+    await db.commit()
+
+    remaining_result = await db.execute(
+        select(func.count(ModelFile.id)).where(
+            ModelFile.deleted_at.is_(None),
+            or_(
+                (ModelFile.source_file_key.is_not(None)) & (ModelFile.source_file_hash.is_(None)),
+                (ModelFile.print_file_key.is_not(None)) & (ModelFile.print_file_hash.is_(None)),
+            ),
+        )
+    )
+    remaining = remaining_result.scalar() or 0
+
+    return BackfillHashesResponse(processed=len(batch), remaining=remaining)
 
 
 @router.get("/{file_id}/download/source")
@@ -2016,10 +2124,12 @@ async def _replace_slot(
         model.source_file_key = new_key
         model.source_file_name = file.filename
         model.source_file_size = new_size
+        model.source_file_hash = _sha256_hex(content)
     else:
         model.print_file_key = new_key
         model.print_file_name = file.filename
         model.print_file_size = new_size
+        model.print_file_hash = _sha256_hex(content)
         # Re-persistir TODOS los plates desde el nuevo print_file (issue
         # #68). `_persist_plates_from_print_file` borra los plates
         # anteriores + thumbnails + sincroniza sliced_* + thumbnail

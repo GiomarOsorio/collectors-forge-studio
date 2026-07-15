@@ -1461,6 +1461,36 @@ tamaños descomprimidos supera 4 GB. Paths con `..` se ignoran. Límite del
 
 ---
 
+### `POST /vault/check-duplicate` (issue #128)
+Chequea si un hash SHA-256 (calculado client-side sobre el `File` con
+`crypto.subtle.digest`, ANTES de subir) ya existe en algún archivo del
+Vault no borrado, en cualquiera de los dos slots. El frontend llama esto
+al elegir un archivo en `VaultUploadPage` — si hay match, muestra un
+modal "Ya existe como X" con opciones "Subir igual" / "Ir al existente".
+
+**Body:** `{"sha256": "<64 hex chars>"}`
+
+**Response 200:**
+```json
+{"duplicate": true, "file": {"id": 42, "name": "Figura ya subida"}}
+```
+`file` es `null` si `duplicate` es `false`.
+
+### `POST /vault/backfill-hashes` (admin, issue #128)
+Calcula el hash SHA-256 de archivos ya existentes que no lo tienen
+(subidos antes de que existiera esta columna) — descarga los bytes de
+MinIO, en lotes de 20 por llamada (para no bloquear el request
+descargando potencialmente cientos de archivos de una sola vez). La UI
+lo llama repetido hasta que `remaining` llegue a 0. Un fallo de MinIO en
+un archivo puntual se loguea y no bloquea el resto del lote.
+
+**Response 200:**
+```json
+{"processed": 20, "remaining": 8}
+```
+
+---
+
 ### `GET /vault/{id}/download/source`
 Descarga el slot `source_file` (`.3mf` editable). 404 si el modelo no
 tiene ese slot.

@@ -42,6 +42,7 @@ import MobileAppHeader from '../../components/MobileAppHeader';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../context/AuthContext';
 import {
+  checkVaultDuplicate,
   fetchVaultMetadata,
   getVaultFile,
   getVaultFolders,
@@ -50,6 +51,8 @@ import {
   updateVaultFile,
   uploadVaultFile,
 } from '../../services/api';
+import { hashFile } from '../../utils/fileHash';
+import DuplicateWarningModal from './components/DuplicateWarningModal';
 
 const ACCENT = '#F43F5E';
 const ACCENT_PRINT = '#34D399';
@@ -176,6 +179,8 @@ export default function VaultUploadPage() {
 
   const [sourceFile, setSourceFile] = useState(null); // .3mf/.stl editable nuevo (reemplaza)
   const [printFile, setPrintFile] = useState(null);   // .gcode.3mf laminado nuevo (reemplaza)
+  // Aviso de duplicado por hash (issue #128) — { slot, fileName, existing } | null
+  const [duplicateWarning, setDuplicateWarning] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [done, setDone] = useState(false);
@@ -262,6 +267,26 @@ export default function VaultUploadPage() {
   };
 
   /**
+   * Hashea `file` client-side y, si coincide con un archivo ya en el Vault
+   * (distinto del que se está editando, en edit-mode), abre el modal de
+   * aviso. Fire-and-forget — no bloquea la selección del archivo.
+   */
+  const checkForDuplicate = (slot, file) => {
+    hashFile(file)
+      .then((sha256) => checkVaultDuplicate(sha256))
+      .then((res) => {
+        const { duplicate, file: existing } = res.data;
+        if (duplicate && existing && existing.id !== replaceId) {
+          setDuplicateWarning({ slot, fileName: file.name, existing });
+        }
+      })
+      .catch(() => {
+        // Best-effort — si falla el chequeo (red, SubtleCrypto no disponible
+        // en contexto no-seguro, etc.) simplemente no se avisa, no bloquea.
+      });
+  };
+
+  /**
    * Acepta archivos del DropZone source. Valida extensión .3mf o .stl
    * (rechaza .gcode.3mf, que pertenece al slot print). Si no hay name
    * aún, lo deriva del filename para que el admin no tenga que tipearlo.
@@ -283,6 +308,7 @@ export default function VaultUploadPage() {
       const base = f.name.replace(/\.(3mf|stl)$/i, '');
       setForm((prev) => ({ ...prev, name: base }));
     }
+    checkForDuplicate('source', f);
   };
 
   /**
@@ -300,6 +326,7 @@ export default function VaultUploadPage() {
       const base = f.name.replace(/\.gcode\.3mf$/i, '');
       setForm((prev) => ({ ...prev, name: base }));
     }
+    checkForDuplicate('print', f);
   };
 
   const handleSubmit = async (e) => {
@@ -759,6 +786,19 @@ export default function VaultUploadPage() {
           </div>
         </div>
       </div>
+      {duplicateWarning && (
+        <DuplicateWarningModal
+          fileName={duplicateWarning.fileName}
+          existing={duplicateWarning.existing}
+          onUploadAnyway={() => setDuplicateWarning(null)}
+          onGoToExisting={() => navigate(`/vault/upload?replace=${duplicateWarning.existing.id}`)}
+          onCancel={() => {
+            if (duplicateWarning.slot === 'source') setSourceFile(null);
+            else setPrintFile(null);
+            setDuplicateWarning(null);
+          }}
+        />
+      )}
     </div>
   );
 }

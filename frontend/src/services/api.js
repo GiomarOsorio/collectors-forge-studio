@@ -906,6 +906,19 @@ export const uploadVaultZip = (file, { folderId, createFolder } = {}, onUploadPr
 };
 
 /**
+ * Chequea si `sha256` (calculado client-side con `hashFile`, issue #128)
+ * ya existe en algún archivo del Vault. `{duplicate, file?: {id, name}}`.
+ * @param {string} sha256
+ */
+export const checkVaultDuplicate = (sha256) => api.post('/vault/check-duplicate', { sha256 });
+
+/**
+ * Corre un lote de backfill de hashes en archivos ya existentes que no
+ * lo tienen. `{processed, remaining}` — llamar repetido hasta remaining=0.
+ */
+export const backfillVaultHashes = () => api.post('/vault/backfill-hashes');
+
+/**
  * Descarga el .3mf/.stl editable de un modelo. 404 si el modelo no lo tiene.
  * @param {number} id - ID del archivo en el Vault
  */

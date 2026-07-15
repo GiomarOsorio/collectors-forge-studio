@@ -76,7 +76,8 @@ Las migraciones están en `backend/alembic/versions/`. Se aplican con `alembic u
 | `a1b2c3d4e5f7` | `a1b2c3d4e5f7_project_metadata.py` | `projects.cover_photo_key`/`color`/`external_url`/`client_quote_id` (issue #136, sub-ticket 1/3) |
 | `b2c3d4e5f6a8` | `b2c3d4e5f6a8_project_model_files.py` | Tabla puente `project_model_files` N:M Project↔ModelFile (issue #136, sub-ticket 2/3) |
 | `c3d4e5f6a7b9` | `c3d4e5f6a7b9_notifications.py` | Tablas `notification_channels`, `notification_templates`, `notification_digest_queue`; columnas SMTP + quiet hours + digest en `app_settings` (issue #137) |
-| `d4e5f6a7b8c0` | `d4e5f6a7b8c0_makerworld.py` | **Head actual** — Tablas `bambu_cloud_auth` (singleton) y `makerworld_imports` (historial) para el import completo de MakerWorld (issue #139) |
+| `d4e5f6a7b8c0` | `d4e5f6a7b8c0_makerworld.py` | Tablas `bambu_cloud_auth` (singleton) y `makerworld_imports` (historial) para el import completo de MakerWorld (issue #139) |
+| `e5f6a7b8c9d1` | `e5f6a7b8c9d1_vault_file_hashes.py` | **Head actual** — Columnas `source_file_hash` / `print_file_hash` (indexadas) en `model_files` para detección de duplicados por SHA-256 (issue #128) |
 
 **Aplicar todas las migraciones:**
 ```bash
@@ -370,9 +371,11 @@ Cada fila puede tener dos slots: `source_file` (`.3mf` editable) y
 | `source_file_key` | VARCHAR(500) | Key MinIO del `.3mf` editable (nullable) |
 | `source_file_name` | VARCHAR(255) | Nombre original del `.3mf` editable |
 | `source_file_size` | BIGINT | Tamaño en bytes del `.3mf` editable |
+| `source_file_hash` | VARCHAR(64), indexado | SHA-256 hex del `.3mf` editable (issue #128) — `NULL` hasta subir/reemplazar o correr backfill |
 | `print_file_key` | VARCHAR(500) | Key MinIO del `.gcode.3mf` laminado (nullable) |
 | `print_file_name` | VARCHAR(255) | Nombre original del `.gcode.3mf` |
 | `print_file_size` | BIGINT | Tamaño en bytes del `.gcode.3mf` |
+| `print_file_hash` | VARCHAR(64), indexado | SHA-256 hex del `.gcode.3mf` laminado (issue #128) |
 | `sliced_weight_g` | NUMERIC(10,2) | Gramos de filamento (parseado del `.gcode.3mf`) |
 | `sliced_time_seconds` | INTEGER | Tiempo de impresión en segundos |
 | `sliced_printer_model` | VARCHAR(100) | Modelo de impresora declarado en el slice |
