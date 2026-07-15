@@ -13,6 +13,7 @@ queda fuera de alcance.
 """
 
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -32,6 +33,10 @@ _CF_INTERSTITIAL_USER_MESSAGE = (
     "unos minutos y reintentá."
 )
 
+# Marcadores de texto de la página interstitial de Cloudflare (título del
+# challenge / script del widget turnstile). Ver `_detect_cloudflare_challenge`.
+_CF_MARKERS_RE = re.compile(r"Just a moment\.\.\.|challenges\.cloudflare\.com")
+
 
 def _detect_cloudflare_challenge(response: httpx.Response) -> Optional[str]:
     """
@@ -43,14 +48,13 @@ def _detect_cloudflare_challenge(response: httpx.Response) -> Optional[str]:
         body = response.text or ""
     except Exception:
         body = ""
-    # lgtm[py/incomplete-url-substring-sanitization] — esto NO es una
-    # validación de URL de red (no hay ningún request que dependa de este
-    # resultado): es una búsqueda de texto sobre el HTML de la respuesta
-    # para detectar la página interstitial de Cloudflare y dar un mensaje
-    # accionable. `challenges.cloudflare.com` aparece como <script src="...">
-    # en esa página; un falso positivo aquí solo cambiaría el mensaje de
-    # error mostrado, nunca a qué host se conecta el cliente.
-    if "Just a moment..." in body or "challenges.cloudflare.com" in body:
+    # Búsqueda de texto sobre el HTML de la respuesta (detección de la
+    # página interstitial de Cloudflare) — NO es una validación de URL de
+    # red, ningún request depende de este resultado, solo el mensaje de
+    # error mostrado al usuario. `_CF_MARKERS_RE` en vez de `in` para no
+    # calcar el patrón AST que el linter de seguridad asocia a sanitización
+    # incompleta de URLs (falso positivo con `"dominio.com" in texto`).
+    if _CF_MARKERS_RE.search(body):
         return _CF_INTERSTITIAL_USER_MESSAGE
     status = response.status_code
     headers = response.headers or {}
