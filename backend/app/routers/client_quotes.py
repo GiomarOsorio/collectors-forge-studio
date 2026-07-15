@@ -37,6 +37,8 @@ from app.schemas.client_quote import ClientQuoteCreate, ClientQuoteResponse
 from app.limiter import limiter
 from app.services.auth import get_current_user, get_operator_user
 from app.services.exchange_rate import get_usd_to_cop
+from app.services.formatters import _fmt_cop
+from app.services.notifier import emit
 from app.services.pdf_generator import generate_client_quote_pdf
 from app.services.vault_storage import download_file
 
@@ -133,6 +135,13 @@ async def create_client_quote(
     db.add(cq)
     await db.commit()
     await db.refresh(cq)
+
+    emit("client_quote.created", {
+        "quote_code": f"COT-{cq.id:04d}",
+        "client_name": cq.client_name or "",
+        "total": _fmt_cop(float(subtotal) * cop_rate),
+    })
+
     return cq
 
 

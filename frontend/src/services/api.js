@@ -1175,5 +1175,29 @@ export const importProject = (file) => {
 export const assignQueueItemProject = (itemId, projectId) =>
   api.put(`/queue/${itemId}/project`, { project_id: projectId });
 
+// ─── Notificaciones multi-canal (issue #137) ───────────────────────────────
+
+/** Matriz de eventos disponibles para suscribir canales. */
+export const getNotificationEvents = () => api.get('/notifications/events');
+
+export const getNotificationChannels = () => api.get('/notifications/channels');
+
+export const createNotificationChannel = (data) => api.post('/notifications/channels', data);
+
+export const updateNotificationChannel = (id, data) => api.put(`/notifications/channels/${id}`, data);
+
+export const deleteNotificationChannel = (id) => api.delete(`/notifications/channels/${id}`);
+
+/** Envía un mensaje de prueba real por el canal. Devuelve `{ok, error}` — nunca lanza por fallo del canal. */
+export const testNotificationChannel = (id) => api.post(`/notifications/channels/${id}/test`);
+
+export const getNotificationTemplate = (event) => api.get(`/notifications/templates/${event}`);
+
+export const updateNotificationTemplate = (event, body) =>
+  api.put(`/notifications/templates/${event}`, { body });
+
+export const previewNotificationTemplate = (event, body) =>
+  api.post(`/notifications/templates/${event}/preview`, { body });
+
 export default api;
 

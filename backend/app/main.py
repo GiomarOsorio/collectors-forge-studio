@@ -50,9 +50,11 @@ from app.routers.projects import router as projects_router
 from app.routers.oidc import router as oidc_router
 from app.routers.spools import router as spools_router
 from app.routers.stats import router as stats_router
+from app.routers.notifications import router as notifications_router
 from app.services.thumbnail_extractor import extract_plate_png, save_thumbnail
 from app.services.vault_storage import download_file, ensure_bucket
 from app.services.tariff_scraper import refresh_if_stale
+from app.services.notifier import digest_loop, maintenance_due_loop
 
 # UUID fijo de la empresa por defecto — coincide con la migración f4a1b9c2d8e7
 DEFAULT_COMPANY_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
@@ -164,12 +166,18 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error("Refresh inicial de tarifa EPM falló: %s", e)
     tariff_task = asyncio.create_task(_periodic_tariff_refresh())
+    # Notificaciones (issue #137): digest diario + chequeo de mantenimiento vencido.
+    digest_task = asyncio.create_task(digest_loop())
+    maintenance_due_task = asyncio.create_task(maintenance_due_loop())
     yield
     tariff_task.cancel()
-    try:
-        await tariff_task
-    except asyncio.CancelledError:
-        pass
+    digest_task.cancel()
+    maintenance_due_task.cancel()
+    for task in (tariff_task, digest_task, maintenance_due_task):
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 # Instancia principal de la aplicación FastAPI con metadatos para la documentación
@@ -290,6 +298,7 @@ app.include_router(filament_profiles_router)
 app.include_router(projects_router)
 app.include_router(spools_router)
 app.include_router(stats_router)
+app.include_router(notifications_router)
 
 # NOTA: el mount clásico de `/static` para binarios subidos por el usuario
 # (thumbnails de Vault, logos de empresa, imágenes de impresiones) no existe

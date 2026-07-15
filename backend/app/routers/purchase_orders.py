@@ -33,6 +33,7 @@ from app.schemas.purchase_order import (
     PurchaseOrderResponse,
 )
 from app.services.auth import get_current_user, get_operator_user
+from app.services.notifier import emit
 
 router = APIRouter(prefix="/api/inventory/purchases", tags=["purchase-orders"])
 
@@ -195,6 +196,8 @@ async def update_purchase_order(
 
     update_data = data.model_dump(exclude_unset=True)
     new_items = update_data.pop("items", None)
+    old_status = order.status
+    new_status = update_data.get("status")
 
     for field, value in update_data.items():
         setattr(order, field, value)
@@ -212,6 +215,11 @@ async def update_purchase_order(
 
     await db.commit()
     await db.refresh(order)
+
+    if new_status is not None and new_status != old_status:
+        emit("purchase_order.status_changed", {
+            "po_code": f"OC-{order.id:04d}", "status": order.status, "supplier": order.supplier,
+        })
 
     # Recargar con ítems
     return await _get_company_purchase_order(db, order.id)
@@ -299,6 +307,10 @@ async def mark_order_arrived(
                     inv_item.needs_purchase = False
 
     await db.commit()
+
+    emit("purchase_order.status_changed", {
+        "po_code": f"OC-{order.id:04d}", "status": order.status, "supplier": order.supplier,
+    })
 
     # Recargar la orden completa con ítems para la respuesta
     return await _get_company_purchase_order(db, order.id)

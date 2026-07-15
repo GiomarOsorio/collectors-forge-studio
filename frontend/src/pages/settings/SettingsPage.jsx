@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import {
+  Bell,
   Building2,
   CheckCircle2,
   ChevronDown,
@@ -34,6 +35,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import NotificationsDrawer from './components/NotificationsDrawer';
 import { useTranslation } from 'react-i18next';
 import { SUPPORTED_LANGS, setLanguage } from '../../i18n';
 import toast from 'react-hot-toast';
@@ -636,6 +638,7 @@ export default function SettingsPage() {
 
   const [accountOpen, setAccountOpen] = useState(false);
   const [usersOpen, setUsersOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   const loadUsers = async () => {
     if (!isAdmin) return;
@@ -719,6 +722,16 @@ export default function SettingsPage() {
           : 'Sin cargar',
         complete: users.length > 0,
         onClick: () => setUsersOpen(true),
+        visible: isAdmin,
+      },
+      {
+        id: 'notifications',
+        icon: Bell,
+        title: 'Notificaciones',
+        desc: 'Telegram, Discord, ntfy, email y webhooks para eventos de cola, stock y más.',
+        status: 'Configurar canales',
+        complete: true,
+        onClick: () => setNotificationsOpen(true),
         visible: isAdmin,
       },
     ];
@@ -848,6 +861,13 @@ export default function SettingsPage() {
         onClose={() => setAppearanceOpen(false)}
         isMobile={isMobile}
       />
+      {isAdmin && (
+        <NotificationsDrawer
+          open={notificationsOpen}
+          onClose={() => setNotificationsOpen(false)}
+          isMobile={isMobile}
+        />
+      )}
     </>
   );
 

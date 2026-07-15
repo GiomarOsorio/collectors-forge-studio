@@ -363,9 +363,23 @@ Obtiene la configuración de la empresa.
   "failure_rate_percent": 5.0,
   "labor_cost_per_hour": 10.0,
   "default_margin_percent": 30.0,
-  "currency": "USD"
+  "currency": "USD",
+  "spool_low_stock_threshold_g": 200.0,
+  "smtp_host": null,
+  "smtp_port": null,
+  "smtp_user": null,
+  "smtp_password": null,
+  "smtp_from": null,
+  "smtp_tls": true,
+  "quiet_hours_start": null,
+  "quiet_hours_end": null,
+  "digest_hour": null
 }
 ```
+
+Campos `smtp_*` / `quiet_hours_*` / `digest_hour` son de notificaciones
+(issue #137, ver sección dedicada abajo) — un solo servidor SMTP y un solo
+rango de quiet hours para todo el estudio, no por canal.
 
 ### `PUT /settings/`
 Actualiza la configuración.
@@ -1167,6 +1181,74 @@ crea con sufijo " (importado)" (nunca sobreescribe). Los archivos se
 re-suben a MinIO con keys nuevas. 400 si el ZIP es inválido, falta
 `manifest.json`, o la versión no es soportada; 507 si excede la cuota
 configurada del Vault (`VAULT_QUOTA_GB`).
+
+---
+
+## Notificaciones (issue #137)
+
+Sistema multi-canal de avisos (Telegram, Discord, ntfy, email, webhook)
+para eventos de negocio. Todo el módulo es admin-only. El dispatcher
+(`app/services/notifier.py`) es fire-and-forget (`asyncio.create_task`) —
+un evento nunca bloquea ni puede reventar la request que lo originó.
+
+**Matriz de eventos**: `queue.item_done`, `queue.item_cancelled`,
+`inventory.low_stock`, `inventory.spool_low`, `maintenance.due`,
+`purchase_order.status_changed`, `client_quote.created`.
+
+### `GET /notifications/events`
+Lista la matriz de eventos disponibles (array de strings).
+
+### `GET /notifications/channels`
+Lista todos los canales configurados.
+
+### `POST /notifications/channels`
+Crea un canal. `config` se valida según `type` (schemas discriminados:
+`TelegramConfig{bot_token,chat_id}`, `DiscordConfig{webhook_url}`,
+`NtfyConfig{server,topic,priority?,token?}`,
+`EmailChannelConfig{recipients:[]}`, `WebhookConfig{url,secret?}`).
+
+**Request:**
+```json
+{
+  "type": "ntfy",
+  "name": "Avisos del taller",
+  "config": {"server": "https://ntfy.sh", "topic": "cfs-estudio"},
+  "enabled": true,
+  "events": ["queue.item_done", "inventory.low_stock"],
+  "defer_to_digest": false
+}
+```
+
+### `PUT /notifications/channels/{id}`
+Actualización parcial (`exclude_unset`).
+
+### `DELETE /notifications/channels/{id}`
+204 sin contenido.
+
+### `POST /notifications/channels/{id}/test`
+Envía un mensaje de prueba real de forma síncrona.
+
+**Response 200:** `{"ok": true, "error": null}` — `ok: false` con `error`
+poblado si el provider falló (nunca lanza 4xx/5xx por fallo del canal).
+
+### `GET /notifications/templates/{event}`
+Template Liquid del evento. Si no hay uno personalizado, retorna el
+default hardcoded con `is_default: true`.
+
+### `PUT /notifications/templates/{event}`
+Guarda un template personalizado. 400 si la sintaxis Liquid es inválida o
+falla al renderizar contra el payload de muestra del evento.
+
+### `POST /notifications/templates/{event}/preview`
+`{"body": "..."}` → `{"ok": bool, "rendered": str|null, "error": str|null}`
+— renderiza contra datos dummy del evento sin guardar.
+
+**Quiet hours + digest**: configurados en `AppSettings` (`quiet_hours_start`,
+`quiet_hours_end`, `digest_hour`, ver sección Configuración). Un evento que
+cae en quiet hours se descarta, salvo que el canal tenga
+`defer_to_digest: true` — en ese caso se encola en
+`notification_digest_queue` y se envía agrupado a la hora de `digest_hour`
+(America/Bogota).
 
 ---
 
