@@ -25,6 +25,7 @@ import {
   getExchangeRate,
 } from '../../services/api';
 import { fmtCOP, fmtUSD } from '../../utils/inventoryAdapter';
+import InventoryNavTabs from './InventoryNavTabs';
 
 /**
  * Formatea el precio según la moneda del ítem (issue #78).
@@ -303,6 +304,7 @@ export default function InventoryPrintsPage() {
 
   return (
     <div>
+      <InventoryNavTabs className="mb-4 -mt-1" />
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="tf-page-title mb-0">Disponible para Venta</h2>

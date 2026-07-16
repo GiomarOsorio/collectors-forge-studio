@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
+  AppTabs,
   Button,
   Card,
   DetailDrawer,
@@ -90,6 +91,15 @@ import { FAILURE_CATEGORY_LABELS } from '../../utils/failureCategories';
 import { getThumbnail } from '../../utils/thumbnail';
 
 const ACCENT = '#F43F5E';
+
+// Segundo nivel de la app Vault como AppTabs (issue #181 — la sidebar ya no
+// tiene subnav). "Subir modelo" NO es un tab: es una acción (botones ya
+// existentes en el header/FAB/empty-state), por eso solo quedan 2 rutas
+// navegables aquí. VaultTrashPage monta el mismo array para volver.
+export const VAULT_TABS = [
+  { id: 'galeria',  label: 'Galería',  icon: Archive },
+  { id: 'papelera', label: 'Papelera', icon: Trash },
+];
 
 const fmtBytes = (b) => {
   if (b == null) return '—';
@@ -1850,6 +1860,13 @@ export default function VaultPage() {
           title="Galería"
           onMenu={() => openSidebar?.()}
         />
+        <AppTabs
+          items={VAULT_TABS}
+          value="galeria"
+          onChange={(id) => id === 'papelera' && navigate('/vault/trash')}
+          accent={ACCENT}
+          className="px-4"
+        />
         <div className="px-4 mt-3">
           <Card className="p-4 flex flex-col gap-3 industrial-grid">
             <div className="flex items-baseline justify-between">
@@ -2073,6 +2090,14 @@ export default function VaultPage() {
           </Link>
         )}
       </header>
+
+      <AppTabs
+        items={VAULT_TABS}
+        value="galeria"
+        onChange={(id) => id === 'papelera' && navigate('/vault/trash')}
+        accent={ACCENT}
+        className="px-6 border-b border-[var(--color-border)]"
+      />
 
       {selectMode && selectedIds.size > 0 && (
         <div className="flex items-center gap-2 bg-amber-500/10 border-b border-amber-500/30 px-6 py-2">

@@ -16,7 +16,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   DndContext,
   PointerSensor,
@@ -41,7 +41,6 @@ import {
   Copy,
   FileBox,
   FileText,
-  GanttChartSquare,
   GripVertical,
   Layers,
   ListOrdered,
@@ -95,6 +94,7 @@ import ScheduleModal from './components/ScheduleModal';
 import TimelineView from './components/TimelineView';
 import {
   ACCENT,
+  QUEUE_TABS as TABS,
   fmtDate,
   fmtTimeHours,
   getBatchProgress,
@@ -103,12 +103,6 @@ import {
   statusBadge,
   unitDndId,
 } from './queueHelpers';
-
-const TABS = [
-  { id: 'activa',    label: 'Cola activa', icon: ListOrdered },
-  { id: 'historial', label: 'Historial',   icon: Clock },
-  { id: 'timeline',  label: 'Timeline',    icon: GanttChartSquare },
-];
 
 // ── Form helpers a module-level (anti bug cursor jump — ver formFieldFocus.test.jsx)
 
@@ -1095,10 +1089,23 @@ function CancelReasonModal({ item, onConfirm, onClose }) {
 
 export default function QueuePage() {
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { openSidebar } = useOutletContext() || {};
   const confirm = useConfirm();
 
-  const [tab, setTab] = useState('activa');
+  // Tab inicial: 'activa' salvo que lleguemos de vuelta desde Bitácora
+  // (PrintLogPage navega con state.tab para no perder el tab previo — #181).
+  const [tab, setTab] = useState(location.state?.tab || 'activa');
+  // Bitácora es una ruta separada (PrintLogPage) fusionada visualmente en
+  // el mismo AppTabs — issue #181. Los demás ids son tabs de estado interno.
+  const handleTabChange = (id) => {
+    if (id === 'bitacora') {
+      navigate('/queue/log', { state: { tab } });
+      return;
+    }
+    setTab(id);
+  };
   const [query, setQuery] = useState('');
   const [active, setActive] = useState([]);
   const [history, setHistory] = useState([]);
@@ -1408,7 +1415,7 @@ export default function QueuePage() {
     <AppTabs
       items={TABS.map((t) => ({ ...t, count: counts[t.id] }))}
       value={tab}
-      onChange={setTab}
+      onChange={handleTabChange}
       accent={ACCENT}
       className="px-6 border-b border-[var(--color-border)]"
     />
@@ -1450,26 +1457,13 @@ export default function QueuePage() {
             </div>
           </Card>
         </div>
-        <div className="mt-3 px-4 flex gap-1.5">
-          {TABS.map((t) => {
-            const isActive = t.id === tab;
-            const Icon = t.icon;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setTab(t.id)}
-                className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${
-                  isActive ? 'bg-teal-500/15 border-teal-500/40 text-teal-300' : 'bg-transparent border-[var(--color-border)] text-steel'
-                }`}
-              >
-                <Icon size={12} />
-                {t.label}
-                <span className="mono text-[10px] text-gunmetal">{counts[t.id]}</span>
-              </button>
-            );
-          })}
-        </div>
+        <AppTabs
+          items={TABS.map((t) => ({ ...t, count: counts[t.id] }))}
+          value={tab}
+          onChange={handleTabChange}
+          accent={ACCENT}
+          className="mt-3 px-4"
+        />
         <div className="px-4 mt-3">
           <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-2">
             <Search size={14} className="text-gunmetal" />

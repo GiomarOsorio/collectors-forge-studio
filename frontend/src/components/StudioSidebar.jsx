@@ -6,9 +6,13 @@
  *  - Search visual (⌘K placeholder)
  *  - APPS section: lista FLAT (sin dropdown por app) con drag&drop para
  *    reordenar. Click en el app navega a su ruta principal.
- *  - Sección SECUNDARIA: muestra inline los sub-items del app activo
- *    (eyebrow = nombre del app, sub-items con count badge)
  *  - Footer: avatar + username + rol·ciudad + gear ⚙️ (Settings) + LogOut
+ *
+ * Decisión 2026-07-16 (issue #181): la sidebar es SOLO apps — la sección
+ * secundaria por app (subnav) se eliminó. El segundo nivel de cada app
+ * (rutas internas) vive ahora como `AppTabs` arriba del contenido de cada
+ * página; ver `SIDEBAR_APPS[].items` en `config/sidebar.js`, que sigue
+ * siendo la fuente de verdad de esas rutas para quien monte los tabs.
  *
  * @module components/StudioSidebar
  */
@@ -150,53 +154,6 @@ function loadOrder(validIds) {
     /* fallback */
   }
   return Array.from(validIds);
-}
-
-/**
- * Sección secundaria — muestra los sub-items del app actualmente activo.
- * Usa el `app.color` como accent para los counts. Si no hay app activa
- * (ej. en Studio Home `/`) no se renderiza nada.
- */
-function ActiveAppSection({ app, isAdmin, onNavigate }) {
-  if (!app) return null;
-  const items = app.items.filter((it) => !it.adminOnly || isAdmin);
-  if (!items.length) return null;
-  return (
-    <div className="mt-4 px-2">
-      <div className="px-2 pb-2 flex items-center gap-1.5">
-        <span
-          className="lbl-eyebrow text-[10px] tracking-widest"
-          style={{ color: 'var(--color-gunmetal-dim)' }}
-        >
-          {app.name}
-        </span>
-      </div>
-      <ul className="flex flex-col gap-0.5">
-        {items.map((item) => {
-          const Icon = item.icon;
-          return (
-            <li key={item.to}>
-              <NavLink
-                to={item.to}
-                end={item.end}
-                onClick={onNavigate}
-                className={({ isActive }) =>
-                  `flex items-center gap-2 px-2.5 py-1.5 rounded-md text-[12.5px] transition-colors ${
-                    isActive
-                      ? 'bg-surf-hover text-tech-white'
-                      : 'text-steel hover:bg-surf-hover hover:text-tech-white'
-                  }`
-                }
-              >
-                <Icon size={13} style={{ color: app.color }} className="shrink-0 opacity-80" />
-                <span className="flex-1 truncate">{item.label}</span>
-              </NavLink>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
 }
 
 /**
@@ -357,9 +314,6 @@ export default function StudioSidebar({ open, onClose }) {
               </ul>
             </SortableContext>
           </DndContext>
-
-          {/* Secondary section — sub-items del app activo */}
-          <ActiveAppSection app={activeApp} isAdmin={isAdmin} onNavigate={onClose} />
         </nav>
 
         {/* Footer: avatar + user + Settings ⚙️ + Logout */}
