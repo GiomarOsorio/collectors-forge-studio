@@ -11,13 +11,21 @@
  * Para que el menu hamburger funcione, el page debe leer `openSidebar` de
  * `useOutletContext()` (provisto por `AppLayout`) y pasarlo como `onMenu`.
  *
+ * Issue #161 (P7): se auto-registra en `AppLayout` vía `useOutletContext()`
+ * al montar para que el FAB hamburger global se oculte mientras este header
+ * está en pantalla — evita la colisión visual entre ambos (ver
+ * `agent-docs/ui-responsive/mockups/patterns.html` sección P7). Las páginas
+ * V1 que no montan este componente siguen viendo el FAB como fallback.
+ *
  * @module components/MobileAppHeader
  */
 
+import { useEffect } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { Bell, Menu, Search } from 'lucide-react';
 
 const ICON_BTN =
-  'w-9 h-9 rounded-lg border border-[var(--color-border)] inline-flex items-center justify-center text-tech-white bg-transparent shrink-0 active:bg-[var(--color-surf-hover)] transition-colors';
+  'w-11 h-11 rounded-lg border border-[var(--color-border)] inline-flex items-center justify-center text-tech-white bg-transparent shrink-0 active:bg-[var(--color-surf-hover)] transition-colors';
 
 /**
  * @param {Object} props
@@ -38,6 +46,16 @@ export default function MobileAppHeader({
   onSearch,
   showNotificationDot = true,
 }) {
+  // `useOutletContext` no lanza si se usa fuera de un <Route> (retorna el
+  // default del contexto, undefined) — seguro para tests que renderizan
+  // este componente aislado.
+  const outletContext = useOutletContext();
+  useEffect(() => {
+    outletContext?.registerMobileHeader?.(true);
+    return () => outletContext?.registerMobileHeader?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="px-4 pt-1 pb-2.5 flex items-center gap-2.5">
       <button
@@ -46,7 +64,7 @@ export default function MobileAppHeader({
         aria-label="Menú"
         className={ICON_BTN}
       >
-        <Menu size={18} />
+        <Menu size={19} />
       </button>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
