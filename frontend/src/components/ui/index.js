@@ -14,7 +14,7 @@ export { default as Button } from './Button';
 export { default as Card } from './Card';
 export { default as Chip } from './Chip';
 export { default as Collapsible } from './Collapsible';
-export { default as ContextMenu } from './ContextMenu';
+export { default as ContextMenu, useContextMenuTrigger } from './ContextMenu';
 export { default as DetailDrawer } from './DetailDrawer';
 export { default as FilamentSwatch } from './FilamentSwatch';
 export { default as Input } from './Input';
@@ -29,9 +29,15 @@ export { default as Swatch } from './Swatch';
 export { default as DropZone } from './DropZone';
 export { default as EmptyState } from './EmptyState';
 export { default as KPITile } from './KPITile';
-export { default as PageHeader } from './PageHeader';
 export { default as PageShell } from './PageShell';
 export { default as ProgressBar } from './ProgressBar';
 export { default as SearchField } from './SearchField';
 export { default as StatusPill, STATUS_PRESETS } from './StatusPill';
-export { default as ToolbarRow } from './ToolbarRow';
+
+// v3 foundation responsive (issue #160 — patrones P1–P7)
+export { default as AppTabs } from './AppTabs';
+export { default as CardGrid } from './CardGrid';
+export { default as DesktopPageHeader } from './DesktopPageHeader';
+export { default as KPIStrip } from './KPIStrip';
+export { default as LineItems } from './LineItems';
+export { default as ResponsiveTable } from './ResponsiveTable';

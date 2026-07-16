@@ -1,27 +1,27 @@
 /**
  * @file Tests de los primitives v2 (port `claude design/components.jsx`).
  *
- * Cubre PageShell, PageHeader, KPITile, StatusPill, EmptyState (v2),
- * DropZone, ToolbarRow, SearchField, ProgressBar y la nueva API
- * (eyebrow + footer) del DetailDrawer.
+ * Cubre PageShell, KPITile, StatusPill, EmptyState (v2), DropZone,
+ * SearchField, ProgressBar y la nueva API (eyebrow + footer) del
+ * DetailDrawer. PageHeader y ToolbarRow (huérfanos sin consumidores)
+ * fueron eliminados en el issue #160 — DesktopPageHeader los absorbe
+ * (ver uiResponsiveFoundation.test.jsx).
  */
 
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import { Box, Cpu, Package, Upload } from 'lucide-react';
+import { Box, Cpu } from 'lucide-react';
 
 import {
   DetailDrawer,
   DropZone,
   EmptyState,
   KPITile,
-  PageHeader,
   PageShell,
   ProgressBar,
   SearchField,
   STATUS_PRESETS,
   StatusPill,
-  ToolbarRow,
 } from '../components/ui';
 
 // ─── PageShell ──────────────────────────────────────────────────────────────
@@ -38,42 +38,6 @@ describe('PageShell', () => {
     const { container } = render(<PageShell>x</PageShell>);
     const root = container.firstChild;
     expect(root.style.getPropertyValue('--page-accent')).toBe('var(--color-app-inventory)');
-  });
-});
-
-// ─── PageHeader ─────────────────────────────────────────────────────────────
-
-describe('PageHeader', () => {
-  it('renderiza title obligatorio', () => {
-    render(<PageHeader title="Filamentos" />);
-    expect(screen.getByRole('heading', { name: 'Filamentos' })).toBeInTheDocument();
-  });
-
-  it('renderiza appName como eyebrow', () => {
-    render(<PageHeader title="X" appName="Inventario" />);
-    expect(screen.getByText('Inventario')).toBeInTheDocument();
-  });
-
-  it('renderiza subtitle opcional', () => {
-    render(<PageHeader title="X" subtitle="Descripción larga" />);
-    expect(screen.getByText('Descripción larga')).toBeInTheDocument();
-  });
-
-  it('renderiza icon en el badge cuando se pasa', () => {
-    const { container } = render(<PageHeader title="X" icon={Package} />);
-    expect(container.querySelector('svg')).toBeInTheDocument();
-  });
-
-  it('renderiza actions slot a la derecha', () => {
-    render(
-      <PageHeader title="X" actions={<button>Save</button>} />,
-    );
-    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
-  });
-
-  it('renderiza children slot (debajo de subtitle)', () => {
-    render(<PageHeader title="X"><p>extra</p></PageHeader>);
-    expect(screen.getByText('extra')).toBeInTheDocument();
   });
 });
 
@@ -204,20 +168,6 @@ describe('DropZone', () => {
     const file = new File(['x'], 'test.3mf', { type: 'model/3mf' });
     fireEvent.change(input, { target: { files: [file] } });
     expect(onFiles).toHaveBeenCalledTimes(1);
-  });
-});
-
-// ─── ToolbarRow ─────────────────────────────────────────────────────────────
-
-describe('ToolbarRow', () => {
-  it('renderiza children con border-bottom + bg', () => {
-    const { container } = render(
-      <ToolbarRow>
-        <button>x</button>
-      </ToolbarRow>,
-    );
-    expect(container.firstChild.className).toContain('border-b');
-    expect(screen.getByRole('button', { name: 'x' })).toBeInTheDocument();
   });
 });
 

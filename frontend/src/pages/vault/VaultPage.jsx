@@ -46,6 +46,7 @@ import {
   DropZone,
   EmptyState,
   KPI,
+  KPIStrip,
   Lightbox,
   MobileSheet,
   StatusPill,
@@ -1825,26 +1826,18 @@ export default function VaultPage() {
   );
 
   const KPIs = (
-    <div className="flex flex-wrap gap-3 px-6 pt-4 pb-2">
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI label="Modelos" value={total} unit="docs" sub="en biblioteca" accent={ACCENT} icon={Archive} />
-      </div>
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI label="Almacenado" value={fmtBytes(usedBytes)} sub={`de ${fmtBytes(quotaBytes)}`} accent="#3B82F6" icon={HardDrive} />
-      </div>
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI label="Cuota usada" value={`${percent.toFixed(1)}%`} sub={percent > 80 ? 'cerca del límite' : 'al día'} accent={percent > 80 ? '#FBBF24' : '#34D399'} />
-      </div>
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI
-          label="Con plate render"
-          value={files.filter((f) => f.local_thumbnail_url).length}
-          unit="docs"
-          sub="en esta página"
-          accent="#94A0AE"
-        />
-      </div>
-    </div>
+    <KPIStrip className="px-6 pt-4 pb-2">
+      <KPI label="Modelos" value={total} unit="docs" sub="en biblioteca" accent={ACCENT} icon={Archive} />
+      <KPI label="Almacenado" value={fmtBytes(usedBytes)} sub={`de ${fmtBytes(quotaBytes)}`} accent="#3B82F6" icon={HardDrive} />
+      <KPI label="Cuota usada" value={`${percent.toFixed(1)}%`} sub={percent > 80 ? 'cerca del límite' : 'al día'} accent={percent > 80 ? '#FBBF24' : '#34D399'} />
+      <KPI
+        label="Con plate render"
+        value={files.filter((f) => f.local_thumbnail_url).length}
+        unit="docs"
+        sub="en esta página"
+        accent="#94A0AE"
+      />
+    </KPIStrip>
   );
 
   if (isMobile) {

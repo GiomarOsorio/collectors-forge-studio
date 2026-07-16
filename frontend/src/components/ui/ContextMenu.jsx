@@ -10,10 +10,80 @@
  * y renderiza `<ContextMenu>` condicionalmente. El menú se cierra solo al
  * hacer click fuera, presionar Escape, o al ejecutar un item.
  *
+ * En touch el click derecho no existe: usar `useContextMenuTrigger` (spread
+ * de handlers con long-press de 500ms) o, mejor aún para descubribilidad,
+ * un botón ⋮ explícito que llame `open({ x, y })` con las coords del botón.
+ *
  * @module components/ui/ContextMenu
  */
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+
+/**
+ * Handlers para disparar un ContextMenu tanto con click derecho (desktop)
+ * como con long-press de 500ms (touch, donde `contextmenu` no dispara de
+ * forma confiable). El long-press se cancela si el dedo se mueve >10px
+ * (scroll) o se levanta antes de tiempo.
+ *
+ * @param {(coords: {x: number, y: number}) => void} open - Abre el menú en coords de viewport
+ * @returns {{onContextMenu: Function, onTouchStart: Function, onTouchMove: Function, onTouchEnd: Function, onTouchCancel: Function}}
+ *   Spread directo sobre el elemento disparador: `<div {...triggerProps}>`.
+ */
+export function useContextMenuTrigger(open) {
+  const timerRef = useRef(null);
+  const startRef = useRef({ x: 0, y: 0 });
+
+  const cancel = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => cancel, [cancel]);
+
+  const onContextMenu = useCallback(
+    (e) => {
+      e.preventDefault();
+      cancel();
+      open({ x: e.clientX, y: e.clientY });
+    },
+    [open, cancel],
+  );
+
+  const onTouchStart = useCallback(
+    (e) => {
+      const touch = e.touches[0];
+      if (!touch) return;
+      startRef.current = { x: touch.clientX, y: touch.clientY };
+      cancel();
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        open({ x: startRef.current.x, y: startRef.current.y });
+      }, 500);
+    },
+    [open, cancel],
+  );
+
+  const onTouchMove = useCallback(
+    (e) => {
+      const touch = e.touches[0];
+      if (!touch) return;
+      const dx = touch.clientX - startRef.current.x;
+      const dy = touch.clientY - startRef.current.y;
+      if (Math.hypot(dx, dy) > 10) cancel();
+    },
+    [cancel],
+  );
+
+  return {
+    onContextMenu,
+    onTouchStart,
+    onTouchMove,
+    onTouchEnd: cancel,
+    onTouchCancel: cancel,
+  };
+}
 
 /**
  * @typedef {Object} ContextMenuItem

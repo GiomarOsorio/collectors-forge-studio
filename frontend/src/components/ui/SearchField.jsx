@@ -21,7 +21,7 @@ export default function SearchField({ value, onChange, placeholder = 'Buscar…'
   return (
     <div
       className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] ${className}`}
-      style={typeof width === 'number' ? { width } : { width }}
+      style={{ width, maxWidth: '100%' }}
     >
       <Search size={13} className="text-gunmetal shrink-0" />
       <input

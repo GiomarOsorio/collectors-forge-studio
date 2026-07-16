@@ -57,6 +57,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
+  AppTabs,
   Button,
   Card,
   DetailDrawer,
@@ -1404,33 +1405,13 @@ export default function QueuePage() {
   );
 
   const TabsBar = (
-    <div className="flex items-center gap-0.5 px-6 border-b border-[var(--color-border)] overflow-x-auto">
-      {TABS.map((t) => {
-        const Icon = t.icon;
-        const isActive = t.id === tab;
-        return (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={`inline-flex items-center gap-2 px-3.5 py-3 text-sm font-medium transition-colors whitespace-nowrap -mb-px border-b-2 ${
-              isActive ? 'text-tech-white' : 'text-steel border-transparent hover:text-tech-white'
-            }`}
-            style={isActive ? { borderColor: ACCENT } : undefined}
-          >
-            <Icon size={13} style={isActive ? { color: ACCENT } : { color: '#7A8494' }} />
-            {t.label}
-            <span
-              className={`mono text-[10px] px-1.5 py-px rounded-full border ${
-                isActive ? 'bg-teal-500/14 border-teal-500/30 text-teal-300' : 'bg-white/5 border-[var(--color-border)] text-gunmetal'
-              }`}
-            >
-              {counts[t.id]}
-            </span>
-          </button>
-        );
-      })}
-    </div>
+    <AppTabs
+      items={TABS.map((t) => ({ ...t, count: counts[t.id] }))}
+      value={tab}
+      onChange={setTab}
+      accent={ACCENT}
+      className="px-6 border-b border-[var(--color-border)]"
+    />
   );
 
   // ── Mobile shell ─────────────────────────────────────────────────────────
