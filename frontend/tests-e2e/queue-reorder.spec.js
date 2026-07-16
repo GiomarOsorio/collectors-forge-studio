@@ -123,7 +123,13 @@ test.describe('Queue — reorder drag-and-drop y tabs (issue #133)', () => {
   test('cambia a la pestaña Timeline', async ({ page }) => {
     await page.goto('/queue');
     await page.waitForLoadState('networkidle');
-    await page.getByRole('button', { name: /timeline/i }).first().click();
+    // Desktop usa AppTabs (issue #160, role="tab"); el shell mobile mantiene
+    // su propio selector con <button>. El locator cubre ambos.
+    await page
+      .getByRole('tab', { name: /timeline/i })
+      .or(page.getByRole('button', { name: /timeline/i }))
+      .first()
+      .click();
     await expect(page.getByText(/sin impresoras registradas/i)).toBeVisible();
   });
 });
