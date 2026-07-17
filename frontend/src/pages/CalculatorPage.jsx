@@ -1317,24 +1317,28 @@ export default function CalculatorPage({ embedded = false } = {}) {
   return (
     <div className={`flex flex-col bg-forge-black ${embedded ? 'min-h-[700px]' : 'min-h-screen'}`}>
       <CalcHeader isStale={isStale} onOpenStaleModal={() => setStaleModalOpen(true)} />
-      <div
-        className="flex-1 min-h-0 grid"
-        style={{ gridTemplateColumns: 'minmax(420px, 1.2fr) minmax(320px, 1fr) minmax(320px, 1fr)' }}
-      >
+      {/* Issue #162: en el punto ciego 1024-1279 (lg) el grid de 3 columnas
+          desbordaba (mínimo 1060px vs ~736px reales con sidebar). lg colapsa
+          a 2 columnas — form | resultado+desglose apilados (wrapper
+          `xl:contents` los "desenvuelve" a columnas propias desde xl). Todos
+          los tracks van minmax(0, Xfr) — ver nota técnica en #160. */}
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]">
         <CalcForm form={form} setField={setField} filaments={filaments} printers={printers} supplies={supplies} consumables={consumables} errors={errors} />
-        <CalcResult
-          result={result}
-          form={form}
-          calcLoading={calcLoading}
-          calcError={calcError}
-          onReprint={onReprint}
-          onGenerateQuote={onGenerateQuote}
-          onCalculate={runCalc}
-          savingQuote={savingQuote}
-          dirty={dirty}
-          canCalc={canCalc(form)}
-        />
-        <CalcBreakdown result={result} form={form} exchangeRate={result?.usd_to_cop_rate} />
+        <div className="flex flex-col min-h-0 xl:contents">
+          <CalcResult
+            result={result}
+            form={form}
+            calcLoading={calcLoading}
+            calcError={calcError}
+            onReprint={onReprint}
+            onGenerateQuote={onGenerateQuote}
+            onCalculate={runCalc}
+            savingQuote={savingQuote}
+            dirty={dirty}
+            canCalc={canCalc(form)}
+          />
+          <CalcBreakdown result={result} form={form} exchangeRate={result?.usd_to_cop_rate} />
+        </div>
       </div>
       <StaleTariffModal
         open={staleModalOpen}
