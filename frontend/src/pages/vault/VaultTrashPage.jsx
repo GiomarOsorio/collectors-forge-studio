@@ -10,15 +10,16 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import { Archive, ArrowLeft, RotateCcw, Trash, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Button, Card, EmptyState } from '../../components/ui';
+import { AppTabs, Button, Card, EmptyState } from '../../components/ui';
 import MobileAppHeader from '../../components/MobileAppHeader';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { emptyVaultTrash, getVaultTrash, purgeVaultFile, restoreVaultFile } from '../../services/api';
 import { getThumbnail } from '../../utils/thumbnail';
+import { VAULT_TABS } from './VaultPage';
 
 const ACCENT = '#F43F5E';
 
@@ -73,6 +74,7 @@ function TrashRow({ file, onRestore, onPurge }) {
 
 export default function VaultTrashPage() {
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const { openSidebar } = useOutletContext() || {};
   const confirm = useConfirm();
 
@@ -169,9 +171,20 @@ export default function VaultTrashPage() {
     </header>
   );
 
+  const TabsBar = (
+    <AppTabs
+      items={VAULT_TABS}
+      value="papelera"
+      onChange={(id) => id === 'galeria' && navigate('/vault')}
+      accent={ACCENT}
+      className={isMobile ? 'px-4' : 'px-6 border-b border-[var(--color-border)]'}
+    />
+  );
+
   return (
     <div className="flex flex-col min-h-screen -m-4 md:-m-6 xl:-m-8">
       {Header}
+      {TabsBar}
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
         {loading ? (
           <p className="py-16 text-center text-gunmetal text-sm">Cargando papelera…</p>

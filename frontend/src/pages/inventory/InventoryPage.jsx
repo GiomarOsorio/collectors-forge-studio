@@ -61,6 +61,7 @@ import {
 import MobileAppHeader from '../../components/MobileAppHeader';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useIsMobile } from '../../hooks/useMediaQuery';
+import InventoryNavTabs from './InventoryNavTabs';
 import {
   arrivePurchaseOrder,
   createInventoryItem,
@@ -3227,6 +3228,7 @@ export default function InventoryPage() {
           onMenu={() => openSidebar?.()}
           onSearch={() => setSearchOpen(true)}
         />
+        <InventoryNavTabs className="px-4" />
         <MobileSearchOverlay
           open={searchOpen}
           onClose={() => setSearchOpen(false)}
@@ -3633,6 +3635,8 @@ export default function InventoryPage() {
           </button>
         </div>
       </header>
+
+      <InventoryNavTabs className="px-6 border-b border-[var(--color-border)]" />
 
       <KPIStrip stats={stats} openPOs={openPOs} openPOsValue={openPOsValue} />
 

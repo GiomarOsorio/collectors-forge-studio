@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
+  AppTabs,
   Button,
   Card,
   DetailDrawer,
@@ -1110,33 +1111,13 @@ export default function MaintenancePage() {
   );
 
   const TabsBar = (
-    <div className="flex items-center gap-0.5 px-6 border-b border-[var(--color-border)] overflow-x-auto">
-      {TABS.map((t) => {
-        const Icon = t.icon;
-        const isActive = t.id === tab;
-        return (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={`inline-flex items-center gap-2 px-3.5 py-3 text-sm font-medium transition-colors whitespace-nowrap -mb-px border-b-2 ${
-              isActive ? 'text-tech-white' : 'text-steel border-transparent hover:text-tech-white'
-            }`}
-            style={isActive ? { borderColor: ACCENT } : undefined}
-          >
-            <Icon size={13} style={isActive ? { color: ACCENT } : { color: '#7A8494' }} />
-            {t.label}
-            <span
-              className={`mono text-[10px] px-1.5 py-px rounded-full border ${
-                isActive ? 'bg-violet-500/14 border-violet-500/30 text-violet-300' : 'bg-white/5 border-[var(--color-border)] text-gunmetal'
-              }`}
-            >
-              {counts[t.id]}
-            </span>
-          </button>
-        );
-      })}
-    </div>
+    <AppTabs
+      items={TABS.map((t) => ({ ...t, count: counts[t.id] }))}
+      value={tab}
+      onChange={setTab}
+      accent={ACCENT}
+      className="px-6 border-b border-[var(--color-border)]"
+    />
   );
 
   if (isMobile) {
@@ -1178,25 +1159,13 @@ export default function MaintenancePage() {
             </div>
           </Card>
         </div>
-        <div className="mt-3 px-4 flex gap-1.5">
-          {TABS.map((t) => {
-            const isActive = t.id === tab;
-            const Icon = t.icon;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setTab(t.id)}
-                className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${
-                  isActive ? 'bg-violet-500/15 border-violet-500/40 text-violet-300' : 'bg-transparent border-[var(--color-border)] text-steel'
-                }`}
-              >
-                <Icon size={12} />
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
+        <AppTabs
+          items={TABS.map((t) => ({ ...t, count: counts[t.id] }))}
+          value={tab}
+          onChange={setTab}
+          accent={ACCENT}
+          className="mt-3 px-4"
+        />
         {tab === 'dashboard' ? (
           loading ? (
             <p className="px-4 py-12 text-center text-gunmetal text-sm">Cargando…</p>

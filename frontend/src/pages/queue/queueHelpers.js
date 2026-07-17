@@ -5,9 +5,23 @@
  * @module pages/queue/queueHelpers
  */
 
-import { CheckCircle2, Pause, Play, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock, GanttChartSquare, ListOrdered, Pause, Play, ScrollText, XCircle } from 'lucide-react';
 
 export const ACCENT = '#14B8A6';
+
+/**
+ * Segundo nivel de la app Queue como un único AppTabs (issue #181 — la
+ * sidebar ya no tiene subnav). Cola activa/Historial/Timeline son tabs de
+ * estado interno de `QueuePage`; Bitácora es una ruta separada
+ * (`/queue/log`, `PrintLogPage`) que se fusiona visualmente en la misma
+ * fila — ambas páginas montan este mismo array para poder navegar entre sí.
+ */
+export const QUEUE_TABS = [
+  { id: 'activa',    label: 'Cola activa', icon: ListOrdered },
+  { id: 'historial', label: 'Historial',   icon: Clock },
+  { id: 'timeline',  label: 'Timeline',    icon: GanttChartSquare },
+  { id: 'bitacora',  label: 'Bitácora',    icon: ScrollText },
+];
 
 /**
  * Mapea el status del queue item a metadata `StatusPill` (label + tone + icon).

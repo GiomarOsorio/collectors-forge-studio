@@ -16,6 +16,7 @@ import { useState, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { Download, Upload, FileJson, CheckCircle, AlertCircle } from 'lucide-react';
 import { exportInventory, importInventory } from '../../services/api';
+import InventoryNavTabs from './InventoryNavTabs';
 
 /**
  * Página de importación y exportación de inventario.
@@ -104,6 +105,7 @@ export default function InventoryImportExportPage() {
 
   return (
     <div className="space-y-6">
+      <InventoryNavTabs className="-mt-1" />
       <div>
         <h1 className="text-2xl font-bold text-tech-white">Importar / Exportar</h1>
         <p className="text-steel text-sm mt-1">

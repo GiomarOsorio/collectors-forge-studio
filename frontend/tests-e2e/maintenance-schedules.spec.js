@@ -58,7 +58,8 @@ test.describe('Mantenimiento — Recordatorios (issue #138)', () => {
     await page.goto('/maintenance');
     await page.waitForLoadState('networkidle');
 
-    await page.getByRole('button', { name: /Programados/i }).click();
+    // AppTabs (issue #160/#181) expone las tabs con role="tab".
+    await page.getByRole('tab', { name: /Programados/i }).click();
     await expect(page.getByText('Lubricar ejes XY')).toBeVisible();
     await expect(page.getByText('Vencido', { exact: true })).toBeVisible();
   });
@@ -81,7 +82,8 @@ test.describe('Mantenimiento — Recordatorios (issue #138)', () => {
 
     await page.goto('/maintenance');
     await page.waitForLoadState('networkidle');
-    await page.getByRole('button', { name: /Programados/i }).click();
+    // AppTabs (issue #160/#181) expone las tabs con role="tab".
+    await page.getByRole('tab', { name: /Programados/i }).click();
 
     await page.getByRole('button', { name: 'Crear el primero' }).click();
 

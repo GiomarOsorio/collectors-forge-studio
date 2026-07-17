@@ -35,6 +35,7 @@ import { useConfirm } from '../../components/ConfirmDialog';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { DetailDrawer, MobileSheet, StatusPill, EmptyState } from '../../components/ui';
 import { fmtCOP } from '../../utils/inventoryAdapter';
+import InventoryNavTabs from './InventoryNavTabs';
 
 const APP_ACCENT = '#3B82F6'; // app-inventory
 
@@ -89,6 +90,7 @@ function PurchasesHeader({ purchases, onNew }) {
           <Plus size={13} /> Nueva orden
         </button>
       </header>
+      <InventoryNavTabs className="px-5 border-b border-[var(--color-border-soft)]" />
       <div className="flex gap-2 px-5 py-3 border-b border-[var(--color-border-soft)] bg-forge-black overflow-x-auto">
         <IpKPI label="Órdenes abiertas" icon={Truck} value={open.length} sub={`${purchases.length} totales`} />
         <IpKPI label="En ruta · COP" icon={ShoppingCart} value={fmtCOP(onRoute)} sub="Por recibir" big />

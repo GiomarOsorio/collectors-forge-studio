@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import {
   CalendarClock,
   ChevronLeft,
@@ -21,13 +21,13 @@ import {
   Search,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Button, Card, EmptyState, StatusPill } from '../../components/ui';
+import { AppTabs, Button, Card, EmptyState, StatusPill } from '../../components/ui';
 import MobileAppHeader from '../../components/MobileAppHeader';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../context/AuthContext';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { downloadPrintLogCsv, getPrintLog, getPrinters, getUsers } from '../../services/api';
-import { ACCENT, fmtDate, fmtTimeHours, itemView, statusBadge } from './queueHelpers';
+import { ACCENT, QUEUE_TABS, fmtDate, fmtTimeHours, itemView, statusBadge } from './queueHelpers';
 
 const PAGE_SIZE_KEY = 'cfs-printlog-pagesize';
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
@@ -67,9 +67,17 @@ function readPersistedPageSize() {
 
 export default function PrintLogPage() {
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const { openSidebar } = useOutletContext() || {};
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+
+  // AppTabs fusiona Bitácora con los tabs internos de QueuePage (#181):
+  // click en cualquier otro id navega de vuelta a /queue con ese tab activo.
+  const handleTabChange = (id) => {
+    if (id === 'bitacora') return;
+    navigate('/queue', { state: { tab: id } });
+  };
 
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebouncedValue(query, 350);
@@ -347,6 +355,13 @@ export default function PrintLogPage() {
           title="Bitácora"
           onMenu={() => openSidebar?.()}
         />
+        <AppTabs
+          items={QUEUE_TABS}
+          value="bitacora"
+          onChange={handleTabChange}
+          accent={ACCENT}
+          className="px-4"
+        />
         <div className="px-4">{Filters}</div>
         <div className="px-4">
           {loading ? (
@@ -373,6 +388,12 @@ export default function PrintLogPage() {
         <span className="text-gunmetal-dim">›</span>
         <span className="text-sm font-semibold text-tech-white">Bitácora</span>
       </header>
+      <AppTabs
+        items={QUEUE_TABS}
+        value="bitacora"
+        onChange={handleTabChange}
+        accent={ACCENT}
+      />
       {Filters}
       {loading ? (
         <p className="py-16 text-center text-gunmetal text-sm">Cargando bitácora…</p>
