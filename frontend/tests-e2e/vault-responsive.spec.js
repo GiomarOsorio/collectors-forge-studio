@@ -104,4 +104,39 @@ test.describe('Vault responsive — issue #163', () => {
 
     await expect(page).toHaveScreenshot('vault-history-sheet-390.png', { fullPage: true });
   });
+
+  test('historial a 1280px: drawer lateral (no modal centrado)', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await loginAsDev(page);
+
+    await page.route('**/api/**', async (route) => {
+      const { pathname } = new URL(route.request().url());
+      const method = route.request().method();
+      const json = (body) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+      if (method === 'GET' && /\/vault\/\d+\/print-history$/.test(pathname)) return json(FAKE_HISTORY);
+      if (method === 'GET' && /\/vault\/?$/.test(pathname)) return json([FAKE_FILE]);
+      if (method === 'GET' && /\/vault\/stats$/.test(pathname)) return json({ used_bytes: 7_500_000, quota_bytes: 1_000_000_000, percent: 0.75 });
+      if (method === 'GET' && /\/vault\/folders$/.test(pathname)) return json([]);
+      if (method === 'GET' && /\/vault\/tags$/.test(pathname)) return json([]);
+      return route.fallback();
+    });
+
+    await page.goto('/vault');
+    await page.waitForLoadState('networkidle');
+
+    await page.getByTitle('Ver historial de impresiones').first().click();
+
+    // El drawer (P6) va anclado al borde derecho: su caja arranca en la mitad
+    // derecha del viewport, a diferencia de un modal centrado.
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    await expect(page.getByText('warping en esquina')).toBeVisible();
+    const box = await dialog.boundingBox();
+    expect(box.x).toBeGreaterThan(640);
+    expect(box.x + box.width).toBeGreaterThanOrEqual(1279);
+
+    // Viewport (no fullPage): el drawer es position:fixed y fullPage lo
+    // descoloca en Playwright.
+    await expect(page).toHaveScreenshot('vault-history-drawer-1280.png');
+  });
 });
