@@ -45,6 +45,12 @@ function logItem(id, status) {
 }
 
 test.describe('Print Log — bitácora global (issue #131)', () => {
+  // Estos tests validan la barra de filtros inline + Exportar CSV, que en
+  // el rediseño responsive (#164) viven solo en ≥1024. En <1024 los filtros
+  // pasan a un MobileSheet y el export no se expone. Forzamos viewport
+  // desktop para probar ese chrome sin importar el project (mobile/desktop).
+  test.use({ viewport: { width: 1280, height: 900 } });
+
   test.beforeEach(async ({ page }) => {
     await loginAsDev(page);
   });
