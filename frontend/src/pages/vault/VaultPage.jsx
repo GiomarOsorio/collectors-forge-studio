@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   Archive,
@@ -600,6 +601,7 @@ function StlLivePreview({ fileId, fileName }) {
  * contextos WebGL si React StrictMode monta el efecto dos veces en dev.
  */
 function GCodeViewerModal({ fileId, fileName, onClose }) {
+  const isMobile = useIsMobile();
   const canvasRef = useRef(null);
   const previewRef = useRef(null);
   const [loading, setLoading] = useState(true);
@@ -653,6 +655,75 @@ function GCodeViewerModal({ fileId, fileName, onClose }) {
     previewRef.current.render();
   }, [showTravel]);
 
+  // Spinner de carga superpuesto sobre el canvas (mismo en ambas ramas).
+  const spinner = loading && (
+    <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+      <div className="w-7 h-7 border-2 border-rose-500/20 border-t-rose-500 rounded-full animate-spin" />
+    </div>
+  );
+
+  // Badge mono con la capa actual, esquina superior-izquierda del canvas.
+  const layerBadge = (
+    <span className="absolute top-3.5 left-3.5 mono text-[11px] text-white/55 bg-white/[0.06] border border-white/10 rounded-lg px-2.5 py-1">
+      Capa {layer + 1} / {maxLayer + 1}
+    </span>
+  );
+
+  // Controles inferiores (slider de capa + toggle travel), compartidos.
+  const controls = (
+    <div className="flex flex-col gap-2.5">
+      <div className="flex items-center gap-3">
+        <span className="mono text-[11px] text-gunmetal shrink-0 w-24">
+          Capa {layer + 1} / {maxLayer + 1}
+        </span>
+        <input
+          type="range"
+          min={0}
+          max={maxLayer}
+          value={layer}
+          onChange={(e) => setLayer(Number(e.target.value))}
+          className="flex-1 h-[22px] accent-rose-500"
+        />
+      </div>
+      <label className="flex items-center gap-2 text-[12.5px] text-steel cursor-pointer min-h-6">
+        <input
+          type="checkbox"
+          checked={showTravel}
+          onChange={(e) => setShowTravel(e.target.checked)}
+        />
+        Mostrar movimientos de desplazamiento (travel)
+      </label>
+    </div>
+  );
+
+  // <1024 (P9+P6): el visor ES la pantalla. Overlay fullscreen — canvas ocupa
+  // todo el alto disponible, controles fijos abajo (respetan safe-area),
+  // botón cerrar 44px arriba-derecha.
+  if (isMobile) {
+    return createPortal(
+      <div className="fixed inset-0 z-[60] bg-[#05070C] flex flex-col">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Cerrar visor"
+          className="absolute top-3.5 right-3.5 z-[2] w-11 h-11 rounded-xl bg-white/[0.08] border border-white/[0.14] text-white flex items-center justify-center backdrop-blur"
+        >
+          <X size={18} />
+        </button>
+        <div className="relative flex-1 min-h-0 bg-black">
+          <canvas ref={canvasRef} className="w-full h-full block" />
+          {layerBadge}
+          {spinner}
+        </div>
+        <div className="px-4 pt-3.5 pb-[calc(0.875rem+env(safe-area-inset-bottom,0px))] bg-[var(--color-surf-sidebar)] border-t border-[var(--color-border-soft)] shrink-0">
+          {controls}
+        </div>
+      </div>,
+      document.body,
+    );
+  }
+
+  // ≥1024: modal grande centrado, canvas más alto (520px) que la versión previa.
   return (
     <div className="tf-modal-overlay" onClick={onClose}>
       <div
@@ -665,36 +736,13 @@ function GCodeViewerModal({ fileId, fileName, onClose }) {
             <X size={18} />
           </button>
         </div>
-        <div className="relative w-full h-[420px] bg-black">
+        <div className="relative w-full h-[520px] bg-black">
           <canvas ref={canvasRef} className="w-full h-full block" />
-          {loading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-              <div className="w-7 h-7 border-2 border-rose-500/20 border-t-rose-500 rounded-full animate-spin" />
-            </div>
-          )}
+          {layerBadge}
+          {spinner}
         </div>
-        <div className="p-4 flex flex-col gap-3">
-          <div className="flex items-center gap-3">
-            <span className="mono text-[10.5px] text-gunmetal shrink-0 w-24">
-              Capa {layer + 1} / {maxLayer + 1}
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={maxLayer}
-              value={layer}
-              onChange={(e) => setLayer(Number(e.target.value))}
-              className="flex-1"
-            />
-          </div>
-          <label className="flex items-center gap-2 text-sm text-steel cursor-pointer">
-            <input
-              type="checkbox"
-              checked={showTravel}
-              onChange={(e) => setShowTravel(e.target.checked)}
-            />
-            Mostrar movimientos de desplazamiento (travel)
-          </label>
+        <div className="p-4">
+          {controls}
         </div>
       </div>
     </div>
@@ -707,6 +755,7 @@ function GCodeViewerModal({ fileId, fileName, onClose }) {
  * totales y tasa de éxito agregados (calculados server-side).
  */
 function PrintHistoryModal({ fileId, fileName, onClose }) {
+  const isMobile = useIsMobile();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
 
@@ -731,6 +780,75 @@ function PrintHistoryModal({ fileId, fileName, onClose }) {
   const statusTone = { done: 'done', cancelled: 'danger', printing: 'printing' };
   const items = data?.items || [];
 
+  // Motivo/nota de la fila: categoría + razón de fallo, o "Sin incidencias."
+  // cuando terminó bien. Reutilizado por la card mobile y la celda desktop.
+  const noteOf = (it) => {
+    const parts = [];
+    if (it.failure_category) parts.push(FAILURE_CATEGORY_LABELS[it.failure_category] || it.failure_category);
+    if (it.failure_reason) parts.push(it.failure_reason);
+    return parts.length ? parts.join(' — ') : 'Sin incidencias.';
+  };
+  const gramsOf = (it) => (it.weight_grams != null ? `${Math.round(it.weight_grams * it.quantity)}g` : '—');
+
+  const footer = items.length > 0 && (
+    <div className="flex items-center justify-between text-xs">
+      <span className="mono text-steel">{Math.round(data.total_grams)}g totales</span>
+      {data.success_rate_pct != null && (
+        <span className="mono text-steel">{data.success_rate_pct.toFixed(0)}% de éxito</span>
+      )}
+    </div>
+  );
+
+  // <1024 (P2+P6): MobileSheet con cards en vez de la tabla de 6 columnas.
+  if (isMobile) {
+    return (
+      <MobileSheet open title={`Historial · ${fileName}`} onClose={onClose}>
+        <div className="px-4 pt-3 pb-6 flex flex-col gap-2.5">
+          {loading ? (
+            <p className="text-sm text-gunmetal text-center py-8">Cargando…</p>
+          ) : items.length === 0 ? (
+            <p className="text-sm text-gunmetal text-center py-8">Sin impresiones registradas todavía.</p>
+          ) : (
+            <>
+              {items.map((it) => (
+                <Card key={it.id} className="p-3">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="mono text-[13px] font-semibold text-tech-white">{fmtDate(it.created_at)}</span>
+                    <StatusPill tone={statusTone[it.status] || 'neutral'}>{it.status}</StatusPill>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                    <div>
+                      <div className="lbl-eyebrow text-[9.5px] mb-0.5">Impresora</div>
+                      <div className="text-[12.5px] text-steel">{it.printer_name || '—'}</div>
+                    </div>
+                    <div>
+                      <div className="lbl-eyebrow text-[9.5px] mb-0.5">Filamento</div>
+                      <div className="text-[12.5px] text-steel">{it.filament_name || '—'}</div>
+                    </div>
+                    <div>
+                      <div className="lbl-eyebrow text-[9.5px] mb-0.5">Cantidad</div>
+                      <div className="text-[12.5px] text-steel">{it.quantity} {it.quantity === 1 ? 'pza' : 'pzas'}</div>
+                    </div>
+                    <div>
+                      <div className="lbl-eyebrow text-[9.5px] mb-0.5">Gramos</div>
+                      <div className="text-[12.5px] text-steel mono">{gramsOf(it)}</div>
+                    </div>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-[var(--color-border-soft)] text-xs text-gunmetal">
+                    {noteOf(it)}
+                  </div>
+                </Card>
+              ))}
+              {footer}
+            </>
+          )}
+        </div>
+      </MobileSheet>
+    );
+  }
+
+  // ≥1024: modal centrado con la tabla, envuelta en overflow-x-auto por si
+  // los nombres largos empujan el ancho.
   return (
     <div className="tf-modal-overlay" onClick={onClose}>
       <div
@@ -751,48 +869,45 @@ function PrintHistoryModal({ fileId, fileName, onClose }) {
           ) : items.length === 0 ? (
             <p className="text-sm text-gunmetal text-center py-8">Sin impresiones registradas todavía.</p>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-[10.5px] uppercase tracking-wider text-gunmetal">
-                  <th className="pb-2 font-medium">Fecha</th>
-                  <th className="pb-2 font-medium">Estado</th>
-                  <th className="pb-2 font-medium">Impresora</th>
-                  <th className="pb-2 font-medium">Filamento</th>
-                  <th className="pb-2 font-medium text-right">Gramos</th>
-                  <th className="pb-2 font-medium">Motivo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((it) => (
-                  <tr key={it.id} className="border-t border-[var(--color-border-soft)]">
-                    <td className="py-2 mono text-[11px] text-steel whitespace-nowrap">
-                      {fmtDate(it.created_at)}
-                    </td>
-                    <td className="py-2">
-                      <StatusPill tone={statusTone[it.status] || 'neutral'}>{it.status}</StatusPill>
-                    </td>
-                    <td className="py-2 text-steel">{it.printer_name || '—'}</td>
-                    <td className="py-2 text-steel">{it.filament_name || '—'}</td>
-                    <td className="py-2 text-right mono text-steel whitespace-nowrap">
-                      {it.weight_grams != null ? `${Math.round(it.weight_grams * it.quantity)}g` : '—'}
-                    </td>
-                    <td className="py-2 text-steel text-xs">
-                      {it.failure_category ? (FAILURE_CATEGORY_LABELS[it.failure_category] || it.failure_category) : ''}
-                      {it.failure_reason ? ` — ${it.failure_reason}` : ''}
-                      {!it.failure_category && !it.failure_reason ? '—' : ''}
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[560px]">
+                <thead>
+                  <tr className="text-left text-[10.5px] uppercase tracking-wider text-gunmetal">
+                    <th className="pb-2 font-medium">Fecha</th>
+                    <th className="pb-2 font-medium">Estado</th>
+                    <th className="pb-2 font-medium">Impresora</th>
+                    <th className="pb-2 font-medium">Filamento</th>
+                    <th className="pb-2 font-medium text-right">Gramos</th>
+                    <th className="pb-2 font-medium">Motivo</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {items.map((it) => (
+                    <tr key={it.id} className="border-t border-[var(--color-border-soft)]">
+                      <td className="py-2 mono text-[11px] text-steel whitespace-nowrap">
+                        {fmtDate(it.created_at)}
+                      </td>
+                      <td className="py-2">
+                        <StatusPill tone={statusTone[it.status] || 'neutral'}>{it.status}</StatusPill>
+                      </td>
+                      <td className="py-2 text-steel">{it.printer_name || '—'}</td>
+                      <td className="py-2 text-steel">{it.filament_name || '—'}</td>
+                      <td className="py-2 text-right mono text-steel whitespace-nowrap">
+                        {gramsOf(it)}
+                      </td>
+                      <td className="py-2 text-steel text-xs">
+                        {it.failure_category || it.failure_reason ? noteOf(it) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
         {items.length > 0 && (
-          <div className="px-4 py-3 border-t border-[var(--color-border-soft)] flex items-center justify-between text-xs shrink-0">
-            <span className="mono text-steel">{Math.round(data.total_grams)}g totales</span>
-            {data.success_rate_pct != null && (
-              <span className="mono text-steel">{data.success_rate_pct.toFixed(0)}% de éxito</span>
-            )}
+          <div className="px-4 py-3 border-t border-[var(--color-border-soft)] shrink-0">
+            {footer}
           </div>
         )}
       </div>
@@ -2027,6 +2142,20 @@ export default function VaultPage() {
             onCreate={handleCreateTag}
             onRename={handleRenameTag}
             onDelete={handleDeleteTag}
+          />
+        )}
+        {gcodeViewerFile && (
+          <GCodeViewerModal
+            fileId={gcodeViewerFile.id}
+            fileName={gcodeViewerFile.print_file_name || gcodeViewerFile.name}
+            onClose={() => setGcodeViewerFile(null)}
+          />
+        )}
+        {historyModalFile && (
+          <PrintHistoryModal
+            fileId={historyModalFile.id}
+            fileName={historyModalFile.name}
+            onClose={() => setHistoryModalFile(null)}
           />
         )}
       </div>
