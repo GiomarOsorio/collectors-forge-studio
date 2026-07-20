@@ -847,71 +847,59 @@ function PrintHistoryModal({ fileId, fileName, onClose }) {
     );
   }
 
-  // ≥1024: modal centrado con la tabla, envuelta en overflow-x-auto por si
-  // los nombres largos empujan el ancho.
+  // ≥1024 (P2+P6): drawer lateral derecho (NO modal centrado) con la tabla
+  // completa. El modal centrado desbordaba horizontalmente en el punto ciego
+  // 1024-1279; el drawer lo evita. Ref: mockup vault.html §2 (drawer-right).
   return (
-    <div className="tf-modal-overlay" onClick={onClose}>
-      <div
-        className="bg-surf-panel border border-border-legacy rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-soft)] shrink-0">
-          <p className="text-sm font-semibold text-tech-white truncate">
-            Historial · {fileName}
-          </p>
-          <button type="button" onClick={onClose} className="text-gunmetal hover:text-tech-white" aria-label="Cerrar">
-            <X size={18} />
-          </button>
+    <DetailDrawer
+      open
+      onClose={onClose}
+      eyebrow="HISTORIAL"
+      title={fileName}
+      width={480}
+      footer={items.length > 0 ? footer : undefined}
+    >
+      {loading ? (
+        <p className="text-sm text-gunmetal text-center py-8">Cargando…</p>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-gunmetal text-center py-8">Sin impresiones registradas todavía.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[560px]">
+            <thead>
+              <tr className="text-left text-[10.5px] uppercase tracking-wider text-gunmetal">
+                <th className="pb-2 font-medium">Fecha</th>
+                <th className="pb-2 font-medium">Estado</th>
+                <th className="pb-2 font-medium">Impresora</th>
+                <th className="pb-2 font-medium">Filamento</th>
+                <th className="pb-2 font-medium text-right">Gramos</th>
+                <th className="pb-2 font-medium">Motivo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it) => (
+                <tr key={it.id} className="border-t border-[var(--color-border-soft)]">
+                  <td className="py-2 mono text-[11px] text-steel whitespace-nowrap">
+                    {fmtDate(it.created_at)}
+                  </td>
+                  <td className="py-2">
+                    <StatusPill tone={statusTone[it.status] || 'neutral'}>{it.status}</StatusPill>
+                  </td>
+                  <td className="py-2 text-steel">{it.printer_name || '—'}</td>
+                  <td className="py-2 text-steel">{it.filament_name || '—'}</td>
+                  <td className="py-2 text-right mono text-steel whitespace-nowrap">
+                    {gramsOf(it)}
+                  </td>
+                  <td className="py-2 text-steel text-xs">
+                    {it.failure_category || it.failure_reason ? noteOf(it) : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        <div className="flex-1 overflow-y-auto p-4">
-          {loading ? (
-            <p className="text-sm text-gunmetal text-center py-8">Cargando…</p>
-          ) : items.length === 0 ? (
-            <p className="text-sm text-gunmetal text-center py-8">Sin impresiones registradas todavía.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[560px]">
-                <thead>
-                  <tr className="text-left text-[10.5px] uppercase tracking-wider text-gunmetal">
-                    <th className="pb-2 font-medium">Fecha</th>
-                    <th className="pb-2 font-medium">Estado</th>
-                    <th className="pb-2 font-medium">Impresora</th>
-                    <th className="pb-2 font-medium">Filamento</th>
-                    <th className="pb-2 font-medium text-right">Gramos</th>
-                    <th className="pb-2 font-medium">Motivo</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((it) => (
-                    <tr key={it.id} className="border-t border-[var(--color-border-soft)]">
-                      <td className="py-2 mono text-[11px] text-steel whitespace-nowrap">
-                        {fmtDate(it.created_at)}
-                      </td>
-                      <td className="py-2">
-                        <StatusPill tone={statusTone[it.status] || 'neutral'}>{it.status}</StatusPill>
-                      </td>
-                      <td className="py-2 text-steel">{it.printer_name || '—'}</td>
-                      <td className="py-2 text-steel">{it.filament_name || '—'}</td>
-                      <td className="py-2 text-right mono text-steel whitespace-nowrap">
-                        {gramsOf(it)}
-                      </td>
-                      <td className="py-2 text-steel text-xs">
-                        {it.failure_category || it.failure_reason ? noteOf(it) : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-        {items.length > 0 && (
-          <div className="px-4 py-3 border-t border-[var(--color-border-soft)] shrink-0">
-            {footer}
-          </div>
-        )}
-      </div>
-    </div>
+      )}
+    </DetailDrawer>
   );
 }
 
