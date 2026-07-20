@@ -274,12 +274,11 @@ function ProjectFormModal({ mode, initial, onCancel, onSave, onCoverUploaded }) 
     }
   };
 
-  return (
-    <div className="tf-modal-overlay" style={{ zIndex: 9999 }}>
-      <div className="tf-modal max-w-md">
-        <p className="text-tech-white text-sm font-semibold mb-4">
-          {mode === 'edit' ? 'Editar proyecto' : 'Nuevo proyecto'}
-        </p>
+  const isMobile = useIsMobile();
+  const title = mode === 'edit' ? 'Editar proyecto' : 'Nuevo proyecto';
+
+  const body = (
+    <>
         <div className="flex flex-col gap-3">
           <label className="block">
             <span className="block text-xs text-gunmetal mb-1">Nombre <span className="text-rose-400">*</span></span>
@@ -386,14 +385,44 @@ function ProjectFormModal({ mode, initial, onCancel, onSave, onCoverUploaded }) 
             />
           </label>
         </div>
-        <div className="flex justify-end gap-3 mt-5">
-          <button onClick={onCancel} className="tf-btn-ghost" disabled={saving}>Cancelar</button>
-          <button onClick={submit} className="tf-btn-primary" disabled={saving || !name.trim()}>
-            {saving ? 'Guardando…' : mode === 'edit' ? 'Guardar' : 'Crear'}
-          </button>
-        </div>
-      </div>
+    </>
+  );
+
+  const footer = (
+    <div className="flex gap-2 w-full">
+      <button onClick={onCancel} className="tf-btn-ghost flex-1" disabled={saving}>Cancelar</button>
+      <button onClick={submit} className="tf-btn-primary flex-1" disabled={saving || !name.trim()}>
+        {saving ? 'Guardando…' : mode === 'edit' ? 'Guardar' : 'Crear'}
+      </button>
     </div>
+  );
+
+  // Fix #167 (P6): antes modal centrado `tf-modal-overlay max-w-md` en ambos
+  // shells — única inconsistencia de una página ya dual. Ahora MobileSheet
+  // desde abajo <1024 / DetailDrawer lateral ≥1024. Ref: projects-history.html
+  // §Projects (drawers de SettingsPage).
+  if (isMobile) {
+    return (
+      <MobileSheet open onClose={onCancel} title={title} height="full">
+        <div className="px-5 pt-4 pb-4">{body}</div>
+        <div className="px-5 pt-3 pb-5 border-t border-[var(--color-border-soft)] sticky bottom-0 bg-[var(--color-surf-sidebar)]">
+          {footer}
+        </div>
+      </MobileSheet>
+    );
+  }
+
+  return (
+    <DetailDrawer
+      open
+      onClose={onCancel}
+      eyebrow={mode === 'edit' ? 'PROYECTO' : 'NUEVO PROYECTO'}
+      title={title}
+      width={460}
+      footer={footer}
+    >
+      {body}
+    </DetailDrawer>
   );
 }
 

@@ -200,7 +200,9 @@ function AccountFormDrawer({ open, user, onClose, onSaved, isMobile }) {
           </button>
         </div>
       </FormFieldRow>
-      <div className="grid grid-cols-2 gap-2.5">
+      {/* Fix #168 (P8): en el sheet ~375px dos columnas dejaban los inputs de
+          contraseña ilegibles; apila <640 y usa 2 columnas desde sm. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         <FormFieldRow label="Nueva contraseña">
           <input
             type="password"

@@ -47,12 +47,15 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
+  AppTabs,
   Button,
   Card,
   Chip,
   DetailDrawer,
   EmptyState,
   KPI,
+  KPIStrip as KPIStripBase,
+  LineItems,
   MobileSheet,
   Sparkline,
   StatusPill,
@@ -61,6 +64,7 @@ import {
 import MobileAppHeader from '../../components/MobileAppHeader';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useIsMobile } from '../../hooks/useMediaQuery';
+import InventoryNavTabs from './InventoryNavTabs';
 import {
   arrivePurchaseOrder,
   createInventoryItem,
@@ -92,60 +96,52 @@ const CONSUMPTION_PLACEHOLDER = [240, 180, 95, 310, 280, 420, 360, 145, 0, 0, 29
 
 // ─── KPI Strip ───────────────────────────────────────────────────────────────
 
+// KPIStrip local → shared <KPIStrip> (P5): desktop flex-wrap como hoy;
+// mobile scroll-snap + fade derecho (indicador de que hay más a la derecha).
 function KPIStrip({ stats, openPOs, openPOsValue }) {
   return (
-    <div className="flex flex-wrap gap-3 px-6 pt-4 pb-2">
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI
-          label="Capital"
-          value={fmtUSD(stats.totalValue)}
-          unit="USD"
-          sub="valor en inventario"
-          accent="#3B82F6"
-          icon={ArrowUpRight}
-        />
-      </div>
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI
-          label="Material"
-          value={(stats.totalGrams / 1000).toFixed(2)}
-          unit="kg"
-          sub={`${stats.spoolCount} spools`}
-          accent="#94A0AE"
-          icon={Droplet}
-        />
-      </div>
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI
-          label="Consumo · 14d"
-          value={(CONSUMPTION_PLACEHOLDER.reduce((s, n) => s + n, 0) / 1000).toFixed(2)}
-          unit="kg"
-          sub="placeholder · pronto desde quotes"
-          accent="#2DD4BF"
-          sparkline={CONSUMPTION_PLACEHOLDER}
-        />
-      </div>
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI
-          label="Stock bajo"
-          value={stats.lowCount}
-          unit="ítems"
-          sub={`${stats.criticalCount} críticos`}
-          accent="#FBBF24"
-          icon={AlertTriangle}
-        />
-      </div>
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI
-          label="Próx. compras"
-          value={openPOs}
-          unit="POs"
-          sub={openPOsValue > 0 ? `${fmtCOP(openPOsValue)} en ruta` : 'sin pedidos abiertos'}
-          accent="#8B5CF6"
-          icon={ShoppingCart}
-        />
-      </div>
-    </div>
+    <KPIStripBase className="px-6 pt-4 pb-2">
+      <KPI
+        label="Capital"
+        value={fmtUSD(stats.totalValue)}
+        unit="USD"
+        sub="valor en inventario"
+        accent="#3B82F6"
+        icon={ArrowUpRight}
+      />
+      <KPI
+        label="Material"
+        value={(stats.totalGrams / 1000).toFixed(2)}
+        unit="kg"
+        sub={`${stats.spoolCount} spools`}
+        accent="#94A0AE"
+        icon={Droplet}
+      />
+      <KPI
+        label="Consumo · 14d"
+        value={(CONSUMPTION_PLACEHOLDER.reduce((s, n) => s + n, 0) / 1000).toFixed(2)}
+        unit="kg"
+        sub="placeholder · pronto desde quotes"
+        accent="#2DD4BF"
+        sparkline={CONSUMPTION_PLACEHOLDER}
+      />
+      <KPI
+        label="Stock bajo"
+        value={stats.lowCount}
+        unit="ítems"
+        sub={`${stats.criticalCount} críticos`}
+        accent="#FBBF24"
+        icon={AlertTriangle}
+      />
+      <KPI
+        label="Próx. compras"
+        value={openPOs}
+        unit="POs"
+        sub={openPOsValue > 0 ? `${fmtCOP(openPOsValue)} en ruta` : 'sin pedidos abiertos'}
+        accent="#8B5CF6"
+        icon={ShoppingCart}
+      />
+    </KPIStripBase>
   );
 }
 
@@ -159,39 +155,17 @@ const TABS = [
   { id: 'compras',      label: 'Compras',      shortLabel: 'Compras',      icon: ShoppingCart },
 ];
 
+// CategoryTabs → AppTabs (P4): overflow-x + scroll-snap + fade derecho, con
+// badge de conteo por categoría. Ref: inventory.html §CategoryTabs.
 function CategoryTabs({ value, onChange, counts }) {
   return (
-    <div className="flex items-center gap-0.5 px-6 border-b border-[var(--color-border)] overflow-x-auto">
-      {TABS.map((t) => {
-        const Icon = t.icon;
-        const active = t.id === value;
-        const count = counts[t.id] ?? 0;
-        return (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => onChange(t.id)}
-            className={`inline-flex items-center gap-2 px-3.5 py-3 text-sm font-medium transition-colors whitespace-nowrap -mb-px border-b-2 ${
-              active
-                ? 'text-tech-white border-[var(--color-app-inventory)]'
-                : 'text-steel border-transparent hover:text-tech-white'
-            }`}
-          >
-            <Icon size={13} className={active ? '' : 'text-gunmetal'} style={active ? { color: 'var(--color-app-inventory)' } : undefined} />
-            {t.label}
-            <span
-              className={`mono text-[10px] px-1.5 py-px rounded-full border ${
-                active
-                  ? 'bg-blue-500/14 border-blue-500/30 text-blue-300'
-                  : 'bg-white/5 border-[var(--color-border)] text-gunmetal'
-              }`}
-            >
-              {count}
-            </span>
-          </button>
-        );
-      })}
-    </div>
+    <AppTabs
+      items={TABS.map((t) => ({ id: t.id, label: t.label, icon: t.icon, count: counts[t.id] ?? 0 }))}
+      value={value}
+      onChange={onChange}
+      accent="var(--color-app-inventory)"
+      className="px-6"
+    />
   );
 }
 
@@ -455,8 +429,11 @@ function FilamentGrid({ groups, onCardClick }) {
 function FilamentTable({ items, onRowClick }) {
   return (
     <div className="px-6 pb-8">
-      <div className="border border-[var(--color-border)] rounded-xl overflow-hidden bg-[var(--color-surf-card)]">
-        <table className="w-full border-collapse">
+      {/* Fix #15: overflow-x-auto (antes overflow-hidden) + min-width para que
+          en 1024-1279px (contenido ~736px con sidebar) la tabla haga scroll-x
+          en vez de comprimir columnas ilegiblemente. Ref: inventory.html. */}
+      <div className="border border-[var(--color-border)] rounded-xl overflow-x-auto bg-[var(--color-surf-card)]">
+        <table className="w-full border-collapse min-w-[860px]">
           <thead>
             <tr>
               {['', 'Color · Batch', 'Material', 'Vendor', 'Restante', 'Costo/kg', 'Ubicación'].map((h, idx) => (
@@ -2778,75 +2755,83 @@ function PurchaseOrderFormDrawer({ open, onClose, mode = 'create', initial, onSa
 
       <FormSectionTitle>Ítems del pedido</FormSectionTitle>
       <div className="flex flex-col gap-2">
-        {form.items.map((it, idx) => (
-          <div
-            key={idx}
-            className="rounded-md border border-[var(--color-border)] p-3 flex flex-col gap-2 bg-[var(--color-surf-card-2)]"
-          >
-            <div className="flex items-center gap-2">
-              <span className="mono text-[10px] text-gunmetal tracking-wider">#{idx + 1}</span>
-              <span className="flex-1" />
-              <span className="mono text-xs text-tech-white">
-                {fmtCOP((Number(it.quantity) || 0) * (Number(it.unit_cost) || 0))}
-              </span>
-              {form.items.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeItem(idx)}
-                  className="text-rose-400 hover:text-rose-300 p-1"
-                  aria-label="Eliminar línea"
-                >
-                  <X size={13} />
-                </button>
-              )}
-            </div>
-            <FormFieldRow label="Item del inventario (opcional)">
-              <select
-                value={it.inventory_item_id || ''}
-                onChange={(e) => linkInventoryItem(idx, e.target.value)}
-                className={FORM_INPUT_CLS}
-              >
-                <option value="">— Sin vincular —</option>
-                {inventoryItems.map((inv) => (
-                  <option key={inv.id} value={inv.id}>
-                    [{inv.category}] {inv.name}
-                  </option>
-                ))}
-              </select>
-            </FormFieldRow>
-            <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr] gap-2">
-              <FormFieldRow label="Nombre" required error={errors[`item_${idx}_name`]}>
+        {/* Fix #5 (P1 LineItems): cards apiladas <1024 (vínculo full-width,
+            cant+costo grid-cols-2, subtotal al pie) / grid minmax(0,fr) ≥1024.
+            onRemove condicional para preservar el mínimo de 1 ítem. */}
+        <LineItems
+          columns={[
+            {
+              key: 'name', label: 'Nombre', width: '1.7fr',
+              render: (it, idx) => (
+                <>
+                  <input
+                    value={it.name}
+                    onChange={(e) => updateItem(idx, 'name', e.target.value)}
+                    placeholder="ej. Filamento PLA 1kg Negro"
+                    className={`${FORM_INPUT_CLS} ${errors[`item_${idx}_name`] ? 'border-rose-400/60' : ''}`}
+                  />
+                  {errors[`item_${idx}_name`] && (
+                    <span className="block mt-0.5 text-[10px] text-rose-400">{errors[`item_${idx}_name`]}</span>
+                  )}
+                </>
+              ),
+            },
+            {
+              key: 'quantity', label: 'Cant.', width: '0.6fr',
+              render: (it, idx) => (
+                <>
+                  <input
+                    type="number" min="1" step="1" value={it.quantity}
+                    onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
+                    className={`${FORM_INPUT_CLS} mono text-right ${errors[`item_${idx}_qty`] ? 'border-rose-400/60' : ''}`}
+                  />
+                  {errors[`item_${idx}_qty`] && (
+                    <span className="block mt-0.5 text-[10px] text-rose-400">{errors[`item_${idx}_qty`]}</span>
+                  )}
+                </>
+              ),
+            },
+            {
+              key: 'unit_cost', label: 'Costo unit (COP)', width: '0.9fr',
+              render: (it, idx) => (
                 <input
-                  value={it.name}
-                  onChange={(e) => updateItem(idx, 'name', e.target.value)}
-                  placeholder="ej. Filamento PLA 1kg Negro"
-                  className={FORM_INPUT_CLS}
-                />
-              </FormFieldRow>
-              <FormFieldRow label="Cantidad" required error={errors[`item_${idx}_qty`]}>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={it.quantity}
-                  onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
-                  className={`${FORM_INPUT_CLS} mono`}
-                />
-              </FormFieldRow>
-              <FormFieldRow label="Costo unit (COP)">
-                <input
-                  type="number"
-                  min="0"
-                  step="100"
-                  value={it.unit_cost}
+                  type="number" min="0" step="100" value={it.unit_cost}
                   onChange={(e) => updateItem(idx, 'unit_cost', e.target.value)}
                   placeholder="ej. 80000"
-                  className={`${FORM_INPUT_CLS} mono`}
+                  className={`${FORM_INPUT_CLS} mono text-right`}
                 />
-              </FormFieldRow>
-            </div>
-          </div>
-        ))}
+              ),
+            },
+            {
+              key: 'inventory_item_id', label: 'Vincular a inventario', width: '1.4fr', full: true,
+              render: (it, idx) => (
+                <select
+                  value={it.inventory_item_id || ''}
+                  onChange={(e) => linkInventoryItem(idx, e.target.value)}
+                  className={FORM_INPUT_CLS}
+                >
+                  <option value="">— Sin vincular —</option>
+                  {inventoryItems.map((inv) => (
+                    <option key={inv.id} value={inv.id}>[{inv.category}] {inv.name}</option>
+                  ))}
+                </select>
+              ),
+            },
+            {
+              key: 'subtotal', label: 'Subtotal', width: '0.9fr', mobile: false,
+              render: (it) => (
+                <span className="mono text-[13px] font-semibold text-tech-white">
+                  {fmtCOP((Number(it.quantity) || 0) * (Number(it.unit_cost) || 0))}
+                </span>
+              ),
+            },
+          ]}
+          items={form.items}
+          onRemove={form.items.length > 1 ? (_it, idx) => removeItem(idx) : undefined}
+          mobileFoot={(it) => fmtCOP((Number(it.quantity) || 0) * (Number(it.unit_cost) || 0))}
+          removeLabel="Eliminar línea"
+          minWidth={660}
+        />
         <button
           type="button"
           onClick={addItem}
@@ -3227,6 +3212,7 @@ export default function InventoryPage() {
           onMenu={() => openSidebar?.()}
           onSearch={() => setSearchOpen(true)}
         />
+        <InventoryNavTabs className="px-4" />
         <MobileSearchOverlay
           open={searchOpen}
           onClose={() => setSearchOpen(false)}
@@ -3633,6 +3619,8 @@ export default function InventoryPage() {
           </button>
         </div>
       </header>
+
+      <InventoryNavTabs className="px-6 border-b border-[var(--color-border)]" />
 
       <KPIStrip stats={stats} openPOs={openPOs} openPOsValue={openPOsValue} />
 

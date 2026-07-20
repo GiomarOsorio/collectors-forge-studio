@@ -375,11 +375,13 @@ function BrandingFormDrawer({ open, company, onClose, onSaved, isMobile }) {
         o iterar con <code className="mono text-indigo-300">{'{% for c in colors %}'}</code>.
       </p>
 
+      {/* Fix #168: color picker 44×44 (antes h-9=36px, bajo el target táctil)
+          y tracks minmax(0,…) para no desbordar el drawer a 390px. */}
       <div className="flex flex-col gap-2">
         {palette.map((color, idx) => (
           <div
             key={idx}
-            className="grid grid-cols-[1fr_44px_96px_28px] gap-2 items-center"
+            className="grid grid-cols-[minmax(0,1fr)_44px_96px_32px] gap-2 items-center"
           >
             <input
               type="text"
@@ -392,7 +394,7 @@ function BrandingFormDrawer({ open, company, onClose, onSaved, isMobile }) {
               type="color"
               value={color.hex}
               onChange={(e) => updateColor(idx, 'hex', e.target.value)}
-              className="w-11 h-9 rounded-md border border-[var(--color-border-strong)] cursor-pointer bg-transparent p-0.5"
+              className="w-11 h-11 rounded-md border border-[var(--color-border-strong)] cursor-pointer bg-transparent p-0.5"
               title={color.name || 'Elegir color'}
             />
             <input

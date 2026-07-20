@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   Archive,
@@ -40,18 +41,22 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
+  AppTabs,
   Button,
   Card,
   DetailDrawer,
   DropZone,
   EmptyState,
   KPI,
+  KPIStrip,
   Lightbox,
   MobileSheet,
   StatusPill,
 } from '../../components/ui';
 import MobileAppHeader from '../../components/MobileAppHeader';
 import ModelViewer3D from '../../components/ModelViewer3D';
+import FolderTree from './FolderTree';
+import { buildBreadcrumb, getDescendantIds, getAncestorIds } from './folderTreeUtils';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../context/AuthContext';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -90,6 +95,15 @@ import { getThumbnail } from '../../utils/thumbnail';
 
 const ACCENT = '#F43F5E';
 
+// Segundo nivel de la app Vault como AppTabs (issue #181 — la sidebar ya no
+// tiene subnav). "Subir modelo" NO es un tab: es una acción (botones ya
+// existentes en el header/FAB/empty-state), por eso solo quedan 2 rutas
+// navegables aquí. VaultTrashPage monta el mismo array para volver.
+export const VAULT_TABS = [
+  { id: 'galeria',  label: 'Galería',  icon: Archive },
+  { id: 'papelera', label: 'Papelera', icon: Trash },
+];
+
 const fmtBytes = (b) => {
   if (b == null) return '—';
   if (b >= 1024 ** 3) return `${(b / 1024 ** 3).toFixed(2)} GB`;
@@ -122,41 +136,8 @@ const fmtTime = (seconds) => {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 };
 
-/** Camino de carpetas desde la raíz hasta `folderId` (excluida la raíz). */
-const buildBreadcrumb = (folders, folderId) => {
-  const byId = new Map(folders.map((f) => [f.id, f]));
-  const path = [];
-  let current = folderId != null ? byId.get(folderId) : null;
-  while (current) {
-    path.unshift(current);
-    current = current.parent_id != null ? byId.get(current.parent_id) : null;
-  }
-  return path;
-};
-
-/**
- * IDs de todos los descendientes de `folderId` (hijos, nietos, etc.) —
- * usado para excluir del picker "mover a…" los destinos que el backend
- * (`_assert_not_own_descendant`) siempre va a rechazar.
- */
-const getDescendantIds = (folders, folderId) => {
-  const childrenOf = new Map();
-  for (const f of folders) {
-    if (f.parent_id != null) {
-      if (!childrenOf.has(f.parent_id)) childrenOf.set(f.parent_id, []);
-      childrenOf.get(f.parent_id).push(f.id);
-    }
-  }
-  const result = new Set();
-  const queue = [...(childrenOf.get(folderId) || [])];
-  while (queue.length > 0) {
-    const id = queue.shift();
-    if (result.has(id)) continue;
-    result.add(id);
-    queue.push(...(childrenOf.get(id) || []));
-  }
-  return result;
-};
+// Helpers de jerarquía (breadcrumb, descendientes, ancestros) viven en
+// `./folderTreeUtils` — compartidos con el componente FolderTree (issue #180).
 
 // ─── Carpetas ───────────────────────────────────────────────────────────────
 
@@ -589,6 +570,7 @@ function StlLivePreview({ fileId, fileName }) {
  * contextos WebGL si React StrictMode monta el efecto dos veces en dev.
  */
 function GCodeViewerModal({ fileId, fileName, onClose }) {
+  const isMobile = useIsMobile();
   const canvasRef = useRef(null);
   const previewRef = useRef(null);
   const [loading, setLoading] = useState(true);
@@ -642,6 +624,75 @@ function GCodeViewerModal({ fileId, fileName, onClose }) {
     previewRef.current.render();
   }, [showTravel]);
 
+  // Spinner de carga superpuesto sobre el canvas (mismo en ambas ramas).
+  const spinner = loading && (
+    <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+      <div className="w-7 h-7 border-2 border-rose-500/20 border-t-rose-500 rounded-full animate-spin" />
+    </div>
+  );
+
+  // Badge mono con la capa actual, esquina superior-izquierda del canvas.
+  const layerBadge = (
+    <span className="absolute top-3.5 left-3.5 mono text-[11px] text-white/55 bg-white/[0.06] border border-white/10 rounded-lg px-2.5 py-1">
+      Capa {layer + 1} / {maxLayer + 1}
+    </span>
+  );
+
+  // Controles inferiores (slider de capa + toggle travel), compartidos.
+  const controls = (
+    <div className="flex flex-col gap-2.5">
+      <div className="flex items-center gap-3">
+        <span className="mono text-[11px] text-gunmetal shrink-0 w-24">
+          Capa {layer + 1} / {maxLayer + 1}
+        </span>
+        <input
+          type="range"
+          min={0}
+          max={maxLayer}
+          value={layer}
+          onChange={(e) => setLayer(Number(e.target.value))}
+          className="flex-1 h-[22px] accent-rose-500"
+        />
+      </div>
+      <label className="flex items-center gap-2 text-[12.5px] text-steel cursor-pointer min-h-6">
+        <input
+          type="checkbox"
+          checked={showTravel}
+          onChange={(e) => setShowTravel(e.target.checked)}
+        />
+        Mostrar movimientos de desplazamiento (travel)
+      </label>
+    </div>
+  );
+
+  // <1024 (P9+P6): el visor ES la pantalla. Overlay fullscreen — canvas ocupa
+  // todo el alto disponible, controles fijos abajo (respetan safe-area),
+  // botón cerrar 44px arriba-derecha.
+  if (isMobile) {
+    return createPortal(
+      <div className="fixed inset-0 z-[60] bg-[#05070C] flex flex-col">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Cerrar visor"
+          className="absolute top-3.5 right-3.5 z-[2] w-11 h-11 rounded-xl bg-white/[0.08] border border-white/[0.14] text-white flex items-center justify-center backdrop-blur"
+        >
+          <X size={18} />
+        </button>
+        <div className="relative flex-1 min-h-0 bg-black">
+          <canvas ref={canvasRef} className="w-full h-full block" />
+          {layerBadge}
+          {spinner}
+        </div>
+        <div className="px-4 pt-3.5 pb-[calc(0.875rem+env(safe-area-inset-bottom,0px))] bg-[var(--color-surf-sidebar)] border-t border-[var(--color-border-soft)] shrink-0">
+          {controls}
+        </div>
+      </div>,
+      document.body,
+    );
+  }
+
+  // ≥1024: modal grande centrado, canvas más alto (520px) que la versión previa.
   return (
     <div className="tf-modal-overlay" onClick={onClose}>
       <div
@@ -654,36 +705,13 @@ function GCodeViewerModal({ fileId, fileName, onClose }) {
             <X size={18} />
           </button>
         </div>
-        <div className="relative w-full h-[420px] bg-black">
+        <div className="relative w-full h-[520px] bg-black">
           <canvas ref={canvasRef} className="w-full h-full block" />
-          {loading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-              <div className="w-7 h-7 border-2 border-rose-500/20 border-t-rose-500 rounded-full animate-spin" />
-            </div>
-          )}
+          {layerBadge}
+          {spinner}
         </div>
-        <div className="p-4 flex flex-col gap-3">
-          <div className="flex items-center gap-3">
-            <span className="mono text-[10.5px] text-gunmetal shrink-0 w-24">
-              Capa {layer + 1} / {maxLayer + 1}
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={maxLayer}
-              value={layer}
-              onChange={(e) => setLayer(Number(e.target.value))}
-              className="flex-1"
-            />
-          </div>
-          <label className="flex items-center gap-2 text-sm text-steel cursor-pointer">
-            <input
-              type="checkbox"
-              checked={showTravel}
-              onChange={(e) => setShowTravel(e.target.checked)}
-            />
-            Mostrar movimientos de desplazamiento (travel)
-          </label>
+        <div className="p-4">
+          {controls}
         </div>
       </div>
     </div>
@@ -696,6 +724,7 @@ function GCodeViewerModal({ fileId, fileName, onClose }) {
  * totales y tasa de éxito agregados (calculados server-side).
  */
 function PrintHistoryModal({ fileId, fileName, onClose }) {
+  const isMobile = useIsMobile();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
 
@@ -720,72 +749,126 @@ function PrintHistoryModal({ fileId, fileName, onClose }) {
   const statusTone = { done: 'done', cancelled: 'danger', printing: 'printing' };
   const items = data?.items || [];
 
-  return (
-    <div className="tf-modal-overlay" onClick={onClose}>
-      <div
-        className="bg-surf-panel border border-border-legacy rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-soft)] shrink-0">
-          <p className="text-sm font-semibold text-tech-white truncate">
-            Historial · {fileName}
-          </p>
-          <button type="button" onClick={onClose} className="text-gunmetal hover:text-tech-white" aria-label="Cerrar">
-            <X size={18} />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4">
+  // Motivo/nota de la fila: categoría + razón de fallo, o "Sin incidencias."
+  // cuando terminó bien. Reutilizado por la card mobile y la celda desktop.
+  const noteOf = (it) => {
+    const parts = [];
+    if (it.failure_category) parts.push(FAILURE_CATEGORY_LABELS[it.failure_category] || it.failure_category);
+    if (it.failure_reason) parts.push(it.failure_reason);
+    return parts.length ? parts.join(' — ') : 'Sin incidencias.';
+  };
+  const gramsOf = (it) => (it.weight_grams != null ? `${Math.round(it.weight_grams * it.quantity)}g` : '—');
+
+  const footer = items.length > 0 && (
+    <div className="flex items-center justify-between text-xs">
+      <span className="mono text-steel">{Math.round(data.total_grams)}g totales</span>
+      {data.success_rate_pct != null && (
+        <span className="mono text-steel">{data.success_rate_pct.toFixed(0)}% de éxito</span>
+      )}
+    </div>
+  );
+
+  // <1024 (P2+P6): MobileSheet con cards en vez de la tabla de 6 columnas.
+  if (isMobile) {
+    return (
+      <MobileSheet open title={`Historial · ${fileName}`} onClose={onClose}>
+        <div className="px-4 pt-3 pb-6 flex flex-col gap-2.5">
           {loading ? (
             <p className="text-sm text-gunmetal text-center py-8">Cargando…</p>
           ) : items.length === 0 ? (
             <p className="text-sm text-gunmetal text-center py-8">Sin impresiones registradas todavía.</p>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-[10.5px] uppercase tracking-wider text-gunmetal">
-                  <th className="pb-2 font-medium">Fecha</th>
-                  <th className="pb-2 font-medium">Estado</th>
-                  <th className="pb-2 font-medium">Impresora</th>
-                  <th className="pb-2 font-medium">Filamento</th>
-                  <th className="pb-2 font-medium text-right">Gramos</th>
-                  <th className="pb-2 font-medium">Motivo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((it) => (
-                  <tr key={it.id} className="border-t border-[var(--color-border-soft)]">
-                    <td className="py-2 mono text-[11px] text-steel whitespace-nowrap">
-                      {fmtDate(it.created_at)}
-                    </td>
-                    <td className="py-2">
-                      <StatusPill tone={statusTone[it.status] || 'neutral'}>{it.status}</StatusPill>
-                    </td>
-                    <td className="py-2 text-steel">{it.printer_name || '—'}</td>
-                    <td className="py-2 text-steel">{it.filament_name || '—'}</td>
-                    <td className="py-2 text-right mono text-steel whitespace-nowrap">
-                      {it.weight_grams != null ? `${Math.round(it.weight_grams * it.quantity)}g` : '—'}
-                    </td>
-                    <td className="py-2 text-steel text-xs">
-                      {it.failure_category ? (FAILURE_CATEGORY_LABELS[it.failure_category] || it.failure_category) : ''}
-                      {it.failure_reason ? ` — ${it.failure_reason}` : ''}
-                      {!it.failure_category && !it.failure_reason ? '—' : ''}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <>
+              {items.map((it) => (
+                <Card key={it.id} className="p-3">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="mono text-[13px] font-semibold text-tech-white">{fmtDate(it.created_at)}</span>
+                    <StatusPill tone={statusTone[it.status] || 'neutral'}>{it.status}</StatusPill>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                    <div>
+                      <div className="lbl-eyebrow text-[9.5px] mb-0.5">Impresora</div>
+                      <div className="text-[12.5px] text-steel">{it.printer_name || '—'}</div>
+                    </div>
+                    <div>
+                      <div className="lbl-eyebrow text-[9.5px] mb-0.5">Filamento</div>
+                      <div className="text-[12.5px] text-steel">{it.filament_name || '—'}</div>
+                    </div>
+                    <div>
+                      <div className="lbl-eyebrow text-[9.5px] mb-0.5">Cantidad</div>
+                      <div className="text-[12.5px] text-steel">{it.quantity} {it.quantity === 1 ? 'pza' : 'pzas'}</div>
+                    </div>
+                    <div>
+                      <div className="lbl-eyebrow text-[9.5px] mb-0.5">Gramos</div>
+                      <div className="text-[12.5px] text-steel mono">{gramsOf(it)}</div>
+                    </div>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-[var(--color-border-soft)] text-xs text-gunmetal">
+                    {noteOf(it)}
+                  </div>
+                </Card>
+              ))}
+              {footer}
+            </>
           )}
         </div>
-        {items.length > 0 && (
-          <div className="px-4 py-3 border-t border-[var(--color-border-soft)] flex items-center justify-between text-xs shrink-0">
-            <span className="mono text-steel">{Math.round(data.total_grams)}g totales</span>
-            {data.success_rate_pct != null && (
-              <span className="mono text-steel">{data.success_rate_pct.toFixed(0)}% de éxito</span>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
+      </MobileSheet>
+    );
+  }
+
+  // ≥1024 (P2+P6): drawer lateral derecho (NO modal centrado) con la tabla
+  // completa. El modal centrado desbordaba horizontalmente en el punto ciego
+  // 1024-1279; el drawer lo evita. Ref: mockup vault.html §2 (drawer-right).
+  return (
+    <DetailDrawer
+      open
+      onClose={onClose}
+      eyebrow="HISTORIAL"
+      title={fileName}
+      width={480}
+      footer={items.length > 0 ? footer : undefined}
+    >
+      {loading ? (
+        <p className="text-sm text-gunmetal text-center py-8">Cargando…</p>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-gunmetal text-center py-8">Sin impresiones registradas todavía.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[560px]">
+            <thead>
+              <tr className="text-left text-[10.5px] uppercase tracking-wider text-gunmetal">
+                <th className="pb-2 font-medium">Fecha</th>
+                <th className="pb-2 font-medium">Estado</th>
+                <th className="pb-2 font-medium">Impresora</th>
+                <th className="pb-2 font-medium">Filamento</th>
+                <th className="pb-2 font-medium text-right">Gramos</th>
+                <th className="pb-2 font-medium">Motivo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it) => (
+                <tr key={it.id} className="border-t border-[var(--color-border-soft)]">
+                  <td className="py-2 mono text-[11px] text-steel whitespace-nowrap">
+                    {fmtDate(it.created_at)}
+                  </td>
+                  <td className="py-2">
+                    <StatusPill tone={statusTone[it.status] || 'neutral'}>{it.status}</StatusPill>
+                  </td>
+                  <td className="py-2 text-steel">{it.printer_name || '—'}</td>
+                  <td className="py-2 text-steel">{it.filament_name || '—'}</td>
+                  <td className="py-2 text-right mono text-steel whitespace-nowrap">
+                    {gramsOf(it)}
+                  </td>
+                  <td className="py-2 text-steel text-xs">
+                    {it.failure_category || it.failure_reason ? noteOf(it) : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </DetailDrawer>
   );
 }
 
@@ -1408,6 +1491,39 @@ export default function VaultPage() {
   const [currentFolderId, setCurrentFolderId] = useState(null);
   const [folderModal, setFolderModal] = useState(null); // { mode: 'create'|'rename', folder? }
 
+  // Árbol de carpetas (issue #180). Estado expandido de nodos + colapso del
+  // panel persisten en localStorage (como bambuddy `collapseFoldersByDefault`).
+  const [treeExpanded, setTreeExpanded] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('vault.tree.expanded') || '[]')); }
+    catch { return new Set(); }
+  });
+  const [treePanelCollapsed, setTreePanelCollapsed] = useState(() => {
+    const stored = localStorage.getItem('vault.tree.collapsed');
+    if (stored != null) return stored === '1';
+    // Auto-colapso inicial en el punto ciego 1024–1279 (galería ~736px reales).
+    return typeof window !== 'undefined' && window.innerWidth < 1280;
+  });
+  const [treeSheetOpen, setTreeSheetOpen] = useState(false);
+
+  const persistTreeExpanded = (set) => {
+    try { localStorage.setItem('vault.tree.expanded', JSON.stringify([...set])); } catch { /* noop */ }
+  };
+  const handleToggleTreeNode = (id) => {
+    setTreeExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      persistTreeExpanded(next);
+      return next;
+    });
+  };
+  const toggleTreePanel = () => {
+    setTreePanelCollapsed((c) => {
+      const next = !c;
+      try { localStorage.setItem('vault.tree.collapsed', next ? '1' : '0'); } catch { /* noop */ }
+      return next;
+    });
+  };
+
   // Tags — catálogo global (independiente de la carpeta actual) + filtro
   // activo (multi-select AND: el archivo debe tener TODOS los tags elegidos).
   const [tags, setTags] = useState([]);
@@ -1789,6 +1905,63 @@ export default function VaultPage() {
     </div>
   );
 
+  // Selección desde el árbol: filtra la galería y auto-expande los ancestros
+  // para que la carpeta elegida quede visible.
+  const selectTreeFolder = (id) => {
+    setCurrentFolderId(id);
+    if (id != null) {
+      setTreeExpanded((prev) => {
+        const next = new Set(prev);
+        for (const anc of getAncestorIds(folders, id)) next.add(anc);
+        persistTreeExpanded(next);
+        return next;
+      });
+    }
+  };
+
+  const renderFolderTree = (variant) => (
+    <FolderTree
+      folders={folders}
+      currentFolderId={currentFolderId}
+      total={total}
+      expanded={treeExpanded}
+      onToggle={handleToggleTreeNode}
+      onSelect={
+        variant === 'sheet'
+          ? (id) => { selectTreeFolder(id); setTreeSheetOpen(false); }
+          : selectTreeFolder
+      }
+      isAdmin={isAdmin}
+      onRename={(folder) => setFolderModal({ mode: 'rename', folder })}
+      onMove={handleMoveFolder}
+      onDelete={handleDeleteFolder}
+      variant={variant}
+    />
+  );
+
+  // Panel del árbol (desktop ≥1024). Colapsable a un rail de 44px.
+  const FolderTreePanel = folders.length > 0 && (
+    <aside
+      className={`hidden lg:flex flex-col shrink-0 self-start sticky top-0 max-h-[calc(100vh-1rem)] overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surf-panel)] ${
+        treePanelCollapsed ? 'w-11 p-1 items-center' : 'w-60 p-2'
+      }`}
+    >
+      <div className={`flex items-center ${treePanelCollapsed ? 'justify-center' : 'justify-between'} px-1 pb-2`}>
+        {!treePanelCollapsed && <span className="lbl-eyebrow text-[10px]">Carpetas</span>}
+        <button
+          type="button"
+          onClick={toggleTreePanel}
+          className="w-7 h-7 shrink-0 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surf-card)] text-gunmetal hover:text-tech-white inline-flex items-center justify-center"
+          title={treePanelCollapsed ? 'Expandir panel' : 'Colapsar panel'}
+          aria-label={treePanelCollapsed ? 'Expandir panel de carpetas' : 'Colapsar panel de carpetas'}
+        >
+          <ChevronRight size={14} className={`transition-transform ${treePanelCollapsed ? '' : 'rotate-180'}`} />
+        </button>
+      </div>
+      {!treePanelCollapsed && renderFolderTree('panel')}
+    </aside>
+  );
+
   // Fila de chips de tags — filtro multi-select AND. Se omite por completo
   // si el catálogo está vacío (nada que filtrar todavía).
   const TagsFilterRail = tags.length > 0 && (
@@ -1825,26 +1998,18 @@ export default function VaultPage() {
   );
 
   const KPIs = (
-    <div className="flex flex-wrap gap-3 px-6 pt-4 pb-2">
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI label="Modelos" value={total} unit="docs" sub="en biblioteca" accent={ACCENT} icon={Archive} />
-      </div>
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI label="Almacenado" value={fmtBytes(usedBytes)} sub={`de ${fmtBytes(quotaBytes)}`} accent="#3B82F6" icon={HardDrive} />
-      </div>
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI label="Cuota usada" value={`${percent.toFixed(1)}%`} sub={percent > 80 ? 'cerca del límite' : 'al día'} accent={percent > 80 ? '#FBBF24' : '#34D399'} />
-      </div>
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI
-          label="Con plate render"
-          value={files.filter((f) => f.local_thumbnail_url).length}
-          unit="docs"
-          sub="en esta página"
-          accent="#94A0AE"
-        />
-      </div>
-    </div>
+    <KPIStrip className="px-6 pt-4 pb-2">
+      <KPI label="Modelos" value={total} unit="docs" sub="en biblioteca" accent={ACCENT} icon={Archive} />
+      <KPI label="Almacenado" value={fmtBytes(usedBytes)} sub={`de ${fmtBytes(quotaBytes)}`} accent="#3B82F6" icon={HardDrive} />
+      <KPI label="Cuota usada" value={`${percent.toFixed(1)}%`} sub={percent > 80 ? 'cerca del límite' : 'al día'} accent={percent > 80 ? '#FBBF24' : '#34D399'} />
+      <KPI
+        label="Con plate render"
+        value={files.filter((f) => f.local_thumbnail_url).length}
+        unit="docs"
+        sub="en esta página"
+        accent="#94A0AE"
+      />
+    </KPIStrip>
   );
 
   if (isMobile) {
@@ -1856,6 +2021,13 @@ export default function VaultPage() {
           appAccent={ACCENT}
           title="Galería"
           onMenu={() => openSidebar?.()}
+        />
+        <AppTabs
+          items={VAULT_TABS}
+          value="galeria"
+          onChange={(id) => id === 'papelera' && navigate('/vault/trash')}
+          accent={ACCENT}
+          className="px-4"
         />
         <div className="px-4 mt-3">
           <Card className="p-4 flex flex-col gap-3 industrial-grid">
@@ -1880,8 +2052,20 @@ export default function VaultPage() {
             </div>
           </Card>
         </div>
-        <div className="px-4 mt-3">
-          <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-2">
+        <div className="px-4 mt-3 flex items-center gap-2">
+          {/* Fix #180: en <1024 el panel del árbol se oculta; este botón abre
+              el árbol en un MobileSheet con filas táctiles de 44px. */}
+          {folders.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setTreeSheetOpen(true)}
+              className="shrink-0 inline-flex items-center gap-1.5 min-h-[40px] px-3 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surf-card)] text-tech-white text-sm"
+              aria-label="Ver árbol de carpetas"
+            >
+              <Folder size={15} style={{ color: ACCENT }} /> Carpetas
+            </button>
+          )}
+          <div className="flex-1 flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-2">
             <Search size={14} className="text-gunmetal" />
             <input
               value={query}
@@ -2002,6 +2186,12 @@ export default function VaultPage() {
             </div>
           )}
         </MobileSheet>
+        {/* Fix #180: árbol de carpetas en sheet (filas táctiles 44px). */}
+        <MobileSheet open={treeSheetOpen} onClose={() => setTreeSheetOpen(false)} title="Carpetas" height="full">
+          <div className="px-4 pt-3 pb-6">
+            {treeSheetOpen && renderFolderTree('sheet')}
+          </div>
+        </MobileSheet>
         {folderModal && (
           <FolderNameModal
             mode={folderModal.mode}
@@ -2017,6 +2207,20 @@ export default function VaultPage() {
             onCreate={handleCreateTag}
             onRename={handleRenameTag}
             onDelete={handleDeleteTag}
+          />
+        )}
+        {gcodeViewerFile && (
+          <GCodeViewerModal
+            fileId={gcodeViewerFile.id}
+            fileName={gcodeViewerFile.print_file_name || gcodeViewerFile.name}
+            onClose={() => setGcodeViewerFile(null)}
+          />
+        )}
+        {historyModalFile && (
+          <PrintHistoryModal
+            fileId={historyModalFile.id}
+            fileName={historyModalFile.name}
+            onClose={() => setHistoryModalFile(null)}
           />
         )}
       </div>
@@ -2081,6 +2285,14 @@ export default function VaultPage() {
         )}
       </header>
 
+      <AppTabs
+        items={VAULT_TABS}
+        value="galeria"
+        onChange={(id) => id === 'papelera' && navigate('/vault/trash')}
+        accent={ACCENT}
+        className="px-6 border-b border-[var(--color-border)]"
+      />
+
       {selectMode && selectedIds.size > 0 && (
         <div className="flex items-center gap-2 bg-amber-500/10 border-b border-amber-500/30 px-6 py-2">
           <span className="text-xs text-amber-200 flex-1">
@@ -2093,6 +2305,15 @@ export default function VaultPage() {
       )}
 
       {KPIs}
+
+      {/* Fix #180: árbol de carpetas a la izquierda de la galería (≥1024).
+          KPIs quedan full-width arriba; el resto (breadcrumb → galería) es la
+          columna derecha. */}
+      <div className="flex items-start gap-0">
+        {FolderTreePanel && (
+          <div className="pt-2 pl-4 md:pl-6 shrink-0">{FolderTreePanel}</div>
+        )}
+        <div className="flex-1 min-w-0 flex flex-col">
       {FolderBreadcrumb}
       {SearchScopeHint}
       {TagsFilterRail}
@@ -2224,6 +2445,8 @@ export default function VaultPage() {
           )}
         </>
       )}
+        </div>
+      </div>
 
       <DetailDrawer
         open={!!selected}

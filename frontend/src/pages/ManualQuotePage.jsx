@@ -31,6 +31,7 @@ import {
 } from '../services/api';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import { fmtCOP, fmtUSD } from '../utils/inventoryAdapter';
+import { LineItems } from '../components/ui';
 
 const ACCENT = '#2DD4BF';     // forge-teal — app-cost
 const USD_GREEN = '#34D399';
@@ -151,123 +152,160 @@ function ClientBar({ clientName, onClientName, validDays, onValidDays, exchangeR
   );
 }
 
-// ─── Items table ──────────────────────────────────────────────────────────
-
-function ItemRow({ item, idx, onUpdate, onRemove, lineCOP, lineUSD, exchangeRate, last }) {
-  const isUSD = item.currency === 'USD';
-  const price = parseFloat(item.unit_price) || 0;
-  return (
-    <div
-      className="grid items-start gap-2.5 px-3.5 py-3"
-      style={{
-        gridTemplateColumns: 'minmax(0, 1.6fr) 70px 100px 130px 130px 30px',
-        borderBottom: last ? 0 : '1px solid var(--color-border-soft)',
-      }}
-    >
-      <div>
-        <input
-          value={item.name}
-          onChange={(e) => onUpdate(idx, 'name', e.target.value)}
-          placeholder="Nombre del producto"
-          className="w-full px-2.5 py-1.5 rounded-md bg-[var(--color-surf-card-2)] border border-[var(--color-border)] text-tech-white text-[13px] outline-0 focus:border-[var(--color-forge-teal)]/60"
-        />
-        <input
-          value={item.notes || ''}
-          onChange={(e) => onUpdate(idx, 'notes', e.target.value)}
-          placeholder="Notas internas"
-          className="w-full px-2.5 py-1 mt-1 bg-transparent border-0 outline-0 text-gunmetal text-[11px]"
-        />
-      </div>
-      <input
-        type="number"
-        min="0"
-        step="1"
-        value={item.quantity}
-        onChange={(e) => onUpdate(idx, 'quantity', Number(e.target.value))}
-        className="px-2.5 py-1.5 rounded-md bg-[var(--color-surf-card-2)] border border-[var(--color-border)] text-tech-white mono text-[13px] font-semibold text-center outline-0"
-      />
-      {/* Currency toggle — #78 */}
-      <div className="inline-flex gap-0.5 p-0.5 bg-[var(--color-surf-card-2)] border border-[var(--color-border)] rounded-md">
-        {['COP', 'USD'].map((cur) => {
-          const active = item.currency === cur;
-          const activeBg = cur === 'USD' ? 'rgba(52, 211, 153, 0.18)' : 'rgba(45, 212, 191, 0.16)';
-          const activeColor = cur === 'USD' ? USD_GREEN : ACCENT;
-          return (
-            <button
-              key={cur}
-              type="button"
-              onClick={() => onUpdate(idx, 'currency', cur)}
-              aria-pressed={active}
-              className="flex-1 py-1 rounded mono text-[10.5px] font-semibold tracking-wider transition-colors"
-              style={{
-                background: active ? activeBg : 'transparent',
-                color: active ? activeColor : 'var(--color-steel)',
-              }}
-            >
-              {cur}
-            </button>
-          );
-        })}
-      </div>
-      {/* Unit price con prefijo dinámico */}
-      <div>
-        <div className="flex items-stretch bg-[var(--color-surf-card-2)] border border-[var(--color-border)] rounded-md">
-          <span className="mono px-2 self-center text-[11px] text-gunmetal border-r border-[var(--color-border)] inline-flex items-center">
-            {isUSD ? '$' : 'COP'}
-          </span>
-          <input
-            type="number"
-            min="0"
-            step={isUSD ? '0.5' : '1000'}
-            value={item.unit_price}
-            onChange={(e) => onUpdate(idx, 'unit_price', Number(e.target.value))}
-            className="flex-1 min-w-0 px-2 py-1.5 bg-transparent border-0 outline-0 text-tech-white mono text-[12.5px] font-semibold text-right"
-          />
-        </div>
-        {isUSD && exchangeRate && price > 0 && (
-          <div className="mono text-[9.5px] text-gunmetal-dim mt-1 text-right">
-            ≈ {fmtCOP(price * exchangeRate)} COP
-          </div>
-        )}
-      </div>
-      {/* Line subtotal (siempre en COP) */}
-      <div className="text-right">
-        <div className="mono text-[14px] font-semibold text-tech-white whitespace-nowrap">
-          {fmtCOP(lineCOP)}
-        </div>
-        {isUSD && lineUSD > 0 && (
-          <div className="mono text-[9.5px] mt-0.5" style={{ color: USD_GREEN }}>
-            {fmtUSD(lineUSD)} USD
-          </div>
-        )}
-      </div>
-      <button
-        type="button"
-        onClick={() => onRemove(idx)}
-        aria-label="Quitar"
-        className="w-7 h-7 rounded-md border border-[var(--color-border-strong)] text-gunmetal inline-flex items-center justify-center hover:text-rose-400 hover:border-rose-400/40 self-center"
-      >
-        <X size={12} />
-      </button>
-    </div>
-  );
-}
+// ─── Items table (P1 LineItems — issue #162, roto en mobile antes) ────────
+//
+// Desktop: grid con cabecera (igual que antes). Mobile: cards apiladas
+// (nombre full-width con notas como línea secundaria bajo el nombre — NO
+// como campo del grid, jerarquía del mockup — resto en grid-cols-2, quitar
+// 44px, pie con subtotal). Antes era el MISMO grid de px fijos en ambos
+// tamaños → rompía la creación de cotizaciones en el celular.
 
 function ItemsTable({ items, itemsResolved, onUpdate, onRemove, onAdd, onSelectFromInventory, exchangeRate }) {
-  return (
-    <div className="rounded-lg bg-[var(--color-surf-card)] border border-[var(--color-border)] overflow-hidden">
-      <div
-        className="grid gap-2.5 px-3.5 py-2 bg-[var(--color-surf-card-2)] border-b border-[var(--color-border)] mono text-[9.5px] uppercase tracking-[0.14em] text-gunmetal font-semibold"
-        style={{ gridTemplateColumns: 'minmax(0, 1.6fr) 70px 100px 130px 130px 30px' }}
+  const columns = [
+    {
+      key: 'name',
+      label: 'Producto',
+      width: '1.6fr',
+      render: (item, idx) => (
+        <div>
+          <input
+            value={item.name}
+            onChange={(e) => onUpdate(idx, 'name', e.target.value)}
+            placeholder="Nombre del producto"
+            className="w-full px-2.5 py-1.5 rounded-md bg-[var(--color-surf-card-2)] border border-[var(--color-border)] text-tech-white text-[13px] outline-0 focus:border-[var(--color-forge-teal)]/60"
+          />
+          <input
+            value={item.notes || ''}
+            onChange={(e) => onUpdate(idx, 'notes', e.target.value)}
+            placeholder="Notas internas"
+            className="w-full px-2.5 py-1 mt-1 bg-transparent border-0 outline-0 text-gunmetal text-[11px]"
+          />
+        </div>
+      ),
+    },
+    {
+      key: 'quantity',
+      label: 'Cant.',
+      width: '70px',
+      render: (item, idx) => (
+        <input
+          type="number"
+          min="0"
+          step="1"
+          value={item.quantity}
+          onChange={(e) => onUpdate(idx, 'quantity', Number(e.target.value))}
+          className="w-full px-2.5 py-1.5 rounded-md bg-[var(--color-surf-card-2)] border border-[var(--color-border)] text-tech-white mono text-[13px] font-semibold text-center outline-0"
+        />
+      ),
+    },
+    {
+      key: 'currency',
+      label: 'Moneda',
+      width: '100px',
+      render: (item, idx) => (
+        <div className="inline-flex w-full gap-0.5 p-0.5 bg-[var(--color-surf-card-2)] border border-[var(--color-border)] rounded-md">
+          {['COP', 'USD'].map((cur) => {
+            const active = item.currency === cur;
+            const activeBg = cur === 'USD' ? 'rgba(52, 211, 153, 0.18)' : 'rgba(45, 212, 191, 0.16)';
+            const activeColor = cur === 'USD' ? USD_GREEN : ACCENT;
+            return (
+              <button
+                key={cur}
+                type="button"
+                onClick={() => onUpdate(idx, 'currency', cur)}
+                aria-pressed={active}
+                className="flex-1 py-1 rounded mono text-[10.5px] font-semibold tracking-wider transition-colors"
+                style={{
+                  background: active ? activeBg : 'transparent',
+                  color: active ? activeColor : 'var(--color-steel)',
+                }}
+              >
+                {cur}
+              </button>
+            );
+          })}
+        </div>
+      ),
+    },
+    {
+      key: 'unit_price',
+      label: 'Precio unit.',
+      width: '130px',
+      render: (item, idx) => {
+        const isUSD = item.currency === 'USD';
+        const price = parseFloat(item.unit_price) || 0;
+        return (
+          <div>
+            <div className="flex items-stretch bg-[var(--color-surf-card-2)] border border-[var(--color-border)] rounded-md">
+              <span className="mono px-2 self-center text-[11px] text-gunmetal border-r border-[var(--color-border)] inline-flex items-center">
+                {isUSD ? '$' : 'COP'}
+              </span>
+              <input
+                type="number"
+                min="0"
+                step={isUSD ? '0.5' : '1000'}
+                value={item.unit_price}
+                onChange={(e) => onUpdate(idx, 'unit_price', Number(e.target.value))}
+                className="flex-1 min-w-0 px-2 py-1.5 bg-transparent border-0 outline-0 text-tech-white mono text-[12.5px] font-semibold text-right"
+              />
+            </div>
+            {isUSD && exchangeRate && price > 0 && (
+              <div className="mono text-[9.5px] text-gunmetal-dim mt-1 text-right">
+                ≈ {fmtCOP(price * exchangeRate)} COP
+              </div>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      key: 'subtotal',
+      label: 'Subtotal (COP)',
+      width: '130px',
+      mobile: false, // se muestra en el pie de card (mobileFoot) en vez de duplicarse
+      render: (item, idx) => {
+        const lineCOP = itemsResolved[idx]?.lineCOP || 0;
+        const lineUSD = itemsResolved[idx]?.lineUSD || 0;
+        return (
+          <div className="text-right">
+            <div className="mono text-[14px] font-semibold text-tech-white whitespace-nowrap">
+              {fmtCOP(lineCOP)}
+            </div>
+            {item.currency === 'USD' && lineUSD > 0 && (
+              <div className="mono text-[9.5px] mt-0.5" style={{ color: USD_GREEN }}>
+                {fmtUSD(lineUSD)} USD
+              </div>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
+
+  const addButtons = (
+    <div className="flex gap-2">
+      <button
+        type="button"
+        onClick={onAdd}
+        className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-md text-[11.5px] font-medium text-steel border border-dashed border-[var(--color-border-strong)] hover:text-tech-white min-h-[44px] lg:min-h-0 lg:py-1.5"
       >
-        <span>Producto</span>
-        <span className="text-center">Cant.</span>
-        <span className="text-center">Moneda</span>
-        <span className="text-right">Precio unit.</span>
-        <span className="text-right">Subtotal (COP)</span>
-        <span />
-      </div>
-      {items.length === 0 ? (
+        <Plus size={11} /> Agregar otro ítem
+      </button>
+      {onSelectFromInventory && (
+        <button
+          type="button"
+          onClick={onSelectFromInventory}
+          className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-md text-[11.5px] font-medium text-blue-400 border border-blue-400/30 hover:text-blue-300 min-h-[44px] lg:min-h-0 lg:py-1.5"
+        >
+          <Package size={11} /> Desde inventario
+        </button>
+      )}
+    </div>
+  );
+
+  if (items.length === 0) {
+    return (
+      <div className="rounded-lg bg-[var(--color-surf-card)] border border-[var(--color-border)] overflow-hidden">
         <div className="p-8 text-center">
           <Package size={28} className="mx-auto mb-2 text-gunmetal" />
           <div className="text-[12.5px] text-gunmetal mb-3">Toca para agregar el primer ítem</div>
@@ -280,41 +318,21 @@ function ItemsTable({ items, itemsResolved, onUpdate, onRemove, onAdd, onSelectF
             <Plus size={11} /> Agregar ítem
           </button>
         </div>
-      ) : (
-        <>
-          {items.map((it, idx) => (
-            <ItemRow
-              key={it.id || idx}
-              item={it}
-              idx={idx}
-              onUpdate={onUpdate}
-              onRemove={onRemove}
-              lineCOP={itemsResolved[idx]?.lineCOP || 0}
-              lineUSD={itemsResolved[idx]?.lineUSD || 0}
-              exchangeRate={exchangeRate}
-              last={idx === items.length - 1}
-            />
-          ))}
-          <div className="px-3.5 py-2.5 flex gap-2 bg-[var(--color-surf-card-2)] border-t border-[var(--color-border-soft)]">
-            <button
-              type="button"
-              onClick={onAdd}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11.5px] font-medium text-steel border border-dashed border-[var(--color-border-strong)] hover:text-tech-white"
-            >
-              <Plus size={11} /> Agregar otro ítem
-            </button>
-            {onSelectFromInventory && (
-              <button
-                type="button"
-                onClick={onSelectFromInventory}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11.5px] font-medium text-blue-400 border border-blue-400/30 hover:text-blue-300"
-              >
-                <Package size={11} /> Desde inventario
-              </button>
-            )}
-          </div>
-        </>
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      <LineItems
+        columns={columns}
+        items={items}
+        itemKey={(item, idx) => item.id || idx}
+        onRemove={(item, idx) => onRemove(idx)}
+        mobileFoot={(item, idx) => fmtCOP(itemsResolved[idx]?.lineCOP || 0)}
+        minWidth={660}
+      />
+      {addButtons}
     </div>
   );
 }
@@ -359,7 +377,9 @@ function MqSummary({
   const usdItems = resolved.itemsResolved.filter((i) => i.currency === 'USD');
   return (
     <aside
-      className="w-[360px] shrink-0 border-l border-[var(--color-border-soft)] flex flex-col overflow-y-auto"
+      // 320px en el punto ciego 1024-1279 (issue #162) — a 360px fijo el
+      // aside + sidebar (256px) dejaban muy poco para la tabla de ítems.
+      className="w-[320px] xl:w-[360px] shrink-0 border-l border-[var(--color-border-soft)] flex flex-col overflow-y-auto"
       style={{
         background: `linear-gradient(180deg, color-mix(in oklab, ${ACCENT} 4%, var(--color-forge-black)), var(--color-forge-black))`,
       }}
@@ -654,7 +674,9 @@ export default function ManualQuotePage() {
           onValidDays={setValidDays}
           exchangeRate={exchangeRate}
         />
-        <main className="flex-1 px-4 py-4 pb-32 overflow-y-auto flex flex-col gap-4">
+        {/* pb-40: despeja la barra sticky (ahora en bottom-20) + su propia
+            altura + el bottom nav global debajo de ella. */}
+        <main className="flex-1 px-4 py-4 pb-40 overflow-y-auto flex flex-col gap-4">
           {expiryLabel && (
             <div className="mono text-[11px] text-gunmetal">
               Válida hasta <span className="text-forge-teal">{expiryLabel}</span>
@@ -691,7 +713,11 @@ export default function ManualQuotePage() {
             className="w-full px-3 py-2 rounded-md bg-[var(--color-surf-card-2)] border border-[var(--color-border)] text-tech-white text-[12.5px] outline-0 resize-y"
           />
         </main>
-        <div className="fixed bottom-0 inset-x-0 z-30 px-4 py-3 bg-[var(--color-surf-sidebar)] border-t border-[var(--color-border-soft)] flex items-center gap-2">
+        {/* bottom-20 (no bottom-0): despeja el MobileBottomNav global, que
+            también vive fixed bottom-0 z-30 — sin esto el botón Guardar
+            queda tapado (issue #162). Mismo patrón que los FABs de página
+            de Queue/Vault/Maintenance/Projects. */}
+        <div className="fixed bottom-20 inset-x-0 z-30 px-4 py-3 bg-[var(--color-surf-sidebar)] border-t border-[var(--color-border-soft)] flex items-center gap-2">
           <div className="flex-1 min-w-0">
             <div className="mono text-[9px] uppercase tracking-wider text-gunmetal">Total</div>
             <div className="mono text-[18px] font-semibold text-tech-white truncate">

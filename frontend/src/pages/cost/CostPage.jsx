@@ -31,7 +31,7 @@ import {
   X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Button, Card, DetailDrawer, KPI, MobileSheet } from '../../components/ui';
+import { AppTabs, Button, Card, DetailDrawer, KPI, MobileSheet } from '../../components/ui';
 import MobileAppHeader from '../../components/MobileAppHeader';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -45,6 +45,8 @@ import { fmtCOP } from '../../utils/inventoryAdapter';
 import CalculatorPage from '../CalculatorPage';
 import PrintersPage from '../PrintersPage';
 import CostSettingsPage from '../CostSettingsPage';
+
+const ACCENT = '#2DD4BF';
 
 const TABS = [
   { id: 'cotizaciones', label: 'Cotizaciones',     icon: FileText },
@@ -120,42 +122,6 @@ function KPIStrip({ stats }) {
           icon={Calendar}
         />
       </div>
-    </div>
-  );
-}
-
-// ─── Tabs ───────────────────────────────────────────────────────────────────
-
-function CostTabs({ value, onChange, counts, accent = '#2DD4BF' }) {
-  return (
-    <div className="flex items-center gap-0.5 px-6 border-b border-[var(--color-border)] overflow-x-auto">
-      {TABS.map((t) => {
-        const Icon = t.icon;
-        const active = t.id === value;
-        return (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => onChange(t.id)}
-            className={`inline-flex items-center gap-2 px-3.5 py-3 text-sm font-medium transition-colors whitespace-nowrap -mb-px border-b-2 ${
-              active ? 'text-tech-white' : 'text-steel border-transparent hover:text-tech-white'
-            }`}
-            style={active ? { borderColor: accent } : undefined}
-          >
-            <Icon size={13} style={active ? { color: accent } : { color: '#7A8494' }} />
-            {t.label}
-            {counts[t.id] != null && (
-              <span
-                className={`mono text-[10px] px-1.5 py-px rounded-full border ${
-                  active ? 'bg-teal-500/14 border-teal-500/30 text-teal-300' : 'bg-white/5 border-[var(--color-border)] text-gunmetal'
-                }`}
-              >
-                {counts[t.id]}
-              </span>
-            )}
-          </button>
-        );
-      })}
     </div>
   );
 }
@@ -580,30 +546,13 @@ export default function CostPage() {
           </Card>
         </div>
 
-        <div className="mt-3 px-4 flex gap-1.5 overflow-x-auto pb-1 -mb-1 snap-x">
-          {TABS.map((t) => {
-            const Icon = t.icon;
-            const active = t.id === tab;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setTab(t.id)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap shrink-0 snap-start transition-colors border ${
-                  active
-                    ? 'bg-teal-500/15 border-teal-500/40 text-teal-300'
-                    : 'bg-transparent border-[var(--color-border)] text-steel'
-                }`}
-              >
-                <Icon size={12} />
-                {t.label}
-                {counts[t.id] != null && (
-                  <span className="mono text-[10px] text-gunmetal">{counts[t.id]}</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        <AppTabs
+          items={TABS.map((t) => ({ ...t, count: counts[t.id] }))}
+          value={tab}
+          onChange={setTab}
+          accent={ACCENT}
+          className="mt-3 px-4"
+        />
 
         {tab !== 'calculadora' && (
           <div className="px-4 mt-3">
@@ -746,7 +695,13 @@ export default function CostPage() {
 
       <KPIStrip stats={stats} />
 
-      <CostTabs value={tab} onChange={setTab} counts={counts} />
+      <AppTabs
+        items={TABS.map((t) => ({ ...t, count: counts[t.id] }))}
+        value={tab}
+        onChange={setTab}
+        accent={ACCENT}
+        className="px-6 border-b border-[var(--color-border)]"
+      />
 
       {tab === 'cotizaciones' && (
         <div className="flex flex-col">

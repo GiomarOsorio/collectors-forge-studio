@@ -4,16 +4,19 @@
  * Estrategia responsive (alineada con `useIsMobile` = ≤1023px):
  *  - **Desktop (≥1024px)**: sidebar fija a la izquierda (StudioSidebar) + main
  *    con `lg:ml-64`. Header de página vive dentro de cada Page.
- *  - **Mobile (≤1023px)**: SIN sidebar ni hamburger. La navegación entre apps
- *    la hace `MobileBottomNav` fija al pie de pantalla. Cada Page provee su
- *    propio header con breadcrumb badge + acciones.
+ *  - **Mobile (≤1023px)**: SIN sidebar fija. La navegación entre apps la hace
+ *    `MobileBottomNav` fija al pie de pantalla. Cada Page con `MobileAppHeader`
+ *    provee su propio ☰ 44×44 integrado (issue #161, P7) — el FAB hamburger
+ *    global solo se muestra como fallback en páginas V1 que no lo montan
+ *    (`hasOwnHeader` se actualiza vía `registerMobileHeader` en outletContext,
+ *    que `MobileAppHeader` llama al montar/desmontar).
  *
  * Sustituye a los 8 layouts por app anteriores.
  *
  * @module components/AppLayout
  */
 
-import { Suspense, useState } from 'react';
+import { Suspense, useCallback, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import Breadcrumb from './Breadcrumb';
@@ -43,9 +46,17 @@ export default function AppLayout() {
   const closeSidebar = () => setSidebarOpen(false);
   const { helpOpen, closeHelp } = useKeyboardShortcuts();
 
+  // Issue #161: cuántos MobileAppHeader hay montados ahora mismo. Contador
+  // (no boolean) por si una página anida más de uno transitoriamente durante
+  // un cambio de ruta — el FAB solo reaparece cuando llega a 0.
+  const [ownHeaderCount, setOwnHeaderCount] = useState(0);
+  const registerMobileHeader = useCallback((mounted) => {
+    setOwnHeaderCount((n) => Math.max(0, n + (mounted ? 1 : -1)));
+  }, []);
+
   // Contexto compartido para que las páginas puedan abrir la sidebar mobile
   // desde su propio botón de menú (replica el `onMenu` del design).
-  const outletContext = { openSidebar: () => setSidebarOpen(true) };
+  const outletContext = { openSidebar: () => setSidebarOpen(true), registerMobileHeader };
 
   // ── Shell mobile (≤1023px) ───────────────────────────────────────────────
   if (isMobile) {
@@ -55,18 +66,20 @@ export default function AppLayout() {
             desde el botón menú de páginas que lo dispararon ellas mismas. */}
         <StudioSidebar open={sidebarOpen} onClose={closeSidebar} />
 
-        {/* Issue #53 — hamburger global flotante, garantiza acceso al menú
-            en TODAS las pages (incluyendo las V1 que no proveen su propio
-            MobileAppHeader). Posición fija top-left con padding seguro
-            sobre el contenido. */}
-        <button
-          type="button"
-          onClick={() => setSidebarOpen(true)}
-          aria-label="Abrir menú"
-          className="fixed top-3 left-3 z-40 w-10 h-10 rounded-lg inline-flex items-center justify-center bg-[var(--color-surf-card)]/95 backdrop-blur border border-[var(--color-border-strong)] text-tech-white shadow-lg hover:bg-[var(--color-surf-hover)] transition-colors"
-        >
-          <Menu size={18} />
-        </button>
+        {/* Issue #53 — hamburger global flotante, fallback para páginas V1
+            que no montan su propio MobileAppHeader. Issue #161: cuando una
+            página SÍ lo monta, este FAB se oculta (ownHeaderCount > 0) para
+            no encimarse visualmente con el ☰ 44×44 ya integrado ahí. */}
+        {ownHeaderCount === 0 && (
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Abrir menú"
+            className="fixed top-3 left-3 z-40 w-11 h-11 rounded-lg inline-flex items-center justify-center bg-[var(--color-surf-card)]/95 backdrop-blur border border-[var(--color-border-strong)] text-tech-white shadow-lg hover:bg-[var(--color-surf-hover)] transition-colors"
+          >
+            <Menu size={18} />
+          </button>
+        )}
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden pb-20 pt-2 px-3">
           <Suspense fallback={<PageFallback />}>
@@ -74,7 +87,9 @@ export default function AppLayout() {
           </Suspense>
         </main>
         <MobileBottomNav />
-        {helpOpen && <KeyboardShortcutsModal onClose={closeHelp} />}
+        {/* Fix #168: el modal de atajos de teclado (#140) es desktop-only —
+            no hay teclado físico ni forma de dispararlo en mobile, así que no
+            se monta en este shell. */}
       </div>
     );
   }

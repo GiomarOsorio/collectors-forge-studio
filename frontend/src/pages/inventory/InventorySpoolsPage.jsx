@@ -27,6 +27,7 @@ import {
 import MobileAppHeader from '../../components/MobileAppHeader';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useConfirm } from '../../components/ConfirmDialog';
+import InventoryNavTabs from './InventoryNavTabs';
 import {
   createSpools,
   deleteSpool,
@@ -617,6 +618,7 @@ export default function InventorySpoolsPage() {
     return (
       <div className="flex flex-col gap-3">
         <MobileAppHeader appName="Bobinas" appIcon={Layers} appAccent={ACCENT} title="Bobinas" />
+        <InventoryNavTabs className="px-4" />
         <div className="px-4 flex flex-col gap-3">
           {LowStockBanner}
           {Filters}
@@ -675,6 +677,7 @@ export default function InventorySpoolsPage() {
         <span className="text-gunmetal-dim">›</span>
         <span className="text-sm font-semibold text-tech-white">Bobinas</span>
       </header>
+      <InventoryNavTabs className="border-b border-[var(--color-border)] pb-2" />
       {LowStockBanner}
       {Filters}
       {SelectionBar}
