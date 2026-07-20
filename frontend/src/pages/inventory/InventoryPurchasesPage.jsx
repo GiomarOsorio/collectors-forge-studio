@@ -33,7 +33,7 @@ import {
 } from '../../services/api';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useIsMobile } from '../../hooks/useMediaQuery';
-import { DetailDrawer, MobileSheet, StatusPill, EmptyState } from '../../components/ui';
+import { DetailDrawer, KPIStrip as KPIStripBase, LineItems, MobileSheet, StatusPill, EmptyState } from '../../components/ui';
 import { fmtCOP } from '../../utils/inventoryAdapter';
 import InventoryNavTabs from './InventoryNavTabs';
 
@@ -91,12 +91,18 @@ function PurchasesHeader({ purchases, onNew }) {
         </button>
       </header>
       <InventoryNavTabs className="px-5 border-b border-[var(--color-border-soft)]" />
-      <div className="flex gap-2 px-5 py-3 border-b border-[var(--color-border-soft)] bg-forge-black overflow-x-auto">
+      {/* KPI strip → shared <KPIStrip> (P5): mobile scroll-snap + fade derecho
+          (antes overflow-x-auto sin indicador). Desktop flex-wrap. */}
+      <KPIStripBase
+        className="px-5 py-3 border-b border-[var(--color-border-soft)] bg-forge-black"
+        minWidth={160}
+        snapWidth={180}
+      >
         <IpKPI label="Órdenes abiertas" icon={Truck} value={open.length} sub={`${purchases.length} totales`} />
         <IpKPI label="En ruta · COP" icon={ShoppingCart} value={fmtCOP(onRoute)} sub="Por recibir" big />
         <IpKPI label="Vendors" icon={Building2} value={vendors} sub="distintos" />
         <IpKPI label="Llegadas" icon={Check} value={arrived} sub="recibidas" />
-      </div>
+      </KPIStripBase>
     </>
   );
 }
@@ -544,51 +550,57 @@ function NewPOForm({ initial, inventoryItems, onSave, onCancel, mode = 'create',
           </div>
         ) : (
           <>
-            {form.items.map((l, idx) => (
-              <div
-                key={l.id || idx}
-                className="p-3 rounded-lg bg-[var(--color-surf-card)] border border-[var(--color-border)] flex flex-col gap-2"
-              >
-                <div className="grid gap-1.5" style={{ gridTemplateColumns: 'minmax(0, 1fr) 32px' }}>
-                  <FormFieldRow label="Nombre" required error={errors.lines[idx]?.name}>
+            {/* Fix #5 (P1 LineItems): antes grid fijo '80px 120px 1fr 110px'
+                dentro del sheet dejaba el select "vincular" ilegible en 375px.
+                Ahora: cards apiladas <1024 (vínculo full-width, cant+costo en
+                grid-cols-2, subtotal al pie) / grid con minmax(0,fr) ≥1024.
+                Ref: inventory.html §NewPOForm. */}
+            <LineItems
+              columns={[
+                {
+                  key: 'name', label: 'Ítem', width: '1.7fr',
+                  render: (l, idx) => (
+                    <>
+                      <input
+                        value={l.name}
+                        onChange={(e) => updateLine(idx, 'name', e.target.value)}
+                        placeholder="Nombre del ítem"
+                        className={`${FORM_INPUT_CLS} ${errors.lines[idx]?.name ? 'border-rose-400/60' : ''}`}
+                      />
+                      {errors.lines[idx]?.name && (
+                        <span className="block mt-0.5 text-[10px] text-rose-400">{errors.lines[idx].name}</span>
+                      )}
+                    </>
+                  ),
+                },
+                {
+                  key: 'quantity', label: 'Cant.', width: '0.6fr',
+                  render: (l, idx) => (
+                    <>
+                      <input
+                        type="number" min="1" step="1" value={l.quantity}
+                        onChange={(e) => updateLine(idx, 'quantity', Number(e.target.value))}
+                        className={`${FORM_INPUT_CLS} mono text-right ${errors.lines[idx]?.quantity ? 'border-rose-400/60' : ''}`}
+                      />
+                      {errors.lines[idx]?.quantity && (
+                        <span className="block mt-0.5 text-[10px] text-rose-400">{errors.lines[idx].quantity}</span>
+                      )}
+                    </>
+                  ),
+                },
+                {
+                  key: 'unit_cost', label: 'Costo unit. COP', width: '0.9fr',
+                  render: (l, idx) => (
                     <input
-                      value={l.name}
-                      onChange={(e) => updateLine(idx, 'name', e.target.value)}
-                      placeholder="Nombre del ítem"
-                      className={FORM_INPUT_CLS}
-                    />
-                  </FormFieldRow>
-                  <button
-                    type="button"
-                    onClick={() => removeLine(idx)}
-                    aria-label="Quitar ítem"
-                    className="self-end h-9 rounded-md border border-[var(--color-border-strong)] text-gunmetal inline-flex items-center justify-center hover:text-rose-400 hover:border-rose-400/40"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-                <div className="grid gap-1.5" style={{ gridTemplateColumns: '80px 120px 1fr 110px', alignItems: 'end' }}>
-                  <FormFieldRow label="Cantidad" required error={errors.lines[idx]?.quantity}>
-                    <input
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={l.quantity}
-                      onChange={(e) => updateLine(idx, 'quantity', Number(e.target.value))}
-                      className={`${FORM_INPUT_CLS} mono text-right`}
-                    />
-                  </FormFieldRow>
-                  <FormFieldRow label="Costo unit. COP">
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={l.unit_cost}
+                      type="number" min="0" step="0.01" value={l.unit_cost}
                       onChange={(e) => updateLine(idx, 'unit_cost', Number(e.target.value))}
                       className={`${FORM_INPUT_CLS} mono text-right`}
                     />
-                  </FormFieldRow>
-                  <FormFieldRow label="Vincular a inventario (opcional)">
+                  ),
+                },
+                {
+                  key: 'inventory_item_id', label: 'Vincular a inventario', width: '1.4fr', full: true,
+                  render: (l, idx) => (
                     <select
                       value={l.inventory_item_id || ''}
                       onChange={(e) => updateLine(idx, 'inventory_item_id', e.target.value ? Number(e.target.value) : null)}
@@ -609,13 +621,23 @@ function NewPOForm({ initial, inventoryItems, onSave, onCancel, mode = 'create',
                         </optgroup>
                       ))}
                     </select>
-                  </FormFieldRow>
-                  <div className="mono text-[13px] font-semibold text-tech-white text-right pb-2">
-                    {fmtCOP((Number(l.quantity) || 0) * (Number(l.unit_cost) || 0))}
-                  </div>
-                </div>
-              </div>
-            ))}
+                  ),
+                },
+                {
+                  key: 'subtotal', label: 'Subtotal', width: '0.9fr', mobile: false,
+                  render: (l) => (
+                    <span className="mono text-[13px] font-semibold text-tech-white">
+                      {fmtCOP((Number(l.quantity) || 0) * (Number(l.unit_cost) || 0))}
+                    </span>
+                  ),
+                },
+              ]}
+              items={form.items}
+              itemKey={(l, idx) => l.id || idx}
+              onRemove={(_l, idx) => removeLine(idx)}
+              mobileFoot={(l) => fmtCOP((Number(l.quantity) || 0) * (Number(l.unit_cost) || 0))}
+              minWidth={660}
+            />
             <button
               type="button"
               onClick={addLine}
