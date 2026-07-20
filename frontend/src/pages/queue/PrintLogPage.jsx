@@ -19,9 +19,17 @@ import {
   Download,
   ScrollText,
   Search,
+  SlidersHorizontal,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { AppTabs, Button, Card, EmptyState, StatusPill } from '../../components/ui';
+import {
+  AppTabs,
+  Button,
+  EmptyState,
+  MobileSheet,
+  ResponsiveTable,
+  StatusPill,
+} from '../../components/ui';
 import MobileAppHeader from '../../components/MobileAppHeader';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../context/AuthContext';
@@ -95,6 +103,7 @@ export default function PrintLogPage() {
   const [data, setData] = useState({ items: [], total: 0 });
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     getPrinters()
@@ -155,6 +164,22 @@ export default function PrintLogPage() {
     const range = presetToRange(preset);
     setDateFrom(range.date_from);
     setDateTo(range.date_to);
+  };
+
+  // Nº de filtros activos → badge del botón "Filtros" en mobile.
+  const activeFilterCount =
+    (debouncedQuery.trim() ? 1 : 0) +
+    (printerId ? 1 : 0) +
+    (statusFilter ? 1 : 0) +
+    (userId ? 1 : 0) +
+    (activePreset !== 'Todo' ? 1 : 0);
+
+  const handleClearFilters = () => {
+    setQuery('');
+    setPrinterId('');
+    setStatusFilter('');
+    setUserId('');
+    handlePreset('Todo');
   };
 
   const handleExportCsv = async () => {
@@ -250,63 +275,88 @@ export default function PrintLogPage() {
     </div>
   );
 
-  const Table = (
-    <Card className="p-0 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-[10.5px] uppercase tracking-wider text-gunmetal border-b border-[var(--color-border-soft)]">
-              <th className="px-4 py-2.5 font-medium">Fecha</th>
-              <th className="px-4 py-2.5 font-medium">Pieza</th>
-              <th className="px-4 py-2.5 font-medium">Origen</th>
-              <th className="px-4 py-2.5 font-medium">Impresora</th>
-              <th className="px-4 py-2.5 font-medium">Usuario</th>
-              <th className="px-4 py-2.5 font-medium">Estado</th>
-              <th className="px-4 py-2.5 font-medium text-right">Cant.</th>
-              <th className="px-4 py-2.5 font-medium text-right">Duración</th>
-              <th className="px-4 py-2.5 font-medium text-right">Filamento</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.items.map((it) => {
-              const v = itemView(it);
-              const badge = statusBadge(it.status);
-              return (
-                <tr key={it.id} className="border-b border-[var(--color-border-soft)] last:border-0">
-                  <td className="px-4 py-2.5 mono text-[11px] text-steel whitespace-nowrap">
-                    {fmtDate(it.created_at)}
-                  </td>
-                  <td className="px-4 py-2.5 text-tech-white font-medium max-w-[220px] truncate">
-                    {v.piece_name || it.notes || `Item #${it.id}`}
-                  </td>
-                  <td className="px-4 py-2.5 text-steel capitalize">{v.source}</td>
-                  <td className="px-4 py-2.5 text-steel">{v.printer_name || '—'}</td>
-                  <td className="px-4 py-2.5 text-steel">{it.created_by_username || '—'}</td>
-                  <td className="px-4 py-2.5">
-                    <StatusPill tone={badge.tone} icon={badge.icon}>{badge.label}</StatusPill>
-                  </td>
-                  <td className="px-4 py-2.5 text-right mono text-steel">{v.quantity ?? 1}</td>
-                  <td className="px-4 py-2.5 text-right mono text-steel whitespace-nowrap">
-                    {fmtTimeHours(v.print_time_hours)}
-                  </td>
-                  <td className="px-4 py-2.5 text-right mono text-steel whitespace-nowrap">
-                    {v.weight_grams != null ? `${Number(v.weight_grams).toFixed(0)}g` : '—'}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+  // Columnas del ResponsiveTable (P2). Desktop: tabla como hoy. Mobile: la
+  // card la controla `mobileCard` (línea secundaria origen/usuario/cant. +
+  // grid de 4 pares), según mockup `queue-printlog.html`.
+  const gramsOf = (v) => (v.weight_grams != null ? `${Number(v.weight_grams).toFixed(0)}g` : '—');
+  const columns = [
+    { key: 'date', label: 'Fecha', className: 'mono text-[11px]', render: (it) => fmtDate(it.created_at) },
+    {
+      key: 'piece',
+      label: 'Pieza',
+      strong: true,
+      className: 'max-w-[220px] truncate',
+      render: (it) => itemView(it).piece_name || it.notes || `Item #${it.id}`,
+    },
+    { key: 'source', label: 'Origen', className: 'capitalize', render: (it) => itemView(it).source },
+    { key: 'printer', label: 'Impresora', render: (it) => itemView(it).printer_name || '—' },
+    { key: 'user', label: 'Usuario', render: (it) => it.created_by_username || '—' },
+    {
+      key: 'status',
+      label: 'Estado',
+      render: (it) => {
+        const badge = statusBadge(it.status);
+        return <StatusPill tone={badge.tone} icon={badge.icon}>{badge.label}</StatusPill>;
+      },
+    },
+    { key: 'quantity', label: 'Cant.', className: 'text-right mono', render: (it) => itemView(it).quantity ?? 1 },
+    { key: 'duration', label: 'Duración', className: 'text-right mono', render: (it) => fmtTimeHours(itemView(it).print_time_hours) },
+    { key: 'filament', label: 'Filamento', className: 'text-right mono', render: (it) => gramsOf(itemView(it)) },
+  ];
+
+  const pair = (label, value, mono) => (
+    <div>
+      <div className="mono text-[8.5px] font-bold uppercase tracking-[0.08em] text-gunmetal mb-0.5">{label}</div>
+      <div className={`text-[12.5px] font-semibold text-tech-white ${mono ? 'mono' : ''}`}>{value}</div>
+    </div>
+  );
+
+  const mobileCard = (it) => {
+    const v = itemView(it);
+    const badge = statusBadge(it.status);
+    return (
+      <div className="bg-[var(--color-surf-card)] border border-[var(--color-border)] rounded-xl px-3.5 py-3.5 mb-2.5">
+        <div className="flex items-start justify-between gap-2.5 mb-1">
+          <div className="text-[14.5px] font-bold text-tech-white leading-snug min-w-0 flex-1">
+            {v.piece_name || it.notes || `Item #${it.id}`}
+          </div>
+          <StatusPill tone={badge.tone} icon={badge.icon}>{badge.label}</StatusPill>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[11px] text-gunmetal mb-2.5">
+          <span className="capitalize">{v.source}</span>
+          <span className="text-[var(--color-border-bright)]">·</span>
+          <span>{it.created_by_username || '—'}</span>
+          <span className="text-[var(--color-border-bright)]">·</span>
+          <span>cant. {v.quantity ?? 1}</span>
+        </div>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2 pt-2.5 border-t border-dashed border-[var(--color-border-soft)]">
+          {pair('Fecha', fmtDate(it.created_at), true)}
+          {pair('Impresora', v.printer_name || '—', false)}
+          {pair('Duración', fmtTimeHours(v.print_time_hours), true)}
+          {pair('Filamento', gramsOf(v), true)}
+        </div>
       </div>
-      {!loading && data.items.length === 0 && (
-        <EmptyState
-          icon={ScrollText}
-          accent={ACCENT}
-          title="Sin resultados"
-          hint="Ajusta los filtros o el rango de fechas."
-        />
-      )}
-    </Card>
+    );
+  };
+
+  const emptyState = !loading && (
+    <EmptyState
+      icon={ScrollText}
+      accent={ACCENT}
+      title="Sin resultados"
+      hint="Ajusta los filtros o el rango de fechas."
+    />
+  );
+
+  const Table = (
+    <ResponsiveTable
+      columns={columns}
+      rows={data.items}
+      rowKey={(it) => it.id}
+      mobileCard={mobileCard}
+      minWidth={920}
+      empty={data.items.length === 0 ? emptyState : null}
+    />
   );
 
   const Pagination = data.total > 0 && (
@@ -345,6 +395,101 @@ export default function PrintLogPage() {
     </div>
   );
 
+  // Botón que abre el sheet de filtros en mobile (los 4 filtros + presets
+  // no caben en una fila sin apilar 4 líneas). Badge = nº de filtros activos.
+  const FiltersTrigger = (
+    <button
+      type="button"
+      onClick={() => setFiltersOpen(true)}
+      className="flex items-center justify-between gap-2.5 w-full px-3.5 py-2.5 rounded-[10px] bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] text-tech-white text-[13.5px] font-semibold min-h-[44px]"
+    >
+      <span className="inline-flex items-center gap-2">
+        <SlidersHorizontal size={14} /> Filtros
+      </span>
+      {activeFilterCount > 0 && (
+        <span className="mono text-[10.5px] font-bold bg-teal-500/[0.16] text-teal-300 rounded-full px-2 py-0.5">
+          {activeFilterCount} activo{activeFilterCount > 1 ? 's' : ''}
+        </span>
+      )}
+    </button>
+  );
+
+  const sheetSelectCls =
+    'w-full px-3 py-2.5 rounded-[9px] bg-[var(--color-surf-card-2)] border border-[var(--color-border)] text-tech-white text-sm outline-none min-h-[44px] focus:border-teal-500';
+  const sheetLabelCls =
+    'mono text-[9.5px] font-bold uppercase tracking-[0.1em] text-gunmetal mb-1.5';
+
+  const FilterSheet = (
+    <MobileSheet open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filtros">
+      <div className="px-4 pt-3 pb-6">
+        <div className="mb-3.5">
+          <div className={sheetLabelCls}>Buscar pieza</div>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Nombre de la pieza…"
+            className={sheetSelectCls}
+          />
+        </div>
+        <div className="mb-3.5">
+          <div className={sheetLabelCls}>Impresora</div>
+          <select value={printerId} onChange={(e) => setPrinterId(e.target.value)} className={sheetSelectCls}>
+            <option value="">Todas las impresoras</option>
+            {printers.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+        <div className="mb-3.5">
+          <div className={sheetLabelCls}>Estado</div>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={sheetSelectCls}>
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
+        </div>
+        {isAdmin && users.length > 0 && (
+          <div className="mb-3.5">
+            <div className={sheetLabelCls}>Usuario</div>
+            <select value={userId} onChange={(e) => setUserId(e.target.value)} className={sheetSelectCls}>
+              <option value="">Todos los usuarios</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>{u.username}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        <div className="mb-3.5">
+          <div className={sheetLabelCls}>Rango de fechas</div>
+          <div className="flex flex-wrap gap-2">
+            {DATE_PRESETS.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => handlePreset(preset)}
+                className={`px-3.5 py-2 rounded-full text-[13px] font-semibold border transition-colors min-h-[40px] ${
+                  activePreset === preset
+                    ? 'bg-teal-500/15 border-teal-500/40 text-teal-300'
+                    : 'bg-transparent border-[var(--color-border)] text-steel'
+                }`}
+              >
+                {preset}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex gap-2.5 mt-4">
+          <Button variant="ghost" className="flex-1" onClick={handleClearFilters}>
+            Limpiar
+          </Button>
+          <Button variant="primary" className="flex-[2]" onClick={() => setFiltersOpen(false)}>
+            Aplicar filtros
+          </Button>
+        </div>
+      </div>
+    </MobileSheet>
+  );
+
   if (isMobile) {
     return (
       <div className="flex flex-col gap-3">
@@ -362,7 +507,7 @@ export default function PrintLogPage() {
           accent={ACCENT}
           className="px-4"
         />
-        <div className="px-4">{Filters}</div>
+        <div className="px-4">{FiltersTrigger}</div>
         <div className="px-4">
           {loading ? (
             <p className="py-12 text-center text-gunmetal text-sm">Cargando…</p>
@@ -371,6 +516,7 @@ export default function PrintLogPage() {
           )}
         </div>
         <div className="px-4 pb-6">{Pagination}</div>
+        {FilterSheet}
       </div>
     );
   }
