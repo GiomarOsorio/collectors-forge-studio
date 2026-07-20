@@ -47,6 +47,9 @@ export default function CompanyTemplateEditorPage() {
   const [validating, setValidating] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [validation, setValidation] = useState(null); // {ok, errors, warnings, preview_pdf_b64?}
+  // Fix #168: zoom de fuente del editor (usabilidad en tablet/mobile).
+  const [fontSize, setFontSize] = useState(12);
+  const bumpFont = (delta) => setFontSize((s) => Math.min(20, Math.max(10, s + delta)));
 
   // Cargar template existente o contenido por defecto
   useEffect(() => {
@@ -249,17 +252,42 @@ export default function CompanyTemplateEditorPage() {
 
         {/* Editor de código Liquid */}
         <div className="tf-card p-5 space-y-3">
-          <div className="flex items-center justify-between">
+          {/* Fix #168: toolbar sticky (Validar/Preview siempre alcanzables al
+              hacer scroll del textarea largo) + zoom de fuente A−/A+ + botones
+              con target táctil ≥44px. */}
+          <div className="sticky top-0 z-10 -mx-5 -mt-5 px-5 pt-5 pb-3 bg-[var(--color-surf-card)] flex flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border-soft)]">
             <label className="text-sm font-medium text-steel uppercase tracking-wider">
               Código Liquid (HTML)
             </label>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
+              {/* Zoom de fuente */}
+              <div className="flex items-center rounded-md border border-[var(--color-border-strong)] overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => bumpFont(-1)}
+                  disabled={fontSize <= 10}
+                  className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-steel hover:bg-[var(--color-surf-hover)] disabled:opacity-40 text-xs"
+                  aria-label="Reducir tamaño de fuente"
+                >
+                  A−
+                </button>
+                <span className="mono text-[10px] text-gunmetal px-1 tabular-nums">{fontSize}</span>
+                <button
+                  type="button"
+                  onClick={() => bumpFont(1)}
+                  disabled={fontSize >= 20}
+                  className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-steel hover:bg-[var(--color-surf-hover)] disabled:opacity-40 text-base"
+                  aria-label="Aumentar tamaño de fuente"
+                >
+                  A+
+                </button>
+              </div>
               {/* Botón Validar */}
               <button
                 type="button"
                 onClick={handleValidate}
                 disabled={validating || !form.content.trim()}
-                className="tf-btn-secondary text-xs gap-1.5 py-1.5 px-3"
+                className="tf-btn-secondary text-xs gap-1.5 min-h-[44px] px-4"
               >
                 {validating ? 'Validando...' : 'Validar'}
               </button>
@@ -268,7 +296,7 @@ export default function CompanyTemplateEditorPage() {
                 type="button"
                 onClick={handlePreview}
                 disabled={previewing || !validation?.ok}
-                className="tf-btn-secondary text-xs gap-1.5 py-1.5 px-3"
+                className="tf-btn-secondary text-xs gap-1.5 min-h-[44px] px-4"
                 title={validation?.ok ? 'Abrir PDF de muestra' : 'Valida el template primero'}
               >
                 <Eye size={14} />
@@ -282,7 +310,8 @@ export default function CompanyTemplateEditorPage() {
             onChange={(e) => setForm((p) => ({ ...p, content: e.target.value }))}
             disabled={!user?.role === 'admin'}
             rows={28}
-            className="w-full bg-[#0A0E16] border border-[#222630] rounded-lg p-4 text-xs font-mono text-tech-white focus:outline-none focus:border-indigo-500 resize-y leading-relaxed"
+            style={{ fontSize: `${fontSize}px` }}
+            className="w-full h-[55dvh] sm:h-auto bg-[#0A0E16] border border-[#222630] rounded-lg p-4 font-mono text-tech-white focus:outline-none focus:border-indigo-500 resize-y leading-relaxed"
             placeholder="<!DOCTYPE html>..."
             spellCheck={false}
           />
