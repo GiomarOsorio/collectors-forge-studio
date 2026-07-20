@@ -87,7 +87,9 @@ export default function AppLayout() {
           </Suspense>
         </main>
         <MobileBottomNav />
-        {helpOpen && <KeyboardShortcutsModal onClose={closeHelp} />}
+        {/* Fix #168: el modal de atajos de teclado (#140) es desktop-only —
+            no hay teclado físico ni forma de dispararlo en mobile, así que no
+            se monta en este shell. */}
       </div>
     );
   }
