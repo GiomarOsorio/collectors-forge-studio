@@ -41,6 +41,7 @@ const SEGMENT_LABELS = {
   consumables: 'Consumibles',
   stock:       'Todo el stock',
   purchases:   'Pedidos',
+  spools:      'Bobinas',
   prints:      'Disponible para Venta',
   io:          'Importar / Exportar',
   categories:  'Categorías',

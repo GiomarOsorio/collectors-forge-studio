@@ -81,7 +81,9 @@ describe('VaultPage — Asignar a proyecto', () => {
     fireEvent.click(screen.getByRole('button', { name: /asignar a proyecto/i }));
     await waitFor(() => expect(screen.getByText(/Asignar 2 archivos a proyecto/)).toBeInTheDocument());
 
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: '5' } });
+    // El <select> de proyectos se monta tras resolver getProjects (async):
+    // esperarlo con findByRole evita el flake "Unable to find combobox".
+    fireEvent.change(await screen.findByRole('combobox'), { target: { value: '5' } });
     fireEvent.click(screen.getByRole('button', { name: 'Asignar' }));
 
     await waitFor(() => expect(mockAddProjectFiles).toHaveBeenCalledWith(5, [1, 2]));
