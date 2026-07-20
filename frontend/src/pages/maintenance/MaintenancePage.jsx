@@ -46,6 +46,7 @@ import {
   DetailDrawer,
   EmptyState,
   KPI,
+  LineItems,
   MobileSheet,
   StatusPill,
 } from '../../components/ui';
@@ -785,7 +786,7 @@ function LogFormDrawer({
       {mode === 'create' && (
         <>
           <div className="flex items-center justify-between mt-3 mb-1.5">
-            <span className="lbl-eyebrow text-[9px]">Ítems usados</span>
+            <span className="lbl-eyebrow text-[9px]">Ítems a descontar</span>
             <button
               type="button"
               onClick={addItem}
@@ -798,80 +799,85 @@ function LogFormDrawer({
             {formItems.length === 0 && (
               <p className="text-[11px] text-gunmetal italic">Sin ítems para descontar del inventario.</p>
             )}
-            {formItems.map((item, idx) => (
-              <div
-                key={idx}
-                className="bg-[var(--color-surf-card)] border border-[var(--color-border-soft)] rounded-md p-2.5 flex flex-col gap-2"
-              >
-                <FormFieldRow label="Ítem del inventario (opcional)">
-                  <select
-                    className={FORM_INPUT_CLS}
-                    value={item.inventory_item_id}
-                    onChange={(e) => handleInventoryItemChange(idx, e.target.value)}
-                  >
-                    <option value="">— Sin vincular —</option>
-                    {Object.entries(inventoryByCategory).map(([category, items]) => (
-                      <optgroup key={category} label={category}>
-                        {items.map((inv) => (
-                          <option key={inv.id} value={String(inv.id)}>{inv.name}</option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                </FormFieldRow>
-                <div className="grid grid-cols-3 gap-2">
-                  <FormFieldRow label="Nombre" required>
+            {/* Fix #166 (P1 LineItems, modo stacked): antes grid-cols-3 fijo
+                dejaba Nombre/Cantidad/Costo en 3 inputs de ~105px ilegibles.
+                El drawer es angosto (~480px) en todos los anchos, así que la
+                card apilada se mantiene también en ≥1024 (stacked). Orden 1:1
+                con el mockup: Ítem del inventario → Nombre → Cantidad+Costo
+                (grid-cols-2) → Notas · quitar 44×44. Ref: maintenance.html
+                §LogFormDrawer (.item-li-card sin override ≥1024). */}
+            <LineItems
+              stacked
+              columns={[
+                {
+                  key: 'inventory_item_id', label: 'Ítem del inventario (opcional)',
+                  render: (it, idx) => (
+                    <select
+                      className={FORM_INPUT_CLS}
+                      value={it.inventory_item_id}
+                      onChange={(e) => handleInventoryItemChange(idx, e.target.value)}
+                    >
+                      <option value="">— Sin vincular —</option>
+                      {Object.entries(inventoryByCategory).map(([category, items]) => (
+                        <optgroup key={category} label={category}>
+                          {items.map((inv) => (
+                            <option key={inv.id} value={String(inv.id)}>{inv.name}</option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                  ),
+                },
+                {
+                  key: 'name', label: 'Nombre', full: true,
+                  render: (it, idx) => (
                     <input
                       required
                       className={FORM_INPUT_CLS}
-                      value={item.name}
+                      value={it.name}
                       onChange={(e) => updateItem(idx, 'name', e.target.value)}
                       placeholder="Grasa sintética…"
                     />
-                  </FormFieldRow>
-                  <FormFieldRow label="Cantidad">
+                  ),
+                },
+                {
+                  key: 'quantity', label: 'Cantidad',
+                  render: (it, idx) => (
                     <input
-                      type="number"
-                      min="0.001"
-                      step="any"
-                      className={FORM_INPUT_CLS}
-                      value={item.quantity}
+                      type="number" min="0.001" step="any"
+                      className={`${FORM_INPUT_CLS} mono text-right`}
+                      value={it.quantity}
                       onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
                     />
-                  </FormFieldRow>
-                  <FormFieldRow label="Costo unit.">
+                  ),
+                },
+                {
+                  key: 'unit_cost', label: 'Costo unit.',
+                  render: (it, idx) => (
                     <input
-                      type="number"
-                      min="0"
-                      step="any"
-                      className={FORM_INPUT_CLS}
-                      value={item.unit_cost}
+                      type="number" min="0" step="any"
+                      className={`${FORM_INPUT_CLS} mono text-right`}
+                      value={it.unit_cost}
                       onChange={(e) => updateItem(idx, 'unit_cost', e.target.value)}
                     />
-                  </FormFieldRow>
-                </div>
-                <div className="flex gap-2 items-end">
-                  <div className="flex-1">
-                    <FormFieldRow label="Notas">
-                      <input
-                        className={FORM_INPUT_CLS}
-                        value={item.notes}
-                        onChange={(e) => updateItem(idx, 'notes', e.target.value)}
-                        placeholder="Opcional…"
-                      />
-                    </FormFieldRow>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeItem(idx)}
-                    className="p-1.5 rounded text-gunmetal hover:text-rose-300 hover:bg-rose-500/10 transition-colors"
-                    title="Quitar ítem"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              </div>
-            ))}
+                  ),
+                },
+                {
+                  key: 'notes', label: 'Notas', full: true,
+                  render: (it, idx) => (
+                    <input
+                      className={FORM_INPUT_CLS}
+                      value={it.notes}
+                      onChange={(e) => updateItem(idx, 'notes', e.target.value)}
+                      placeholder="Opcional…"
+                    />
+                  ),
+                },
+              ]}
+              items={formItems}
+              onRemove={(_it, idx) => removeItem(idx)}
+              removeLabel="Quitar ítem"
+            />
           </div>
         </>
       )}
