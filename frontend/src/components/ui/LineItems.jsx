@@ -11,6 +11,10 @@
  *   (campo principal) va full-width arriba, el resto en `grid-cols-2` con
  *   label mono uppercase, el botón quitar 44×44 en la esquina superior
  *   derecha y un pie con "Ítem i de n" + contenido opcional (subtotal).
+ * - **`stacked`**: fuerza la card apilada en todos los anchos (drawers
+ *   angostos ~480px donde una fila grid quedaría comprimida — p. ej. el
+ *   LogFormDrawer de Mantenimiento, issue #166). En este modo el campo
+ *   principal también lleva su label.
  *
  * Referencia visual 1:1: `agent-docs/ui-responsive/mockups/patterns.html` §P1.
  *
@@ -43,6 +47,7 @@ const toTrack = (width) => (/fr$/.test(width) ? `minmax(0, ${width})` : width);
  *   Contenido derecho del pie de card (típicamente el subtotal)
  * @param {React.ReactNode} [props.footer] - Fila de total al pie (solo desktop)
  * @param {number} [props.minWidth=640] - min-width del grid desktop; el wrapper hace scroll-x
+ * @param {boolean} [props.stacked=false] - fuerza la card apilada en todos los anchos
  * @param {string} [props.removeLabel='Quitar ítem']
  * @param {string} [props.className]
  */
@@ -54,12 +59,13 @@ export default function LineItems({
   mobileFoot,
   footer,
   minWidth = 640,
+  stacked = false,
   removeLabel = 'Quitar ítem',
   className = '',
 }) {
   const isMobile = useIsMobile();
 
-  if (isMobile) {
+  if (isMobile || stacked) {
     const [primary, ...rest] = columns;
     const mobileCols = rest.filter((col) => col.mobile !== false);
     return (
@@ -81,6 +87,11 @@ export default function LineItems({
               </button>
             )}
             <div className={`mb-2.5 ${onRemove ? 'pr-12' : ''}`}>
+              {stacked && primary.label && (
+                <label className="block mono text-[9.5px] font-bold uppercase tracking-wider text-gunmetal mb-1">
+                  {primary.label}
+                </label>
+              )}
               {primary.render(item, index)}
             </div>
             <div className="grid grid-cols-2 gap-2 mb-2.5">
