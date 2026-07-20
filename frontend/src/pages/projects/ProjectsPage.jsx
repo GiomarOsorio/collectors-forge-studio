@@ -38,6 +38,7 @@ import {
   DetailDrawer,
   EmptyState,
   KPI,
+  KPIStrip,
   MobileSheet,
   StatusPill,
 } from '../../components/ui';
@@ -686,18 +687,14 @@ export default function ProjectsPage() {
   const completedCount = projects.filter((p) => p.status === 'completed').length;
   const totalItems = projects.reduce((acc, p) => acc + (p.total_items || 0), 0);
 
+  // Fix (audit 1:1): KPIStrip (P5) — en mobile es carousel scroll-snap, no
+  // cards apiladas full-width. Ref: projects-history.html §Projects kpi-strip.
   const KPIs = (
-    <div className="flex flex-wrap gap-3 px-6 pt-4 pb-2">
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI label="Proyectos" value={projects.length} unit="docs" sub={`${activeCount} activos`} accent={ACCENT} icon={FolderKanban} />
-      </div>
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI label="Completados" value={completedCount} unit="docs" sub="listos" accent="#34D399" icon={CheckCircle2} />
-      </div>
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI label="Items agrupados" value={totalItems} unit="items" sub="en todos los proyectos" accent="#38BDF8" icon={FileText} />
-      </div>
-    </div>
+    <KPIStrip className="px-4 md:px-6 pt-4 pb-2">
+      <KPI label="Proyectos" value={projects.length} unit="docs" sub={`${activeCount} activos`} accent={ACCENT} icon={FolderKanban} />
+      <KPI label="Completados" value={completedCount} unit="docs" sub="listos" accent="#34D399" icon={CheckCircle2} />
+      <KPI label="Items agrupados" value={totalItems} unit="items" sub="en todos los proyectos" accent="#38BDF8" icon={FileText} />
+    </KPIStrip>
   );
 
   const Grid = (

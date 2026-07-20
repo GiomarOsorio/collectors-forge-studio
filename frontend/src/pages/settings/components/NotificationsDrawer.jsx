@@ -12,7 +12,7 @@
  * @module pages/settings/components/NotificationsDrawer
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Bell, Link2, Loader2, Mail, MessageSquare, Pencil, Plus, Send, Trash2, X,
 } from 'lucide-react';
@@ -41,6 +41,19 @@ const NOTIFICATION_EVENTS = [
   'purchase_order.status_changed',
   'client_quote.created',
 ];
+
+// Variables disponibles por evento — espejo de SAMPLE_PAYLOADS en
+// backend/app/services/notifier.py (source of truth). Los chips las insertan
+// como `{{ var }}` en el editor (ref. settings.html §Editor de template).
+const TEMPLATE_VARS = {
+  'queue.item_done': ['piece_name', 'printer', 'quantity', 'grams', 'hours', 'user'],
+  'queue.item_cancelled': ['piece_name', 'printer', 'failure_reason'],
+  'inventory.low_stock': ['item_name', 'quantity', 'min_quantity', 'unit'],
+  'inventory.spool_low': ['spool_code', 'remaining_g'],
+  'maintenance.due': ['printer', 'task_name', 'progress_pct'],
+  'purchase_order.status_changed': ['po_code', 'status', 'supplier'],
+  'client_quote.created': ['quote_code', 'client_name', 'total'],
+};
 
 const CHANNEL_TYPES = [
   { value: 'ntfy', icon: Bell },
@@ -277,6 +290,23 @@ function TemplatesSection() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [preview, setPreview] = useState(null);
+  const textareaRef = useRef(null);
+
+  // Inserta `{{ var }}` en la posición del cursor (o al final si no hay foco).
+  const insertVar = (name) => {
+    const token = `{{ ${name} }}`;
+    const el = textareaRef.current;
+    const start = el?.selectionStart ?? body.length;
+    const end = el?.selectionEnd ?? body.length;
+    const next = body.slice(0, start) + token + body.slice(end);
+    setBody(next);
+    requestAnimationFrame(() => {
+      if (!el) return;
+      el.focus();
+      const pos = start + token.length;
+      el.setSelectionRange(pos, pos);
+    });
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -315,7 +345,23 @@ function TemplatesSection() {
       <select className={INPUT_CLS} value={event} onChange={(e) => setEvent(e.target.value)}>
         {NOTIFICATION_EVENTS.map((ev) => <option key={ev} value={ev}>{ev}</option>)}
       </select>
+      {/* Chips de inserción de variables (settings.html §Editor de template). */}
+      <div className="flex flex-wrap gap-1.5">
+        {(TEMPLATE_VARS[event] || []).map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => insertVar(v)}
+            disabled={loading}
+            className="mono text-[10.5px] px-2 min-h-[32px] rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surf-card-2)] text-teal-300 hover:border-teal-500 disabled:opacity-40 transition-colors"
+            title={`Insertar {{ ${v} }}`}
+          >
+            {`{{ ${v} }}`}
+          </button>
+        ))}
+      </div>
       <textarea
+        ref={textareaRef}
         className={`${INPUT_CLS} font-mono text-xs min-h-[110px]`}
         value={loading ? 'Cargando…' : body}
         disabled={loading}
