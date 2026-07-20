@@ -55,6 +55,8 @@ import {
 } from '../../components/ui';
 import MobileAppHeader from '../../components/MobileAppHeader';
 import ModelViewer3D from '../../components/ModelViewer3D';
+import FolderTree from './FolderTree';
+import { buildBreadcrumb, getDescendantIds, getAncestorIds } from './folderTreeUtils';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../context/AuthContext';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -134,41 +136,8 @@ const fmtTime = (seconds) => {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 };
 
-/** Camino de carpetas desde la raíz hasta `folderId` (excluida la raíz). */
-const buildBreadcrumb = (folders, folderId) => {
-  const byId = new Map(folders.map((f) => [f.id, f]));
-  const path = [];
-  let current = folderId != null ? byId.get(folderId) : null;
-  while (current) {
-    path.unshift(current);
-    current = current.parent_id != null ? byId.get(current.parent_id) : null;
-  }
-  return path;
-};
-
-/**
- * IDs de todos los descendientes de `folderId` (hijos, nietos, etc.) —
- * usado para excluir del picker "mover a…" los destinos que el backend
- * (`_assert_not_own_descendant`) siempre va a rechazar.
- */
-const getDescendantIds = (folders, folderId) => {
-  const childrenOf = new Map();
-  for (const f of folders) {
-    if (f.parent_id != null) {
-      if (!childrenOf.has(f.parent_id)) childrenOf.set(f.parent_id, []);
-      childrenOf.get(f.parent_id).push(f.id);
-    }
-  }
-  const result = new Set();
-  const queue = [...(childrenOf.get(folderId) || [])];
-  while (queue.length > 0) {
-    const id = queue.shift();
-    if (result.has(id)) continue;
-    result.add(id);
-    queue.push(...(childrenOf.get(id) || []));
-  }
-  return result;
-};
+// Helpers de jerarquía (breadcrumb, descendientes, ancestros) viven en
+// `./folderTreeUtils` — compartidos con el componente FolderTree (issue #180).
 
 // ─── Carpetas ───────────────────────────────────────────────────────────────
 
@@ -1522,6 +1491,39 @@ export default function VaultPage() {
   const [currentFolderId, setCurrentFolderId] = useState(null);
   const [folderModal, setFolderModal] = useState(null); // { mode: 'create'|'rename', folder? }
 
+  // Árbol de carpetas (issue #180). Estado expandido de nodos + colapso del
+  // panel persisten en localStorage (como bambuddy `collapseFoldersByDefault`).
+  const [treeExpanded, setTreeExpanded] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('vault.tree.expanded') || '[]')); }
+    catch { return new Set(); }
+  });
+  const [treePanelCollapsed, setTreePanelCollapsed] = useState(() => {
+    const stored = localStorage.getItem('vault.tree.collapsed');
+    if (stored != null) return stored === '1';
+    // Auto-colapso inicial en el punto ciego 1024–1279 (galería ~736px reales).
+    return typeof window !== 'undefined' && window.innerWidth < 1280;
+  });
+  const [treeSheetOpen, setTreeSheetOpen] = useState(false);
+
+  const persistTreeExpanded = (set) => {
+    try { localStorage.setItem('vault.tree.expanded', JSON.stringify([...set])); } catch { /* noop */ }
+  };
+  const handleToggleTreeNode = (id) => {
+    setTreeExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      persistTreeExpanded(next);
+      return next;
+    });
+  };
+  const toggleTreePanel = () => {
+    setTreePanelCollapsed((c) => {
+      const next = !c;
+      try { localStorage.setItem('vault.tree.collapsed', next ? '1' : '0'); } catch { /* noop */ }
+      return next;
+    });
+  };
+
   // Tags — catálogo global (independiente de la carpeta actual) + filtro
   // activo (multi-select AND: el archivo debe tener TODOS los tags elegidos).
   const [tags, setTags] = useState([]);
@@ -1903,6 +1905,63 @@ export default function VaultPage() {
     </div>
   );
 
+  // Selección desde el árbol: filtra la galería y auto-expande los ancestros
+  // para que la carpeta elegida quede visible.
+  const selectTreeFolder = (id) => {
+    setCurrentFolderId(id);
+    if (id != null) {
+      setTreeExpanded((prev) => {
+        const next = new Set(prev);
+        for (const anc of getAncestorIds(folders, id)) next.add(anc);
+        persistTreeExpanded(next);
+        return next;
+      });
+    }
+  };
+
+  const renderFolderTree = (variant) => (
+    <FolderTree
+      folders={folders}
+      currentFolderId={currentFolderId}
+      total={total}
+      expanded={treeExpanded}
+      onToggle={handleToggleTreeNode}
+      onSelect={
+        variant === 'sheet'
+          ? (id) => { selectTreeFolder(id); setTreeSheetOpen(false); }
+          : selectTreeFolder
+      }
+      isAdmin={isAdmin}
+      onRename={(folder) => setFolderModal({ mode: 'rename', folder })}
+      onMove={handleMoveFolder}
+      onDelete={handleDeleteFolder}
+      variant={variant}
+    />
+  );
+
+  // Panel del árbol (desktop ≥1024). Colapsable a un rail de 44px.
+  const FolderTreePanel = folders.length > 0 && (
+    <aside
+      className={`hidden lg:flex flex-col shrink-0 self-start sticky top-0 max-h-[calc(100vh-1rem)] overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surf-panel)] ${
+        treePanelCollapsed ? 'w-11 p-1 items-center' : 'w-60 p-2'
+      }`}
+    >
+      <div className={`flex items-center ${treePanelCollapsed ? 'justify-center' : 'justify-between'} px-1 pb-2`}>
+        {!treePanelCollapsed && <span className="lbl-eyebrow text-[10px]">Carpetas</span>}
+        <button
+          type="button"
+          onClick={toggleTreePanel}
+          className="w-7 h-7 shrink-0 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surf-card)] text-gunmetal hover:text-tech-white inline-flex items-center justify-center"
+          title={treePanelCollapsed ? 'Expandir panel' : 'Colapsar panel'}
+          aria-label={treePanelCollapsed ? 'Expandir panel de carpetas' : 'Colapsar panel de carpetas'}
+        >
+          <ChevronRight size={14} className={`transition-transform ${treePanelCollapsed ? '' : 'rotate-180'}`} />
+        </button>
+      </div>
+      {!treePanelCollapsed && renderFolderTree('panel')}
+    </aside>
+  );
+
   // Fila de chips de tags — filtro multi-select AND. Se omite por completo
   // si el catálogo está vacío (nada que filtrar todavía).
   const TagsFilterRail = tags.length > 0 && (
@@ -1993,8 +2052,20 @@ export default function VaultPage() {
             </div>
           </Card>
         </div>
-        <div className="px-4 mt-3">
-          <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-2">
+        <div className="px-4 mt-3 flex items-center gap-2">
+          {/* Fix #180: en <1024 el panel del árbol se oculta; este botón abre
+              el árbol en un MobileSheet con filas táctiles de 44px. */}
+          {folders.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setTreeSheetOpen(true)}
+              className="shrink-0 inline-flex items-center gap-1.5 min-h-[40px] px-3 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surf-card)] text-tech-white text-sm"
+              aria-label="Ver árbol de carpetas"
+            >
+              <Folder size={15} style={{ color: ACCENT }} /> Carpetas
+            </button>
+          )}
+          <div className="flex-1 flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-2">
             <Search size={14} className="text-gunmetal" />
             <input
               value={query}
@@ -2115,6 +2186,12 @@ export default function VaultPage() {
             </div>
           )}
         </MobileSheet>
+        {/* Fix #180: árbol de carpetas en sheet (filas táctiles 44px). */}
+        <MobileSheet open={treeSheetOpen} onClose={() => setTreeSheetOpen(false)} title="Carpetas" height="full">
+          <div className="px-4 pt-3 pb-6">
+            {treeSheetOpen && renderFolderTree('sheet')}
+          </div>
+        </MobileSheet>
         {folderModal && (
           <FolderNameModal
             mode={folderModal.mode}
@@ -2228,6 +2305,15 @@ export default function VaultPage() {
       )}
 
       {KPIs}
+
+      {/* Fix #180: árbol de carpetas a la izquierda de la galería (≥1024).
+          KPIs quedan full-width arriba; el resto (breadcrumb → galería) es la
+          columna derecha. */}
+      <div className="flex items-start gap-0">
+        {FolderTreePanel && (
+          <div className="pt-2 pl-4 md:pl-6 shrink-0">{FolderTreePanel}</div>
+        )}
+        <div className="flex-1 min-w-0 flex flex-col">
       {FolderBreadcrumb}
       {SearchScopeHint}
       {TagsFilterRail}
@@ -2359,6 +2445,8 @@ export default function VaultPage() {
           )}
         </>
       )}
+        </div>
+      </div>
 
       <DetailDrawer
         open={!!selected}
