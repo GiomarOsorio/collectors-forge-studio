@@ -246,14 +246,17 @@ function MkTabs({ tabs, value, onChange, counts }) {
   const { scrollRef, fadeVisible, onScroll } = useOverflowFade();
   return (
     <div className="mk-apptabs-wrap">
-      <nav className="mk-app-tabs" ref={scrollRef} onScroll={onScroll}>
+      <nav className="mk-app-tabs" role="tablist" ref={scrollRef} onScroll={onScroll}>
         {tabs.map((t) => {
           const Icon = t.icon;
+          const active = value === t.id;
           return (
             <button
               key={t.id}
               type="button"
-              className={`mk-app-tab ${value === t.id ? 'active' : ''}`}
+              role="tab"
+              aria-selected={active}
+              className={`mk-app-tab ${active ? 'active' : ''}`}
               onClick={() => onChange(t.id)}
             >
               {Icon && <Icon size={14} />}

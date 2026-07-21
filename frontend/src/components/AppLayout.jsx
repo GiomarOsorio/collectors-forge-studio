@@ -102,7 +102,7 @@ export default function AppLayout() {
       <div className="flex-1 flex flex-col min-w-0 lg:ml-64">
         <main className="flex-1 overflow-y-auto overflow-x-hidden">
           <div
-            className="p-4 md:p-6 xl:p-8 max-w-7xl mx-auto w-full min-h-full"
+            className="p-4 md:p-6 xl:p-8 w-full min-h-full"
             style={{ animation: 'fadeInUp 0.3s ease-out both' }}
           >
             <Breadcrumb />
