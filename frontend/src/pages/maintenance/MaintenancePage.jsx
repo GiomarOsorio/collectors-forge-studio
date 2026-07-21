@@ -40,17 +40,17 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
-  AppTabs,
   Button,
   Card,
   DetailDrawer,
   EmptyState,
-  KPI,
   LineItems,
   MobileSheet,
   StatusPill,
 } from '../../components/ui';
+import useOverflowFade from '../../components/ui/useOverflowFade';
 import MobileAppHeader from '../../components/MobileAppHeader';
+import './MaintenancePage.css';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useConfirm } from '../../components/ConfirmDialog';
 import {
@@ -116,6 +116,19 @@ function levelBadge(level) {
   return { label: 'Sin reg.', tone: 'neutral', icon: undefined };
 }
 
+/** Mapea el tone de `levelBadge` a la clase de `.mk-status-pill`. */
+const MK_TONE = { danger: 'danger', warn: 'warn', done: 'ok', neutral: 'neutral' };
+
+/** Pill de estado con estética del mockup (`.mk-status-pill`). */
+function MkPill({ tone, icon: Icon, children }) {
+  return (
+    <span className={`mk-status-pill ${MK_TONE[tone] || 'neutral'}`}>
+      {Icon && <Icon size={11} />}
+      {children}
+    </span>
+  );
+}
+
 const fmtDate = (iso) => {
   if (!iso) return '—';
   try {
@@ -151,76 +164,57 @@ function PrinterCard({ entry, onClick }) {
   const overallBadge = levelBadge(overallLevel);
 
   return (
-    <Card
-      as="button"
-      interactive
-      onClick={() => onClick(entry)}
-      className="text-left w-full p-4 flex flex-col gap-3"
-    >
-      <div className="flex items-start gap-3">
+    <button type="button" className="mk-printer-card" onClick={() => onClick(entry)}>
+      <div className="mk-pc-head">
         <span
-          className="inline-flex items-center justify-center w-10 h-10 rounded-lg shrink-0"
+          className="mk-pc-icon"
           style={{
-            background: `${overallColor}1A`,
+            background: `${overallColor}1F`,
             color: overallColor,
-            border: `1px solid ${overallColor}40`,
+            border: `1px solid ${overallColor}59`,
           }}
         >
-          <Printer size={16} />
+          <Printer size={17} />
         </span>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <StatusPill tone={overallBadge.tone} icon={overallBadge.icon}>
-              {overallBadge.label}
-            </StatusPill>
-          </div>
-          <p className="text-sm font-semibold text-tech-white truncate">
+          <MkPill tone={overallBadge.tone} icon={overallBadge.icon}>
+            {overallBadge.label}
+          </MkPill>
+          <div className="mk-pc-name truncate">
             {printer.name || `Impresora #${printer.id}`}
-          </p>
-          <p className="mono text-[10.5px] text-gunmetal mt-0.5">
+          </div>
+          <div className="mk-pc-hours">
             {Number(printer.current_hours || 0).toFixed(0)}h impresión acumulada
-          </p>
+          </div>
         </div>
       </div>
 
       {/* Counts */}
-      <div className="grid grid-cols-4 gap-1.5 text-[11px] border-t border-dashed border-[var(--color-border-soft)] pt-2.5">
-        <div className="flex flex-col items-center">
-          <span className="text-rose-400 mono text-base">{critical}</span>
-          <span className="lbl-eyebrow text-[8.5px]">crítico</span>
-        </div>
-        <div className="flex flex-col items-center">
-          <span className="text-amber-400 mono text-base">{warning}</span>
-          <span className="lbl-eyebrow text-[8.5px]">pronto</span>
-        </div>
-        <div className="flex flex-col items-center">
-          <span className="text-emerald-400 mono text-base">{ok}</span>
-          <span className="lbl-eyebrow text-[8.5px]">ok</span>
-        </div>
-        <div className="flex flex-col items-center">
-          <span className="text-gunmetal mono text-base">{unknown}</span>
-          <span className="lbl-eyebrow text-[8.5px]">sin reg.</span>
-        </div>
+      <div className="mk-pc-counts">
+        <div className="mk-pc-count"><span className="n" style={{ color: 'var(--lvl-critical)' }}>{critical}</span><span className="l">crítico</span></div>
+        <div className="mk-pc-count"><span className="n" style={{ color: 'var(--lvl-warn)' }}>{warning}</span><span className="l">pronto</span></div>
+        <div className="mk-pc-count"><span className="n" style={{ color: 'var(--lvl-ok)' }}>{ok}</span><span className="l">ok</span></div>
+        <div className="mk-pc-count"><span className="n" style={{ color: 'var(--lvl-unknown)' }}>{unknown}</span><span className="l">sin reg.</span></div>
       </div>
 
       {/* Top 3 alerts */}
       {(critical > 0 || warning > 0) && (
-        <ul className="flex flex-col gap-1 border-t border-[var(--color-border-soft)] pt-2.5">
+        <ul className="mk-pc-alerts">
           {tipoLevels
             .filter((x) => x.level === 'critical' || x.level === 'warning')
             .slice(0, 3)
             .map(({ tipo, last, level }) => (
-              <li key={tipo.value} className="flex items-center gap-2 text-[11px]">
+              <li key={tipo.value}>
                 <span style={{ color: LEVEL_DOT[level].color }}>{LEVEL_DOT[level].label}</span>
-                <span className="text-tech-white truncate flex-1">{tipo.label}</span>
-                <span className="mono text-gunmetal shrink-0">
+                <span className="a-name">{tipo.label}</span>
+                <span className="a-meta">
                   {last ? `${Math.round(Number(last.hours_since))}/${tipo.interval_hours}h` : '—'}
                 </span>
               </li>
             ))}
         </ul>
       )}
-    </Card>
+    </button>
   );
 }
 
@@ -229,30 +223,78 @@ function PrinterCard({ entry, onClick }) {
 function LogRow({ log, onClick }) {
   const tipo = TYPE_BY_VALUE[log.maintenance_type] || { label: log.maintenance_type || '—' };
   return (
-    <button
-      type="button"
-      onClick={() => onClick(log)}
-      className="w-full text-left flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border-soft)] hover:bg-[var(--color-surf-hover)]/50 transition-colors"
-    >
-      <span
-        className="inline-flex items-center justify-center w-9 h-9 rounded-lg shrink-0"
-        style={{
-          background: `${ACCENT}1A`,
-          color: ACCENT,
-          border: `1px solid ${ACCENT}40`,
-        }}
-      >
+    <button type="button" onClick={() => onClick(log)} className="mk-log-row">
+      <span className="mk-lr-icon">
         <Wrench size={15} />
       </span>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-tech-white truncate">{tipo.label}</p>
-        <p className="mono text-[10.5px] text-gunmetal mt-0.5 truncate">
+        <div className="mk-lr-title truncate">{tipo.label}</div>
+        <div className="mk-lr-meta truncate">
           {fmtDate(log.performed_at)} · {Number(log.hours_at_maintenance || 0).toFixed(0)}h
           {log.printer_name ? ` · ${log.printer_name}` : ''}
-        </p>
+        </div>
       </div>
-      <ChevronRight size={14} className="text-gunmetal-dim shrink-0" />
+      <ChevronRight size={16} className="mk-lr-chevron" />
     </button>
+  );
+}
+
+// ─── AppTabs + KPIStrip (mk-, P4/P5) ────────────────────────────────────────
+
+/** Tabs con scroll-x + fade (P4), estética mockup. */
+function MkTabs({ tabs, value, onChange, counts }) {
+  const { scrollRef, fadeVisible, onScroll } = useOverflowFade();
+  return (
+    <div className="mk-apptabs-wrap">
+      <nav className="mk-app-tabs" role="tablist" ref={scrollRef} onScroll={onScroll}>
+        {tabs.map((t) => {
+          const Icon = t.icon;
+          const active = value === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              className={`mk-app-tab ${active ? 'active' : ''}`}
+              onClick={() => onChange(t.id)}
+            >
+              {Icon && <Icon size={14} />}
+              {t.label}
+              <span className="mk-app-tab-count">{counts[t.id] ?? 0}</span>
+            </button>
+          );
+        })}
+      </nav>
+      <div className={`mk-apptabs-fade ${fadeVisible ? 'visible' : ''}`} aria-hidden="true" />
+    </div>
+  );
+}
+
+/** Strip de KPIs (P5): mobile scroll-snap + fade, desktop wrap. */
+function MkKpiStrip({ items }) {
+  return (
+    <div className="mk-kpi-zone">
+      <div className="mk-kpi-wrap">
+        <div className="mk-kpi-strip">
+          {items.map((k) => {
+            const Icon = k.icon;
+            return (
+              <div className="mk-kpi-card" key={k.label}>
+                <span className="mk-kpi-eyebrow" style={k.color ? { color: k.color } : undefined}>
+                  {Icon && <Icon size={11} />} {k.label}
+                </span>
+                <div className="mk-kpi-value" style={k.color ? { color: k.color } : undefined}>
+                  {k.value}
+                </div>
+                <div className="mk-kpi-sub">{k.sub}</div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mk-kpi-fade" aria-hidden="true" />
+      </div>
+    </div>
   );
 }
 
@@ -1099,37 +1141,25 @@ export default function MaintenancePage() {
 
   const counts = { dashboard: summary.length, logs: logs.length, schedules: schedulesCount };
 
-  const KPIs = (
-    <div className="flex flex-wrap gap-3 px-6 pt-4 pb-2">
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI label="Impresoras" value={stats.printers} unit="docs" sub={`${stats.totalLogs} logs totales`} accent={ACCENT} icon={Printer} />
-      </div>
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI label="Vencidos" value={stats.critical} unit="ítems" sub="acción inmediata" accent="#F87171" icon={AlertTriangle} />
-      </div>
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI label="Pronto" value={stats.warning} unit="ítems" sub="≥85% intervalo" accent="#FBBF24" icon={Clock} />
-      </div>
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI label="Logs · 30d" value={stats.logs30d} unit="docs" sub="último mes" accent="#34D399" icon={CheckCircle2} />
-      </div>
-    </div>
-  );
+  // KPIStrip (P5): mismo set en mobile (scroll-snap) y desktop (wrap). Color por
+  // KPI igual al mockup (eyebrow + valor tintados en Vencidos/Pronto/Logs).
+  const kpiItems = [
+    { label: 'Impresoras', value: stats.printers, sub: `${stats.totalLogs} logs totales`, icon: Printer },
+    { label: 'Vencidos', value: stats.critical, sub: 'acción inmediata', icon: AlertTriangle, color: 'var(--lvl-critical)' },
+    { label: 'Pronto', value: stats.warning, sub: '≥85% intervalo', icon: Clock, color: 'var(--lvl-warn)' },
+    { label: 'Logs · 30d', value: stats.logs30d, sub: 'último mes', icon: CheckCircle2, color: 'var(--lvl-ok)' },
+  ];
 
-  const TabsBar = (
-    <AppTabs
-      items={TABS.map((t) => ({ ...t, count: counts[t.id] }))}
-      value={tab}
-      onChange={setTab}
-      accent={ACCENT}
-      className="px-6 border-b border-[var(--color-border)]"
-    />
-  );
+  const tabLabel = TABS.find((t) => t.id === tab)?.label || tab;
+  const noPrinters = printers.length === 0;
 
-  if (isMobile) {
-    const tabLabel = TABS.find((t) => t.id === tab)?.label || tab;
-    return (
-      <div className="flex flex-col">
+  return (
+    <div
+      className="flex flex-col min-h-screen -m-4 md:-m-6 xl:-m-8"
+      style={{ '--page-accent': 'var(--color-app-mtto)' }}
+    >
+      {/* Header: mobile (app, integra FAB hamburguesa) vs desktop (mk-page-header) */}
+      {isMobile ? (
         <MobileAppHeader
           appName="Mantenimiento"
           appIcon={Wrench}
@@ -1137,60 +1167,47 @@ export default function MaintenancePage() {
           title={tabLabel}
           onMenu={() => openSidebar?.()}
         />
-        <div className="px-4 mt-3">
-          <Card className="p-4 flex flex-col gap-3 industrial-grid">
-            <div className="flex items-baseline justify-between">
-              <span className="lbl-eyebrow">Mantenimiento</span>
-              <span className="mono text-[10px] text-gunmetal">{stats.printers} impresoras</span>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span
-                className={`mono text-3xl font-semibold tracking-tight ${
-                  stats.critical > 0 ? 'text-rose-300' : stats.warning > 0 ? 'text-amber-400' : 'text-tech-white'
-                }`}
-              >
-                {stats.critical + stats.warning}
-              </span>
-              <span className="mono text-sm text-gunmetal">pendientes</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <span className="lbl-eyebrow text-[9px]">Vencidos</span>
-                <p className="mono text-sm text-rose-300 mt-0.5">{stats.critical}</p>
-              </div>
-              <div>
-                <span className="lbl-eyebrow text-[9px]">Pronto</span>
-                <p className="mono text-sm text-amber-400 mt-0.5">{stats.warning}</p>
-              </div>
-            </div>
-          </Card>
-        </div>
-        <AppTabs
-          items={TABS.map((t) => ({ ...t, count: counts[t.id] }))}
-          value={tab}
-          onChange={setTab}
-          accent={ACCENT}
-          className="mt-3 px-4"
-        />
+      ) : (
+        <header className="mk-page-header">
+          <div className="mk-ph-icon"><Wrench size={16} /></div>
+          <div className="flex-1 min-w-0">
+            <div className="mk-ph-eyebrow"><span className="mk-dot" /> Mantenimiento</div>
+            <div className="mk-ph-title">Mantenimiento de impresoras</div>
+          </div>
+          <button
+            type="button"
+            className="mk-btn mk-btn-primary"
+            onClick={() => openCreateLog()}
+            disabled={noPrinters}
+            style={noPrinters ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
+            title={noPrinters ? 'Crea una impresora primero en Cost' : ''}
+          >
+            <Plus size={15} /> Registrar
+          </button>
+        </header>
+      )}
+
+      <MkTabs tabs={TABS} value={tab} onChange={setTab} counts={counts} />
+      <MkKpiStrip items={kpiItems} />
+
+      <div className="mk-tab-panel">
         {tab === 'dashboard' ? (
           loading ? (
-            <p className="px-4 py-12 text-center text-gunmetal text-sm">Cargando…</p>
+            <p className="py-16 text-center text-gunmetal text-sm">Cargando dashboard…</p>
           ) : summary.length === 0 ? (
-            <div className="mt-3 pb-28">
-              <EmptyState
-                icon={Printer}
-                accent={ACCENT}
-                title="Sin impresoras registradas"
-                hint="Las impresoras se crean en Cost › Impresoras. Una vez registradas aparecen aquí para llevar su mantenimiento."
-                action={
-                  <Link to="/cost/printers" className="btn btn-primary btn-sm">
-                    <Plus size={13} /> Crear en Cost
-                  </Link>
-                }
-              />
-            </div>
+            <EmptyState
+              icon={Printer}
+              accent={ACCENT}
+              title="Sin impresoras registradas"
+              hint="Las impresoras se crean en Cost › Impresoras. Una vez registradas aparecen aquí para llevar su mantenimiento."
+              action={
+                <Link to="/cost/printers" className="btn btn-primary btn-sm">
+                  <Plus size={13} /> Crear en Cost
+                </Link>
+              }
+            />
           ) : (
-            <div className="px-4 mt-3 pb-28 flex flex-col gap-2">
+            <div className="mk-card-grid">
               {summary.map((entry) => (
                 <PrinterCard key={entry.printer.id} entry={entry} onClick={setSelectedPrinter} />
               ))}
@@ -1198,21 +1215,30 @@ export default function MaintenancePage() {
           )
         ) : tab === 'logs' ? (
           <>
-            <div className="px-4 mt-3 flex flex-col gap-2">
-              <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-2">
-                <Search size={14} className="text-gunmetal" />
+            <div className="mk-search-row">
+              <div className="mk-search-box">
+                <Search size={15} style={{ color: 'var(--cfs-text-tertiary)' }} />
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Tipo, impresora, notas…"
-                  className="flex-1 bg-transparent border-0 outline-0 text-tech-white text-sm placeholder:text-gunmetal-dim"
                 />
+                {query && (
+                  <button
+                    type="button"
+                    onClick={() => setQuery('')}
+                    aria-label="Limpiar"
+                    style={{ color: 'var(--cfs-text-tertiary)' }}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
               </div>
               {printers.length > 1 && (
                 <select
+                  className="mk-select"
                   value={filterPrinter}
                   onChange={(e) => setFilterPrinter(e.target.value)}
-                  className={FORM_INPUT_CLS}
                   aria-label="Filtrar por impresora"
                 >
                   <option value="">Todas las impresoras</option>
@@ -1222,307 +1248,132 @@ export default function MaintenancePage() {
                 </select>
               )}
             </div>
-            {filteredLogs.length === 0 ? (
-              <div className="mt-3 pb-28">
-                <EmptyState
-                  icon={ClipboardList}
-                  accent={ACCENT}
-                  title={logs.length === 0 ? 'Sin registros aún' : 'Sin resultados'}
-                  hint={
-                    logs.length === 0
-                      ? 'Cuando registres un mantenimiento aparecerá en este historial.'
-                      : 'Cambia el filtro o limpia la búsqueda.'
-                  }
-                  action={
-                    logs.length === 0 ? (
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        icon={Plus}
-                        onClick={() => openCreateLog()}
-                      >
-                        Registrar primer mantenimiento
-                      </Button>
-                    ) : null
-                  }
-                />
-              </div>
+            {loading ? (
+              <p className="py-16 text-center text-gunmetal text-sm">Cargando logs…</p>
+            ) : filteredLogs.length === 0 ? (
+              <EmptyState
+                icon={ClipboardList}
+                accent={ACCENT}
+                title={logs.length === 0 ? 'Sin registros aún' : 'Sin resultados'}
+                hint={
+                  logs.length === 0
+                    ? 'Cuando registres un mantenimiento aparecerá en este historial.'
+                    : 'Cambia el filtro o limpia la búsqueda.'
+                }
+                action={
+                  logs.length === 0 ? (
+                    <Button variant="primary" size="sm" icon={Plus} onClick={() => openCreateLog()} disabled={noPrinters}>
+                      Registrar primer mantenimiento
+                    </Button>
+                  ) : null
+                }
+              />
             ) : (
-              <ul className="mt-3 pb-28">
+              <div className="mk-log-list">
                 {filteredLogs.map((l) => (
-                  <li key={l.id}>
-                    <LogRow log={l} onClick={setSelectedLog} />
-                  </li>
+                  <LogRow key={l.id} log={l} onClick={setSelectedLog} />
                 ))}
-              </ul>
+              </div>
             )}
           </>
         ) : (
-          <SchedulesSection printers={printers} isMobile onCountChange={setSchedulesCount} />
+          <SchedulesSection printers={printers} isMobile={isMobile} onCountChange={setSchedulesCount} />
         )}
+      </div>
+
+      {/* FAB Registrar (mobile) */}
+      {isMobile && (
         <button
           type="button"
+          className="mk-fab"
           onClick={() => openCreateLog()}
-          disabled={printers.length === 0}
-          className="fixed bottom-20 right-4 z-40 inline-flex items-center gap-2 pl-4 pr-5 py-3.5 rounded-full font-semibold text-sm shadow-2xl active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{ background: ACCENT, color: '#0A1014', boxShadow: `0 8px 24px ${ACCENT}55` }}
+          disabled={noPrinters}
           aria-label="Registrar mantenimiento"
-          title={printers.length === 0 ? 'Crea una impresora primero en Cost' : ''}
+          title={noPrinters ? 'Crea una impresora primero en Cost' : ''}
         >
           <Plus size={16} strokeWidth={2.5} />
           Registrar
         </button>
-        <MobileSheet
-          open={!!selectedPrinter}
-          onClose={() => setSelectedPrinter(null)}
-          title={selectedPrinter?.printer?.name || ''}
-          height="full"
-        >
-          <div className="px-5 pt-4 pb-3">
-            <PrinterDrawerBody entry={selectedPrinter} onHoursSaved={handleHoursSaved} />
-          </div>
-          {selectedPrinter && (
-            <div className="px-5 pt-3 pb-5 border-t border-[var(--color-border-soft)] flex flex-wrap gap-2 sticky bottom-0 bg-[var(--color-surf-sidebar)]">
+      )}
+
+      {/* Drawers: MobileSheet (<1024) / DetailDrawer (≥1024) — P6 */}
+      {isMobile ? (
+        <>
+          <MobileSheet
+            open={!!selectedPrinter}
+            onClose={() => setSelectedPrinter(null)}
+            title={selectedPrinter?.printer?.name || ''}
+            height="full"
+          >
+            <div className="px-5 pt-4 pb-3">
+              <PrinterDrawerBody entry={selectedPrinter} onHoursSaved={handleHoursSaved} />
+            </div>
+            {selectedPrinter && (
+              <div className="px-5 pt-3 pb-5 border-t border-[var(--color-border-soft)] flex flex-wrap gap-2 sticky bottom-0 bg-[var(--color-surf-sidebar)]">
+                <PrinterDrawerFooter
+                  entry={selectedPrinter}
+                  onRegister={(printer) => { setSelectedPrinter(null); openCreateLog(printer); }}
+                />
+              </div>
+            )}
+          </MobileSheet>
+          <MobileSheet
+            open={!!selectedLog}
+            onClose={() => setSelectedLog(null)}
+            title={selectedLog ? TYPE_BY_VALUE[selectedLog.maintenance_type]?.label || selectedLog.maintenance_type || 'Log' : ''}
+            height="full"
+          >
+            <div className="px-5 pt-4 pb-3">
+              <LogDrawerBody log={selectedLog} />
+            </div>
+            {selectedLog && (
+              <div className="px-5 pt-3 pb-5 border-t border-[var(--color-border-soft)] flex flex-wrap gap-2 sticky bottom-0 bg-[var(--color-surf-sidebar)]">
+                <LogDrawerFooter
+                  log={selectedLog}
+                  onEdit={(log) => { setSelectedLog(null); openEditLog(log); }}
+                  onDelete={handleDeleteLog}
+                  onClose={() => setSelectedLog(null)}
+                />
+              </div>
+            )}
+          </MobileSheet>
+        </>
+      ) : (
+        <>
+          <DetailDrawer
+            open={!!selectedPrinter}
+            onClose={() => setSelectedPrinter(null)}
+            eyebrow={selectedPrinter ? `IMPRESORA · ${Number(selectedPrinter.printer?.current_hours || 0).toFixed(0)}H` : undefined}
+            title={selectedPrinter?.printer?.name || ''}
+            width={460}
+            footer={selectedPrinter && (
               <PrinterDrawerFooter
                 entry={selectedPrinter}
-                onRegister={(printer) => {
-                  setSelectedPrinter(null);
-                  openCreateLog(printer);
-                }}
+                onRegister={(printer) => { setSelectedPrinter(null); openCreateLog(printer); }}
               />
-            </div>
-          )}
-        </MobileSheet>
-        <MobileSheet
-          open={!!selectedLog}
-          onClose={() => setSelectedLog(null)}
-          title={
-            selectedLog
-              ? TYPE_BY_VALUE[selectedLog.maintenance_type]?.label ||
-                selectedLog.maintenance_type ||
-                'Log'
-              : ''
-          }
-          height="full"
-        >
-          <div className="px-5 pt-4 pb-3">
-            <LogDrawerBody log={selectedLog} />
-          </div>
-          {selectedLog && (
-            <div className="px-5 pt-3 pb-5 border-t border-[var(--color-border-soft)] flex flex-wrap gap-2 sticky bottom-0 bg-[var(--color-surf-sidebar)]">
+            )}
+          >
+            <PrinterDrawerBody entry={selectedPrinter} onHoursSaved={handleHoursSaved} />
+          </DetailDrawer>
+          <DetailDrawer
+            open={!!selectedLog}
+            onClose={() => setSelectedLog(null)}
+            eyebrow={selectedLog ? `LOG · ${fmtDate(selectedLog.performed_at)}` : undefined}
+            title={selectedLog ? TYPE_BY_VALUE[selectedLog.maintenance_type]?.label || selectedLog.maintenance_type || 'Log de mantenimiento' : ''}
+            width={460}
+            footer={selectedLog && (
               <LogDrawerFooter
                 log={selectedLog}
-                onEdit={(log) => {
-                  setSelectedLog(null);
-                  openEditLog(log);
-                }}
+                onEdit={(log) => { setSelectedLog(null); openEditLog(log); }}
                 onDelete={handleDeleteLog}
                 onClose={() => setSelectedLog(null)}
               />
-            </div>
-          )}
-        </MobileSheet>
-        <LogFormDrawer
-          open={logFormOpen}
-          mode={logFormMode}
-          initialForm={logFormInitial}
-          printers={printers}
-          inventoryItems={inventoryItems}
-          editingLog={editingLog}
-          onClose={() => setLogFormOpen(false)}
-          onSaved={handleLogSaved}
-          isMobile
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col min-h-screen -m-4 md:-m-6 xl:-m-8">
-      <header className="flex items-center gap-4 px-6 py-3.5 border-b border-[var(--color-border-soft)] bg-[var(--color-surf-sidebar)] sticky top-0 z-20">
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span
-            className="inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0"
-            style={{ background: `${ACCENT}1F`, color: ACCENT, border: `1px solid ${ACCENT}40` }}
-          >
-            <Wrench size={13} />
-          </span>
-          <span className="text-sm text-gunmetal whitespace-nowrap">Mantenimiento</span>
-          <span className="text-gunmetal-dim shrink-0">›</span>
-          <span className="text-sm font-semibold text-tech-white whitespace-nowrap capitalize">{tab}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="primary"
-            size="sm"
-            icon={Plus}
-            onClick={() => openCreateLog()}
-            disabled={printers.length === 0}
-            title={printers.length === 0 ? 'Crea una impresora primero en Cost' : ''}
-          >
-            Registrar
-          </Button>
-        </div>
-      </header>
-
-      {KPIs}
-      {TabsBar}
-
-      {tab === 'dashboard' ? (
-        loading ? (
-          <p className="px-6 py-16 text-center text-gunmetal text-sm">Cargando dashboard…</p>
-        ) : summary.length === 0 ? (
-          <EmptyState
-            icon={Printer}
-            accent={ACCENT}
-            title="Sin impresoras registradas"
-            hint="Las impresoras se crean en Cost › Impresoras. Una vez registradas aparecen aquí para llevar su mantenimiento."
-            action={
-              <Link to="/cost/printers" className="btn btn-primary btn-sm">
-                <Plus size={13} /> Crear en Cost
-              </Link>
-            }
-          />
-        ) : (
-          <div
-            className="px-6 pt-4 pb-8 grid gap-3"
-            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}
-          >
-            {summary.map((entry) => (
-              <PrinterCard key={entry.printer.id} entry={entry} onClick={setSelectedPrinter} />
-            ))}
-          </div>
-        )
-      ) : tab === 'logs' ? (
-        <div className="flex flex-col">
-          <div className="flex flex-wrap gap-3 items-center px-6 py-3 sticky top-0 bg-forge-black/80 backdrop-blur z-10">
-            <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 min-w-[260px] basis-[280px] flex-1 max-w-md">
-              <Search size={13} className="text-gunmetal" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Tipo, impresora, notas…"
-                className="flex-1 bg-transparent border-0 outline-0 text-tech-white text-sm placeholder:text-gunmetal-dim"
-              />
-              {query && (
-                <button onClick={() => setQuery('')} className="text-gunmetal hover:text-tech-white" aria-label="Limpiar">
-                  <X size={12} />
-                </button>
-              )}
-            </div>
-            {printers.length > 1 && (
-              <select
-                value={filterPrinter}
-                onChange={(e) => setFilterPrinter(e.target.value)}
-                className="bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm focus:outline-none focus:border-violet-500 min-w-[180px]"
-                aria-label="Filtrar por impresora"
-              >
-                <option value="">Todas las impresoras</option>
-                {printers.map((p) => (
-                  <option key={p.id} value={String(p.id)}>{p.name}</option>
-                ))}
-              </select>
             )}
-            <span className="flex-1" />
-            <span className="mono text-[11px] text-gunmetal">
-              {filteredLogs.length} de {logs.length} logs
-            </span>
-          </div>
-          {loading ? (
-            <p className="px-6 py-16 text-center text-gunmetal text-sm">Cargando logs…</p>
-          ) : filteredLogs.length === 0 ? (
-            <EmptyState
-              icon={ClipboardList}
-              accent={ACCENT}
-              title={logs.length === 0 ? 'Sin registros aún' : 'Sin resultados'}
-              hint={
-                logs.length === 0
-                  ? 'Cuando registres un mantenimiento aparecerá en este historial.'
-                  : 'Cambia el filtro o limpia la búsqueda.'
-              }
-              action={
-                logs.length === 0 ? (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    icon={Plus}
-                    onClick={() => openCreateLog()}
-                    disabled={printers.length === 0}
-                  >
-                    Registrar primer mantenimiento
-                  </Button>
-                ) : null
-              }
-            />
-          ) : (
-            <div className="pb-8 border border-[var(--color-border)] rounded-xl mx-6 overflow-hidden bg-[var(--color-surf-card)]">
-              <ul>
-                {filteredLogs.map((l) => (
-                  <li key={l.id}>
-                    <LogRow log={l} onClick={setSelectedLog} />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      ) : (
-        <SchedulesSection printers={printers} isMobile={false} onCountChange={setSchedulesCount} />
+          >
+            <LogDrawerBody log={selectedLog} />
+          </DetailDrawer>
+        </>
       )}
-
-      <DetailDrawer
-        open={!!selectedPrinter}
-        onClose={() => setSelectedPrinter(null)}
-        eyebrow={
-          selectedPrinter
-            ? `IMPRESORA · ${Number(selectedPrinter.printer?.current_hours || 0).toFixed(0)}H`
-            : undefined
-        }
-        title={selectedPrinter?.printer?.name || ''}
-        width={460}
-        footer={
-          selectedPrinter && (
-            <PrinterDrawerFooter
-              entry={selectedPrinter}
-              onRegister={(printer) => {
-                setSelectedPrinter(null);
-                openCreateLog(printer);
-              }}
-            />
-          )
-        }
-      >
-        <PrinterDrawerBody entry={selectedPrinter} onHoursSaved={handleHoursSaved} />
-      </DetailDrawer>
-
-      <DetailDrawer
-        open={!!selectedLog}
-        onClose={() => setSelectedLog(null)}
-        eyebrow={selectedLog ? `LOG · ${fmtDate(selectedLog.performed_at)}` : undefined}
-        title={
-          selectedLog
-            ? TYPE_BY_VALUE[selectedLog.maintenance_type]?.label ||
-              selectedLog.maintenance_type ||
-              'Log de mantenimiento'
-            : ''
-        }
-        width={460}
-        footer={
-          selectedLog && (
-            <LogDrawerFooter
-              log={selectedLog}
-              onEdit={(log) => {
-                setSelectedLog(null);
-                openEditLog(log);
-              }}
-              onDelete={handleDeleteLog}
-              onClose={() => setSelectedLog(null)}
-            />
-          )
-        }
-      >
-        <LogDrawerBody log={selectedLog} />
-      </DetailDrawer>
 
       <LogFormDrawer
         open={logFormOpen}
@@ -1533,20 +1384,8 @@ export default function MaintenancePage() {
         editingLog={editingLog}
         onClose={() => setLogFormOpen(false)}
         onSaved={handleLogSaved}
-        isMobile={false}
+        isMobile={isMobile}
       />
-
-      <footer className="mt-auto px-6 py-2.5 border-t border-[var(--color-border-soft)] bg-[var(--color-surf-sidebar)] flex flex-wrap items-center gap-4 text-[11px] text-gunmetal">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" style={{ boxShadow: '0 0 6px #34D39966' }} />
-          <span className="mono">CONECTADO</span>
-        </span>
-        <span className="w-px h-3 bg-[var(--color-border)]" />
-        <span className="mono">{stats.printers} impresoras</span>
-        <span className="mono">{stats.totalLogs} logs</span>
-        <span className="flex-1" />
-        <span className="mono">es-CO</span>
-      </footer>
     </div>
   );
 }
