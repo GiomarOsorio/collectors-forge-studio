@@ -16,6 +16,7 @@ import toast from 'react-hot-toast';
 import {
   Button,
   Card,
+  CardGrid,
   DetailDrawer,
   EmptyState,
   MobileSheet,
@@ -90,13 +91,13 @@ function ScheduleCard({ schedule, onEdit, onComplete, onDelete }) {
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
-              className="p-1 rounded text-gunmetal hover:text-tech-white"
+              className="w-11 h-11 -mr-2 -mt-2 rounded-lg inline-flex items-center justify-center text-gunmetal hover:bg-[var(--color-surf-hover)] hover:text-tech-white transition-colors"
               aria-label="Más acciones"
             >
-              <MoreVertical size={14} />
+              <MoreVertical size={16} />
             </button>
             {menuOpen && (
-              <div className="absolute right-0 top-6 z-20 w-40 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md shadow-xl py-1">
+              <div className="absolute right-0 top-10 z-20 w-40 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md shadow-xl py-1">
                 <button
                   type="button"
                   className="w-full text-left px-3 py-1.5 text-xs text-tech-white hover:bg-white/5"
@@ -378,10 +379,7 @@ export default function SchedulesSection({ printers, isMobile, onCountChange }) 
           }
         />
       ) : (
-        <div
-          className="grid gap-3"
-          style={{ gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))' }}
-        >
+        <CardGrid min={280} gap={12}>
           {schedules.map((s) => (
             <ScheduleCard
               key={s.id}
@@ -391,7 +389,7 @@ export default function SchedulesSection({ printers, isMobile, onCountChange }) 
               onDelete={handleDelete}
             />
           ))}
-        </div>
+        </CardGrid>
       )}
 
       {isMobile ? (

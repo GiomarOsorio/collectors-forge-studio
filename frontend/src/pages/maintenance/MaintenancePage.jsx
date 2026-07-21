@@ -43,9 +43,11 @@ import {
   AppTabs,
   Button,
   Card,
+  CardGrid,
+  DesktopPageHeader,
   DetailDrawer,
   EmptyState,
-  KPI,
+  KPIStrip,
   LineItems,
   MobileSheet,
   StatusPill,
@@ -1099,22 +1101,13 @@ export default function MaintenancePage() {
 
   const counts = { dashboard: summary.length, logs: logs.length, schedules: schedulesCount };
 
-  const KPIs = (
-    <div className="flex flex-wrap gap-3 px-6 pt-4 pb-2">
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI label="Impresoras" value={stats.printers} unit="docs" sub={`${stats.totalLogs} logs totales`} accent={ACCENT} icon={Printer} />
-      </div>
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI label="Vencidos" value={stats.critical} unit="ítems" sub="acción inmediata" accent="#F87171" icon={AlertTriangle} />
-      </div>
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI label="Pronto" value={stats.warning} unit="ítems" sub="≥85% intervalo" accent="#FBBF24" icon={Clock} />
-      </div>
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI label="Logs · 30d" value={stats.logs30d} unit="docs" sub="último mes" accent="#34D399" icon={CheckCircle2} />
-      </div>
-    </div>
-  );
+  // KPIStrip (P5): mismo set de KPIs en mobile (scroll-snap) y desktop (wrap).
+  const kpiItems = [
+    { label: 'Impresoras', value: stats.printers, unit: 'docs', sub: `${stats.totalLogs} logs totales`, accent: ACCENT, icon: Printer },
+    { label: 'Vencidos', value: stats.critical, unit: 'ítems', sub: 'acción inmediata', accent: '#F87171', icon: AlertTriangle },
+    { label: 'Pronto', value: stats.warning, unit: 'ítems', sub: '≥85% intervalo', accent: '#FBBF24', icon: Clock },
+    { label: 'Logs · 30d', value: stats.logs30d, unit: 'docs', sub: 'último mes', accent: '#34D399', icon: CheckCircle2 },
+  ];
 
   const TabsBar = (
     <AppTabs
@@ -1138,32 +1131,7 @@ export default function MaintenancePage() {
           onMenu={() => openSidebar?.()}
         />
         <div className="px-4 mt-3">
-          <Card className="p-4 flex flex-col gap-3 industrial-grid">
-            <div className="flex items-baseline justify-between">
-              <span className="lbl-eyebrow">Mantenimiento</span>
-              <span className="mono text-[10px] text-gunmetal">{stats.printers} impresoras</span>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span
-                className={`mono text-3xl font-semibold tracking-tight ${
-                  stats.critical > 0 ? 'text-rose-300' : stats.warning > 0 ? 'text-amber-400' : 'text-tech-white'
-                }`}
-              >
-                {stats.critical + stats.warning}
-              </span>
-              <span className="mono text-sm text-gunmetal">pendientes</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <span className="lbl-eyebrow text-[9px]">Vencidos</span>
-                <p className="mono text-sm text-rose-300 mt-0.5">{stats.critical}</p>
-              </div>
-              <div>
-                <span className="lbl-eyebrow text-[9px]">Pronto</span>
-                <p className="mono text-sm text-amber-400 mt-0.5">{stats.warning}</p>
-              </div>
-            </div>
-          </Card>
+          <KPIStrip items={kpiItems} />
         </div>
         <AppTabs
           items={TABS.map((t) => ({ ...t, count: counts[t.id] }))}
@@ -1190,11 +1158,11 @@ export default function MaintenancePage() {
               />
             </div>
           ) : (
-            <div className="px-4 mt-3 pb-28 flex flex-col gap-2">
+            <CardGrid min={280} gap={12} className="px-4 mt-3 pb-28">
               {summary.map((entry) => (
                 <PrinterCard key={entry.printer.id} entry={entry} onClick={setSelectedPrinter} />
               ))}
-            </div>
+            </CardGrid>
           )
         ) : tab === 'logs' ? (
           <>
@@ -1339,33 +1307,30 @@ export default function MaintenancePage() {
 
   return (
     <div className="flex flex-col min-h-screen -m-4 md:-m-6 xl:-m-8">
-      <header className="flex items-center gap-4 px-6 py-3.5 border-b border-[var(--color-border-soft)] bg-[var(--color-surf-sidebar)] sticky top-0 z-20">
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span
-            className="inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0"
-            style={{ background: `${ACCENT}1F`, color: ACCENT, border: `1px solid ${ACCENT}40` }}
-          >
-            <Wrench size={13} />
-          </span>
-          <span className="text-sm text-gunmetal whitespace-nowrap">Mantenimiento</span>
-          <span className="text-gunmetal-dim shrink-0">›</span>
-          <span className="text-sm font-semibold text-tech-white whitespace-nowrap capitalize">{tab}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="primary"
-            size="sm"
-            icon={Plus}
-            onClick={() => openCreateLog()}
-            disabled={printers.length === 0}
-            title={printers.length === 0 ? 'Crea una impresora primero en Cost' : ''}
-          >
-            Registrar
-          </Button>
-        </div>
-      </header>
+      <div className="px-6 py-3.5 border-b border-[var(--color-border-soft)] bg-[var(--color-surf-sidebar)] sticky top-0 z-20">
+        <DesktopPageHeader
+          icon={Wrench}
+          eyebrow="Mantenimiento"
+          title="Mantenimiento de impresoras"
+          accent={ACCENT}
+          actions={
+            <Button
+              variant="primary"
+              size="sm"
+              icon={Plus}
+              onClick={() => openCreateLog()}
+              disabled={printers.length === 0}
+              title={printers.length === 0 ? 'Crea una impresora primero en Cost' : ''}
+            >
+              Registrar
+            </Button>
+          }
+        />
+      </div>
 
-      {KPIs}
+      <div className="px-6 pt-4 pb-2">
+        <KPIStrip items={kpiItems} />
+      </div>
       {TabsBar}
 
       {tab === 'dashboard' ? (
@@ -1384,14 +1349,11 @@ export default function MaintenancePage() {
             }
           />
         ) : (
-          <div
-            className="px-6 pt-4 pb-8 grid gap-3"
-            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}
-          >
+          <CardGrid min={280} gap={12} className="px-6 pt-4 pb-8">
             {summary.map((entry) => (
               <PrinterCard key={entry.printer.id} entry={entry} onClick={setSelectedPrinter} />
             ))}
-          </div>
+          </CardGrid>
         )
       ) : tab === 'logs' ? (
         <div className="flex flex-col">
