@@ -15,13 +15,9 @@ import { MoreVertical, Plus, Wrench } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   Button,
-  Card,
-  CardGrid,
   DetailDrawer,
   EmptyState,
   MobileSheet,
-  ProgressBar,
-  StatusPill,
 } from '../../../components/ui';
 import { useConfirm } from '../../../components/ConfirmDialog';
 import {
@@ -74,24 +70,33 @@ function remainingLabel(s) {
     : `Faltan ~${remaining.toFixed(0)} días`;
 }
 
-/** Card individual de un recordatorio, con progreso + menú de acciones. */
+const MK_PILL = { ok: 'ok', due_soon: 'warn', overdue: 'danger' };
+
+/** Card individual de un recordatorio, con progreso + menú de acciones (mk-, 1:1 mockup). */
 function ScheduleCard({ schedule, onEdit, onComplete, onDelete }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const tone = STATUS_TONE[schedule.status] || 'neutral';
+  const fillColor =
+    schedule.status === 'overdue'
+      ? 'var(--lvl-critical)'
+      : schedule.status === 'due_soon'
+        ? 'var(--lvl-warn)'
+        : 'var(--page-accent)';
   return (
-    <Card className="p-3.5 flex flex-col gap-2.5 industrial-grid relative">
-      <div className="flex items-start justify-between gap-2">
+    <div className="mk-schedule-card">
+      <div className="mk-sc-top">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-tech-white truncate">{schedule.task_name}</p>
-          <p className="text-[11px] text-gunmetal truncate">{schedule.printer_name}</p>
+          <div className="mk-sc-name truncate">{schedule.task_name}</div>
+          <div className="mk-sc-printer truncate">{schedule.printer_name}</div>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <StatusPill tone={tone}>{STATUS_LABEL[schedule.status]}</StatusPill>
+        <div className="mk-sc-actions">
+          <span className={`mk-status-pill ${MK_PILL[schedule.status] || 'neutral'}`}>
+            {STATUS_LABEL[schedule.status]}
+          </span>
           <div className="relative">
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
-              className="w-11 h-11 -mr-2 -mt-2 rounded-lg inline-flex items-center justify-center text-gunmetal hover:bg-[var(--color-surf-hover)] hover:text-tech-white transition-colors"
+              className="mk-sc-menu-btn"
               aria-label="Más acciones"
             >
               <MoreVertical size={16} />
@@ -124,16 +129,17 @@ function ScheduleCard({ schedule, onEdit, onComplete, onDelete }) {
           </div>
         </div>
       </div>
-      <ProgressBar
-        value={Math.min(100, Number(schedule.progress_pct))}
-        accent={schedule.status === 'overdue' ? '#F87171' : schedule.status === 'due_soon' ? '#FBBF24' : ACCENT}
-        height={5}
-      />
-      <div className="flex items-center justify-between text-[11px] text-gunmetal">
-        <span>{remainingLabel(schedule)}</span>
-        <span className="mono">{Number(schedule.progress_pct).toFixed(0)}%</span>
+      <div className="mk-sc-progress-track">
+        <div
+          className="mk-sc-progress-fill"
+          style={{ width: `${Math.min(100, Number(schedule.progress_pct))}%`, background: fillColor }}
+        />
       </div>
-    </Card>
+      <div className="mk-sc-foot">
+        <span>{remainingLabel(schedule)}</span>
+        <span className="pct">{Number(schedule.progress_pct).toFixed(0)}%</span>
+      </div>
+    </div>
   );
 }
 
@@ -359,12 +365,18 @@ export default function SchedulesSection({ printers, isMobile, onCountChange }) 
   }
 
   return (
-    <div className={isMobile ? 'px-4 mt-3 pb-28' : 'px-6 pt-4 pb-8'}>
-      <div className="flex items-center justify-between mb-3">
-        <span className="lbl-eyebrow">Recordatorios programados</span>
-        <Button variant="primary" size="sm" icon={Plus} onClick={openCreate} disabled={!printers?.length}>
-          Nuevo
-        </Button>
+    <div className={isMobile ? 'pb-28' : ''}>
+      <div className="mk-items-head">
+        <span className="mk-section-title" style={{ margin: 0 }}>Recordatorios programados</span>
+        <button
+          type="button"
+          className="mk-btn mk-btn-primary"
+          onClick={openCreate}
+          disabled={!printers?.length}
+          style={!printers?.length ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
+        >
+          <Plus size={15} /> Nuevo
+        </button>
       </div>
       {schedules.length === 0 ? (
         <EmptyState
@@ -379,7 +391,7 @@ export default function SchedulesSection({ printers, isMobile, onCountChange }) 
           }
         />
       ) : (
-        <CardGrid min={280} gap={12}>
+        <div className="mk-card-grid">
           {schedules.map((s) => (
             <ScheduleCard
               key={s.id}
@@ -389,7 +401,7 @@ export default function SchedulesSection({ printers, isMobile, onCountChange }) 
               onDelete={handleDelete}
             />
           ))}
-        </CardGrid>
+        </div>
       )}
 
       {isMobile ? (
