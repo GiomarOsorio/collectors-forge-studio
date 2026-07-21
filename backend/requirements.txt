@@ -16,7 +16,7 @@ weasyprint==69.0
 authlib>=1.3.0
 itsdangerous>=2.0.0
 httpx==0.27.2
-aiosmtplib==3.0.2
+aiosmtplib==5.1.1  # #189: PYSEC-2026-2338 (era 3.0.2). API send() estable — mismos kwargs.
 pdfplumber==0.11.10
 slowapi==0.1.9
 boto3
@@ -34,6 +34,11 @@ matplotlib==3.9.2
 # Etiquetas PDF de bobinas (#135): QR del deep-link. Extra [pil] trae Pillow
 # (ya viene transitivo de matplotlib, pero se declara explícito).
 qrcode[pil]==8.2
+
+# Seguridad (#189): forzamos setuptools parcheado — PYSEC-2026-3447. No es
+# dependencia de runtime, pero el image la trae y pip-audit la flaggea; el pin
+# garantiza la versión corregida al instalar en el Containerfile.
+setuptools>=83.0.0
 
 # Testing
 pytest==9.0.3
