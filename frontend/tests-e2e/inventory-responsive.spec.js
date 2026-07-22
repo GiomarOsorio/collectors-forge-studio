@@ -1,14 +1,13 @@
 /**
  * @file Screenshot-tests responsive de Inventario (issue #165).
  *
- *  - CategoryTabs → AppTabs (overflow-x + fade), KPIStrip P5 con fade.
- *  - FilamentTable (vista tabla): wrapper overflow-x-auto + min-width, para
- *    que en 1024-1279 haga scroll-x en vez de comprimir columnas (Fix #15).
- *  - NewPOForm / PO form drawer: líneas como LineItems (P1) — cards mobile,
- *    grid minmax(0,fr) desktop (Fix #5).
+ *  - /inventory = Resumen (overview) tras la consolidación de nav (PR A).
+ *  - FilamentTable (vista tabla, /inventory/bobinas): wrapper overflow-x-auto +
+ *    min-width, para que en 1024-1279 haga scroll-x en vez de comprimir
+ *    columnas (Fix #15).
  *
- * Se apoya en el seed de dev (como los tests de galería del Vault); valida
- * cero overflow-x del documento en cada breakpoint.
+ * Se apoya en el seed de dev; valida cero overflow-x del documento en cada
+ * breakpoint.
  *
  * @module tests-e2e/inventory-responsive.spec
  */
@@ -44,7 +43,7 @@ test.describe('Inventory responsive — issue #165', () => {
   test('punto ciego 1100px + vista tabla de filamentos: sin overflow-x del documento', async ({ page }) => {
     await page.setViewportSize({ width: 1100, height: 850 });
     await loginAsDev(page);
-    await page.goto('/inventory');
+    await page.goto('/inventory/bobinas');
     await page.waitForLoadState('networkidle');
 
     // Cambia a la vista tabla (FilamentTable, Fix #15). El botón vive en el
