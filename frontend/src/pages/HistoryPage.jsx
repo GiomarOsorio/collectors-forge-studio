@@ -6,11 +6,14 @@
  * Cotizaciones" y "Cotización manual".
  *
  * Port 1:1 del mockup projects-history.html §History (sistema `mk-`): shell dual
- * (`MobileAppHeader` <1024 / `mk-page-header` ≥1024), sub-nav de Costos como
- * AppTabs (P4, decisión 2026-07-16 — antes vivía en la sidebar), tabla de 6
- * columnas (`mk-hist-table`, wrapper overflow-x-auto siempre) → cards P2 en
- * mobile, y detalle/edición P6 dual (`MobileSheet` <1024 / `DetailDrawer` ≥1024).
- * Ruta canónica `/cost/history` intacta.
+ * (`MobileAppHeader` <1024 / `mk-page-header` ≥1024), tabla de 6 columnas
+ * (`mk-hist-table`, wrapper overflow-x-auto siempre) → cards P2 en mobile, y
+ * detalle/edición P6 dual (`MobileSheet` <1024 / `DetailDrawer` ≥1024). Ruta
+ * canónica `/cost/history` intacta.
+ *
+ * NOTA: el sub-nav de Costos por rutas (decisión 2026-07-16, mockup §History)
+ * se difiere al lote de unificación del módulo Cost (page 7), para no dejar un
+ * dead-end con los tabs in-page de CostPage.
  *
  * @module pages/HistoryPage
  */
@@ -25,24 +28,10 @@ import { SkeletonTable } from '../components/SkeletonLoader';
 import EmptyState from '../components/EmptyState';
 import MobileAppHeader from '../components/MobileAppHeader';
 import { useIsMobile } from '../hooks/useMediaQuery';
-import { AppTabs, MobileSheet, DetailDrawer } from '../components/ui';
+import { MobileSheet, DetailDrawer } from '../components/ui';
 import './HistoryPage.css';
 
 const ACCENT = '#2DD4BF';
-
-/**
- * Sub-nav del módulo Cost (P4 AppTabs). Decisión 2026-07-16: el segundo nivel
- * de Cost salió de la sidebar y vive en el contenido de cada página de Cost.
- * Por ahora se cablea solo aquí (resto de páginas Cost lo adoptan en su turno).
- */
-const COST_TABS = [
-  { id: 'quotes',     label: 'Cotizaciones',    path: '/cost' },
-  { id: 'calculator', label: 'Calcular pieza',  path: '/cost/calculator' },
-  { id: 'manual',     label: 'Nueva cotización', path: '/cost/manual' },
-  { id: 'history',    label: 'Historial',       path: '/cost/history' },
-  { id: 'printers',   label: 'Impresoras',      path: '/cost/printers' },
-  { id: 'settings',   label: 'Tarifa & ajustes', path: '/cost/settings' },
-];
 
 /** Fecha ISO → dd/mm/yyyy. */
 const formatDate = (dateStr) => {
@@ -120,21 +109,6 @@ export default function HistoryPage() {
       toast.error('Error al eliminar');
     }
   };
-
-  const handleTabChange = (id) => {
-    const tab = COST_TABS.find((t) => t.id === id);
-    if (tab && id !== 'history') navigate(tab.path);
-  };
-
-  const subNav = (
-    <AppTabs
-      items={COST_TABS.map((t) => (t.id === 'history' ? { ...t, count: quotes.length } : t))}
-      value="history"
-      onChange={handleTabChange}
-      accent={ACCENT}
-      className="px-4 md:px-6"
-    />
-  );
 
   const DesktopTable = (
     <div className="mk-hist-table-wrap">
@@ -243,9 +217,7 @@ export default function HistoryPage() {
         </header>
       )}
 
-      {subNav}
-
-      <div className="mk-hist-max px-4 md:px-6 pt-1 pb-24 md:pb-10 w-full">
+      <div className="mk-hist-max px-4 md:px-6 pt-3 pb-24 md:pb-10 w-full">
         {loading ? (
           <div className="pt-3"><SkeletonTable rows={6} cols={6} /></div>
         ) : (
