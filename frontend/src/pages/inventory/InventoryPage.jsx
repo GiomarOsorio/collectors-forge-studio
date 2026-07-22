@@ -13,7 +13,7 @@
  * @module pages/inventory/InventoryPage
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -73,10 +73,12 @@ import {
   getFilamentProfile,
   getInventoryItems,
   getPurchaseOrders,
+  getSpools,
   updateInventoryItem,
   updatePurchaseOrder,
   upsertFilamentProfile,
 } from '../../services/api';
+import FilamentSpoolsSection from './components/FilamentSpoolsSection';
 import { MATERIALS, MATERIAL_ORDER } from '../../config/materials';
 import {
   computeFilamentStats,
@@ -313,7 +315,7 @@ function lastUsedFromDate(iso) {
 
 // ─── Filament card (grid) ────────────────────────────────────────────────────
 
-function FilamentCard({ f, onClick }) {
+function FilamentCard({ f, onClick, spoolCount = 0 }) {
   const level = stockLevel(f);
   const p = fillPercent(f);
   // Issue #59: cuando el filamento está crítico, borde amarillo en TODO
@@ -357,6 +359,7 @@ function FilamentCard({ f, onClick }) {
           <p className="mono text-[10.5px] text-gunmetal mt-0.5 truncate">
             {f.vendor}
             {f.batch ? ` · ${f.batch}` : ''}
+            {spoolCount > 0 ? ` · ${spoolCount} bobina${spoolCount === 1 ? '' : 's'}` : ''}
           </p>
         </div>
       </div>
@@ -389,7 +392,7 @@ function FilamentCard({ f, onClick }) {
 
 // ─── Grid grouped by stock level + material ─────────────────────────────────
 
-function FilamentGrid({ groups, onCardClick }) {
+function FilamentGrid({ groups, onCardClick, spoolCountById }) {
   return (
     <div className="flex flex-col gap-6 px-6 pt-2 pb-8">
       {groups.map((g) => (
@@ -416,7 +419,7 @@ function FilamentGrid({ groups, onCardClick }) {
             style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}
           >
             {g.items.map((f) => (
-              <FilamentCard key={f.id} f={f} onClick={onCardClick} />
+              <FilamentCard key={f.id} f={f} onClick={onCardClick} spoolCount={spoolCountById?.[f.id] || 0} />
             ))}
           </div>
         </section>
@@ -500,7 +503,7 @@ function FilamentTable({ items, onRowClick }) {
 
 // ─── Drawer body ─────────────────────────────────────────────────────────────
 
-function FilamentDrawerBody({ f, onReassign, onAddToPurchase, onDelete }) {
+function FilamentDrawerBody({ f, onReassign, onAddToPurchase, onDelete, isMobile, onSpoolsChanged }) {
   if (!f) return null;
   const level = stockLevel(f);
   const p = fillPercent(f);
@@ -630,6 +633,15 @@ function FilamentDrawerBody({ f, onReassign, onAddToPurchase, onDelete }) {
           </button>
         )}
       </div>
+
+      {/* Bobinas físicas (PR B): tracking por-rollo absorbido acá — alta en
+          lote, editar peso/estado, borrar, imprimir etiquetas QR. */}
+      <FilamentSpoolsSection
+        filamentId={f.id}
+        filamentName={f.colorName}
+        isMobile={isMobile}
+        onCountChange={onSpoolsChanged}
+      />
 
       {/* Historial reciente — placeholder hasta endpoint real (quotes/queue) */}
       <div>
@@ -1349,7 +1361,7 @@ function MobileChips({ materialFilters, onToggleMat }) {
   );
 }
 
-function FilamentRow({ f, onClick }) {
+function FilamentRow({ f, onClick, spoolCount = 0 }) {
   const level = stockLevel(f);
   const p = fillPercent(f);
   return (
@@ -1377,6 +1389,7 @@ function FilamentRow({ f, onClick }) {
         <p className="mono text-[10px] text-gunmetal mt-0.5 truncate">
           {f.vendor}
           {f.batch ? ` · ${f.batch}` : ''}
+          {spoolCount > 0 ? ` · ${spoolCount} bob.` : ''}
         </p>
       </div>
       <div className="flex flex-col items-end shrink-0 gap-1 min-w-[60px]">
@@ -2961,6 +2974,9 @@ export default function InventoryPage({ section = 'resumen' }) {
   const [tools, setTools] = useState([]);
   const [consumables, setConsumables] = useState([]);
   const [purchases, setPurchases] = useState([]);
+  // PR B: bobinas físicas (spools) — para mostrar conteo por filamento en la
+  // lista y alimentar la sección de tracking dentro del drawer de Bobinas.
+  const [spools, setSpools] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Carga inicial: todos los conteos en paralelo (la pestaña activa los necesita
@@ -2970,11 +2986,15 @@ export default function InventoryPage({ section = 'resumen' }) {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
-      const [allRes, poRes] = await Promise.allSettled([
+      const [allRes, poRes, spoolsRes] = await Promise.allSettled([
         getInventoryItems(),
         getPurchaseOrders(),
+        getSpools(),
       ]);
       if (cancelled) return;
+      if (spoolsRes.status === 'fulfilled') {
+        setSpools(spoolsRes.value.data || []);
+      }
       // Una sola llamada a /inventory/items/ y partimos por category client-side
       // (la función getInventoryItems no acepta params, y filtrar local es
       // más rápido que 4 round-trips).
@@ -3094,6 +3114,22 @@ export default function InventoryPage({ section = 'resumen' }) {
   }, [filteredFilaments, sort]);
 
   const stats = useMemo(() => computeFilamentStats(filaments), [filaments]);
+
+  // Refetch estable de spools tras alta/edición/borrado dentro del drawer.
+  const refreshSpools = useCallback(() => {
+    getSpools()
+      .then((r) => setSpools(r.data || []))
+      .catch(() => {});
+  }, []);
+
+  // Conteo de bobinas físicas activas por filamento (inventory_item_id).
+  const spoolCountById = useMemo(() => {
+    const m = {};
+    for (const s of spools) {
+      if (s.status === 'active') m[s.inventory_item_id] = (m[s.inventory_item_id] || 0) + 1;
+    }
+    return m;
+  }, [spools]);
 
   /**
    * Filtra + ordena items genéricos (insumos/herramientas/consumibles) por la
@@ -3374,7 +3410,7 @@ export default function InventoryPage({ section = 'resumen' }) {
                     <ul className="px-4 flex flex-col gap-2">
                       {g.items.map((f) => (
                         <li key={f.id}>
-                          <FilamentRow f={f} onClick={setSelected} />
+                          <FilamentRow f={f} onClick={setSelected} spoolCount={spoolCountById[f.id] || 0} />
                         </li>
                       ))}
                     </ul>
@@ -3477,6 +3513,8 @@ export default function InventoryPage({ section = 'resumen' }) {
         >
           <FilamentDrawerBody
             f={selected}
+            isMobile={isMobile}
+            onSpoolsChanged={refreshSpools}
             onReassign={() => toast('Reasignar batch llega pronto.')}
             onAddToPurchase={(filament) => {
               // Pre-fill PO form con el filamento como línea, vinculado
@@ -3720,7 +3758,7 @@ export default function InventoryPage({ section = 'resumen' }) {
               }
             />
           ) : view === 'grid' ? (
-            <FilamentGrid groups={groups} onCardClick={setSelected} />
+            <FilamentGrid groups={groups} onCardClick={setSelected} spoolCountById={spoolCountById} />
           ) : (
             <FilamentTable items={filteredFilaments} onRowClick={setSelected} />
           )}
@@ -3857,6 +3895,8 @@ export default function InventoryPage({ section = 'resumen' }) {
       >
         <FilamentDrawerBody
           f={selected}
+          isMobile={isMobile}
+          onSpoolsChanged={refreshSpools}
           onReassign={() => toast('Reasignar batch llega pronto.')}
           onAddToPurchase={(filament) => {
             const raw = filamentsRawById[filament.id];
