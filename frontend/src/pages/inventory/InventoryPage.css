@@ -1,0 +1,159 @@
+/**
+ * InventoryPage.css — port 1:1 de inventory.html (sistema `mk-`).
+ * Prefijo `mk-inv-` para clases inventory-específicas, tokens --cfs-* +
+ * --page-accent (inventory = azul #3B82F6). Compartido por las 5 páginas
+ * del módulo (Resumen/Pedidos/Disponible/Bobinas/Import-Export).
+ *
+ * El shell (mk-page-header, KPIStrip P5, AppTabs P4) vive en mockup-system.css
+ * / componentes ui/. Aquí: tabla filamentos, cards mobile, po-list, line items
+ * P1, forms de item/PO, swatch/chips.
+ */
+
+/* ── Toolbar ──────────────────────────────────────────────────────────────── */
+.mk-inv-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.mk-inv-search {
+  flex: 1 1 220px; min-width: 0; max-width: 420px;
+  display: flex; align-items: center; gap: 8px;
+  background: var(--cfs-surface-card); border: 1px solid var(--cfs-border-strong);
+  border-radius: 9px; padding: 0 11px; height: 44px;
+}
+.mk-inv-search input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; color: var(--cfs-text); font-size: 13.5px; }
+.mk-inv-search input::placeholder { color: var(--cfs-text-tertiary); }
+.mk-inv-viewtoggle {
+  display: inline-flex; border: 1px solid var(--cfs-border-strong); border-radius: 9px; overflow: hidden; flex-shrink: 0; height: 44px;
+}
+.mk-inv-viewtoggle button { padding: 0 13px; border: 0; background: var(--cfs-surface-card); color: var(--cfs-text-tertiary); display: inline-flex; align-items: center; }
+.mk-inv-viewtoggle button.active { background: var(--app-inventory-soft, rgba(59,130,246,.12)); color: var(--app-inventory-light, #60A5FA); }
+@media (min-width: 1024px) { .mk-inv-search, .mk-inv-viewtoggle { height: 36px; } }
+
+/* ── Tabla filamentos (P2, ≥1024) ─────────────────────────────────────────── */
+.mk-ftable-wrap {
+  background: var(--cfs-surface-card); border: 1px solid var(--cfs-border-legacy);
+  border-radius: 12px; overflow-x: auto; -webkit-overflow-scrolling: touch;
+}
+table.mk-ftable { width: 100%; border-collapse: collapse; min-width: 860px; }
+table.mk-ftable th {
+  text-align: left; padding: 10px 12px;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .06em; color: var(--cfs-text-tertiary);
+  background: var(--cfs-surface-card-2); border-bottom: 1px solid var(--cfs-border); white-space: nowrap;
+}
+table.mk-ftable td {
+  padding: 11px 12px; font-size: 12.5px; color: var(--cfs-text-secondary);
+  border-bottom: 1px solid var(--cfs-border-soft); white-space: nowrap; vertical-align: middle;
+}
+table.mk-ftable tr:last-child td { border-bottom: 0; }
+table.mk-ftable tbody tr:hover td { background: var(--cfs-surface-hover); cursor: pointer; }
+.mk-cell-strong { color: var(--cfs-text); font-weight: 600; font-size: 13px; }
+.mk-cell-batch { font-family: var(--font-mono); font-size: 10.5px; color: var(--cfs-text-tertiary); margin-top: 1px; }
+
+/* Chips */
+.mk-mat-chip {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em;
+  padding: 2px 7px; border-radius: 5px; display: inline-block;
+  background: var(--cfs-surface-card-2); border: 1px solid var(--cfs-border); color: var(--cfs-text-secondary);
+}
+.mk-crit-chip {
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .06em;
+  padding: 2px 7px; border-radius: 5px; margin-left: 6px; display: inline-block;
+  background: rgba(251,191,36,.12); border: 1px solid rgba(251,191,36,.35); color: var(--forge-amber);
+}
+
+/* Swatch de color */
+.mk-swatch { width: 26px; height: 26px; border-radius: 999px; flex-shrink: 0; border: 2px solid var(--cfs-border-strong); position: relative; display: inline-block; }
+.mk-swatch::after { content: ''; position: absolute; inset: 34%; border-radius: 999px; background: var(--cfs-surface-card); }
+
+/* Barra de llenado */
+.mk-fill-track { width: 120px; height: 3px; background: rgba(148,160,174,.15); border-radius: 2px; margin-top: 5px; }
+.mk-fill-bar { height: 100%; border-radius: 2px; background: var(--app-inventory, #3B82F6); }
+.mk-fill-bar.low { background: var(--forge-amber); }
+
+/* ── Cards filamentos (mobile) ────────────────────────────────────────────── */
+.mk-fcards { display: block; }
+.mk-fcard {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--cfs-surface-card); border: 1px solid var(--cfs-border-legacy);
+  border-radius: 12px; padding: 12px; margin-bottom: 8px;
+}
+.mk-fcard .mk-swatch { width: 38px; height: 38px; }
+.mk-fcard-main { flex: 1; min-width: 0; }
+.mk-fcard-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 2px; }
+.mk-fcard-name { font-size: 14px; font-weight: 600; color: var(--cfs-text); }
+.mk-fcard-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--cfs-text-tertiary); }
+.mk-fcard-right { flex-shrink: 0; text-align: right; }
+.mk-fcard-pct { font-family: var(--font-mono); font-size: 14px; font-weight: 700; }
+.mk-fcard-g { font-family: var(--font-mono); font-size: 10px; color: var(--cfs-text-tertiary); margin-top: 1px; }
+.mk-fcard .mk-fill-track { width: 64px; margin-left: auto; }
+
+/* ── Compras — lista de POs ───────────────────────────────────────────────── */
+.mk-po-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+@media (min-width: 768px) { .mk-po-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1280px) { .mk-po-list { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.mk-po-card { background: var(--cfs-surface-card); border: 1px solid var(--cfs-border-legacy); border-radius: 12px; padding: 14px; min-width: 0; }
+.mk-po-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.mk-po-vendor { font-size: 14px; font-weight: 700; color: var(--cfs-text); }
+.mk-po-id { font-family: var(--font-mono); font-size: 10px; color: var(--cfs-text-tertiary); }
+.mk-po-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+.mk-po-pair label { display: block; font-family: var(--font-mono); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--cfs-text-tertiary); margin-bottom: 2px; }
+.mk-po-pair span { font-size: 12.5px; color: var(--cfs-text-secondary); }
+.mk-po-pair span.money { font-family: var(--font-mono); font-weight: 700; color: var(--cfs-text); }
+
+/* ── Forms de item / PO (sheet/drawer) ────────────────────────────────────── */
+.mk-fsec-title { font-family: var(--font-mono); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .14em; color: var(--cfs-text-secondary); margin: 18px 0 8px; }
+.mk-fsec-title:first-of-type { margin-top: 0; }
+.mk-fsec-note { font-size: 11.5px; color: var(--cfs-text-tertiary); margin: -4px 0 8px; }
+.mk-f-label { display: block; font-family: var(--font-mono); font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: var(--cfs-text-tertiary); margin-bottom: 4px; }
+.mk-f-input, .mk-f-select {
+  width: 100%; min-height: 44px; padding: 9px 11px; border-radius: 8px;
+  background: var(--cfs-surface-card-2); border: 1px solid var(--cfs-border);
+  color: var(--cfs-text); font-size: 13.5px; outline: none;
+}
+.mk-f-input:focus, .mk-f-select:focus { border-color: var(--app-inventory, #3B82F6); }
+.mk-f-input::placeholder { color: var(--cfs-text-tertiary-dim); }
+.mk-f-hint { font-size: 10.5px; color: var(--cfs-text-tertiary-dim); margin-top: 3px; }
+.mk-form-grid2 { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px; }
+@media (min-width: 640px) { .mk-form-grid2 { grid-template-columns: minmax(0,1fr) minmax(0,1fr); } }
+.mk-form-grid2 > div { min-width: 0; }
+.mk-form-span2 { grid-column: 1 / -1; }
+
+/* Selector de color con swatch */
+.mk-color-row { display: flex; align-items: center; gap: 10px; }
+.mk-color-row input[type="color"] { width: 44px; height: 44px; padding: 3px; flex-shrink: 0; border: 1px solid var(--cfs-border-strong); border-radius: 9px; background: var(--cfs-surface-card-2); cursor: pointer; }
+.mk-color-row .mk-swatch { width: 30px; height: 30px; }
+
+/* Checkbox touch 44px */
+.mk-chk-line { display: flex; align-items: center; gap: 9px; min-height: 44px; font-size: 12.5px; color: var(--cfs-text-secondary); cursor: pointer; }
+.mk-chk-line input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--forge-amber); flex-shrink: 0; }
+
+/* ── P1 LINE ITEMS (PO form) ──────────────────────────────────────────────── */
+.mk-pol-cards { display: block; }
+.mk-pol-card { position: relative; background: var(--cfs-surface-card); border: 1px solid var(--cfs-border); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+.mk-pol-remove { position: absolute; top: 8px; right: 8px; width: 44px; height: 44px; border-radius: 9px; background: var(--cfs-surface-card-2); border: 1px solid var(--cfs-border-strong); color: var(--cfs-text-tertiary); display: flex; align-items: center; justify-content: center; }
+.mk-pol-remove:hover { color: var(--forge-rose); border-color: rgba(244,63,94,.4); }
+.mk-pol-name-wrap { margin-bottom: 10px; padding-right: 52px; }
+.mk-pol-grid2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 8px; margin-bottom: 10px; }
+.mk-pol-link-wrap { margin-bottom: 10px; }
+.mk-pol-foot { display: flex; align-items: baseline; justify-content: space-between; padding-top: 10px; border-top: 1px dashed var(--cfs-border-soft); }
+.mk-pol-foot .lbl { font-family: var(--font-mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--cfs-text-tertiary); }
+.mk-pol-foot .val { font-family: var(--font-mono); font-size: 15px; font-weight: 700; color: var(--cfs-text); }
+.mk-pol-table { display: none; }
+.mk-pol-add-btn { width: 100%; margin-bottom: 10px; }
+
+@media (min-width: 1024px) {
+  .mk-pol-cards { display: none; }
+  .mk-pol-table { display: block; background: var(--cfs-surface-card); border: 1px solid var(--cfs-border); border-radius: 12px; overflow: hidden; }
+  .mk-pol-row { display: grid; grid-template-columns: minmax(0,1.7fr) minmax(0,0.55fr) minmax(0,0.9fr) minmax(0,1.4fr) minmax(0,0.9fr) 36px; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--cfs-border-soft); }
+  .mk-pol-row:last-of-type { border-bottom: 0; }
+  .mk-pol-head { background: var(--cfs-surface-card-2); border-bottom: 1px solid var(--cfs-border); padding: 8px 12px; }
+  .mk-pol-head span { font-family: var(--font-mono); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--cfs-text-tertiary); }
+  .mk-pol-table .mk-f-input, .mk-pol-table .mk-f-select { min-height: 36px; padding: 6px 8px; font-size: 12.5px; }
+  .mk-pol-total { font-family: var(--font-mono); font-size: 12.5px; font-weight: 700; color: var(--cfs-text); text-align: right; }
+  .mk-pol-remove-desktop { width: 36px; height: 36px; border-radius: 8px; background: transparent; border: 1px solid var(--cfs-border-strong); color: var(--cfs-text-tertiary); display: inline-flex; align-items: center; justify-content: center; }
+  .mk-pol-remove-desktop:hover { color: var(--forge-rose); border-color: rgba(244,63,94,.4); }
+  .mk-pol-table-foot { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--cfs-surface-card-2); border-top: 1px solid var(--cfs-border-soft); }
+  .mk-pol-add-btn { width: auto; margin-bottom: 0; }
+}
+
+.mk-po-total-box { display: flex; align-items: baseline; justify-content: space-between; padding: 12px 14px; border-radius: 10px; margin-top: 10px; background: var(--cfs-surface-card-2); border: 1px solid var(--cfs-border); }
+.mk-po-total-box .lbl { font-size: 12.5px; font-weight: 600; color: var(--cfs-text); }
+.mk-po-total-box .val { font-family: var(--font-mono); font-size: 17px; font-weight: 700; color: var(--app-inventory-light, #60A5FA); }

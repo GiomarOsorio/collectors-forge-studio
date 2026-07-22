@@ -163,16 +163,24 @@ function AppRoutes() {
             compras). Sub-rutas dedicadas para pedidos / prints / I/O.
             Las URLs legacy (/v2 + 5 tabs viejos) redirigen al index. */}
         <Route path="/inventory">
-          <Route index               element={<InventoryPage />} />
+          {/* Nav consolidada (una sola sub-nav): Resumen · Bobinas ·
+              Herramientas · Consumibles · Pedidos · Disponible · Import/Export.
+              Insumos y el tab in-page Compras se soft-deletearon del frontend. */}
+          <Route index               element={<InventoryPage section="resumen" />} />
+          <Route path="bobinas"      element={<InventoryPage section="bobinas" />} />
+          <Route path="herramientas" element={<InventoryPage section="herramientas" />} />
+          <Route path="consumibles"  element={<InventoryPage section="consumibles" />} />
           <Route path="v2"           element={<RedirectPreservingSearch to="/inventory" />} />
-          <Route path="filaments"    element={<RedirectPreservingSearch to="/inventory" />} />
+          <Route path="filaments"    element={<RedirectPreservingSearch to="/inventory/bobinas" />} />
           <Route path="supplies"     element={<RedirectPreservingSearch to="/inventory" />} />
-          <Route path="tools"        element={<RedirectPreservingSearch to="/inventory" />} />
-          <Route path="consumables"  element={<RedirectPreservingSearch to="/inventory" />} />
+          <Route path="tools"        element={<RedirectPreservingSearch to="/inventory/herramientas" />} />
+          <Route path="consumables"  element={<RedirectPreservingSearch to="/inventory/consumibles" />} />
           <Route path="stock"        element={<RedirectPreservingSearch to="/inventory" />} />
           <Route path="purchases"    element={<InventoryPurchasesPage />} />
           <Route path="prints"       element={<InventoryPrintsPage />} />
           <Route path="io"           element={<InventoryImportExportPage />} />
+          {/* /inventory/spools sigue accesible por URL (fuera del nav); PR B
+              absorbe el tracking por-bobina dentro de Bobinas. */}
           <Route path="spools"       element={<InventorySpoolsPage />} />
         </Route>
 

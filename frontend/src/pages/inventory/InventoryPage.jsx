@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -89,6 +89,7 @@ import {
   mapToFilament,
   stockLevel,
 } from '../../utils/inventoryAdapter';
+import './InventoryPage.css';
 
 // Placeholder de consumo diario hasta que tengamos el endpoint real.
 // 14 días, gramos por día. Cuando tengamos historial real, viene del backend.
@@ -1441,13 +1442,15 @@ const FILAMENT_DENSITY_DEFAULTS = {
 // al primer input con `autoFocus` (bug reportado: cursor salta a "Nombre
 // interno" cada vez que escribís en otro campo).
 
-const FORM_INPUT_CLS =
-  'w-full bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm placeholder:text-gunmetal-dim outline-none focus:border-blue-500';
+// Port mk-: el input del mockup (mk-f-input) — bg surface-card-2, borde,
+// 44px min-height, focus azul. `mono`/`resize-y`/`uppercase` se siguen
+// apilando por los call-sites que lo necesitan.
+const FORM_INPUT_CLS = 'mk-f-input';
 
 function FormFieldRow({ label, required, error, children }) {
   return (
     <label className="flex flex-col gap-1 min-w-0">
-      <span className="lbl-eyebrow text-[10px] flex items-center gap-1">
+      <span className="mk-f-label flex items-center gap-1">
         {label}
         {required && <span className="text-rose-400" aria-label="requerido">*</span>}
         {error && (
@@ -1462,11 +1465,7 @@ function FormFieldRow({ label, required, error, children }) {
 }
 
 function FormSectionTitle({ children }) {
-  return (
-    <div className="lbl-eyebrow text-[10px] mt-2 pb-1 border-b border-[var(--color-border-soft)]">
-      {children}
-    </div>
-  );
+  return <div className="mk-fsec-title">{children}</div>;
 }
 
 function emptyFilamentForm() {
@@ -2924,14 +2923,16 @@ function PurchaseOrderFormDrawer({ open, onClose, mode = 'create', initial, onSa
  *
  * @returns {JSX.Element}
  */
-export default function InventoryPage() {
-  const navigate = useNavigate();
+export default function InventoryPage({ section = 'resumen' }) {
   const isMobile = useIsMobile();
   const confirm = useConfirm();
   // El AppLayout expone `openSidebar` para que el header mobile pueda
   // abrir el drawer (replica el `onMenu` del design).
   const { openSidebar } = useOutletContext() || {};
-  const [tab, setTab] = useState('filamentos');
+  // Nav consolidada (PR A): la sección viene de la ruta, no de tabs in-page.
+  // 'bobinas' mapea a la lista de filamentos; 'resumen' es el overview.
+  // Insumos y el tab in-page 'compras' fueron soft-deleteados del frontend.
+  const tab = section === 'bobinas' ? 'filamentos' : section;
   const [view, setView] = useState('grid');
   const [query, setQuery] = useState('');
   const [materialFilters, setMaterialFilters] = useState([]);
@@ -3200,6 +3201,92 @@ export default function InventoryPage() {
     setMaterialFilters([]);
   };
 
+  // ── Nav consolidada: label/conteo de la sección + overview de Resumen ────
+  const SECTION_LABELS = {
+    resumen: 'Resumen',
+    filamentos: 'Bobinas',
+    herramientas: 'Herramientas',
+    consumibles: 'Consumibles',
+  };
+  const sectionLabel = SECTION_LABELS[tab] || tab;
+  const sectionCount =
+    tab === 'resumen'
+      ? filaments.length + tools.length + consumables.length
+      : counts[tab] ?? 0;
+
+  // Ítems que necesitan atención (stock bajo/crítico) — cruzan categorías.
+  const attentionFilaments = useMemo(
+    () => filaments.filter((f) => stockLevel(f) !== 'ok'),
+    [filaments],
+  );
+  const attentionItems = useMemo(
+    () => [...tools, ...consumables].filter((i) => itemLevel(i) !== 'ok'),
+    [tools, consumables],
+  );
+
+  // Overview de Resumen: KPIs (arriba) + lo que necesita atención + accesos.
+  const ResumenOverview = (
+    <div className="px-4 md:px-6 pt-3 pb-24 md:pb-10 flex flex-col gap-6">
+      <section>
+        <div className="mk-section-title flex items-center gap-2 mb-2.5">
+          <AlertTriangle size={13} className="text-amber-400" />
+          Necesita atención
+          <span className="mono text-[11px] text-gunmetal font-normal">
+            {attentionFilaments.length + attentionItems.length}
+          </span>
+        </div>
+        {loading ? (
+          <p className="text-sm text-gunmetal py-6 text-center">Cargando…</p>
+        ) : attentionFilaments.length === 0 && attentionItems.length === 0 ? (
+          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surf-card)] px-4 py-6 text-center">
+            <Check size={20} className="text-emerald-400 mx-auto mb-1.5" />
+            <p className="text-sm text-tech-white font-semibold">Todo el stock está OK</p>
+            <p className="text-xs text-gunmetal mt-0.5">Ningún ítem bajo el mínimo.</p>
+          </div>
+        ) : (
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
+            {attentionFilaments.map((f) => (
+              <FilamentCard key={`f-${f.id}`} f={f} onClick={setSelected} />
+            ))}
+            {attentionItems.map((it) => (
+              <InventoryItemCard key={`i-${it.id}`} item={it} onClick={setSelectedItem} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section>
+        <div className="mk-section-title mb-2.5">Accesos</div>
+        <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+          {[
+            { to: '/inventory/bobinas', icon: Droplet, label: 'Bobinas', count: filaments.length },
+            { to: '/inventory/herramientas', icon: Scissors, label: 'Herramientas', count: tools.length },
+            { to: '/inventory/consumibles', icon: Beaker, label: 'Consumibles', count: consumables.length },
+            { to: '/inventory/purchases', icon: ShoppingCart, label: 'Pedidos', count: purchases.length },
+          ].map((s) => {
+            const Icon = s.icon;
+            return (
+              <Link
+                key={s.to}
+                to={s.to}
+                className="flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surf-card)] px-3.5 py-3 hover:border-[var(--color-border-bright)] transition-colors"
+              >
+                <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg shrink-0" style={{ background: 'rgba(59,130,246,.12)', color: '#3B82F6', border: '1px solid rgba(59,130,246,.28)' }}>
+                  <Icon size={16} />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-tech-white truncate">{s.label}</p>
+                  <p className="mono text-[11px] text-gunmetal">{s.count} ítems</p>
+                </div>
+                <ChevronRight size={15} className="text-gunmetal-dim shrink-0" />
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+    </div>
+  );
+
   // ── Shell mobile ───────────────────────────────────────────────────────
   if (isMobile) {
     return (
@@ -3208,7 +3295,7 @@ export default function InventoryPage() {
           appName="Inventario"
           appIcon={Box}
           appAccent="#3B82F6"
-          title={TABS.find((t) => t.id === tab)?.label || tab}
+          title={sectionLabel}
           onMenu={() => openSidebar?.()}
           onSearch={() => setSearchOpen(true)}
         />
@@ -3223,9 +3310,9 @@ export default function InventoryPage() {
             globales del inventario, no específicos del tab filamentos. */}
         <MobileHeroStatus stats={stats} consumption14d={CONSUMPTION_PLACEHOLDER} />
         <MobileMiniKPIs stats={stats} openPOs={openPOs} openPOsValue={openPOsValue} />
-        <MobileTabs value={tab} onChange={setTab} counts={counts} />
-
-        {tab === 'filamentos' ? (
+        {tab === 'resumen' ? (
+          ResumenOverview
+        ) : tab === 'filamentos' ? (
           <>
             <MobileChips materialFilters={materialFilters} onToggleMat={toggleMat} />
             <div className="flex items-center justify-between px-4 mt-2 mb-1">
@@ -3296,38 +3383,11 @@ export default function InventoryPage() {
               </div>
             )}
           </>
-        ) : tab === 'compras' ? (
-          <>
-            <div className="flex items-center justify-between px-4 mt-2 mb-1">
-              <span className="mono text-[11px] text-gunmetal">
-                {filteredPurchases.length} de {purchases.length} pedidos
-              </span>
-            </div>
-            {loading ? (
-              <p className="px-4 py-12 text-center text-gunmetal text-sm">Cargando…</p>
-            ) : filteredPurchases.length === 0 ? (
-              <EmptyState
-                icon={ShoppingCart}
-                accent="#8B5CF6"
-                title={purchases.length === 0 ? 'Sin pedidos de compra' : 'Sin resultados'}
-              />
-            ) : (
-              <ul className="mt-2 pb-28">
-                {filteredPurchases.map((p) => (
-                  <li key={p.id}>
-                    <PurchaseRow po={p} onClick={setSelectedPurchase} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
         ) : (
           <>
             <div className="flex items-center justify-between px-4 mt-2 mb-1">
               <span className="mono text-[11px] text-gunmetal">
-                {tab === 'insumos'
-                  ? `${filteredSupplies.length} de ${supplies.length} insumos`
-                  : tab === 'herramientas'
+                {tab === 'herramientas'
                   ? `${filteredTools.length} de ${tools.length} herramientas`
                   : `${filteredConsumables.length} de ${consumables.length} consumibles`}
               </span>
@@ -3374,32 +3434,27 @@ export default function InventoryPage() {
           </>
         )}
 
-        <MobileFAB
-          onClick={() => {
-            if (tab === 'compras') {
-              setPoFormMode('create');
-              setEditingPoRaw(null);
-              setPoFormOpen(true);
-              return;
-            }
-            if (tab === 'filamentos') {
-              setAddOpen(true);
-              return;
-            }
-            // Insumo / Herramienta / Consumible → ItemFormDrawer
-            const catMap = {
-              insumos: 'Insumo',
-              herramientas: 'Herramienta',
-              consumibles: 'Consumible',
-            };
-            const cat = catMap[tab];
-            if (cat) {
-              setItemFormCategory(cat);
-              setItemFormMode('create');
-              setEditingItemRaw(null);
-            }
-          }}
-        />
+        {tab !== 'resumen' && (
+          <MobileFAB
+            onClick={() => {
+              if (tab === 'filamentos') {
+                setAddOpen(true);
+                return;
+              }
+              // Herramienta / Consumible → ItemFormDrawer
+              const catMap = {
+                herramientas: 'Herramienta',
+                consumibles: 'Consumible',
+              };
+              const cat = catMap[tab];
+              if (cat) {
+                setItemFormCategory(cat);
+                setItemFormMode('create');
+                setEditingItemRaw(null);
+              }
+            }}
+          />
+        )}
 
         <MobileSheet
           open={!!selected}
@@ -3438,7 +3493,6 @@ export default function InventoryPage() {
               setPoFormMode('create');
               setPoFormOpen(true);
               setSelected(null);
-              setTab('compras');
             }}
             onDelete={(filament) => handleDeleteItem(filament, 'filament')}
           />
@@ -3572,11 +3626,11 @@ export default function InventoryPage() {
           </span>
           <span className="text-sm text-gunmetal whitespace-nowrap">Inventario</span>
           <span className="text-gunmetal-dim shrink-0">›</span>
-          <span className="text-sm font-semibold text-tech-white whitespace-nowrap capitalize">
-            {tab}
+          <span className="text-sm font-semibold text-tech-white whitespace-nowrap">
+            {sectionLabel}
           </span>
           <span className="mono text-[10px] px-1.5 py-0.5 rounded-sm bg-white/6 border border-[var(--color-border)] text-steel tracking-wider whitespace-nowrap shrink-0 ml-1">
-            {counts[tab] ?? 0} ítems
+            {sectionCount} ítems
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -3588,35 +3642,30 @@ export default function InventoryPage() {
           </Link>
           <span className="w-px h-4 bg-[var(--color-border)]" />
           <Button variant="ghost" iconOnly icon={Bell} iconSize={14} aria-label="Notificaciones" />
-          <button
-            type="button"
-            onClick={() => {
-              if (tab === 'filamentos') {
-                setAddOpen(true);
-                return;
-              }
-              if (tab === 'compras') {
-                setPoFormMode('create');
-                setEditingPoRaw(null);
-                setPoFormOpen(true);
-                return;
-              }
-              const catMap = {
-                insumos: 'Insumo',
-                herramientas: 'Herramienta',
-                consumibles: 'Consumible',
-              };
-              const cat = catMap[tab];
-              if (cat) {
-                setItemFormCategory(cat);
-                setItemFormMode('create');
-                setEditingItemRaw(null);
-              }
-            }}
-            className="btn btn-primary btn-sm"
-          >
-            <Plus size={13} /> Agregar
-          </button>
+          {tab !== 'resumen' && (
+            <button
+              type="button"
+              onClick={() => {
+                if (tab === 'filamentos') {
+                  setAddOpen(true);
+                  return;
+                }
+                const catMap = {
+                  herramientas: 'Herramienta',
+                  consumibles: 'Consumible',
+                };
+                const cat = catMap[tab];
+                if (cat) {
+                  setItemFormCategory(cat);
+                  setItemFormMode('create');
+                  setEditingItemRaw(null);
+                }
+              }}
+              className="btn btn-primary btn-sm"
+            >
+              <Plus size={13} /> Agregar
+            </button>
+          )}
         </div>
       </header>
 
@@ -3624,9 +3673,9 @@ export default function InventoryPage() {
 
       <KPIStrip stats={stats} openPOs={openPOs} openPOsValue={openPOsValue} />
 
-      <CategoryTabs value={tab} onChange={setTab} counts={counts} />
-
-      {tab === 'filamentos' ? (
+      {tab === 'resumen' ? (
+        ResumenOverview
+      ) : tab === 'filamentos' ? (
         <>
           <Toolbar
             query={query}
@@ -3674,72 +3723,6 @@ export default function InventoryPage() {
             <FilamentGrid groups={groups} onCardClick={setSelected} />
           ) : (
             <FilamentTable items={filteredFilaments} onRowClick={setSelected} />
-          )}
-        </>
-      ) : tab === 'compras' ? (
-        <>
-          <div className="flex flex-wrap gap-3 items-center px-6 py-3 sticky top-0 bg-forge-black/80 backdrop-blur z-10">
-            <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 min-w-[260px] basis-[280px] flex-1 max-w-md">
-              <Search size={13} className="text-gunmetal" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Proveedor, tracking, status, PO id…"
-                className="flex-1 bg-transparent border-0 outline-0 text-tech-white text-sm placeholder:text-gunmetal-dim"
-              />
-              {query && (
-                <button
-                  type="button"
-                  onClick={() => setQuery('')}
-                  className="text-gunmetal hover:text-tech-white"
-                  aria-label="Limpiar"
-                >
-                  <X size={12} />
-                </button>
-              )}
-            </div>
-            <span className="flex-1" />
-            <span className="mono text-[11px] text-gunmetal">
-              {filteredPurchases.length} de {purchases.length} pedidos
-            </span>
-          </div>
-          {loading ? (
-            <p className="px-6 py-16 text-center text-gunmetal text-sm">Cargando pedidos…</p>
-          ) : filteredPurchases.length === 0 ? (
-            <EmptyState
-              icon={ShoppingCart}
-              accent="#8B5CF6"
-              title={purchases.length === 0 ? 'Sin pedidos de compra' : 'Sin resultados'}
-              hint={
-                purchases.length === 0
-                  ? 'Crea un pedido para llevar control de lo que llega de tus proveedores.'
-                  : 'Ajusta la búsqueda para ver más pedidos.'
-              }
-              action={
-                purchases.length === 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPoFormMode('create');
-                      setEditingPoRaw(null);
-                      setPoFormOpen(true);
-                    }}
-                    className="btn btn-primary btn-sm"
-                  >
-                    <Plus size={13} /> Crear pedido
-                  </button>
-                ) : null
-              }
-            />
-          ) : (
-            <div
-              className="px-6 pb-8 grid gap-3"
-              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}
-            >
-              {filteredPurchases.map((p) => (
-                <PurchaseCard key={p.id} po={p} onClick={setSelectedPurchase} />
-              ))}
-            </div>
           )}
         </>
       ) : (
@@ -3889,7 +3872,6 @@ export default function InventoryPage() {
             setPoFormMode('create');
             setPoFormOpen(true);
             setSelected(null);
-            setTab('compras');
           }}
           onDelete={(filament) => handleDeleteItem(filament, 'filament')}
         />
