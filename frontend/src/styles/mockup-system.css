@@ -55,6 +55,10 @@
 .mk-btn-primary { background: var(--page-accent); color: #0A1014; }
 .mk-btn-secondary { background: transparent; color: var(--cfs-text-secondary); border-color: var(--cfs-border-legacy); }
 .mk-btn-danger-ghost { background: transparent; color: var(--color-forge-rose); border-color: rgba(244,63,94,.3); }
+.mk-btn-danger { background: var(--color-forge-rose); color: #fff; }
+.mk-btn-danger:disabled { opacity: .4; cursor: not-allowed; background: var(--cfs-surface-card-2); color: var(--cfs-text-tertiary); }
+.mk-btn-block { width: 100%; }
+.mk-btn:disabled { opacity: .45; cursor: not-allowed; }
 @media (min-width: 1024px) {
   .mk-btn { min-height: 36px; padding: 7px 14px; }
   .mk-btn.mk-keep-44 { min-height: 44px; }
