@@ -89,6 +89,7 @@ import {
   mapToFilament,
   stockLevel,
 } from '../../utils/inventoryAdapter';
+import './InventoryPage.css';
 
 // Placeholder de consumo diario hasta que tengamos el endpoint real.
 // 14 días, gramos por día. Cuando tengamos historial real, viene del backend.
@@ -1441,13 +1442,15 @@ const FILAMENT_DENSITY_DEFAULTS = {
 // al primer input con `autoFocus` (bug reportado: cursor salta a "Nombre
 // interno" cada vez que escribís en otro campo).
 
-const FORM_INPUT_CLS =
-  'w-full bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm placeholder:text-gunmetal-dim outline-none focus:border-blue-500';
+// Port mk-: el input del mockup (mk-f-input) — bg surface-card-2, borde,
+// 44px min-height, focus azul. `mono`/`resize-y`/`uppercase` se siguen
+// apilando por los call-sites que lo necesitan.
+const FORM_INPUT_CLS = 'mk-f-input';
 
 function FormFieldRow({ label, required, error, children }) {
   return (
     <label className="flex flex-col gap-1 min-w-0">
-      <span className="lbl-eyebrow text-[10px] flex items-center gap-1">
+      <span className="mk-f-label flex items-center gap-1">
         {label}
         {required && <span className="text-rose-400" aria-label="requerido">*</span>}
         {error && (
@@ -1462,11 +1465,7 @@ function FormFieldRow({ label, required, error, children }) {
 }
 
 function FormSectionTitle({ children }) {
-  return (
-    <div className="lbl-eyebrow text-[10px] mt-2 pb-1 border-b border-[var(--color-border-soft)]">
-      {children}
-    </div>
-  );
+  return <div className="mk-fsec-title">{children}</div>;
 }
 
 function emptyFilamentForm() {
