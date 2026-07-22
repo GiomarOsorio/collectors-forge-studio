@@ -106,6 +106,6 @@ test.describe('Print Log — bitácora global (issue #131)', () => {
 
     const hoyBtn = page.getByRole('button', { name: 'Hoy' });
     await hoyBtn.click();
-    await expect(hoyBtn).toHaveClass(/teal/);
+    await expect(hoyBtn).toHaveClass(/active/);
   });
 });

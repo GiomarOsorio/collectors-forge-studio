@@ -24,10 +24,8 @@ import {
 import toast from 'react-hot-toast';
 import {
   AppTabs,
-  Button,
   EmptyState,
   MobileSheet,
-  ResponsiveTable,
   StatusPill,
 } from '../../components/ui';
 import MobileAppHeader from '../../components/MobileAppHeader';
@@ -36,6 +34,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { downloadPrintLogCsv, getPrintLog, getPrinters, getUsers } from '../../services/api';
 import { ACCENT, QUEUE_TABS, fmtDate, fmtTimeHours, itemView, statusBadge } from './queueHelpers';
+import './PrintLogPage.css';
 
 const PAGE_SIZE_KEY = 'cfs-printlog-pagesize';
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
@@ -197,356 +196,224 @@ export default function PrintLogPage() {
   const rangeStart = data.total === 0 ? 0 : (page - 1) * pageSize + 1;
   const rangeEnd = Math.min(page * pageSize, data.total);
 
-  const Filters = (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-2 items-center">
-        <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 min-w-[200px] flex-1 max-w-sm">
-          <Search size={13} className="text-gunmetal" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar pieza…"
-            className="flex-1 bg-transparent border-0 outline-0 text-tech-white text-sm placeholder:text-gunmetal-dim"
-          />
+  const gramsOf = (v) => (v.weight_grams != null ? `${Number(v.weight_grams).toFixed(0)}g` : '—');
+  const rows = data.items;
+  const titleOf = (it) => itemView(it).piece_name || it.notes || `Item #${it.id}`;
+
+  const DesktopFilters = (
+    <div className="mk-filters-desktop">
+      <div className="mk-filter-row">
+        <div className="mk-search-box">
+          <Search size={14} style={{ color: 'var(--cfs-text-tertiary)' }} />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar pieza…" />
         </div>
-        <select
-          value={printerId}
-          onChange={(e) => setPrinterId(e.target.value)}
-          className="bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm focus:outline-none focus:border-teal-500"
-        >
+        <select className="mk-filter-select" value={printerId} onChange={(e) => setPrinterId(e.target.value)}>
           <option value="">Todas las impresoras</option>
-          {printers.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
+          {printers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm focus:outline-none focus:border-teal-500"
-        >
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
+        <select className="mk-filter-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          {STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
         {isAdmin && users.length > 0 && (
-          <select
-            value={userId}
-            onChange={(e) => setUserId(e.target.value)}
-            className="bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm focus:outline-none focus:border-teal-500"
-          >
+          <select className="mk-filter-select" value={userId} onChange={(e) => setUserId(e.target.value)}>
             <option value="">Todos los usuarios</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>{u.username}</option>
-            ))}
+            {users.map((u) => <option key={u.id} value={u.id}>{u.username}</option>)}
           </select>
         )}
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={Download}
-          onClick={handleExportCsv}
-          disabled={exporting}
-        >
-          {exporting ? 'Exportando…' : 'Exportar CSV'}
-        </Button>
+        <button type="button" className="mk-btn mk-btn-secondary" onClick={handleExportCsv} disabled={exporting}>
+          <Download size={14} /> {exporting ? 'Exportando…' : 'Exportar CSV'}
+        </button>
       </div>
-      <div className="flex flex-wrap gap-1.5 items-center">
-        <CalendarClock size={13} className="text-gunmetal shrink-0" />
+      <div className="mk-filter-presets">
+        <CalendarClock size={14} style={{ color: 'var(--cfs-text-tertiary)' }} />
         {DATE_PRESETS.map((preset) => (
-          <button
-            key={preset}
-            type="button"
-            onClick={() => handlePreset(preset)}
-            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
-              activePreset === preset
-                ? 'bg-teal-500/15 border-teal-500/40 text-teal-300'
-                : 'bg-transparent border-[var(--color-border)] text-steel hover:text-tech-white'
-            }`}
-          >
+          <button key={preset} type="button" className={`mk-preset-pill ${activePreset === preset ? 'active' : ''}`} onClick={() => handlePreset(preset)}>
             {preset}
           </button>
         ))}
         {activePreset !== 'Todo' && dateFrom && dateTo && (
-          <span className="mono text-[10.5px] text-gunmetal">
-            {dateFrom} → {dateTo}
-          </span>
+          <span className="mk-preset-range">{dateFrom} → {dateTo}</span>
         )}
       </div>
     </div>
   );
 
-  // Columnas del ResponsiveTable (P2). Desktop: tabla como hoy. Mobile: la
-  // card la controla `mobileCard` (línea secundaria origen/usuario/cant. +
-  // grid de 4 pares), según mockup `queue-printlog.html`.
-  const gramsOf = (v) => (v.weight_grams != null ? `${Number(v.weight_grams).toFixed(0)}g` : '—');
-  const columns = [
-    { key: 'date', label: 'Fecha', className: 'mono text-[11px]', render: (it) => fmtDate(it.created_at) },
-    {
-      key: 'piece',
-      label: 'Pieza',
-      strong: true,
-      className: 'max-w-[220px] truncate',
-      render: (it) => itemView(it).piece_name || it.notes || `Item #${it.id}`,
-    },
-    { key: 'source', label: 'Origen', className: 'capitalize', render: (it) => itemView(it).source },
-    { key: 'printer', label: 'Impresora', render: (it) => itemView(it).printer_name || '—' },
-    { key: 'user', label: 'Usuario', render: (it) => it.created_by_username || '—' },
-    {
-      key: 'status',
-      label: 'Estado',
-      render: (it) => {
-        const badge = statusBadge(it.status);
-        return <StatusPill tone={badge.tone} icon={badge.icon}>{badge.label}</StatusPill>;
-      },
-    },
-    { key: 'quantity', label: 'Cant.', className: 'text-right mono', render: (it) => itemView(it).quantity ?? 1 },
-    { key: 'duration', label: 'Duración', className: 'text-right mono', render: (it) => fmtTimeHours(itemView(it).print_time_hours) },
-    { key: 'filament', label: 'Filamento', className: 'text-right mono', render: (it) => gramsOf(itemView(it)) },
-  ];
-
-  const pair = (label, value, mono) => (
-    <div>
-      <div className="mono text-[8.5px] font-bold uppercase tracking-[0.08em] text-gunmetal mb-0.5">{label}</div>
-      <div className={`text-[12.5px] font-semibold text-tech-white ${mono ? 'mono' : ''}`}>{value}</div>
+  const MobileFilterTrigger = (
+    <div className="mk-filters-mobile-trigger">
+      <button type="button" className="mk-filter-trigger-btn" onClick={() => setFiltersOpen(true)}>
+        <span className="inline-flex items-center gap-2"><SlidersHorizontal size={15} /> Filtros</span>
+        {activeFilterCount > 0 && (
+          <span className="badge-count">{activeFilterCount} activo{activeFilterCount > 1 ? 's' : ''}</span>
+        )}
+      </button>
     </div>
   );
 
-  const mobileCard = (it) => {
-    const v = itemView(it);
-    const badge = statusBadge(it.status);
-    return (
-      <div className="bg-[var(--color-surf-card)] border border-[var(--color-border)] rounded-xl px-3.5 py-3.5 mb-2.5">
-        <div className="flex items-start justify-between gap-2.5 mb-1">
-          <div className="text-[14.5px] font-bold text-tech-white leading-snug min-w-0 flex-1">
-            {v.piece_name || it.notes || `Item #${it.id}`}
-          </div>
-          <StatusPill tone={badge.tone} icon={badge.icon}>{badge.label}</StatusPill>
-        </div>
-        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[11px] text-gunmetal mb-2.5">
-          <span className="capitalize">{v.source}</span>
-          <span className="text-[var(--color-border-bright)]">·</span>
-          <span>{it.created_by_username || '—'}</span>
-          <span className="text-[var(--color-border-bright)]">·</span>
-          <span>cant. {v.quantity ?? 1}</span>
-        </div>
-        <div className="grid grid-cols-2 gap-x-3 gap-y-2 pt-2.5 border-t border-dashed border-[var(--color-border-soft)]">
-          {pair('Fecha', fmtDate(it.created_at), true)}
-          {pair('Impresora', v.printer_name || '—', false)}
-          {pair('Duración', fmtTimeHours(v.print_time_hours), true)}
-          {pair('Filamento', gramsOf(v), true)}
-        </div>
+  const DesktopTable = (
+    <div className="mk-table-card">
+      <div className="mk-table-scroll">
+        <table className="mk-log-table">
+          <thead>
+            <tr>
+              <th>Fecha</th><th>Pieza</th><th>Origen</th><th>Impresora</th><th>Usuario</th><th>Estado</th>
+              <th className="num">Cant.</th><th className="num">Duración</th><th className="num">Filamento</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((it) => {
+              const v = itemView(it);
+              const badge = statusBadge(it.status);
+              return (
+                <tr key={it.id}>
+                  <td className="date">{fmtDate(it.created_at)}</td>
+                  <td className="piece truncate">{titleOf(it)}</td>
+                  <td className="capitalize">{v.source}</td>
+                  <td>{v.printer_name || '—'}</td>
+                  <td>{it.created_by_username || '—'}</td>
+                  <td><StatusPill tone={badge.tone} icon={badge.icon}>{badge.label}</StatusPill></td>
+                  <td className="num">{v.quantity ?? 1}</td>
+                  <td className="num">{fmtTimeHours(v.print_time_hours)}</td>
+                  <td className="num">{gramsOf(v)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
-    );
-  };
-
-  const emptyState = !loading && (
-    <EmptyState
-      icon={ScrollText}
-      accent={ACCENT}
-      title="Sin resultados"
-      hint="Ajusta los filtros o el rango de fechas."
-    />
+    </div>
   );
 
-  const Table = (
-    <ResponsiveTable
-      columns={columns}
-      rows={data.items}
-      rowKey={(it) => it.id}
-      mobileCard={mobileCard}
-      minWidth={920}
-      empty={data.items.length === 0 ? emptyState : null}
-    />
+  const MobileCards = (
+    <div className="mk-log-cards">
+      {rows.map((it) => {
+        const v = itemView(it);
+        const badge = statusBadge(it.status);
+        return (
+          <div key={it.id} className="mk-log-card">
+            <div className="mk-log-card-top">
+              <div className="mk-log-card-title truncate">{titleOf(it)}</div>
+              <StatusPill tone={badge.tone} icon={badge.icon}>{badge.label}</StatusPill>
+            </div>
+            <div className="mk-log-card-secondary">
+              <span className="capitalize">{v.source}</span><span className="sep">·</span>
+              <span>{it.created_by_username || '—'}</span><span className="sep">·</span>
+              <span>cant. {v.quantity ?? 1}</span>
+            </div>
+            <div className="mk-log-card-grid">
+              <div><div className="mk-log-pair-label">Fecha</div><div className="mk-log-pair-value mono">{fmtDate(it.created_at)}</div></div>
+              <div><div className="mk-log-pair-label">Impresora</div><div className="mk-log-pair-value">{v.printer_name || '—'}</div></div>
+              <div><div className="mk-log-pair-label">Duración</div><div className="mk-log-pair-value mono">{fmtTimeHours(v.print_time_hours)}</div></div>
+              <div><div className="mk-log-pair-label">Filamento</div><div className="mk-log-pair-value mono">{gramsOf(v)}</div></div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 
   const Pagination = data.total > 0 && (
-    <div className="flex flex-wrap items-center gap-3 justify-between">
-      <span className="mono text-[11px] text-gunmetal">
-        {rangeStart}-{rangeEnd} de {data.total}
-      </span>
-      <div className="flex items-center gap-2">
-        <select
-          value={pageSize}
-          onChange={(e) => handlePageSizeChange(e.target.value)}
-          className="bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2 py-1 text-tech-white text-xs focus:outline-none"
-        >
-          {PAGE_SIZE_OPTIONS.map((n) => (
-            <option key={n} value={n}>{n} / página</option>
-          ))}
+    <div className="mk-pagination-row">
+      <span className="mk-pagination-count">{rangeStart}-{rangeEnd} de {data.total}</span>
+      <div className="mk-pagination-controls">
+        <select className="mk-page-size-select" value={pageSize} onChange={(e) => handlePageSizeChange(e.target.value)}>
+          {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n} / página</option>)}
         </select>
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={ChevronLeft}
-          onClick={() => setPage((p) => Math.max(1, p - 1))}
-          disabled={page <= 1}
-          aria-label="Página anterior"
-        />
-        <span className="mono text-xs text-steel">{page} / {totalPages}</span>
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={ChevronRight}
-          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-          disabled={page >= totalPages}
-          aria-label="Página siguiente"
-        />
+        <button type="button" className="mk-page-btn" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} aria-label="Página anterior">
+          <ChevronLeft size={16} />
+        </button>
+        <span className="mk-page-indicator">{page} / {totalPages}</span>
+        <button type="button" className="mk-page-btn" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} aria-label="Página siguiente">
+          <ChevronRight size={16} />
+        </button>
       </div>
     </div>
   );
 
-  // Botón que abre el sheet de filtros en mobile (los 4 filtros + presets
-  // no caben en una fila sin apilar 4 líneas). Badge = nº de filtros activos.
-  const FiltersTrigger = (
-    <button
-      type="button"
-      onClick={() => setFiltersOpen(true)}
-      className="flex items-center justify-between gap-2.5 w-full px-3.5 py-2.5 rounded-[10px] bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] text-tech-white text-[13.5px] font-semibold min-h-[44px]"
-    >
-      <span className="inline-flex items-center gap-2">
-        <SlidersHorizontal size={14} /> Filtros
-      </span>
-      {activeFilterCount > 0 && (
-        <span className="mono text-[10.5px] font-bold bg-teal-500/[0.16] text-teal-300 rounded-full px-2 py-0.5">
-          {activeFilterCount} activo{activeFilterCount > 1 ? 's' : ''}
-        </span>
-      )}
-    </button>
-  );
-
-  const sheetSelectCls =
-    'w-full px-3 py-2.5 rounded-[9px] bg-[var(--color-surf-card-2)] border border-[var(--color-border)] text-tech-white text-sm outline-none min-h-[44px] focus:border-teal-500';
-  const sheetLabelCls =
-    'mono text-[9.5px] font-bold uppercase tracking-[0.1em] text-gunmetal mb-1.5';
-
   const FilterSheet = (
     <MobileSheet open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filtros">
-      <div className="px-4 pt-3 pb-6">
-        <div className="mb-3.5">
-          <div className={sheetLabelCls}>Buscar pieza</div>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Nombre de la pieza…"
-            className={sheetSelectCls}
-          />
+      <div className="px-4 pt-2 pb-6">
+        <div className="mk-sheet-field">
+          <div className="mk-sheet-field-label">Buscar pieza</div>
+          <input className="mk-sheet-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Nombre de la pieza…" />
         </div>
-        <div className="mb-3.5">
-          <div className={sheetLabelCls}>Impresora</div>
-          <select value={printerId} onChange={(e) => setPrinterId(e.target.value)} className={sheetSelectCls}>
+        <div className="mk-sheet-field">
+          <div className="mk-sheet-field-label">Impresora</div>
+          <select className="mk-sheet-select" value={printerId} onChange={(e) => setPrinterId(e.target.value)}>
             <option value="">Todas las impresoras</option>
-            {printers.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
+            {printers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </div>
-        <div className="mb-3.5">
-          <div className={sheetLabelCls}>Estado</div>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={sheetSelectCls}>
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
+        <div className="mk-sheet-field">
+          <div className="mk-sheet-field-label">Estado</div>
+          <select className="mk-sheet-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            {STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
         </div>
         {isAdmin && users.length > 0 && (
-          <div className="mb-3.5">
-            <div className={sheetLabelCls}>Usuario</div>
-            <select value={userId} onChange={(e) => setUserId(e.target.value)} className={sheetSelectCls}>
+          <div className="mk-sheet-field">
+            <div className="mk-sheet-field-label">Usuario</div>
+            <select className="mk-sheet-select" value={userId} onChange={(e) => setUserId(e.target.value)}>
               <option value="">Todos los usuarios</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>{u.username}</option>
-              ))}
+              {users.map((u) => <option key={u.id} value={u.id}>{u.username}</option>)}
             </select>
           </div>
         )}
-        <div className="mb-3.5">
-          <div className={sheetLabelCls}>Rango de fechas</div>
-          <div className="flex flex-wrap gap-2">
+        <div className="mk-sheet-field">
+          <div className="mk-sheet-field-label">Rango de fechas</div>
+          <div className="mk-sheet-presets">
             {DATE_PRESETS.map((preset) => (
-              <button
-                key={preset}
-                type="button"
-                onClick={() => handlePreset(preset)}
-                className={`px-3.5 py-2 rounded-full text-[13px] font-semibold border transition-colors min-h-[40px] ${
-                  activePreset === preset
-                    ? 'bg-teal-500/15 border-teal-500/40 text-teal-300'
-                    : 'bg-transparent border-[var(--color-border)] text-steel'
-                }`}
-              >
+              <button key={preset} type="button" className={`mk-sheet-preset-pill ${activePreset === preset ? 'active' : ''}`} onClick={() => handlePreset(preset)}>
                 {preset}
               </button>
             ))}
           </div>
         </div>
         <div className="flex gap-2.5 mt-4">
-          <Button variant="ghost" className="flex-1" onClick={handleClearFilters}>
-            Limpiar
-          </Button>
-          <Button variant="primary" className="flex-[2]" onClick={() => setFiltersOpen(false)}>
-            Aplicar filtros
-          </Button>
+          <button type="button" className="mk-btn mk-btn-secondary" style={{ flex: 1 }} onClick={handleClearFilters}>Limpiar</button>
+          <button type="button" className="mk-btn mk-btn-primary" style={{ flex: 2 }} onClick={() => setFiltersOpen(false)}>Aplicar filtros</button>
         </div>
       </div>
     </MobileSheet>
   );
 
-  if (isMobile) {
-    return (
-      <div className="flex flex-col gap-3">
-        <MobileAppHeader
-          appName="Bitácora"
-          appIcon={ScrollText}
-          appAccent={ACCENT}
-          title="Bitácora"
-          onMenu={() => openSidebar?.()}
-        />
-        <AppTabs
-          items={QUEUE_TABS}
-          value="bitacora"
-          onChange={handleTabChange}
-          accent={ACCENT}
-          className="px-4"
-        />
-        <div className="px-4">{FiltersTrigger}</div>
-        <div className="px-4">
-          {loading ? (
-            <p className="py-12 text-center text-gunmetal text-sm">Cargando…</p>
-          ) : (
-            Table
-          )}
-        </div>
-        <div className="px-4 pb-6">{Pagination}</div>
-        {FilterSheet}
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col gap-4 p-6">
-      <header className="flex items-center gap-2">
-        <span
-          className="inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0"
-          style={{ background: `${ACCENT}1F`, color: ACCENT, border: `1px solid ${ACCENT}40` }}
-        >
-          <ScrollText size={13} />
-        </span>
-        <span className="text-sm text-gunmetal">Queue</span>
-        <span className="text-gunmetal-dim">›</span>
-        <span className="text-sm font-semibold text-tech-white">Bitácora</span>
-      </header>
+    <div className="flex flex-col min-h-screen -m-4 md:-m-6 xl:-m-8" style={{ '--page-accent': 'var(--color-app-queue)' }}>
+      {isMobile ? (
+        <MobileAppHeader appName="Queue" appIcon={ScrollText} appAccent={ACCENT} title="Bitácora" onMenu={() => openSidebar?.()} />
+      ) : (
+        <header className="mk-page-header">
+          <div className="mk-ph-icon"><ScrollText size={16} /></div>
+          <div className="flex-1 min-w-0">
+            <div className="mk-ph-eyebrow"><span className="mk-dot" /> Queue</div>
+            <div className="mk-ph-title">Bitácora global de impresiones</div>
+          </div>
+        </header>
+      )}
+
       <AppTabs
         items={QUEUE_TABS}
         value="bitacora"
         onChange={handleTabChange}
         accent={ACCENT}
+        className="px-4 md:px-6"
       />
-      {Filters}
-      {loading ? (
-        <p className="py-16 text-center text-gunmetal text-sm">Cargando bitácora…</p>
-      ) : (
-        Table
-      )}
-      {Pagination}
+
+      <div className="mk-ql-max px-4 md:px-6 pt-3 pb-24">
+        {DesktopFilters}
+        {MobileFilterTrigger}
+        {loading ? (
+          <p className="py-16 text-center text-gunmetal text-sm">Cargando bitácora…</p>
+        ) : rows.length === 0 ? (
+          <EmptyState icon={ScrollText} accent={ACCENT} title="Sin resultados" hint="Ajusta los filtros o el rango de fechas." />
+        ) : (
+          <>
+            {isMobile ? MobileCards : DesktopTable}
+            {Pagination}
+          </>
+        )}
+      </div>
+
+      {FilterSheet}
     </div>
   );
 }
