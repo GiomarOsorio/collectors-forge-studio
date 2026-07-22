@@ -44,7 +44,12 @@
   display: flex; align-items: center; gap: 6px;
 }
 .mk-ph-eyebrow .mk-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--page-accent); }
-.mk-ph-title { font-size: 19px; font-weight: 700; letter-spacing: -.01em; margin-top: 1px; color: var(--cfs-text); }
+.mk-ph-title { font-size: 19px; font-weight: 700; letter-spacing: -.01em; margin-top: 1px; color: var(--cfs-text); display: flex; align-items: center; gap: 8px; }
+.mk-ph-count {
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
+  background: var(--cfs-surface-card-2); border: 1px solid var(--cfs-border);
+  color: var(--cfs-text-secondary); padding: 2px 8px; border-radius: 999px;
+}
 
 /* ── Botones (accent por --page-accent) ───────────────────────────────────── */
 .mk-btn {

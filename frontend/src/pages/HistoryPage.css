@@ -1,0 +1,95 @@
+/**
+ * HistoryPage.css — port 1:1 de projects-history.html §History.
+ * Prefijo `mk-`, tokens --cfs-* + --page-accent (cost = teal #2DD4BF).
+ * Shell (mk-page-header) + sub-nav de Costos (AppTabs) reutilizados.
+ */
+
+.mk-hist-max { max-width: 1100px; }
+
+/* ── Tabla desktop (P2) — wrapper SIEMPRE overflow-x-auto ─────────────────── */
+.mk-hist-table-wrap {
+  display: none;
+  background: var(--cfs-surface-card); border: 1px solid var(--cfs-border-legacy);
+  border-radius: 14px; overflow-x: auto; margin-top: 12px;
+}
+table.mk-hist-table { width: 100%; border-collapse: collapse; min-width: 640px; }
+table.mk-hist-table thead tr { background: var(--cfs-surface-card-2); }
+table.mk-hist-table th {
+  text-align: left; padding: 10px 14px;
+  font-family: var(--font-mono); font-size: 9.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--cfs-text-tertiary); white-space: nowrap;
+  border-bottom: 1px solid var(--cfs-border-legacy);
+}
+table.mk-hist-table th.num, table.mk-hist-table td.num { text-align: right; }
+table.mk-hist-table td {
+  padding: 11px 14px; font-size: 12.5px; color: var(--cfs-text-secondary);
+  border-bottom: 1px solid var(--cfs-border); white-space: nowrap;
+}
+table.mk-hist-table tr:last-child td { border-bottom: none; }
+table.mk-hist-table tr:hover td { background: var(--cfs-surface-hover); }
+table.mk-hist-table td.piece { color: var(--cfs-text); font-weight: 500; }
+table.mk-hist-table td.total { font-family: var(--font-mono); font-weight: 700; color: var(--forge-teal); }
+.mk-row-actions { display: inline-flex; gap: 4px; justify-content: flex-end; }
+.mk-icon-btn {
+  width: 32px; height: 32px; border-radius: 8px; border: none;
+  background: transparent; color: var(--cfs-text-tertiary);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.mk-icon-btn:hover { background: var(--cfs-surface-hover); color: var(--cfs-text); }
+.mk-icon-btn.danger:hover { background: rgba(244,63,94,.12); color: var(--forge-rose); }
+
+/* ── Cards mobile (P2) ────────────────────────────────────────────────────── */
+.mk-hist-cards { display: block; margin-top: 12px; }
+.mk-hist-card {
+  background: var(--cfs-surface-card); border: 1px solid var(--cfs-border-legacy);
+  border-radius: 14px; padding: 14px; margin-bottom: 10px;
+}
+.mk-hc-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.mk-hc-title { font-size: 13.5px; font-weight: 600; min-width: 0; color: var(--cfs-text); }
+.mk-hc-total {
+  font-family: var(--font-mono); font-size: 14px; font-weight: 700;
+  color: var(--forge-teal); flex-shrink: 0; white-space: nowrap;
+}
+.mk-hc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+.mk-hc-pair label {
+  display: block; font-family: var(--font-mono); font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--cfs-text-tertiary); margin-bottom: 2px;
+}
+.mk-hc-pair span { font-size: 12.5px; color: var(--cfs-text-secondary); }
+.mk-hc-actions {
+  display: flex; gap: 8px; margin-top: 12px; padding-top: 10px;
+  border-top: 1px solid var(--cfs-border);
+}
+.mk-hc-actions .mk-btn { flex: 1; min-height: 44px; font-size: 12.5px; }
+
+@media (min-width: 1024px) {
+  .mk-hist-table-wrap { display: block; }
+  .mk-hist-cards { display: none; }
+}
+
+/* ── Desglose de costos (detalle) ─────────────────────────────────────────── */
+.mk-cost-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding: 7px 0; font-size: 13px; border-bottom: 1px solid var(--cfs-border-soft);
+}
+.mk-cost-row:last-child { border-bottom: none; }
+.mk-cost-row .lbl { color: var(--cfs-text-secondary); min-width: 0; }
+.mk-cost-row .val { font-family: var(--font-mono); font-weight: 600; flex-shrink: 0; color: var(--cfs-text); }
+.mk-cost-row.bold .lbl { color: var(--cfs-text); font-weight: 600; }
+.mk-cost-row.bold .val { font-weight: 700; }
+.mk-cost-total-usd {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  background: rgba(45,212,191,.08); border-radius: 10px; padding: 9px 12px; margin: 8px 0 0;
+}
+.mk-cost-total-usd .lbl { font-weight: 600; color: var(--cfs-text); }
+.mk-cost-total-usd .val { font-family: var(--font-mono); font-weight: 700; color: var(--forge-teal); }
+.mk-cost-total-cop {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  background: rgba(45,212,191,.1); border: 1px solid rgba(45,212,191,.25);
+  border-radius: 10px; padding: 10px 12px; margin-top: 8px;
+}
+.mk-cost-total-cop .lbl { font-weight: 600; color: var(--forge-teal); min-width: 0; }
+.mk-cost-total-cop .val { font-family: var(--font-mono); font-weight: 700; font-size: 16px; color: var(--forge-teal); flex-shrink: 0; }
+.mk-cost-rate-hint { font-size: 10.5px; color: var(--cfs-text-tertiary); margin-top: 8px; font-family: var(--font-mono); }
