@@ -16,7 +16,9 @@ import { loginAsDev } from './helpers/auth.js';
 
 const PAGES = [
   { path: '/', name: 'studio-home' },
-  { path: '/inventory', name: 'inventory' },
+  // /inventory (Resumen) se cubre de forma determinista en
+  // inventory-responsive.spec.js (contenido mockeado). Se saca de acá para
+  // no depender del seed real, que renderiza distinto según el entorno.
   { path: '/cost', name: 'cost' },
   { path: '/cost/calculator/v2', name: 'calculator' },
   { path: '/queue', name: 'queue' },
