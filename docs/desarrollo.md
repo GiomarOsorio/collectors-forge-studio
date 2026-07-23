@@ -111,6 +111,28 @@ npm run lint     # ESLint
 npm test         # Vitest (tests unitarios del frontend)
 ```
 
+### Convención UI (sistema mk-)
+
+Las pantallas usan el **sistema de diseño `mk-`** (ver
+[arquitectura.md → "Sistema de diseño UI"](arquitectura.md#sistema-de-diseño-ui-responsive)).
+Al crear/portar una página:
+
+1. Reusar clases compartidas de `src/styles/mockup-system.css` (`mk-page-header`,
+   `mk-kpi-*`, `mk-btn*`, `mk-field`, `mk-status-pill`, `mk-fab`…) y componentes
+   `components/ui/` (AppTabs, KPIStrip, LineItems, MobileSheet/DetailDrawer).
+2. Lo específico de la vista va en un `PageName.css` co-locado, **importado en su
+   `.jsx`** (`import './PageName.css'`) — es fácil olvidarlo y queda sin estilo.
+3. Fijar el acento con `style={{ '--page-accent': '<color-app>' }}` en el wrapper.
+4. Shell dual: `MobileAppHeader` (<1024) / `mk-page-header` (≥1024) con `useIsMobile`.
+   Para tablas/listas, renderizar **un solo árbol** por breakpoint (gate con
+   `useIsMobile`, no CSS `display`) para no duplicar nodos que rompen `getByText`.
+5. Los tests visuales (`toHaveScreenshot`) deben **mockear el API** para ser
+   deterministas (el runner de CI difiere del seed local). Umbral en
+   `playwright.config.js` (`maxDiffPixelRatio: 0.05`).
+
+Referencia de patrones: `agent-docs/ui-responsive/` (mockups por pantalla +
+`patterns.html`, el catálogo del design system).
+
 ---
 
 ## 3. Ejecutar los tests
