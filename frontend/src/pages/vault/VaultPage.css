@@ -1,0 +1,92 @@
+/**
+ * VaultPage.css — port 1:1 de vault.html (sistema `mk-`).
+ * Prefijo `mk-vault-` / `mk-model-*`, tokens --cfs-* + --page-accent
+ * (vault = rose #F43F5E). Shell (mk-page-header, AppTabs) reutilizado.
+ */
+
+/* ── KPI strip (P5) ───────────────────────────────────────────────────────── */
+.mk-vault-kpi-wrap { position: relative; }
+.mk-vault-kpi-strip {
+  display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 8px; margin: 0 -2px 4px;
+  scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch;
+}
+.mk-vault-kpi-strip::-webkit-scrollbar { display: none; }
+.mk-vault-kpi-wrap::after {
+  content: ''; position: absolute; top: 0; right: 0; bottom: 8px; width: 28px;
+  background: linear-gradient(to right, transparent, var(--cfs-bg)); pointer-events: none;
+}
+.mk-vault-kpi-card {
+  scroll-snap-align: start; flex: 0 0 168px; min-width: 168px; padding: 14px 16px; border-radius: 12px;
+  background: var(--cfs-surface-card); border: 1px solid var(--cfs-border-legacy);
+}
+.mk-vault-kpi-card .kpi-label { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--cfs-text-tertiary); }
+.mk-vault-kpi-card .kpi-value { font-family: var(--font-mono); font-size: 22px; font-weight: 700; line-height: 1; margin-bottom: 4px; color: var(--cfs-text); }
+.mk-vault-kpi-card .kpi-value .unit { font-size: 12px; font-weight: 500; color: var(--cfs-text-tertiary); margin-left: 4px; }
+.mk-vault-kpi-card .kpi-sub { font-size: 11.5px; color: var(--cfs-text-tertiary); }
+@media (min-width: 1024px) {
+  .mk-vault-kpi-wrap::after { display: none; }
+  .mk-vault-kpi-strip { flex-wrap: wrap; overflow: visible; }
+  .mk-vault-kpi-card { flex: 1 1 168px; }
+}
+
+/* ── Search ───────────────────────────────────────────────────────────────── */
+.mk-vault-search-row { display: flex; gap: 8px; align-items: center; margin: 14px 0; }
+.mk-vault-search {
+  flex: 1; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--cfs-border-strong); background: var(--cfs-surface-sidebar);
+  color: var(--cfs-text); font-size: 13px; min-height: 44px;
+}
+.mk-vault-search input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; color: var(--cfs-text); font-size: 13px; }
+.mk-vault-search input::placeholder { color: var(--cfs-text-tertiary); }
+
+/* ── Section title ────────────────────────────────────────────────────────── */
+.mk-vault-section-title { font-size: 13px; font-weight: 600; margin: 18px 0 10px; display: flex; align-items: center; justify-content: space-between; color: var(--cfs-text); }
+
+/* ── Folder cards ─────────────────────────────────────────────────────────── */
+.mk-folder-card {
+  border-radius: 14px; padding: 18px 14px 14px; cursor: pointer;
+  background: var(--cfs-surface-card); border: 1px solid var(--cfs-border-legacy); min-width: 0;
+}
+.mk-folder-card:hover { border-color: var(--cfs-border-bright); }
+.mk-folder-icon { font-size: 32px; color: var(--forge-rose); opacity: .85; margin-bottom: 10px; display: flex; }
+.mk-folder-card .f-name { font-size: 13px; font-weight: 600; color: var(--cfs-text); }
+.mk-folder-card .f-sub { font-size: 11px; color: var(--cfs-text-tertiary); margin-top: 2px; }
+
+/* ── Model grid + card ────────────────────────────────────────────────────── */
+.mk-model-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+@media (min-width: 640px) { .mk-model-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 1024px) { .mk-model-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; } }
+
+.mk-model-card {
+  border-radius: 14px; overflow: hidden; cursor: pointer; min-width: 0;
+  background: var(--cfs-surface-card); border: 1px solid var(--cfs-border-legacy);
+  transition: border-color .15s, background .15s;
+}
+.mk-model-card:hover { border-color: var(--cfs-border-bright); background: var(--cfs-surface-card-2); }
+.mk-model-card .thumb {
+  aspect-ratio: 1 / 1; position: relative; display: flex; align-items: flex-start; padding: 8px;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(244,63,94,0.09), transparent 55%),
+    repeating-linear-gradient(135deg, var(--cfs-surface-card-2) 0 2px, transparent 2px 14px);
+  background-color: #05070C;
+}
+html:not(.dark) .mk-model-card .thumb { background-color: #E9ECF1; }
+.mk-model-card .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.mk-model-card .thumb-icon { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0.18; color: var(--cfs-text-tertiary); }
+.mk-model-card .meta { padding: 10px 12px 12px; }
+.mk-model-card .m-name { font-size: 13px; font-weight: 600; margin: 6px 0 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--cfs-text); }
+.mk-model-card .m-sub { font-size: 11px; color: var(--cfs-text-tertiary); font-family: var(--font-mono); }
+.mk-model-card .m-actions { display: flex; gap: 4px; margin-top: 8px; }
+.mk-model-card .m-actions button {
+  flex: 1; font-size: 10.5px; padding: 6px; min-height: 30px; border-radius: 7px;
+  border: 1px solid var(--cfs-border); background: transparent; color: var(--cfs-text-tertiary); font-weight: 500;
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+}
+.mk-model-card .m-actions button:hover { color: var(--cfs-text); border-color: var(--cfs-border-bright); background: var(--cfs-surface-hover); }
+
+/* ── MakerWorld badge ─────────────────────────────────────────────────────── */
+.mk-badge-makerworld {
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; font-size: 9.5px; font-weight: 700;
+  letter-spacing: .04em; border-radius: 6px; background: rgba(0,245,212,0.10); color: #00D3B5;
+  border: 1px solid rgba(0,245,212,0.28); font-family: var(--font-mono);
+}
