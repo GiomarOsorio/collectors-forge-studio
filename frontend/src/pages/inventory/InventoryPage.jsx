@@ -176,25 +176,19 @@ function CategoryTabs({ value, onChange, counts }) {
 
 function Toolbar({ query, onQuery, materialFilters, onToggleMat, view, onView, sort, onSort, onClear }) {
   return (
-    <div className="flex flex-wrap gap-3 items-center px-6 py-3 sticky top-0 bg-forge-black/80 backdrop-blur z-10">
-      {/* Search */}
-      <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 min-w-[260px] basis-[280px] flex-1 max-w-md">
-        <Search size={13} className="text-gunmetal shrink-0" />
+    <div className="mk-inv-toolbar px-4 md:px-6 pt-3 sticky top-0 bg-forge-black/80 backdrop-blur z-10">
+      {/* Search (mk-) */}
+      <div className="mk-inv-search">
+        <Search size={14} style={{ color: 'var(--cfs-text-tertiary)' }} className="shrink-0" />
         <input
           data-search-input
           value={query}
           onChange={(e) => onQuery(e.target.value)}
           placeholder="Buscar color, batch, ubicación…"
-          className="flex-1 bg-transparent border-0 outline-0 text-tech-white text-sm placeholder:text-gunmetal-dim"
         />
         {query && (
-          <button
-            type="button"
-            onClick={() => onQuery('')}
-            className="text-gunmetal hover:text-tech-white"
-            aria-label="Limpiar búsqueda"
-          >
-            <X size={12} />
+          <button type="button" onClick={() => onQuery('')} aria-label="Limpiar búsqueda" style={{ color: 'var(--cfs-text-tertiary)' }}>
+            <X size={13} />
           </button>
         )}
       </div>
@@ -225,7 +219,7 @@ function Toolbar({ query, onQuery, materialFilters, onToggleMat, view, onView, s
         <select
           value={sort}
           onChange={(e) => onSort(e.target.value)}
-          className="input mono text-xs pr-8 cursor-pointer w-auto min-w-[180px] appearance-none"
+          className="mk-f-select mono text-xs pr-8 cursor-pointer w-auto min-w-[180px] appearance-none"
         >
           <option value="lowFirst">Stock bajo primero</option>
           <option value="material">Por material</option>
@@ -233,11 +227,11 @@ function Toolbar({ query, onQuery, materialFilters, onToggleMat, view, onView, s
           <option value="valueDesc">Valor (mayor)</option>
           <option value="weightDesc">Peso restante</option>
         </select>
-        <ChevronDown size={12} className="absolute right-2.5 top-2.5 text-gunmetal pointer-events-none" />
+        <ChevronDown size={12} className="absolute right-2.5 top-3 pointer-events-none" style={{ color: 'var(--cfs-text-tertiary)' }} />
       </div>
 
-      {/* View toggle */}
-      <div className="inline-flex border border-[var(--color-border-strong)] rounded-md overflow-hidden bg-[var(--color-surf-card)]">
+      {/* View toggle (mk-) */}
+      <div className="mk-inv-viewtoggle">
         {[
           { id: 'grid', icon: Grid3x3, label: 'Vista grid' },
           { id: 'table', icon: List, label: 'Vista tabla' },
@@ -249,13 +243,11 @@ function Toolbar({ query, onQuery, materialFilters, onToggleMat, view, onView, s
               key={v.id}
               type="button"
               onClick={() => onView(v.id)}
-              className={`px-2.5 py-1.5 transition-colors ${
-                active ? 'bg-[var(--color-surf-hover)] text-tech-white' : 'text-gunmetal hover:text-tech-white'
-              }`}
+              className={active ? 'active' : ''}
               aria-label={v.label}
               aria-pressed={active}
             >
-              <Icon size={13} />
+              <Icon size={14} />
             </button>
           );
         })}
@@ -430,23 +422,18 @@ function FilamentGrid({ groups, onCardClick, spoolCountById }) {
 
 // ─── Table view ──────────────────────────────────────────────────────────────
 
-function FilamentTable({ items, onRowClick }) {
+function FilamentTable({ items, onRowClick, spoolCountById }) {
   return (
-    <div className="px-6 pb-8">
-      {/* Fix #15: overflow-x-auto (antes overflow-hidden) + min-width para que
-          en 1024-1279px (contenido ~736px con sidebar) la tabla haga scroll-x
-          en vez de comprimir columnas ilegiblemente. Ref: inventory.html. */}
-      <div className="border border-[var(--color-border)] rounded-xl overflow-x-auto bg-[var(--color-surf-card)]">
-        <table className="w-full border-collapse min-w-[860px]">
+    <div className="px-4 md:px-6 pb-8">
+      {/* Fix #15 (mk-ftable): wrapper overflow-x-auto SIEMPRE + min-width, para
+          que en 1024-1279px la tabla haga scroll-x en vez de comprimir
+          columnas. Ref: inventory.html §Filamentos. */}
+      <div className="mk-ftable-wrap">
+        <table className="mk-ftable">
           <thead>
             <tr>
-              {['', 'Color · Batch', 'Material', 'Vendor', 'Restante', 'Costo/kg', 'Ubicación'].map((h, idx) => (
-                <th
-                  key={idx}
-                  className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-gunmetal px-3 py-2.5 border-b border-[var(--color-border)] bg-forge-black sticky top-0 z-[1]"
-                >
-                  {h}
-                </th>
+              {['', 'Color · Batch', 'Material', 'Vendor', 'Restante', 'Bobinas', 'Costo/kg', 'Ubicación'].map((h, idx) => (
+                <th key={idx}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -454,43 +441,29 @@ function FilamentTable({ items, onRowClick }) {
             {items.map((f) => {
               const level = stockLevel(f);
               const p = fillPercent(f);
+              const spoolCount = spoolCountById?.[f.id] || 0;
               return (
-                <tr
-                  key={f.id}
-                  onClick={() => onRowClick(f)}
-                  className="cursor-pointer hover:bg-[var(--color-surf-hover)]/60 transition-colors border-b border-[var(--color-border-soft)] last:border-b-0"
-                >
-                  <td className="px-3 py-3 w-[44px]">
+                <tr key={f.id} onClick={() => onRowClick(f)}>
+                  <td style={{ width: 44 }}>
                     <Swatch color={f.color} size={26} level={level} />
                   </td>
-                  <td className="px-3 py-3">
-                    <div className="text-sm font-medium text-tech-white truncate">{f.colorName}</div>
-                    <div className="mono text-[11px] text-gunmetal">{f.batch || '—'}</div>
+                  <td>
+                    <div className="mk-cell-strong truncate">{f.colorName}</div>
+                    <div className="mk-cell-batch">{f.batch || '—'}</div>
                   </td>
-                  <td className="px-3 py-3 w-[80px]">
-                    <span className="mono text-[10.5px] px-1.5 py-0.5 rounded-sm bg-white/5 border border-[var(--color-border)] text-steel tracking-wider">
-                      {f.material}
+                  <td style={{ width: 80 }}><span className="mk-mat-chip">{f.material}</span></td>
+                  <td className="mono" style={{ fontSize: '11.5px' }}>{f.vendor}</td>
+                  <td style={{ width: 180 }}>
+                    <span className="mono" style={{ fontSize: 12, color: 'var(--cfs-text)' }}>
+                      {fmtG(f.remaining)} <span style={{ color: 'var(--cfs-text-tertiary)' }}>/ {fmtKg(f.total)}</span>
                     </span>
-                  </td>
-                  <td className="px-3 py-3 w-[110px] mono text-xs text-steel">{f.vendor}</td>
-                  <td className="px-3 py-3 w-[180px]">
-                    <div className="flex flex-col gap-1">
-                      <span className="mono text-xs text-tech-white">
-                        {fmtG(f.remaining)} <span className="text-gunmetal">/ {fmtKg(f.total)}</span>
-                      </span>
-                      <div className="h-0.5 bg-white/5 rounded">
-                        <div
-                          className="h-full rounded"
-                          style={{
-                            width: `${p}%`,
-                            background: level === 'ok' ? '#3B82F6' : '#FBBF24',
-                          }}
-                        />
-                      </div>
+                    <div className="mk-fill-track">
+                      <div className={`mk-fill-bar${level === 'ok' ? '' : ' low'}`} style={{ width: `${p}%` }} />
                     </div>
                   </td>
-                  <td className="px-3 py-3 w-[110px] mono text-xs text-tech-white">{fmtUSD(f.costPerKg)}</td>
-                  <td className="px-3 py-3 mono text-[11px] text-steel">{f.location || '—'}</td>
+                  <td className="mono" style={{ color: 'var(--cfs-text-secondary)' }}>{spoolCount > 0 ? spoolCount : '—'}</td>
+                  <td className="mono" style={{ color: 'var(--cfs-text)' }}>{fmtUSD(f.costPerKg)}</td>
+                  <td className="mono" style={{ fontSize: 11 }}>{f.location || '—'}</td>
                 </tr>
               );
             })}
@@ -3648,26 +3621,18 @@ export default function InventoryPage({ section = 'resumen' }) {
 
   // ── Shell desktop ──────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col min-h-screen -m-4 md:-m-6 xl:-m-8">
-      {/* Header */}
-      <header className="flex items-center gap-4 px-6 py-3.5 border-b border-[var(--color-border-soft)] bg-[var(--color-surf-sidebar)] sticky top-0 z-20">
+    <div className="flex flex-col min-h-screen -m-4 md:-m-6 xl:-m-8" style={{ '--page-accent': '#3B82F6' }}>
+      {/* Header (mk-page-header) */}
+      <header className="mk-page-header">
+        <div className="mk-ph-icon"><Box size={16} /></div>
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span
-            className="inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0"
-            style={{
-              background: 'rgba(59, 130, 246, 0.12)',
-              color: '#3B82F6',
-              border: '1px solid rgba(59, 130, 246, 0.25)',
-            }}
-          >
-            <Box size={13} />
-          </span>
-          <span className="text-sm text-gunmetal whitespace-nowrap">Inventario</span>
-          <span className="text-gunmetal-dim shrink-0">›</span>
-          <span className="text-sm font-semibold text-tech-white whitespace-nowrap">
-            {sectionLabel}
-          </span>
-          <span className="mono text-[10px] px-1.5 py-0.5 rounded-sm bg-white/6 border border-[var(--color-border)] text-steel tracking-wider whitespace-nowrap shrink-0 ml-1">
+          <div className="min-w-0">
+            <div className="mk-ph-eyebrow"><span className="mk-dot" /> Inventario</div>
+            <div className="mk-ph-title">
+              {sectionLabel}
+            </div>
+          </div>
+          <span className="mono text-[10px] px-1.5 py-0.5 rounded-sm bg-white/6 border border-[var(--color-border)] text-steel tracking-wider whitespace-nowrap shrink-0 ml-1 self-end mb-1">
             {sectionCount} ítems
           </span>
         </div>
@@ -3760,7 +3725,7 @@ export default function InventoryPage({ section = 'resumen' }) {
           ) : view === 'grid' ? (
             <FilamentGrid groups={groups} onCardClick={setSelected} spoolCountById={spoolCountById} />
           ) : (
-            <FilamentTable items={filteredFilaments} onRowClick={setSelected} />
+            <FilamentTable items={filteredFilaments} onRowClick={setSelected} spoolCountById={spoolCountById} />
           )}
         </>
       ) : (
@@ -3781,30 +3746,29 @@ export default function InventoryPage({ section = 'resumen' }) {
             const Icon = meta.icon;
             return (
               <>
-                <div className="flex flex-wrap gap-3 items-center px-6 py-3 sticky top-0 bg-forge-black/80 backdrop-blur z-10">
-                  <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 min-w-[260px] basis-[280px] flex-1 max-w-md">
-                    <Search size={13} className="text-gunmetal" />
+                <div className="mk-inv-toolbar px-4 md:px-6 pt-3 sticky top-0 bg-forge-black/80 backdrop-blur z-10">
+                  <div className="mk-inv-search">
+                    <Search size={14} style={{ color: 'var(--cfs-text-tertiary)' }} />
                     <input
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
                       placeholder={`Buscar ${tab}, proveedor, notas…`}
-                      className="flex-1 bg-transparent border-0 outline-0 text-tech-white text-sm placeholder:text-gunmetal-dim"
                     />
                     {query && (
                       <button
                         type="button"
                         onClick={() => setQuery('')}
-                        className="text-gunmetal hover:text-tech-white"
                         aria-label="Limpiar"
+                        style={{ color: 'var(--cfs-text-tertiary)' }}
                       >
-                        <X size={12} />
+                        <X size={13} />
                       </button>
                     )}
                   </div>
                   <select
                     value={sort}
                     onChange={(e) => setSort(e.target.value)}
-                    className="input mono text-xs cursor-pointer w-auto min-w-[170px]"
+                    className="mk-f-select mono text-xs cursor-pointer w-auto min-w-[170px]"
                   >
                     <option value="lowFirst">Stock bajo primero</option>
                     <option value="material">Por nombre</option>
