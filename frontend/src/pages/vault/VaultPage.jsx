@@ -91,6 +91,7 @@ import MakerWorldImportModal from './components/MakerWorldImportModal';
 import UploadZipModal from './components/UploadZipModal';
 import { apiErrorMsg } from '../../utils/apiError';
 import { FAILURE_CATEGORY_LABELS } from '../../utils/failureCategories';
+import './VaultPage.css';
 import { getThumbnail } from '../../utils/thumbnail';
 
 const ACCENT = '#F43F5E';
@@ -154,24 +155,16 @@ function FolderCard({ folder, folders, isAdmin, onOpen, onRename, onMove, onDele
   const excludedIds = getDescendantIds(folders, folder.id);
   const otherFolders = folders.filter((f) => f.id !== folder.id && !excludedIds.has(f.id));
   return (
-    <Card className="relative text-left w-full overflow-hidden flex flex-col">
-      <button
-        type="button"
-        onClick={() => onOpen(folder.id)}
-        className="h-40 bg-[var(--color-surf-sidebar)] flex items-center justify-center w-full"
-      >
-        <Folder size={40} style={{ color: `${ACCENT}88` }} />
+    <div className="mk-folder-card relative">
+      <button type="button" onClick={() => onOpen(folder.id)} className="text-left w-full block">
+        <div className="mk-folder-icon"><Folder size={30} /></div>
+        <p className="f-name truncate" title={folder.name}>{folder.name}</p>
+        <p className="f-sub truncate">
+          {folder.file_count} archivo{folder.file_count === 1 ? '' : 's'}
+        </p>
       </button>
-      <div className="p-3 flex items-center gap-2">
-        <button type="button" onClick={() => onOpen(folder.id)} className="flex-1 min-w-0 text-left">
-          <p className="text-sm font-semibold text-tech-white truncate" title={folder.name}>
-            {folder.name}
-          </p>
-          <p className="mono text-[10.5px] text-gunmetal truncate">
-            {folder.file_count} archivo{folder.file_count === 1 ? '' : 's'}
-          </p>
-        </button>
-        {isAdmin && (
+      {isAdmin && (
+        <div className="absolute top-2.5 right-2.5">
           <div className="relative shrink-0">
             <button
               type="button"
@@ -224,9 +217,9 @@ function FolderCard({ folder, folders, isAdmin, onOpen, onRename, onMove, onDele
               </>
             )}
           </div>
-        )}
-      </div>
-    </Card>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -345,11 +338,12 @@ function VaultCard({ file, onClick, onShowHistory, selectMode, selected, onToggl
   // En modo selección la card es un <div> (no <button>) para poder anidar
   // el checkbox sin invalidar el HTML (button dentro de button). El click
   // en el resto de la card también togglea la selección.
-  const cardProps = selectMode
-    ? { as: 'div', interactive: true, onClick: () => onToggleSelect(file.id), className: 'text-left w-full overflow-hidden flex flex-col cursor-pointer' }
-    : { as: 'button', interactive: true, onClick: () => onClick(file), className: 'text-left w-full overflow-hidden flex flex-col' };
+  const Wrapper = selectMode ? 'div' : 'button';
+  const wrapperProps = selectMode
+    ? { onClick: () => onToggleSelect(file.id) }
+    : { type: 'button', onClick: () => onClick(file) };
   return (
-    <Card {...cardProps}>
+    <Wrapper {...wrapperProps} className="mk-model-card relative text-left w-full flex flex-col">
       {selectMode && (
         <div className="absolute top-2 left-2 z-10" onClick={(e) => e.stopPropagation()}>
           <input
@@ -361,46 +355,35 @@ function VaultCard({ file, onClick, onShowHistory, selectMode, selected, onToggl
           />
         </div>
       )}
-      <div className="h-40 bg-[var(--color-surf-sidebar)] flex items-center justify-center overflow-hidden">
+      <div className="thumb">
         {thumb ? (
           <img
             src={thumb}
             alt={file.name}
-            className="w-full h-full object-cover"
             onError={(e) => {
               e.target.style.display = 'none';
               e.target.nextSibling.style.display = 'flex';
             }}
           />
         ) : null}
-        <div
-          className="w-full h-full flex items-center justify-center"
-          style={{ display: thumb ? 'none' : 'flex' }}
-        >
-          <Archive size={40} style={{ color: `${ACCENT}55` }} />
+        <div className="thumb-icon" style={{ display: thumb ? 'none' : 'flex' }}>
+          <Archive size={38} />
         </div>
       </div>
-      <div className="p-3 flex flex-col flex-1 gap-1">
-        <div className="flex items-center gap-1.5 mb-0.5">
+      <div className="meta flex flex-col flex-1">
+        <div className="flex items-center gap-1.5">
           {file.is_print_ready ? (
-            <StatusPill tone="done" icon={Printer}>
-              Listo para imprimir
-            </StatusPill>
+            <StatusPill tone="done" icon={Printer}>Listo para imprimir</StatusPill>
           ) : (
-            <StatusPill tone="neutral" icon={FileBox}>
-              Solo editable
-            </StatusPill>
+            <StatusPill tone="neutral" icon={FileBox}>Solo editable</StatusPill>
           )}
           {/* Badge "N impresiones" (issue #130) — span, no button, para no
-              anidar interactivos dentro del Card as="button". */}
+              anidar interactivos dentro del button de la card. */}
           {file.print_count > 0 && (
             <span
               role="button"
               tabIndex={0}
-              onClick={(e) => {
-                e.stopPropagation();
-                onShowHistory?.(file);
-              }}
+              onClick={(e) => { e.stopPropagation(); onShowHistory?.(file); }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
@@ -415,19 +398,12 @@ function VaultCard({ file, onClick, onShowHistory, selectMode, selected, onToggl
             </span>
           )}
         </div>
-        <p className="text-sm font-semibold text-tech-white truncate" title={file.name}>
-          {file.name}
-        </p>
-        <p className="mono text-[10.5px] text-gunmetal truncate">
-          {fmtBytes(totalSizeBytes(file))} · {fmtDate(file.created_at)}
-        </p>
+        <p className="m-name" title={file.name}>{file.name}</p>
+        <p className="m-sub truncate">{fmtBytes(totalSizeBytes(file))} · {fmtDate(file.created_at)}</p>
         {Array.isArray(file.tags) && file.tags.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1">
             {file.tags.slice(0, 3).map((t) => (
-              <span
-                key={t}
-                className="mono text-[9px] px-1.5 py-px rounded-sm bg-white/5 border border-[var(--color-border)] text-steel"
-              >
+              <span key={t} className="mono text-[9px] px-1.5 py-px rounded-sm bg-white/5 border border-[var(--color-border)] text-steel">
                 {t}
               </span>
             ))}
@@ -437,7 +413,7 @@ function VaultCard({ file, onClick, onShowHistory, selectMode, selected, onToggl
           </div>
         )}
       </div>
-    </Card>
+    </Wrapper>
   );
 }
 
@@ -1886,10 +1862,7 @@ export default function VaultPage() {
     : 'Cambia el filtro o limpia la búsqueda.';
 
   const FolderGrid = childFolders.length > 0 && (
-    <div
-      className="px-4 md:px-6 pb-3 pt-2 grid gap-3"
-      style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}
-    >
+    <div className="mk-model-grid px-4 md:px-6 pb-3 pt-2">
       {childFolders.map((f) => (
         <FolderCard
           key={f.id}
@@ -2014,7 +1987,7 @@ export default function VaultPage() {
 
   if (isMobile) {
     return (
-      <div className="flex flex-col">
+      <div className="flex flex-col" style={{ '--page-accent': ACCENT }}>
         <MobileAppHeader
           appName="Vault"
           appIcon={Archive}
@@ -2105,16 +2078,14 @@ export default function VaultPage() {
           </div>
         ) : (
           <>
-            <ul className="mt-3">
+            <div className="mk-model-grid px-4 mt-3">
               {files.map((f) => (
-                <li key={f.id}>
-                  <VaultRow
-                    file={f} onClick={setSelected} onShowHistory={setHistoryModalFile}
-                    selectMode={selectMode} selected={selectedIds.has(f.id)} onToggleSelect={toggleFileSelect}
-                  />
-                </li>
+                <VaultCard
+                  key={f.id} file={f} onClick={setSelected} onShowHistory={setHistoryModalFile}
+                  selectMode={selectMode} selected={selectedIds.has(f.id)} onToggleSelect={toggleFileSelect}
+                />
               ))}
-            </ul>
+            </div>
             {totalPages > 1 && (
               <nav
                 className="px-4 pt-3 pb-28 flex items-center gap-2 text-[12px]"
@@ -2228,19 +2199,15 @@ export default function VaultPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen -m-4 md:-m-6 xl:-m-8">
-      <header className="flex items-center gap-4 px-6 py-3.5 border-b border-[var(--color-border-soft)] bg-[var(--color-surf-sidebar)] sticky top-0 z-20">
+    <div className="flex flex-col min-h-screen -m-4 md:-m-6 xl:-m-8" style={{ '--page-accent': ACCENT }}>
+      <header className="mk-page-header">
+        <div className="mk-ph-icon"><Archive size={16} /></div>
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span
-            className="inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0"
-            style={{ background: `${ACCENT}1F`, color: ACCENT, border: `1px solid ${ACCENT}40` }}
-          >
-            <Archive size={13} />
-          </span>
-          <span className="text-sm text-gunmetal whitespace-nowrap">Vault</span>
-          <span className="text-gunmetal-dim shrink-0">›</span>
-          <span className="text-sm font-semibold text-tech-white whitespace-nowrap">Galería</span>
-          <span className="mono text-[10px] px-1.5 py-0.5 rounded-sm bg-white/5 border border-[var(--color-border)] text-steel ml-1">
+          <div className="min-w-0">
+            <div className="mk-ph-eyebrow"><span className="mk-dot" /> Vault</div>
+            <div className="mk-ph-title">Galería</div>
+          </div>
+          <span className="mono text-[10px] px-1.5 py-0.5 rounded-sm bg-white/5 border border-[var(--color-border)] text-steel ml-1 self-end mb-1">
             {total} modelos
           </span>
         </div>
@@ -2320,18 +2287,17 @@ export default function VaultPage() {
       {FolderGrid}
 
       <div className="flex flex-wrap gap-3 items-center px-6 py-3 sticky top-0 bg-forge-black/80 backdrop-blur z-10 border-b border-[var(--color-border-soft)]">
-        <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 min-w-[260px] basis-[280px] flex-1 max-w-md">
-          <Search size={13} className="text-gunmetal" />
+        <div className="mk-vault-search" style={{ flex: '1 1 280px', maxWidth: 420 }}>
+          <Search size={14} style={{ color: 'var(--cfs-text-tertiary)' }} />
           <input
             data-search-input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar modelo, tag, descripción…"
-            className="flex-1 bg-transparent border-0 outline-0 text-tech-white text-sm placeholder:text-gunmetal-dim"
           />
           {query && (
-            <button onClick={() => setQuery('')} className="text-gunmetal hover:text-tech-white" aria-label="Limpiar">
-              <X size={12} />
+            <button onClick={() => setQuery('')} style={{ color: 'var(--cfs-text-tertiary)' }} aria-label="Limpiar">
+              <X size={13} />
             </button>
           )}
         </div>
@@ -2366,10 +2332,7 @@ export default function VaultPage() {
         )
       ) : (
         <>
-          <div
-            className="px-6 pb-4 grid gap-3"
-            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}
-          >
+          <div className="mk-model-grid px-6 pb-4">
             {files.map((f) => (
               <VaultCard
                 key={f.id} file={f} onClick={setSelected} onShowHistory={setHistoryModalFile}
