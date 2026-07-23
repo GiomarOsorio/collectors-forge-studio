@@ -1,0 +1,28 @@
+/**
+ * ManualQuotePage.css — port 1:1 de cost.html §"Crear cotización al cliente".
+ * Prefijo `mk-`, tokens --cfs-* + --page-accent (cost = teal #2DD4BF).
+ *
+ * El header usa mk-page-header (mockup-system.css), los ítems usan LineItems
+ * (P1) y el summary ya estaba alineado con el mockup. Aquí solo el client-bar
+ * (cb-block), que es lo específico de esta vista.
+ */
+
+.mk-client-bar { display: flex; flex-wrap: wrap; gap: 10px; padding: 12px; border-bottom: 1px solid var(--cfs-border-soft); }
+.mk-cb-block {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px;
+  background: var(--cfs-surface-card); border: 1px solid var(--cfs-border);
+}
+.mk-cb-block.client { flex: 1 1 220px; min-width: 0; }
+.mk-cb-block.rate { flex: 1 1 160px; }
+.mk-cb-icon {
+  width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+  background: color-mix(in oklab, var(--page-accent) 14%, transparent);
+  border: 1px solid color-mix(in oklab, var(--page-accent) 28%, transparent);
+  color: var(--page-accent); display: flex; align-items: center; justify-content: center;
+}
+.mk-cb-txt { flex: 1; min-width: 0; }
+.mk-cb-eyebrow { font-family: var(--font-mono); font-size: 9px; text-transform: uppercase; letter-spacing: .12em; color: var(--cfs-text-tertiary); }
+.mk-cb-input { width: 100%; background: transparent; border: 0; outline: 0; font-size: 13.5px; font-weight: 500; color: var(--cfs-text); padding: 0; }
+.mk-cb-input::placeholder { color: var(--cfs-text-tertiary-dim); }
+.mk-cb-days-input { width: 42px; background: transparent; border: 0; outline: 0; font-weight: 700; color: var(--cfs-text); font-size: 15px; font-family: var(--font-mono); }
+.mk-cb-rate-value { font-family: var(--font-mono); font-weight: 700; font-size: 14px; color: var(--cfs-text); white-space: nowrap; }
