@@ -29,6 +29,7 @@ import EmptyState from '../components/EmptyState';
 import MobileAppHeader from '../components/MobileAppHeader';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import { MobileSheet, DetailDrawer } from '../components/ui';
+import CostNavTabs from './cost/CostNavTabs';
 import './HistoryPage.css';
 
 const ACCENT = '#2DD4BF';
@@ -216,6 +217,8 @@ export default function HistoryPage() {
           </div>
         </header>
       )}
+
+      <CostNavTabs className="px-4 md:px-6" />
 
       <div className="mk-hist-max px-4 md:px-6 pt-3 pb-24 md:pb-10 w-full">
         {loading ? (

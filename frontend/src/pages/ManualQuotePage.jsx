@@ -19,6 +19,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import CostNavTabs from './cost/CostNavTabs';
 import toast from 'react-hot-toast';
 import {
   FileEdit, Plus, X, Building2, Clock, Package,
@@ -667,6 +668,7 @@ export default function ManualQuotePage() {
     return (
       <div className="flex flex-col min-h-screen bg-forge-black">
         <MqHeader pieceCount={items.length} />
+        <CostNavTabs className="px-4" />
         <ClientBar
           clientName={clientName}
           onClientName={setClientName}
@@ -745,6 +747,7 @@ export default function ManualQuotePage() {
   return (
     <div className="flex flex-col min-h-screen bg-forge-black">
       <MqHeader pieceCount={items.length} />
+      <CostNavTabs className="px-5" />
       <ClientBar
         clientName={clientName}
         onClientName={setClientName}

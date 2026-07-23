@@ -42,9 +42,7 @@ import {
   getQuotes,
 } from '../../services/api';
 import { fmtCOP } from '../../utils/inventoryAdapter';
-import CalculatorPage from '../CalculatorPage';
-import PrintersPage from '../PrintersPage';
-import CostSettingsPage from '../CostSettingsPage';
+import CostNavTabs from './CostNavTabs';
 
 const ACCENT = '#2DD4BF';
 
@@ -374,10 +372,8 @@ export default function CostPage() {
   const confirm = useConfirm();
   const { openSidebar } = useOutletContext() || {};
 
-  const [tab, setTab] = useState('cotizaciones');
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(null);
-  const [selectedPrint, setSelectedPrint] = useState(null);
 
   const [clientQuotes, setClientQuotes] = useState([]);
   const [printQuotes, setPrintQuotes] = useState([]);
@@ -502,14 +498,13 @@ export default function CostPage() {
 
   // ── Mobile shell ──────────────────────────────────────────────────────────
   if (isMobile) {
-    const tabLabel = TABS.find((t) => t.id === tab)?.label || tab;
     return (
       <div className="flex flex-col">
         <MobileAppHeader
           appName="Cost"
           appIcon={Calculator}
           appAccent="#2DD4BF"
-          title={tabLabel}
+          title="Cotizaciones"
           onMenu={() => openSidebar?.()}
         />
         <div className="px-4 mt-3">
@@ -546,87 +541,52 @@ export default function CostPage() {
           </Card>
         </div>
 
-        <AppTabs
-          items={TABS.map((t) => ({ ...t, count: counts[t.id] }))}
-          value={tab}
-          onChange={setTab}
-          accent={ACCENT}
-          className="mt-3 px-4"
-        />
+        <CostNavTabs className="mt-3 px-4" />
 
-        {tab !== 'calculadora' && (
-          <div className="px-4 mt-3">
-            <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-2">
-              <Search size={14} className="text-gunmetal" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={tab === 'cotizaciones' ? 'Cliente, COT-XXXX…' : 'Pieza, cliente…'}
-                className="flex-1 bg-transparent border-0 outline-0 text-tech-white text-sm placeholder:text-gunmetal-dim"
-              />
-              {query && (
-                <button
-                  type="button"
-                  onClick={() => setQuery('')}
-                  className="text-gunmetal hover:text-tech-white"
-                  aria-label="Limpiar"
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </div>
+        <div className="px-4 mt-3">
+          <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-2">
+            <Search size={14} className="text-gunmetal" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Cliente, COT-XXXX…"
+              className="flex-1 bg-transparent border-0 outline-0 text-tech-white text-sm placeholder:text-gunmetal-dim"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                className="text-gunmetal hover:text-tech-white"
+                aria-label="Limpiar"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
-        )}
+        </div>
 
-        {tab === 'cotizaciones' ? (
-          loading ? (
-            <p className="px-4 py-12 text-center text-gunmetal text-sm">Cargando cotizaciones…</p>
-          ) : filteredQuotes.length === 0 ? (
-            <div className="px-4 py-12 flex flex-col items-center gap-2 text-center">
-              <FileText size={22} className="text-gunmetal-dim" />
-              <p className="text-sm font-semibold text-tech-white">
-                {clientQuotes.length === 0 ? 'Aún no hay cotizaciones' : 'Sin resultados'}
-              </p>
-              <p className="text-xs text-gunmetal max-w-xs">
-                {clientQuotes.length === 0
-                  ? 'Toca + para crear la primera cotización manual.'
-                  : 'Ajusta la búsqueda.'}
-              </p>
-            </div>
-          ) : (
-            <ul className="px-4 mt-3 pb-28 flex flex-col gap-2">
-              {filteredQuotes.map((q) => (
-                <li key={q.id}>
-                  <QuoteCard q={q} onClick={setSelected} />
-                </li>
-              ))}
-            </ul>
-          )
-        ) : tab === 'historial' ? (
-          loading ? (
-            <p className="px-4 py-12 text-center text-gunmetal text-sm">Cargando historial…</p>
-          ) : filteredPrints.length === 0 ? (
-            <div className="px-4 py-12 flex flex-col items-center gap-2 text-center">
-              <Printer size={22} className="text-gunmetal-dim" />
-              <p className="text-sm font-semibold text-tech-white">Sin cálculos guardados</p>
-            </div>
-          ) : (
-            <ul className="mt-3 pb-28">
-              {filteredPrints.map((q) => (
-                <li key={q.id}>
-                  <PrintHistoryRow q={q} onClick={setSelectedPrint} />
-                </li>
-              ))}
-            </ul>
-          )
-        ) : tab === 'calculadora' ? (
-          <CalculatorPage embedded />
-        ) : tab === 'impresoras' ? (
-          <div className="p-4"><PrintersPage /></div>
-        ) : tab === 'ajustes' ? (
-          <div className="p-4"><CostSettingsPage /></div>
+        {loading ? (
+          <p className="px-4 py-12 text-center text-gunmetal text-sm">Cargando cotizaciones…</p>
+        ) : filteredQuotes.length === 0 ? (
+          <div className="px-4 py-12 flex flex-col items-center gap-2 text-center">
+            <FileText size={22} className="text-gunmetal-dim" />
+            <p className="text-sm font-semibold text-tech-white">
+              {clientQuotes.length === 0 ? 'Aún no hay cotizaciones' : 'Sin resultados'}
+            </p>
+            <p className="text-xs text-gunmetal max-w-xs">
+              {clientQuotes.length === 0
+                ? 'Toca + para crear la primera cotización manual.'
+                : 'Ajusta la búsqueda.'}
+            </p>
+          </div>
         ) : (
-          <CalculatorPromo />
+          <ul className="px-4 mt-3 pb-28 flex flex-col gap-2">
+            {filteredQuotes.map((q) => (
+              <li key={q.id}>
+                <QuoteCard q={q} onClick={setSelected} />
+              </li>
+            ))}
+          </ul>
         )}
 
         {/* FAB cotización manual */}
@@ -675,8 +635,8 @@ export default function CostPage() {
           </span>
           <span className="text-sm text-gunmetal whitespace-nowrap">Cost</span>
           <span className="text-gunmetal-dim shrink-0">›</span>
-          <span className="text-sm font-semibold text-tech-white whitespace-nowrap capitalize">
-            {tab}
+          <span className="text-sm font-semibold text-tech-white whitespace-nowrap">
+            Cotizaciones
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -695,15 +655,9 @@ export default function CostPage() {
 
       <KPIStrip stats={stats} />
 
-      <AppTabs
-        items={TABS.map((t) => ({ ...t, count: counts[t.id] }))}
-        value={tab}
-        onChange={setTab}
-        accent={ACCENT}
-        className="px-6 border-b border-[var(--color-border)]"
-      />
+      <CostNavTabs className="px-6 border-b border-[var(--color-border)]" />
 
-      {tab === 'cotizaciones' && (
+      {(
         <div className="flex flex-col">
           <div className="flex flex-wrap gap-3 items-center px-6 py-3 sticky top-0 bg-forge-black/80 backdrop-blur z-10">
             <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 min-w-[260px] basis-[280px] flex-1 max-w-md">
@@ -772,61 +726,6 @@ export default function CostPage() {
         </div>
       )}
 
-      {tab === 'historial' && (
-        <div className="flex flex-col">
-          <div className="flex flex-wrap gap-3 items-center px-6 py-3 sticky top-0 bg-forge-black/80 backdrop-blur z-10">
-            <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 min-w-[260px] basis-[280px] flex-1 max-w-md">
-              <Search size={13} className="text-gunmetal" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar pieza o cliente…"
-                className="flex-1 bg-transparent border-0 outline-0 text-tech-white text-sm placeholder:text-gunmetal-dim"
-              />
-              {query && (
-                <button
-                  type="button"
-                  onClick={() => setQuery('')}
-                  className="text-gunmetal hover:text-tech-white"
-                  aria-label="Limpiar"
-                >
-                  <X size={12} />
-                </button>
-              )}
-            </div>
-            <span className="flex-1" />
-            <span className="mono text-[11px] text-gunmetal">
-              {filteredPrints.length} de {printQuotes.length} cálculos
-            </span>
-          </div>
-
-          {loading ? (
-            <p className="px-6 py-16 text-center text-gunmetal text-sm">Cargando historial…</p>
-          ) : filteredPrints.length === 0 ? (
-            <div className="px-6 py-16 flex flex-col items-center gap-3 text-center">
-              <Printer size={28} className="text-gunmetal-dim" />
-              <p className="text-sm font-semibold text-tech-white">Sin cálculos guardados</p>
-              <Link to="/cost/calculator" className="btn btn-primary btn-sm">
-                <Calculator size={13} /> Ir a la calculadora
-              </Link>
-            </div>
-          ) : (
-            <div className="px-6 pb-8 border border-[var(--color-border)] rounded-xl mx-6 overflow-hidden bg-[var(--color-surf-card)]">
-              <ul>
-                {filteredPrints.map((q) => (
-                  <li key={q.id}>
-                    <PrintHistoryRow q={q} onClick={setSelectedPrint} />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
-
-      {tab === 'calculadora' && <CalculatorPage embedded />}
-      {tab === 'impresoras' && <div className="px-6 pb-8"><PrintersPage /></div>}
-      {tab === 'ajustes' && <div className="px-6 pb-8"><CostSettingsPage /></div>}
 
       <DetailDrawer
         open={!!selected}
@@ -840,58 +739,6 @@ export default function CostPage() {
           onDelete={handleDelete}
           onClose={() => setSelected(null)}
         />
-      </DetailDrawer>
-
-      <DetailDrawer
-        open={!!selectedPrint}
-        onClose={() => setSelectedPrint(null)}
-        title={selectedPrint ? `Cálculo · ${selectedPrint.piece_name || `#${selectedPrint.id}`}` : ''}
-        width={460}
-      >
-        {selectedPrint && (
-          <div className="p-5 flex flex-col gap-4">
-            <div>
-              <span className="lbl-eyebrow text-[9px]">Pieza</span>
-              <h2 className="text-lg font-semibold text-tech-white mt-0.5">
-                {selectedPrint.piece_name || `#${selectedPrint.id}`}
-              </h2>
-              {selectedPrint.client_name && (
-                <p className="text-xs text-gunmetal mt-0.5 inline-flex items-center gap-1">
-                  <User size={11} /> {selectedPrint.client_name}
-                </p>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <Card className="p-3">
-                <span className="lbl-eyebrow text-[9px]">Total</span>
-                <p className="mono text-base font-semibold text-forge-teal mt-0.5">
-                  {fmtCOP(selectedPrint.total_price)}
-                </p>
-              </Card>
-              <Card className="p-3">
-                <span className="lbl-eyebrow text-[9px]">Margen</span>
-                <p className="mono text-base font-semibold text-tech-white mt-0.5">
-                  {Math.round(Number(selectedPrint.margin_percent || 0))}%
-                </p>
-              </Card>
-              <Card className="p-3">
-                <span className="lbl-eyebrow text-[9px]">Peso</span>
-                <p className="mono text-sm text-tech-white mt-0.5">
-                  {Number(selectedPrint.weight_grams || 0).toFixed(0)} g
-                </p>
-              </Card>
-              <Card className="p-3">
-                <span className="lbl-eyebrow text-[9px]">Tiempo</span>
-                <p className="mono text-sm text-tech-white mt-0.5">
-                  {Number(selectedPrint.print_time_hours || 0).toFixed(2)} h
-                </p>
-              </Card>
-            </div>
-            <Link to="/cost/history" className="btn btn-ghost btn-sm self-start">
-              Ver historial completo
-            </Link>
-          </div>
-        )}
       </DetailDrawer>
 
       <footer className="mt-auto px-6 py-2.5 border-t border-[var(--color-border-soft)] bg-[var(--color-surf-sidebar)] flex flex-wrap items-center gap-4 text-[11px] text-gunmetal">
