@@ -19,6 +19,7 @@ import { useState, useEffect } from 'react';
 import { getSettings, updateSettings, getExchangeRate, getElectricityTariff, getElectricityTariffs, updateSettings as applySettings, refreshElectricityTariff } from '../services/api';
 import toast from 'react-hot-toast';
 import { Save, Zap, AlertTriangle, RefreshCw } from 'lucide-react';
+import CostNavTabs from './cost/CostNavTabs';
 
 /**
  * Formatea una fecha ISO como "hace X días/horas" en español.
@@ -179,6 +180,7 @@ export default function SettingsPage() {
 
   return (
     <div>
+      <CostNavTabs className="-mx-4 md:-mx-6 px-4 md:px-6 mb-4" />
       <h2 className="tf-page-title">Configuración</h2>
 
       <div className="max-w-2xl">

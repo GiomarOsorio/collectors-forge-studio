@@ -71,16 +71,7 @@ test.describe('Cost responsive — issue #162', () => {
     await expect(page).toHaveScreenshot('calculator-1280.png', { fullPage: true });
   });
 
-  test('CostPage → tab Calculadora embebida: sin overflow-x en 1100 y 1280', async ({ page }) => {
-    await loginAsDev(page);
-    for (const width of [1100, 1280]) {
-      await page.setViewportSize({ width, height: 850 });
-      await page.goto('/cost');
-      await page.waitForLoadState('networkidle');
-      await page.getByRole('tab', { name: /Calculadora/ }).click();
-      await page.waitForTimeout(300);
-      const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
-      expect(scrollWidth).toBeLessThanOrEqual(width);
-    }
-  });
+  // (Eliminado) "tab Calculadora embebida" — con la nav consolidada (PR
+  // sub-nav Cost) la Calculadora ya no se embebe en /cost; es su propia ruta
+  // /cost/calculator, cubierta por los tests calculator-1100/1280 de arriba.
 });

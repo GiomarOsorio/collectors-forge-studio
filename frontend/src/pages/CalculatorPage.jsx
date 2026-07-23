@@ -1251,6 +1251,7 @@ export default function CalculatorPage({ embedded = false } = {}) {
     return (
       <div className={`flex flex-col bg-forge-black ${embedded ? 'min-h-[700px]' : 'min-h-screen'}`}>
         {!embedded && <CalcHeader isStale={isStale} onOpenStaleModal={() => setStaleModalOpen(true)} />}
+        {!embedded && <CostNavTabs className="px-4 md:px-6" />}
         <main className="flex-1 pb-28 overflow-y-auto">
           <CalcForm form={form} setField={setField} filaments={filaments} printers={printers} supplies={supplies} consumables={consumables} errors={errors} />
         </main>
@@ -1317,6 +1318,7 @@ export default function CalculatorPage({ embedded = false } = {}) {
   return (
     <div className={`flex flex-col bg-forge-black ${embedded ? 'min-h-[700px]' : 'min-h-screen'}`}>
       <CalcHeader isStale={isStale} onOpenStaleModal={() => setStaleModalOpen(true)} />
+      {!embedded && <CostNavTabs className="px-4 md:px-6" />}
       {/* Issue #162: en el punto ciego 1024-1279 (lg) el grid de 3 columnas
           desbordaba (mínimo 1060px vs ~736px reales con sidebar). lg colapsa
           a 2 columnas — form | resultado+desglose apilados (wrapper

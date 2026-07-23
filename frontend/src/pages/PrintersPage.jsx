@@ -16,6 +16,7 @@ import { Plus, Pencil, Trash2, Printer } from 'lucide-react';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import { DetailDrawer, MobileSheet } from '../components/ui';
+import CostNavTabs from './cost/CostNavTabs';
 
 const ACCENT = '#2DD4BF';
 
@@ -214,6 +215,7 @@ export default function PrintersPage() {
 
   return (
     <div>
+      <CostNavTabs className="-mx-4 md:-mx-6 px-4 md:px-6 mb-4" />
       <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
         <div>
           <h2 className="text-[15px] font-bold text-tech-white">Impresoras</h2>
