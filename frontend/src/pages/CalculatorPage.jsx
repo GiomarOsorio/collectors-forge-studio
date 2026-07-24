@@ -40,6 +40,7 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import { isKwhTariffStale, formatTariffPeriod, currentTariffPeriod } from '../utils/tariff';
 import { fmtCOP, fmtUSD } from '../utils/inventoryAdapter';
+import CostNavTabs from './cost/CostNavTabs';
 
 const ACCENT = '#2DD4BF';        // forge-teal — app Cost
 const AMBER = '#FBBF24';         // warning
