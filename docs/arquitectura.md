@@ -79,6 +79,71 @@ Las rutas legacy `/xxx/v2` siguen funcionando como redirects de cortesía vía `
 
 ---
 
+## Sistema de diseño UI (responsive)
+
+Todas las pantallas de la SPA se portaron 1:1 desde los mockups responsive de
+`agent-docs/ui-responsive/mockups/` al **sistema `mk-`**, un design system propio
+que convive con TailwindCSS v4.
+
+### Capas de CSS
+
+| Capa | Archivo | Contenido |
+|------|---------|-----------|
+| Utilidades | `frontend/src/index.css` | TailwindCSS v4 + clases legacy `tf-*` |
+| Sistema compartido | `frontend/src/styles/mockup-system.css` | Clases `mk-*` reutilizables (`mk-page-header`, `mk-kpi-*`, `mk-app-tabs`, `mk-btn*`, `mk-status-pill`, `mk-field`, `mk-fab`…), tokens `--cfs-*` (light/dark automático) y `--page-accent` (color por página) |
+| Por página | `frontend/src/pages/**/PageName.css` | Clases `mk-*` específicas de esa vista, importadas **explícitamente** en su `.jsx` (co-locación) |
+
+Cada página fija su acento con `style={{ '--page-accent': '<color-app>' }}` en el
+wrapper raíz; todos los `mk-*` que usan `var(--page-accent)` se tiñen solos.
+
+### Patrones responsive (P1–P9)
+
+El catálogo vive en `agent-docs/ui-responsive/mockups/patterns.html` (documentación
+del design system, **no** una pantalla). Los patrones se implementan como
+componentes/clases compartidas:
+
+| Patrón | Qué resuelve | Implementación |
+|--------|--------------|----------------|
+| P1 LineItems | Líneas editables (PO, cotización) | `components/ui/LineItems` (cards apiladas <1024 / grid con cabecera ≥1024) |
+| P2 Tabla → cards | Tablas densas en mobile | tabla `overflow-x-auto` ≥1024 / cards <1024, gate por `useIsMobile` para no duplicar nodos |
+| P3 CardGrid | Grillas de cards fluidas | `repeat(auto-fill, minmax(...))` |
+| P4 AppTabs | Fila de tabs tipo pill con overflow-x | `components/ui/AppTabs` (scroll-snap + fade) |
+| P5 KPIStrip | Fila de KPIs | `components/ui/KPIStrip` (carousel mobile, wrap desktop) |
+| P6 MobileSheet / DetailDrawer | Detalle/formularios | `MobileSheet` (bottom sheet <1024) / `DetailDrawer` (lateral ≥1024) |
+| P7 Headers | Header dual | `MobileAppHeader` (<1024) / `mk-page-header` (≥1024) vía `useIsMobile` |
+| P8 Forms | Grids de campos | `mk-form-grid` (1 col → 2 col ≥640) |
+| P9 Charts | Sparklines/gráficos | `components/ui/Sparkline` |
+
+### Sub-navegación por módulo (P4)
+
+Las apps con más de una sección montan un **`*NavTabs`** (AppTabs de página) en
+**cada** una de sus páginas, en lugar de tabs in-page o subnav en la sidebar
+(decisión issue #181 — la sidebar solo lista apps):
+
+- `pages/inventory/InventoryNavTabs.jsx` → Resumen · Bobinas · Herramientas · Consumibles · Pedidos · Disponible para venta · Importar/Exportar
+- `pages/cost/CostNavTabs.jsx` → Cotizaciones · Calcular pieza · Nueva cotización · Historial · Impresoras · Tarifa & ajustes
+- `pages/vault/VaultPage.jsx` y `pages/queue/PrintLogPage.jsx` usan `AppTabs` directo.
+
+La **fuente de verdad** de estos items es `frontend/src/config/sidebar.js`
+(`SIDEBAR_APPS[app].items`): el `*NavTabs` mapea `{ to → id, label, icon }` y marca
+activo por `location.pathname`. Así el label/ícono se define una sola vez.
+
+> **Nota (Inventory):** "Bobinas" fusiona la vista agregada de filamentos con el
+> tracking por-bobina física (issue #134): la lista muestra el conteo de bobinas
+> por tipo y el detalle abre `FilamentSpoolsSection` (alta en lote, peso/estado,
+> etiquetas QR). La página `/inventory/spools` sigue accesible por URL como
+> transición.
+
+### Regresión visual
+
+Los baselines de Playwright (`toHaveScreenshot`) del CI corren en un runner
+self-hosted que renderiza con ~3% de ruido de antialiasing. Reglas:
+`maxDiffPixelRatio: 0.05` en `playwright.config.js`, y los tests visuales
+**mockean el API** (route interception) para ser deterministas — no dependen del
+seed real, que difiere entre el runner y las máquinas de desarrollo.
+
+---
+
 ## Estructura de archivos
 
 ```
@@ -193,8 +258,10 @@ collectors-forge-studio/
 ├── frontend/                         # SPA React
 │   ├── src/
 │   │   ├── App.jsx                   # Router raíz + PrivateRoute + AppRoutes
-│   │   ├── main.jsx                  # Entry point React
+│   │   ├── main.jsx                  # Entry point React (importa mockup-system.css)
 │   │   ├── index.css                 # TailwindCSS v4 + clases custom tf-*
+│   │   ├── styles/
+│   │   │   └── mockup-system.css     # Sistema de diseño mk- compartido (ver "Sistema de diseño UI")
 │   │   │
 │   │   ├── context/
 │   │   │   ├── AuthContext.jsx       # JWT: login, logout, user state
@@ -213,14 +280,15 @@ collectors-forge-studio/
 │   │   │   ├── SkeletonLoader.jsx    # Skeletons compartidos
 │   │   │   ├── ModelViewer3D.jsx     # Visor 3D de modelos STL
 │   │   │   ├── widgets/              # Widgets del dashboard (LowStock, etc.)
-│   │   │   └── ui/                   # Primitives compartidos (Button, Card, KPI,
-│   │   │                              # StatusPill, DetailDrawer, MobileSheet, EmptyState,
-│   │   │                              # DropZone, ProgressBar, SearchField, ToolbarRow,
-│   │   │                              # Chip, Input, Sparkline, Swatch, etc.)
+│   │   │   └── ui/                   # Primitives compartidos + foundation responsive:
+│   │   │                              # AppTabs (P4), KPIStrip/KPI (P5), LineItems (P1),
+│   │   │                              # MobileSheet/DetailDrawer (P6), Sparkline (P9),
+│   │   │                              # Button, Card, StatusPill, EmptyState, Chip, Swatch,
+│   │   │                              # FilamentSwatch, useOverflowFade, etc.
 │   │   │
 │   │   ├── config/
 │   │   │   ├── apps.js               # Definición de las apps (id, nombre, ruta, color)
-│   │   │   ├── sidebar.js            # Sidebar config (apps + items secundarios)
+│   │   │   ├── sidebar.js            # Config de apps + items (fuente de verdad de los *NavTabs)
 │   │   │   ├── materials.js          # Tipos de filamento (PLA/PETG/ABS/...)
 │   │   │   └── maintenance.js        # 12 tipos de mantenimiento BambuLab P2S
 │   │   │
@@ -237,21 +305,32 @@ collectors-forge-studio/
 │   │   │   │   ├── CompanyPage.jsx              # Dashboard con drawers integrados
 │   │   │   │   └── CompanyTemplateEditorPage.jsx # Editor Liquid + validar + preview
 │   │   │   ├── inventory/
-│   │   │   │   ├── InventoryPage.jsx            # Tabs internos (Filamentos/Insumos/Herr/Cons/Compras)
-│   │   │   │   ├── InventoryPrintsPage.jsx      # Impresiones con fotos
-│   │   │   │   ├── InventoryPurchasesPage.jsx   # Tabla de pedidos
-│   │   │   │   └── InventoryImportExportPage.jsx # Bulk CSV import/export
+│   │   │   │   ├── InventoryNavTabs.jsx         # Sub-nav consolidada del módulo (P4)
+│   │   │   │   ├── InventoryPage.jsx            # Secciones por ruta: Resumen/Bobinas/Herramientas/Consumibles
+│   │   │   │   ├── InventoryPrintsPage.jsx      # Disponible para venta (impresiones con fotos)
+│   │   │   │   ├── InventoryPurchasesPage.jsx   # Pedidos (tabla)
+│   │   │   │   ├── InventorySpoolsPage.jsx      # Tracking por-bobina (absorbido en Bobinas; accesible por URL)
+│   │   │   │   ├── InventoryImportExportPage.jsx # Bulk CSV import/export
+│   │   │   │   └── components/FilamentSpoolsSection.jsx # Bobinas físicas dentro del detalle de Bobinas
 │   │   │   ├── cost/
-│   │   │   │   └── CostPage.jsx                 # Dashboard (Cotizaciones / Historial / Calc)
+│   │   │   │   ├── CostNavTabs.jsx              # Sub-nav consolidada del módulo (P4)
+│   │   │   │   └── CostPage.jsx                 # Vista Cotizaciones (Historial/Calc son rutas propias)
 │   │   │   ├── maintenance/
 │   │   │   │   └── MaintenancePage.jsx          # Dashboard + Historial + CRUD logs vía drawers
 │   │   │   ├── queue/
-│   │   │   │   └── QueuePage.jsx                # Tabs Activa / Historial + VaultPicker
+│   │   │   │   ├── QueuePage.jsx                # Tabs Activa / Historial + VaultPicker
+│   │   │   │   └── PrintLogPage.jsx             # Bitácora global de impresiones (/queue/log)
 │   │   │   ├── settings/
 │   │   │   │   └── SettingsPage.jsx             # Cuenta + Usuarios (admin) vía drawers
+│   │   │   ├── projects/
+│   │   │   │   └── ProjectsPage.jsx             # Proyectos (agrupan items de cola)
 │   │   │   └── vault/
 │   │   │       ├── VaultPage.jsx                # Galería .3mf / .gcode.3mf
-│   │   │       └── VaultUploadPage.jsx          # Dual upload (admin)
+│   │   │       ├── VaultUploadPage.jsx          # Dual upload (admin)
+│   │   │       ├── VaultTrashPage.jsx           # Papelera
+│   │   │       └── FolderTree.jsx               # Árbol de carpetas
+│   │   │
+│   │   │   Nota: cada página lleva su `PageName.css` co-locado (clases mk- específicas).
 │   │   │
 │   │   ├── services/
 │   │   │   └── api.js                # Axios + interceptors + todas las funciones API

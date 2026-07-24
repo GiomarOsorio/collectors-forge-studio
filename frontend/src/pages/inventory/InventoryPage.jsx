@@ -13,8 +13,8 @@
  * @module pages/inventory/InventoryPage
  */
 
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useOutletContext } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useOutletContext } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -73,10 +73,12 @@ import {
   getFilamentProfile,
   getInventoryItems,
   getPurchaseOrders,
+  getSpools,
   updateInventoryItem,
   updatePurchaseOrder,
   upsertFilamentProfile,
 } from '../../services/api';
+import FilamentSpoolsSection from './components/FilamentSpoolsSection';
 import { MATERIALS, MATERIAL_ORDER } from '../../config/materials';
 import {
   computeFilamentStats,
@@ -89,6 +91,7 @@ import {
   mapToFilament,
   stockLevel,
 } from '../../utils/inventoryAdapter';
+import './InventoryPage.css';
 
 // Placeholder de consumo diario hasta que tengamos el endpoint real.
 // 14 días, gramos por día. Cuando tengamos historial real, viene del backend.
@@ -173,25 +176,19 @@ function CategoryTabs({ value, onChange, counts }) {
 
 function Toolbar({ query, onQuery, materialFilters, onToggleMat, view, onView, sort, onSort, onClear }) {
   return (
-    <div className="flex flex-wrap gap-3 items-center px-6 py-3 sticky top-0 bg-forge-black/80 backdrop-blur z-10">
-      {/* Search */}
-      <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 min-w-[260px] basis-[280px] flex-1 max-w-md">
-        <Search size={13} className="text-gunmetal shrink-0" />
+    <div className="mk-inv-toolbar px-4 md:px-6 pt-3 sticky top-0 bg-forge-black/80 backdrop-blur z-10">
+      {/* Search (mk-) */}
+      <div className="mk-inv-search">
+        <Search size={14} style={{ color: 'var(--cfs-text-tertiary)' }} className="shrink-0" />
         <input
           data-search-input
           value={query}
           onChange={(e) => onQuery(e.target.value)}
           placeholder="Buscar color, batch, ubicación…"
-          className="flex-1 bg-transparent border-0 outline-0 text-tech-white text-sm placeholder:text-gunmetal-dim"
         />
         {query && (
-          <button
-            type="button"
-            onClick={() => onQuery('')}
-            className="text-gunmetal hover:text-tech-white"
-            aria-label="Limpiar búsqueda"
-          >
-            <X size={12} />
+          <button type="button" onClick={() => onQuery('')} aria-label="Limpiar búsqueda" style={{ color: 'var(--cfs-text-tertiary)' }}>
+            <X size={13} />
           </button>
         )}
       </div>
@@ -222,7 +219,7 @@ function Toolbar({ query, onQuery, materialFilters, onToggleMat, view, onView, s
         <select
           value={sort}
           onChange={(e) => onSort(e.target.value)}
-          className="input mono text-xs pr-8 cursor-pointer w-auto min-w-[180px] appearance-none"
+          className="mk-f-select mono text-xs pr-8 cursor-pointer w-auto min-w-[180px] appearance-none"
         >
           <option value="lowFirst">Stock bajo primero</option>
           <option value="material">Por material</option>
@@ -230,11 +227,11 @@ function Toolbar({ query, onQuery, materialFilters, onToggleMat, view, onView, s
           <option value="valueDesc">Valor (mayor)</option>
           <option value="weightDesc">Peso restante</option>
         </select>
-        <ChevronDown size={12} className="absolute right-2.5 top-2.5 text-gunmetal pointer-events-none" />
+        <ChevronDown size={12} className="absolute right-2.5 top-3 pointer-events-none" style={{ color: 'var(--cfs-text-tertiary)' }} />
       </div>
 
-      {/* View toggle */}
-      <div className="inline-flex border border-[var(--color-border-strong)] rounded-md overflow-hidden bg-[var(--color-surf-card)]">
+      {/* View toggle (mk-) */}
+      <div className="mk-inv-viewtoggle">
         {[
           { id: 'grid', icon: Grid3x3, label: 'Vista grid' },
           { id: 'table', icon: List, label: 'Vista tabla' },
@@ -246,13 +243,11 @@ function Toolbar({ query, onQuery, materialFilters, onToggleMat, view, onView, s
               key={v.id}
               type="button"
               onClick={() => onView(v.id)}
-              className={`px-2.5 py-1.5 transition-colors ${
-                active ? 'bg-[var(--color-surf-hover)] text-tech-white' : 'text-gunmetal hover:text-tech-white'
-              }`}
+              className={active ? 'active' : ''}
               aria-label={v.label}
               aria-pressed={active}
             >
-              <Icon size={13} />
+              <Icon size={14} />
             </button>
           );
         })}
@@ -312,7 +307,7 @@ function lastUsedFromDate(iso) {
 
 // ─── Filament card (grid) ────────────────────────────────────────────────────
 
-function FilamentCard({ f, onClick }) {
+function FilamentCard({ f, onClick, spoolCount = 0 }) {
   const level = stockLevel(f);
   const p = fillPercent(f);
   // Issue #59: cuando el filamento está crítico, borde amarillo en TODO
@@ -356,6 +351,7 @@ function FilamentCard({ f, onClick }) {
           <p className="mono text-[10.5px] text-gunmetal mt-0.5 truncate">
             {f.vendor}
             {f.batch ? ` · ${f.batch}` : ''}
+            {spoolCount > 0 ? ` · ${spoolCount} bobina${spoolCount === 1 ? '' : 's'}` : ''}
           </p>
         </div>
       </div>
@@ -388,7 +384,7 @@ function FilamentCard({ f, onClick }) {
 
 // ─── Grid grouped by stock level + material ─────────────────────────────────
 
-function FilamentGrid({ groups, onCardClick }) {
+function FilamentGrid({ groups, onCardClick, spoolCountById }) {
   return (
     <div className="flex flex-col gap-6 px-6 pt-2 pb-8">
       {groups.map((g) => (
@@ -415,7 +411,7 @@ function FilamentGrid({ groups, onCardClick }) {
             style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}
           >
             {g.items.map((f) => (
-              <FilamentCard key={f.id} f={f} onClick={onCardClick} />
+              <FilamentCard key={f.id} f={f} onClick={onCardClick} spoolCount={spoolCountById?.[f.id] || 0} />
             ))}
           </div>
         </section>
@@ -426,23 +422,18 @@ function FilamentGrid({ groups, onCardClick }) {
 
 // ─── Table view ──────────────────────────────────────────────────────────────
 
-function FilamentTable({ items, onRowClick }) {
+function FilamentTable({ items, onRowClick, spoolCountById }) {
   return (
-    <div className="px-6 pb-8">
-      {/* Fix #15: overflow-x-auto (antes overflow-hidden) + min-width para que
-          en 1024-1279px (contenido ~736px con sidebar) la tabla haga scroll-x
-          en vez de comprimir columnas ilegiblemente. Ref: inventory.html. */}
-      <div className="border border-[var(--color-border)] rounded-xl overflow-x-auto bg-[var(--color-surf-card)]">
-        <table className="w-full border-collapse min-w-[860px]">
+    <div className="px-4 md:px-6 pb-8">
+      {/* Fix #15 (mk-ftable): wrapper overflow-x-auto SIEMPRE + min-width, para
+          que en 1024-1279px la tabla haga scroll-x en vez de comprimir
+          columnas. Ref: inventory.html §Filamentos. */}
+      <div className="mk-ftable-wrap">
+        <table className="mk-ftable">
           <thead>
             <tr>
-              {['', 'Color · Batch', 'Material', 'Vendor', 'Restante', 'Costo/kg', 'Ubicación'].map((h, idx) => (
-                <th
-                  key={idx}
-                  className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-gunmetal px-3 py-2.5 border-b border-[var(--color-border)] bg-forge-black sticky top-0 z-[1]"
-                >
-                  {h}
-                </th>
+              {['', 'Color · Batch', 'Material', 'Vendor', 'Restante', 'Bobinas', 'Costo/kg', 'Ubicación'].map((h, idx) => (
+                <th key={idx}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -450,43 +441,29 @@ function FilamentTable({ items, onRowClick }) {
             {items.map((f) => {
               const level = stockLevel(f);
               const p = fillPercent(f);
+              const spoolCount = spoolCountById?.[f.id] || 0;
               return (
-                <tr
-                  key={f.id}
-                  onClick={() => onRowClick(f)}
-                  className="cursor-pointer hover:bg-[var(--color-surf-hover)]/60 transition-colors border-b border-[var(--color-border-soft)] last:border-b-0"
-                >
-                  <td className="px-3 py-3 w-[44px]">
+                <tr key={f.id} onClick={() => onRowClick(f)}>
+                  <td style={{ width: 44 }}>
                     <Swatch color={f.color} size={26} level={level} />
                   </td>
-                  <td className="px-3 py-3">
-                    <div className="text-sm font-medium text-tech-white truncate">{f.colorName}</div>
-                    <div className="mono text-[11px] text-gunmetal">{f.batch || '—'}</div>
+                  <td>
+                    <div className="mk-cell-strong truncate">{f.colorName}</div>
+                    <div className="mk-cell-batch">{f.batch || '—'}</div>
                   </td>
-                  <td className="px-3 py-3 w-[80px]">
-                    <span className="mono text-[10.5px] px-1.5 py-0.5 rounded-sm bg-white/5 border border-[var(--color-border)] text-steel tracking-wider">
-                      {f.material}
+                  <td style={{ width: 80 }}><span className="mk-mat-chip">{f.material}</span></td>
+                  <td className="mono" style={{ fontSize: '11.5px' }}>{f.vendor}</td>
+                  <td style={{ width: 180 }}>
+                    <span className="mono" style={{ fontSize: 12, color: 'var(--cfs-text)' }}>
+                      {fmtG(f.remaining)} <span style={{ color: 'var(--cfs-text-tertiary)' }}>/ {fmtKg(f.total)}</span>
                     </span>
-                  </td>
-                  <td className="px-3 py-3 w-[110px] mono text-xs text-steel">{f.vendor}</td>
-                  <td className="px-3 py-3 w-[180px]">
-                    <div className="flex flex-col gap-1">
-                      <span className="mono text-xs text-tech-white">
-                        {fmtG(f.remaining)} <span className="text-gunmetal">/ {fmtKg(f.total)}</span>
-                      </span>
-                      <div className="h-0.5 bg-white/5 rounded">
-                        <div
-                          className="h-full rounded"
-                          style={{
-                            width: `${p}%`,
-                            background: level === 'ok' ? '#3B82F6' : '#FBBF24',
-                          }}
-                        />
-                      </div>
+                    <div className="mk-fill-track">
+                      <div className={`mk-fill-bar${level === 'ok' ? '' : ' low'}`} style={{ width: `${p}%` }} />
                     </div>
                   </td>
-                  <td className="px-3 py-3 w-[110px] mono text-xs text-tech-white">{fmtUSD(f.costPerKg)}</td>
-                  <td className="px-3 py-3 mono text-[11px] text-steel">{f.location || '—'}</td>
+                  <td className="mono" style={{ color: 'var(--cfs-text-secondary)' }}>{spoolCount > 0 ? spoolCount : '—'}</td>
+                  <td className="mono" style={{ color: 'var(--cfs-text)' }}>{fmtUSD(f.costPerKg)}</td>
+                  <td className="mono" style={{ fontSize: 11 }}>{f.location || '—'}</td>
                 </tr>
               );
             })}
@@ -499,7 +476,7 @@ function FilamentTable({ items, onRowClick }) {
 
 // ─── Drawer body ─────────────────────────────────────────────────────────────
 
-function FilamentDrawerBody({ f, onReassign, onAddToPurchase, onDelete }) {
+function FilamentDrawerBody({ f, onReassign, onAddToPurchase, onDelete, isMobile, onSpoolsChanged }) {
   if (!f) return null;
   const level = stockLevel(f);
   const p = fillPercent(f);
@@ -629,6 +606,15 @@ function FilamentDrawerBody({ f, onReassign, onAddToPurchase, onDelete }) {
           </button>
         )}
       </div>
+
+      {/* Bobinas físicas (PR B): tracking por-rollo absorbido acá — alta en
+          lote, editar peso/estado, borrar, imprimir etiquetas QR. */}
+      <FilamentSpoolsSection
+        filamentId={f.id}
+        filamentName={f.colorName}
+        isMobile={isMobile}
+        onCountChange={onSpoolsChanged}
+      />
 
       {/* Historial reciente — placeholder hasta endpoint real (quotes/queue) */}
       <div>
@@ -1348,7 +1334,7 @@ function MobileChips({ materialFilters, onToggleMat }) {
   );
 }
 
-function FilamentRow({ f, onClick }) {
+function FilamentRow({ f, onClick, spoolCount = 0 }) {
   const level = stockLevel(f);
   const p = fillPercent(f);
   return (
@@ -1376,6 +1362,7 @@ function FilamentRow({ f, onClick }) {
         <p className="mono text-[10px] text-gunmetal mt-0.5 truncate">
           {f.vendor}
           {f.batch ? ` · ${f.batch}` : ''}
+          {spoolCount > 0 ? ` · ${spoolCount} bob.` : ''}
         </p>
       </div>
       <div className="flex flex-col items-end shrink-0 gap-1 min-w-[60px]">
@@ -1441,13 +1428,15 @@ const FILAMENT_DENSITY_DEFAULTS = {
 // al primer input con `autoFocus` (bug reportado: cursor salta a "Nombre
 // interno" cada vez que escribís en otro campo).
 
-const FORM_INPUT_CLS =
-  'w-full bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm placeholder:text-gunmetal-dim outline-none focus:border-blue-500';
+// Port mk-: el input del mockup (mk-f-input) — bg surface-card-2, borde,
+// 44px min-height, focus azul. `mono`/`resize-y`/`uppercase` se siguen
+// apilando por los call-sites que lo necesitan.
+const FORM_INPUT_CLS = 'mk-f-input';
 
 function FormFieldRow({ label, required, error, children }) {
   return (
     <label className="flex flex-col gap-1 min-w-0">
-      <span className="lbl-eyebrow text-[10px] flex items-center gap-1">
+      <span className="mk-f-label flex items-center gap-1">
         {label}
         {required && <span className="text-rose-400" aria-label="requerido">*</span>}
         {error && (
@@ -1462,11 +1451,7 @@ function FormFieldRow({ label, required, error, children }) {
 }
 
 function FormSectionTitle({ children }) {
-  return (
-    <div className="lbl-eyebrow text-[10px] mt-2 pb-1 border-b border-[var(--color-border-soft)]">
-      {children}
-    </div>
-  );
+  return <div className="mk-fsec-title">{children}</div>;
 }
 
 function emptyFilamentForm() {
@@ -2924,14 +2909,16 @@ function PurchaseOrderFormDrawer({ open, onClose, mode = 'create', initial, onSa
  *
  * @returns {JSX.Element}
  */
-export default function InventoryPage() {
-  const navigate = useNavigate();
+export default function InventoryPage({ section = 'resumen' }) {
   const isMobile = useIsMobile();
   const confirm = useConfirm();
   // El AppLayout expone `openSidebar` para que el header mobile pueda
   // abrir el drawer (replica el `onMenu` del design).
   const { openSidebar } = useOutletContext() || {};
-  const [tab, setTab] = useState('filamentos');
+  // Nav consolidada (PR A): la sección viene de la ruta, no de tabs in-page.
+  // 'bobinas' mapea a la lista de filamentos; 'resumen' es el overview.
+  // Insumos y el tab in-page 'compras' fueron soft-deleteados del frontend.
+  const tab = section === 'bobinas' ? 'filamentos' : section;
   const [view, setView] = useState('grid');
   const [query, setQuery] = useState('');
   const [materialFilters, setMaterialFilters] = useState([]);
@@ -2960,6 +2947,9 @@ export default function InventoryPage() {
   const [tools, setTools] = useState([]);
   const [consumables, setConsumables] = useState([]);
   const [purchases, setPurchases] = useState([]);
+  // PR B: bobinas físicas (spools) — para mostrar conteo por filamento en la
+  // lista y alimentar la sección de tracking dentro del drawer de Bobinas.
+  const [spools, setSpools] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Carga inicial: todos los conteos en paralelo (la pestaña activa los necesita
@@ -2969,11 +2959,15 @@ export default function InventoryPage() {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
-      const [allRes, poRes] = await Promise.allSettled([
+      const [allRes, poRes, spoolsRes] = await Promise.allSettled([
         getInventoryItems(),
         getPurchaseOrders(),
+        getSpools(),
       ]);
       if (cancelled) return;
+      if (spoolsRes.status === 'fulfilled') {
+        setSpools(spoolsRes.value.data || []);
+      }
       // Una sola llamada a /inventory/items/ y partimos por category client-side
       // (la función getInventoryItems no acepta params, y filtrar local es
       // más rápido que 4 round-trips).
@@ -3094,6 +3088,22 @@ export default function InventoryPage() {
 
   const stats = useMemo(() => computeFilamentStats(filaments), [filaments]);
 
+  // Refetch estable de spools tras alta/edición/borrado dentro del drawer.
+  const refreshSpools = useCallback(() => {
+    getSpools()
+      .then((r) => setSpools(r.data || []))
+      .catch(() => {});
+  }, []);
+
+  // Conteo de bobinas físicas activas por filamento (inventory_item_id).
+  const spoolCountById = useMemo(() => {
+    const m = {};
+    for (const s of spools) {
+      if (s.status === 'active') m[s.inventory_item_id] = (m[s.inventory_item_id] || 0) + 1;
+    }
+    return m;
+  }, [spools]);
+
   /**
    * Filtra + ordena items genéricos (insumos/herramientas/consumibles) por la
    * misma query y sort que filamentos. lowFirst usa ratio quantity/min.
@@ -3200,6 +3210,92 @@ export default function InventoryPage() {
     setMaterialFilters([]);
   };
 
+  // ── Nav consolidada: label/conteo de la sección + overview de Resumen ────
+  const SECTION_LABELS = {
+    resumen: 'Resumen',
+    filamentos: 'Bobinas',
+    herramientas: 'Herramientas',
+    consumibles: 'Consumibles',
+  };
+  const sectionLabel = SECTION_LABELS[tab] || tab;
+  const sectionCount =
+    tab === 'resumen'
+      ? filaments.length + tools.length + consumables.length
+      : counts[tab] ?? 0;
+
+  // Ítems que necesitan atención (stock bajo/crítico) — cruzan categorías.
+  const attentionFilaments = useMemo(
+    () => filaments.filter((f) => stockLevel(f) !== 'ok'),
+    [filaments],
+  );
+  const attentionItems = useMemo(
+    () => [...tools, ...consumables].filter((i) => itemLevel(i) !== 'ok'),
+    [tools, consumables],
+  );
+
+  // Overview de Resumen: KPIs (arriba) + lo que necesita atención + accesos.
+  const ResumenOverview = (
+    <div className="px-4 md:px-6 pt-3 pb-24 md:pb-10 flex flex-col gap-6">
+      <section>
+        <div className="mk-section-title flex items-center gap-2 mb-2.5">
+          <AlertTriangle size={13} className="text-amber-400" />
+          Necesita atención
+          <span className="mono text-[11px] text-gunmetal font-normal">
+            {attentionFilaments.length + attentionItems.length}
+          </span>
+        </div>
+        {loading ? (
+          <p className="text-sm text-gunmetal py-6 text-center">Cargando…</p>
+        ) : attentionFilaments.length === 0 && attentionItems.length === 0 ? (
+          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surf-card)] px-4 py-6 text-center">
+            <Check size={20} className="text-emerald-400 mx-auto mb-1.5" />
+            <p className="text-sm text-tech-white font-semibold">Todo el stock está OK</p>
+            <p className="text-xs text-gunmetal mt-0.5">Ningún ítem bajo el mínimo.</p>
+          </div>
+        ) : (
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
+            {attentionFilaments.map((f) => (
+              <FilamentCard key={`f-${f.id}`} f={f} onClick={setSelected} />
+            ))}
+            {attentionItems.map((it) => (
+              <InventoryItemCard key={`i-${it.id}`} item={it} onClick={setSelectedItem} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section>
+        <div className="mk-section-title mb-2.5">Accesos</div>
+        <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+          {[
+            { to: '/inventory/bobinas', icon: Droplet, label: 'Bobinas', count: filaments.length },
+            { to: '/inventory/herramientas', icon: Scissors, label: 'Herramientas', count: tools.length },
+            { to: '/inventory/consumibles', icon: Beaker, label: 'Consumibles', count: consumables.length },
+            { to: '/inventory/purchases', icon: ShoppingCart, label: 'Pedidos', count: purchases.length },
+          ].map((s) => {
+            const Icon = s.icon;
+            return (
+              <Link
+                key={s.to}
+                to={s.to}
+                className="flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surf-card)] px-3.5 py-3 hover:border-[var(--color-border-bright)] transition-colors"
+              >
+                <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg shrink-0" style={{ background: 'rgba(59,130,246,.12)', color: '#3B82F6', border: '1px solid rgba(59,130,246,.28)' }}>
+                  <Icon size={16} />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-tech-white truncate">{s.label}</p>
+                  <p className="mono text-[11px] text-gunmetal">{s.count} ítems</p>
+                </div>
+                <ChevronRight size={15} className="text-gunmetal-dim shrink-0" />
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+    </div>
+  );
+
   // ── Shell mobile ───────────────────────────────────────────────────────
   if (isMobile) {
     return (
@@ -3208,7 +3304,7 @@ export default function InventoryPage() {
           appName="Inventario"
           appIcon={Box}
           appAccent="#3B82F6"
-          title={TABS.find((t) => t.id === tab)?.label || tab}
+          title={sectionLabel}
           onMenu={() => openSidebar?.()}
           onSearch={() => setSearchOpen(true)}
         />
@@ -3223,9 +3319,9 @@ export default function InventoryPage() {
             globales del inventario, no específicos del tab filamentos. */}
         <MobileHeroStatus stats={stats} consumption14d={CONSUMPTION_PLACEHOLDER} />
         <MobileMiniKPIs stats={stats} openPOs={openPOs} openPOsValue={openPOsValue} />
-        <MobileTabs value={tab} onChange={setTab} counts={counts} />
-
-        {tab === 'filamentos' ? (
+        {tab === 'resumen' ? (
+          ResumenOverview
+        ) : tab === 'filamentos' ? (
           <>
             <MobileChips materialFilters={materialFilters} onToggleMat={toggleMat} />
             <div className="flex items-center justify-between px-4 mt-2 mb-1">
@@ -3287,7 +3383,7 @@ export default function InventoryPage() {
                     <ul className="px-4 flex flex-col gap-2">
                       {g.items.map((f) => (
                         <li key={f.id}>
-                          <FilamentRow f={f} onClick={setSelected} />
+                          <FilamentRow f={f} onClick={setSelected} spoolCount={spoolCountById[f.id] || 0} />
                         </li>
                       ))}
                     </ul>
@@ -3296,38 +3392,11 @@ export default function InventoryPage() {
               </div>
             )}
           </>
-        ) : tab === 'compras' ? (
-          <>
-            <div className="flex items-center justify-between px-4 mt-2 mb-1">
-              <span className="mono text-[11px] text-gunmetal">
-                {filteredPurchases.length} de {purchases.length} pedidos
-              </span>
-            </div>
-            {loading ? (
-              <p className="px-4 py-12 text-center text-gunmetal text-sm">Cargando…</p>
-            ) : filteredPurchases.length === 0 ? (
-              <EmptyState
-                icon={ShoppingCart}
-                accent="#8B5CF6"
-                title={purchases.length === 0 ? 'Sin pedidos de compra' : 'Sin resultados'}
-              />
-            ) : (
-              <ul className="mt-2 pb-28">
-                {filteredPurchases.map((p) => (
-                  <li key={p.id}>
-                    <PurchaseRow po={p} onClick={setSelectedPurchase} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
         ) : (
           <>
             <div className="flex items-center justify-between px-4 mt-2 mb-1">
               <span className="mono text-[11px] text-gunmetal">
-                {tab === 'insumos'
-                  ? `${filteredSupplies.length} de ${supplies.length} insumos`
-                  : tab === 'herramientas'
+                {tab === 'herramientas'
                   ? `${filteredTools.length} de ${tools.length} herramientas`
                   : `${filteredConsumables.length} de ${consumables.length} consumibles`}
               </span>
@@ -3374,32 +3443,27 @@ export default function InventoryPage() {
           </>
         )}
 
-        <MobileFAB
-          onClick={() => {
-            if (tab === 'compras') {
-              setPoFormMode('create');
-              setEditingPoRaw(null);
-              setPoFormOpen(true);
-              return;
-            }
-            if (tab === 'filamentos') {
-              setAddOpen(true);
-              return;
-            }
-            // Insumo / Herramienta / Consumible → ItemFormDrawer
-            const catMap = {
-              insumos: 'Insumo',
-              herramientas: 'Herramienta',
-              consumibles: 'Consumible',
-            };
-            const cat = catMap[tab];
-            if (cat) {
-              setItemFormCategory(cat);
-              setItemFormMode('create');
-              setEditingItemRaw(null);
-            }
-          }}
-        />
+        {tab !== 'resumen' && (
+          <MobileFAB
+            onClick={() => {
+              if (tab === 'filamentos') {
+                setAddOpen(true);
+                return;
+              }
+              // Herramienta / Consumible → ItemFormDrawer
+              const catMap = {
+                herramientas: 'Herramienta',
+                consumibles: 'Consumible',
+              };
+              const cat = catMap[tab];
+              if (cat) {
+                setItemFormCategory(cat);
+                setItemFormMode('create');
+                setEditingItemRaw(null);
+              }
+            }}
+          />
+        )}
 
         <MobileSheet
           open={!!selected}
@@ -3422,6 +3486,8 @@ export default function InventoryPage() {
         >
           <FilamentDrawerBody
             f={selected}
+            isMobile={isMobile}
+            onSpoolsChanged={refreshSpools}
             onReassign={() => toast('Reasignar batch llega pronto.')}
             onAddToPurchase={(filament) => {
               // Pre-fill PO form con el filamento como línea, vinculado
@@ -3438,7 +3504,6 @@ export default function InventoryPage() {
               setPoFormMode('create');
               setPoFormOpen(true);
               setSelected(null);
-              setTab('compras');
             }}
             onDelete={(filament) => handleDeleteItem(filament, 'filament')}
           />
@@ -3556,27 +3621,19 @@ export default function InventoryPage() {
 
   // ── Shell desktop ──────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col min-h-screen -m-4 md:-m-6 xl:-m-8">
-      {/* Header */}
-      <header className="flex items-center gap-4 px-6 py-3.5 border-b border-[var(--color-border-soft)] bg-[var(--color-surf-sidebar)] sticky top-0 z-20">
+    <div className="flex flex-col min-h-screen -m-4 md:-m-6 xl:-m-8" style={{ '--page-accent': '#3B82F6' }}>
+      {/* Header (mk-page-header) */}
+      <header className="mk-page-header">
+        <div className="mk-ph-icon"><Box size={16} /></div>
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span
-            className="inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0"
-            style={{
-              background: 'rgba(59, 130, 246, 0.12)',
-              color: '#3B82F6',
-              border: '1px solid rgba(59, 130, 246, 0.25)',
-            }}
-          >
-            <Box size={13} />
-          </span>
-          <span className="text-sm text-gunmetal whitespace-nowrap">Inventario</span>
-          <span className="text-gunmetal-dim shrink-0">›</span>
-          <span className="text-sm font-semibold text-tech-white whitespace-nowrap capitalize">
-            {tab}
-          </span>
-          <span className="mono text-[10px] px-1.5 py-0.5 rounded-sm bg-white/6 border border-[var(--color-border)] text-steel tracking-wider whitespace-nowrap shrink-0 ml-1">
-            {counts[tab] ?? 0} ítems
+          <div className="min-w-0">
+            <div className="mk-ph-eyebrow"><span className="mk-dot" /> Inventario</div>
+            <div className="mk-ph-title">
+              {sectionLabel}
+            </div>
+          </div>
+          <span className="mono text-[10px] px-1.5 py-0.5 rounded-sm bg-white/6 border border-[var(--color-border)] text-steel tracking-wider whitespace-nowrap shrink-0 ml-1 self-end mb-1">
+            {sectionCount} ítems
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -3588,35 +3645,30 @@ export default function InventoryPage() {
           </Link>
           <span className="w-px h-4 bg-[var(--color-border)]" />
           <Button variant="ghost" iconOnly icon={Bell} iconSize={14} aria-label="Notificaciones" />
-          <button
-            type="button"
-            onClick={() => {
-              if (tab === 'filamentos') {
-                setAddOpen(true);
-                return;
-              }
-              if (tab === 'compras') {
-                setPoFormMode('create');
-                setEditingPoRaw(null);
-                setPoFormOpen(true);
-                return;
-              }
-              const catMap = {
-                insumos: 'Insumo',
-                herramientas: 'Herramienta',
-                consumibles: 'Consumible',
-              };
-              const cat = catMap[tab];
-              if (cat) {
-                setItemFormCategory(cat);
-                setItemFormMode('create');
-                setEditingItemRaw(null);
-              }
-            }}
-            className="btn btn-primary btn-sm"
-          >
-            <Plus size={13} /> Agregar
-          </button>
+          {tab !== 'resumen' && (
+            <button
+              type="button"
+              onClick={() => {
+                if (tab === 'filamentos') {
+                  setAddOpen(true);
+                  return;
+                }
+                const catMap = {
+                  herramientas: 'Herramienta',
+                  consumibles: 'Consumible',
+                };
+                const cat = catMap[tab];
+                if (cat) {
+                  setItemFormCategory(cat);
+                  setItemFormMode('create');
+                  setEditingItemRaw(null);
+                }
+              }}
+              className="btn btn-primary btn-sm"
+            >
+              <Plus size={13} /> Agregar
+            </button>
+          )}
         </div>
       </header>
 
@@ -3624,9 +3676,9 @@ export default function InventoryPage() {
 
       <KPIStrip stats={stats} openPOs={openPOs} openPOsValue={openPOsValue} />
 
-      <CategoryTabs value={tab} onChange={setTab} counts={counts} />
-
-      {tab === 'filamentos' ? (
+      {tab === 'resumen' ? (
+        ResumenOverview
+      ) : tab === 'filamentos' ? (
         <>
           <Toolbar
             query={query}
@@ -3671,75 +3723,9 @@ export default function InventoryPage() {
               }
             />
           ) : view === 'grid' ? (
-            <FilamentGrid groups={groups} onCardClick={setSelected} />
+            <FilamentGrid groups={groups} onCardClick={setSelected} spoolCountById={spoolCountById} />
           ) : (
-            <FilamentTable items={filteredFilaments} onRowClick={setSelected} />
-          )}
-        </>
-      ) : tab === 'compras' ? (
-        <>
-          <div className="flex flex-wrap gap-3 items-center px-6 py-3 sticky top-0 bg-forge-black/80 backdrop-blur z-10">
-            <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 min-w-[260px] basis-[280px] flex-1 max-w-md">
-              <Search size={13} className="text-gunmetal" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Proveedor, tracking, status, PO id…"
-                className="flex-1 bg-transparent border-0 outline-0 text-tech-white text-sm placeholder:text-gunmetal-dim"
-              />
-              {query && (
-                <button
-                  type="button"
-                  onClick={() => setQuery('')}
-                  className="text-gunmetal hover:text-tech-white"
-                  aria-label="Limpiar"
-                >
-                  <X size={12} />
-                </button>
-              )}
-            </div>
-            <span className="flex-1" />
-            <span className="mono text-[11px] text-gunmetal">
-              {filteredPurchases.length} de {purchases.length} pedidos
-            </span>
-          </div>
-          {loading ? (
-            <p className="px-6 py-16 text-center text-gunmetal text-sm">Cargando pedidos…</p>
-          ) : filteredPurchases.length === 0 ? (
-            <EmptyState
-              icon={ShoppingCart}
-              accent="#8B5CF6"
-              title={purchases.length === 0 ? 'Sin pedidos de compra' : 'Sin resultados'}
-              hint={
-                purchases.length === 0
-                  ? 'Crea un pedido para llevar control de lo que llega de tus proveedores.'
-                  : 'Ajusta la búsqueda para ver más pedidos.'
-              }
-              action={
-                purchases.length === 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPoFormMode('create');
-                      setEditingPoRaw(null);
-                      setPoFormOpen(true);
-                    }}
-                    className="btn btn-primary btn-sm"
-                  >
-                    <Plus size={13} /> Crear pedido
-                  </button>
-                ) : null
-              }
-            />
-          ) : (
-            <div
-              className="px-6 pb-8 grid gap-3"
-              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}
-            >
-              {filteredPurchases.map((p) => (
-                <PurchaseCard key={p.id} po={p} onClick={setSelectedPurchase} />
-              ))}
-            </div>
+            <FilamentTable items={filteredFilaments} onRowClick={setSelected} spoolCountById={spoolCountById} />
           )}
         </>
       ) : (
@@ -3760,30 +3746,29 @@ export default function InventoryPage() {
             const Icon = meta.icon;
             return (
               <>
-                <div className="flex flex-wrap gap-3 items-center px-6 py-3 sticky top-0 bg-forge-black/80 backdrop-blur z-10">
-                  <div className="flex items-center gap-2 bg-[var(--color-surf-card)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 min-w-[260px] basis-[280px] flex-1 max-w-md">
-                    <Search size={13} className="text-gunmetal" />
+                <div className="mk-inv-toolbar px-4 md:px-6 pt-3 sticky top-0 bg-forge-black/80 backdrop-blur z-10">
+                  <div className="mk-inv-search">
+                    <Search size={14} style={{ color: 'var(--cfs-text-tertiary)' }} />
                     <input
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
                       placeholder={`Buscar ${tab}, proveedor, notas…`}
-                      className="flex-1 bg-transparent border-0 outline-0 text-tech-white text-sm placeholder:text-gunmetal-dim"
                     />
                     {query && (
                       <button
                         type="button"
                         onClick={() => setQuery('')}
-                        className="text-gunmetal hover:text-tech-white"
                         aria-label="Limpiar"
+                        style={{ color: 'var(--cfs-text-tertiary)' }}
                       >
-                        <X size={12} />
+                        <X size={13} />
                       </button>
                     )}
                   </div>
                   <select
                     value={sort}
                     onChange={(e) => setSort(e.target.value)}
-                    className="input mono text-xs cursor-pointer w-auto min-w-[170px]"
+                    className="mk-f-select mono text-xs cursor-pointer w-auto min-w-[170px]"
                   >
                     <option value="lowFirst">Stock bajo primero</option>
                     <option value="material">Por nombre</option>
@@ -3874,6 +3859,8 @@ export default function InventoryPage() {
       >
         <FilamentDrawerBody
           f={selected}
+          isMobile={isMobile}
+          onSpoolsChanged={refreshSpools}
           onReassign={() => toast('Reasignar batch llega pronto.')}
           onAddToPurchase={(filament) => {
             const raw = filamentsRawById[filament.id];
@@ -3889,7 +3876,6 @@ export default function InventoryPage() {
             setPoFormMode('create');
             setPoFormOpen(true);
             setSelected(null);
-            setTab('compras');
           }}
           onDelete={(filament) => handleDeleteItem(filament, 'filament')}
         />

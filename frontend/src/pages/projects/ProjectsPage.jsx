@@ -38,6 +38,7 @@ import {
   DetailDrawer,
   EmptyState,
   KPI,
+  KPIStrip,
   MobileSheet,
   StatusPill,
 } from '../../components/ui';
@@ -58,6 +59,7 @@ import {
   updateProject,
   uploadProjectCover,
 } from '../../services/api';
+import './ProjectsPage.css';
 
 const ACCENT = '#F59E0B';
 
@@ -111,12 +113,12 @@ function ProjectProgressBar({ project }) {
   const cancelledPct = total > 0 ? (project.cancelled_count / total) * 100 : 0;
   return (
     <div>
-      <div className="relative h-1.5 bg-white/5 rounded-full overflow-hidden flex">
-        <div style={{ width: `${donePct}%`, background: '#34D399' }} />
-        <div style={{ width: `${printingPct}%`, background: '#38BDF8' }} />
-        <div style={{ width: `${cancelledPct}%`, background: '#F43F5E55' }} />
+      <div className="mk-pc-progress-track">
+        {donePct > 0 && <div className="seg-done" style={{ width: `${donePct}%` }} />}
+        {printingPct > 0 && <div className="seg-printing" style={{ width: `${printingPct}%` }} />}
+        {cancelledPct > 0 && <div className="seg-cancelled" style={{ width: `${cancelledPct}%` }} />}
       </div>
-      <p className="mono text-[10.5px] text-gunmetal mt-1">
+      <p className="mk-pc-progress-caption">
         {project.done_count}/{total} listos
         {project.printing_count > 0 ? ` · ${project.printing_count} imprimiendo` : ''}
         {project.pending_count > 0 ? ` · ${project.pending_count} pendientes` : ''}
@@ -132,83 +134,62 @@ function ProjectCard({ project, onOpen, onEdit, onDelete, onExport }) {
   const meta = STATUS_META[project.status] || STATUS_META.active;
   const accent = project.color || ACCENT;
   return (
-    <Card
-      as="div" interactive
-      className="p-4 flex flex-col gap-3 cursor-pointer"
+    <div
+      className="mk-project-card"
       style={{ borderLeft: `3px solid ${accent}` }}
       onClick={() => onOpen(project)}
     >
-      <div className="flex items-start gap-3">
-        {project.has_cover ? (
-          <img
-            src={getProjectCoverUrl(project.id, project.updated_at)}
-            alt=""
-            className="w-9 h-9 rounded-lg object-cover shrink-0"
-          />
-        ) : (
-          <span
-            className="inline-flex items-center justify-center w-9 h-9 rounded-lg shrink-0"
-            style={{ background: `${accent}1A`, color: accent, border: `1px solid ${accent}40` }}
-          >
+      <div className="mk-pc-head">
+        <span
+          className="mk-pc-icon"
+          style={{ background: `${accent}1F`, color: accent, border: `1px solid ${accent}4D` }}
+        >
+          {project.has_cover ? (
+            <img src={getProjectCoverUrl(project.id, project.updated_at)} alt="" />
+          ) : (
             <FolderKanban size={16} />
-          </span>
-        )}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+          )}
+        </span>
+        <div className="mk-pc-body">
+          <div className="mk-pc-pills">
             <StatusPill tone={meta.tone} icon={meta.icon}>{meta.label}</StatusPill>
             {project.external_url && (
               <a
                 href={project.external_url}
                 target="_blank" rel="noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className="text-gunmetal hover:text-tech-white"
+                className="mk-pc-ext"
                 aria-label="Link externo"
               >
                 <ExternalLink size={12} />
               </a>
             )}
           </div>
-          <p className="text-sm font-semibold text-tech-white truncate">{project.name}</p>
-          {project.client_name && (
-            <p className="mono text-[10.5px] text-gunmetal truncate">{project.client_name}</p>
-          )}
-          {project.client_quote_code && (
-            <p className="mono text-[10.5px] text-amber-300/80 truncate">{project.client_quote_code}</p>
-          )}
+          <p className="mk-pc-name truncate">{project.name}</p>
+          {project.client_name && <p className="mk-pc-client truncate">{project.client_name}</p>}
+          {project.client_quote_code && <p className="mk-pc-quote truncate">{project.client_quote_code}</p>}
         </div>
         <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
           <button
             type="button"
             onClick={() => setMenuOpen((o) => !o)}
-            className="p-1.5 rounded text-gunmetal hover:text-tech-white hover:bg-white/5"
+            className="mk-pc-kebab"
             aria-label="Opciones de proyecto"
           >
-            <MoreVertical size={14} />
+            <MoreVertical size={15} />
           </button>
           {menuOpen && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-              <div className="absolute right-0 top-full mt-1 z-20 w-40 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surf-card)] shadow-xl py-1">
-                <button
-                  type="button"
-                  className="w-full text-left px-3 py-1.5 text-xs text-tech-white hover:bg-white/5 flex items-center gap-2"
-                  onClick={() => { setMenuOpen(false); onEdit(project); }}
-                >
-                  <Pencil size={12} /> Editar
+              <div className="mk-pc-menu">
+                <button type="button" className="mk-pc-menu-item" onClick={() => { setMenuOpen(false); onEdit(project); }}>
+                  <Pencil size={13} /> Editar
                 </button>
-                <button
-                  type="button"
-                  className="w-full text-left px-3 py-1.5 text-xs text-tech-white hover:bg-white/5 flex items-center gap-2"
-                  onClick={() => { setMenuOpen(false); onExport(project); }}
-                >
-                  <Download size={12} /> Exportar
+                <button type="button" className="mk-pc-menu-item" onClick={() => { setMenuOpen(false); onExport(project); }}>
+                  <Download size={13} /> Exportar
                 </button>
-                <button
-                  type="button"
-                  className="w-full text-left px-3 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10 flex items-center gap-2"
-                  onClick={() => { setMenuOpen(false); onDelete(project); }}
-                >
-                  <Trash2 size={12} /> Eliminar
+                <button type="button" className="mk-pc-menu-item danger" onClick={() => { setMenuOpen(false); onDelete(project); }}>
+                  <Trash2 size={13} /> Eliminar
                 </button>
               </div>
             </>
@@ -216,7 +197,7 @@ function ProjectCard({ project, onOpen, onEdit, onDelete, onExport }) {
         </div>
       </div>
       <ProjectProgressBar project={project} />
-    </Card>
+    </div>
   );
 }
 
@@ -278,120 +259,85 @@ function ProjectFormModal({ mode, initial, onCancel, onSave, onCoverUploaded }) 
   const title = mode === 'edit' ? 'Editar proyecto' : 'Nuevo proyecto';
 
   const body = (
-    <>
-        <div className="flex flex-col gap-3">
-          <label className="block">
-            <span className="block text-xs text-gunmetal mb-1">Nombre <span className="text-rose-400">*</span></span>
-            <input
-              autoFocus
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="ej. Encargo boda Ana & Luis"
-              className="w-full bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm focus:outline-none focus:border-amber-500"
+    <div className="mk-form-grid" style={{ '--page-accent': ACCENT }}>
+      <label className="mk-field full">
+        <span className="lbl">Nombre <span className="req">*</span></span>
+        <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="ej. Encargo boda Ana & Luis" />
+      </label>
+      <label className="mk-field">
+        <span className="lbl">Cliente</span>
+        <input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="ej. Ana Gómez" />
+      </label>
+      <label className="mk-field">
+        <span className="lbl">Cotización vinculada</span>
+        <select value={clientQuoteId} onChange={(e) => setClientQuoteId(e.target.value)}>
+          <option value="">Sin cotización vinculada</option>
+          {quotes.map((q) => (
+            <option key={q.id} value={String(q.id)}>
+              {`COT-${String(q.id).padStart(4, '0')} · ${q.client_name}`}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="mk-field full">
+        <span className="lbl">Link externo</span>
+        <input value={externalUrl} onChange={(e) => setExternalUrl(e.target.value)} placeholder="https://makerworld.com/models/…" />
+      </label>
+      <div className="mk-field full">
+        <span className="lbl">Color</span>
+        <div className="flex flex-wrap gap-2">
+          {COLOR_PALETTE.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setColor(c === color ? '' : c)}
+              className="w-8 h-8 rounded-full border-2 transition-transform p-0"
+              style={{ background: c, borderColor: color === c ? 'var(--cfs-text)' : 'transparent', transform: color === c ? 'scale(1.12)' : 'scale(1)' }}
+              aria-label={`Color ${c}`}
             />
-          </label>
-          <label className="block">
-            <span className="block text-xs text-gunmetal mb-1">Cliente</span>
-            <input
-              value={clientName}
-              onChange={(e) => setClientName(e.target.value)}
-              placeholder="ej. Ana Gómez"
-              className="w-full bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm focus:outline-none focus:border-amber-500"
-            />
-          </label>
-          <label className="block">
-            <span className="block text-xs text-gunmetal mb-1">Cotización vinculada</span>
-            <select
-              value={clientQuoteId}
-              onChange={(e) => setClientQuoteId(e.target.value)}
-              className="w-full bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm"
-            >
-              <option value="">Sin cotización vinculada</option>
-              {quotes.map((q) => (
-                <option key={q.id} value={String(q.id)}>
-                  {`COT-${String(q.id).padStart(4, '0')} · ${q.client_name}`}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="block text-xs text-gunmetal mb-1">Link externo</span>
-            <input
-              value={externalUrl}
-              onChange={(e) => setExternalUrl(e.target.value)}
-              placeholder="https://makerworld.com/models/…"
-              className="w-full bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm focus:outline-none focus:border-amber-500"
-            />
-          </label>
-          <div>
-            <span className="block text-xs text-gunmetal mb-1.5">Color</span>
-            <div className="flex flex-wrap gap-1.5">
-              {COLOR_PALETTE.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setColor(c === color ? '' : c)}
-                  className="w-6 h-6 rounded-full border-2 transition-transform"
-                  style={{ background: c, borderColor: color === c ? '#fff' : 'transparent', transform: color === c ? 'scale(1.15)' : 'scale(1)' }}
-                  aria-label={`Color ${c}`}
-                />
-              ))}
-            </div>
-          </div>
-          {mode === 'edit' && (
-            <label className="block">
-              <span className="block text-xs text-gunmetal mb-1">Estado</span>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                className="w-full bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm"
-              >
-                <option value="active">Activo</option>
-                <option value="completed">Completado</option>
-                <option value="archived">Archivado</option>
-              </select>
-            </label>
-          )}
-          {mode === 'edit' && (
-            <label className="block">
-              <span className="block text-xs text-gunmetal mb-1">Foto de portada</span>
-              <div className="flex items-center gap-2">
-                {initial?.has_cover && (
-                  <img
-                    src={getProjectCoverUrl(initial.id, initial.updated_at)}
-                    alt=""
-                    className="w-9 h-9 rounded object-cover shrink-0"
-                  />
-                )}
-                <label className="tf-btn-ghost inline-flex items-center gap-1.5 cursor-pointer text-xs">
-                  <Upload size={12} />
-                  {uploadingCover ? 'Subiendo…' : initial?.has_cover ? 'Reemplazar' : 'Subir imagen'}
-                  <input
-                    type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
-                    aria-label="Subir foto de portada"
-                    onChange={handleCoverChange} disabled={uploadingCover}
-                  />
-                </label>
-              </div>
-            </label>
-          )}
-          <label className="block">
-            <span className="block text-xs text-gunmetal mb-1">Notas</span>
-            <textarea
-              rows={2}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="w-full bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-1.5 text-tech-white text-sm resize-y"
-            />
-          </label>
+          ))}
         </div>
-    </>
+      </div>
+      {mode === 'edit' && (
+        <label className="mk-field">
+          <span className="lbl">Estado</span>
+          <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="active">Activo</option>
+            <option value="completed">Completado</option>
+            <option value="archived">Archivado</option>
+          </select>
+        </label>
+      )}
+      {mode === 'edit' && (
+        <div className="mk-field">
+          <span className="lbl">Foto de portada</span>
+          <div className="flex items-center gap-2.5">
+            {initial?.has_cover && (
+              <img src={getProjectCoverUrl(initial.id, initial.updated_at)} alt="" className="w-11 h-11 rounded-[10px] object-cover shrink-0" />
+            )}
+            <label className="mk-btn mk-btn-secondary cursor-pointer flex-1">
+              <Upload size={13} />
+              {uploadingCover ? 'Subiendo…' : initial?.has_cover ? 'Reemplazar' : 'Subir imagen'}
+              <input
+                type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+                aria-label="Subir foto de portada"
+                onChange={handleCoverChange} disabled={uploadingCover}
+              />
+            </label>
+          </div>
+        </div>
+      )}
+      <label className="mk-field full">
+        <span className="lbl">Notas</span>
+        <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas del encargo…" />
+      </label>
+    </div>
   );
 
   const footer = (
-    <div className="flex gap-2 w-full">
-      <button onClick={onCancel} className="tf-btn-ghost flex-1" disabled={saving}>Cancelar</button>
-      <button onClick={submit} className="tf-btn-primary flex-1" disabled={saving || !name.trim()}>
+    <div className="flex gap-2 w-full" style={{ '--page-accent': ACCENT }}>
+      <button onClick={onCancel} className="mk-btn mk-btn-secondary flex-1" disabled={saving}>Cancelar</button>
+      <button onClick={submit} className="mk-btn mk-btn-primary flex-1" disabled={saving || !name.trim()}>
         {saving ? 'Guardando…' : mode === 'edit' ? 'Guardar' : 'Crear'}
       </button>
     </div>
@@ -686,25 +632,18 @@ export default function ProjectsPage() {
   const completedCount = projects.filter((p) => p.status === 'completed').length;
   const totalItems = projects.reduce((acc, p) => acc + (p.total_items || 0), 0);
 
+  // Fix (audit 1:1): KPIStrip (P5) — en mobile es carousel scroll-snap, no
+  // cards apiladas full-width. Ref: projects-history.html §Projects kpi-strip.
   const KPIs = (
-    <div className="flex flex-wrap gap-3 px-6 pt-4 pb-2">
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI label="Proyectos" value={projects.length} unit="docs" sub={`${activeCount} activos`} accent={ACCENT} icon={FolderKanban} />
-      </div>
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI label="Completados" value={completedCount} unit="docs" sub="listos" accent="#34D399" icon={CheckCircle2} />
-      </div>
-      <div className="flex-1 min-w-[180px] flex">
-        <KPI label="Items agrupados" value={totalItems} unit="items" sub="en todos los proyectos" accent="#38BDF8" icon={FileText} />
-      </div>
-    </div>
+    <KPIStrip className="px-4 md:px-6 pt-4 pb-2">
+      <KPI label="Proyectos" value={projects.length} unit="docs" sub={`${activeCount} activos`} accent={ACCENT} icon={FolderKanban} />
+      <KPI label="Completados" value={completedCount} unit="docs" sub="listos" accent="#34D399" icon={CheckCircle2} />
+      <KPI label="Items agrupados" value={totalItems} unit="items" sub="en todos los proyectos" accent="#38BDF8" icon={FileText} />
+    </KPIStrip>
   );
 
   const Grid = (
-    <div
-      className="px-4 md:px-6 pb-8 grid gap-3"
-      style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}
-    >
+    <div className="mk-project-grid px-4 md:px-6 pb-8">
       {projects.map((p) => (
         <ProjectCard
           key={p.id}
@@ -745,7 +684,7 @@ export default function ProjectsPage() {
 
   if (isMobile) {
     return (
-      <div className="flex flex-col">
+      <div className="flex flex-col" style={{ '--page-accent': ACCENT }}>
         <MobileAppHeader
           appName="Proyectos"
           appIcon={FolderKanban}
@@ -798,31 +737,29 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen -m-4 md:-m-6 xl:-m-8">
-      <header className="flex items-center gap-4 px-6 py-3.5 border-b border-[var(--color-border-soft)] bg-[var(--color-surf-sidebar)] sticky top-0 z-20">
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span
-            className="inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0"
-            style={{ background: `${ACCENT}1F`, color: ACCENT, border: `1px solid ${ACCENT}40` }}
-          >
-            <FolderKanban size={13} />
-          </span>
-          <span className="text-sm font-semibold text-tech-white whitespace-nowrap">Proyectos</span>
-          <span className="mono text-[10px] px-1.5 py-0.5 rounded-sm bg-white/5 border border-[var(--color-border)] text-steel ml-1">
-            {projects.length}
-          </span>
+    <div className="flex flex-col min-h-screen -m-4 md:-m-6 xl:-m-8" style={{ '--page-accent': ACCENT }}>
+      <header className="mk-page-header">
+        <div className="mk-ph-icon"><FolderKanban size={16} /></div>
+        <div className="flex-1 min-w-0">
+          <div className="mk-ph-eyebrow"><span className="mk-dot" /> Proyectos</div>
+          <div className="mk-ph-title">
+            Proyectos
+            <span className="mk-ph-count">{projects.length}</span>
+          </div>
         </div>
-        <label className="btn btn-ghost btn-sm cursor-pointer">
-          <Upload size={13} /> {importing ? 'Importando…' : 'Importar'}
-          <input
-            type="file" accept=".zip" className="hidden"
-            aria-label="Importar proyecto (ZIP)"
-            onChange={handleImportFile} disabled={importing}
-          />
-        </label>
-        <Button variant="primary" size="sm" icon={Plus} onClick={() => setFormModal({ mode: 'create' })}>
-          Nuevo proyecto
-        </Button>
+        <div className="flex gap-2 shrink-0">
+          <label className="mk-btn mk-btn-secondary cursor-pointer">
+            <Upload size={14} /> {importing ? 'Importando…' : 'Importar'}
+            <input
+              type="file" accept=".zip" className="hidden"
+              aria-label="Importar proyecto (ZIP)"
+              onChange={handleImportFile} disabled={importing}
+            />
+          </label>
+          <button type="button" className="mk-btn mk-btn-primary" onClick={() => setFormModal({ mode: 'create' })}>
+            <Plus size={14} /> Nuevo proyecto
+          </button>
+        </div>
       </header>
 
       {KPIs}

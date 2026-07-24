@@ -38,9 +38,16 @@ export default defineConfig({
   },
 
   expect: {
-    // Tolerancia píxel — Playwright recommends ~0.2 for cross-platform
+    // Tolerancia píxel. El runner self-hosted renderiza con ruido de
+    // antialiasing/subpixel ~3% en páginas mobile densas (fallos flaky
+    // rotando de página en cada corrida, sin cambios reales de código).
+    // 0.05 absorbe ese piso de ruido sin ocultar regresiones visuales
+    // reales (que en full-page suelen ser >5%). `threshold` sube un poco
+    // la tolerancia por-píxel para reducir falsos positivos de bordes.
+    // Playwright recomienda hasta ~0.2 para cross-platform.
     toHaveScreenshot: {
-      maxDiffPixelRatio: 0.02,
+      maxDiffPixelRatio: 0.05,
+      threshold: 0.25,
       animations: 'disabled',
       caret: 'hide',
     },

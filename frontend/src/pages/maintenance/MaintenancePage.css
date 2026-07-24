@@ -1,0 +1,92 @@
+/**
+ * MaintenancePage.css — clases page-specific del port 1:1 de maintenance.html.
+ * Prefijo `mk-` (convive con Tailwind). Comparte tokens `--cfs-*` +
+ * `--page-accent` con `styles/mockup-system.css`.
+ */
+
+/* ── PrinterCard (dashboard) ───────────────────────────────────────────────── */
+.mk-printer-card {
+  background: var(--cfs-surface-card); border: 1px solid var(--cfs-border-legacy);
+  border-radius: 14px; padding: 14px; text-align: left; min-width: 0;
+  display: flex; flex-direction: column; gap: 12px; width: 100%; color: inherit;
+}
+.mk-printer-card:hover { background: var(--cfs-surface-hover); }
+.mk-pc-head { display: flex; align-items: flex-start; gap: 12px; }
+.mk-pc-icon {
+  width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 17px;
+}
+.mk-pc-name { font-size: 14px; font-weight: 700; margin-top: 3px; color: var(--cfs-text); }
+.mk-pc-hours { font-family: var(--font-mono); font-size: 10.5px; color: var(--cfs-text-tertiary); margin-top: 2px; }
+.mk-pc-counts {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;
+  border-top: 1px dashed var(--cfs-border-soft); padding-top: 10px;
+}
+.mk-pc-count { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.mk-pc-count .n { font-family: var(--font-mono); font-size: 16px; font-weight: 700; }
+.mk-pc-count .l {
+  font-family: var(--font-mono); font-size: 8.5px; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--cfs-text-tertiary); margin-top: 2px; white-space: nowrap;
+}
+.mk-pc-alerts {
+  display: flex; flex-direction: column; gap: 6px;
+  border-top: 1px solid var(--cfs-border-soft); padding-top: 10px; margin: 0; list-style: none;
+}
+.mk-pc-alerts li { display: flex; align-items: center; gap: 8px; font-size: 11.5px; min-width: 0; }
+.mk-pc-alerts .a-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--cfs-text); }
+.mk-pc-alerts .a-meta { font-family: var(--font-mono); font-size: 10px; color: var(--cfs-text-tertiary); flex-shrink: 0; }
+
+/* ── ScheduleCard (programados) ────────────────────────────────────────────── */
+.mk-schedule-card {
+  background: var(--cfs-surface-card); border: 1px solid var(--cfs-border-legacy);
+  border-radius: 14px; padding: 14px; min-width: 0;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.mk-sc-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.mk-sc-name { font-size: 13.5px; font-weight: 600; color: var(--cfs-text); }
+.mk-sc-printer { font-size: 11px; color: var(--cfs-text-tertiary); margin-top: 2px; }
+.mk-sc-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.mk-sc-menu-btn {
+  width: 44px; height: 44px; margin: -8px -8px -8px 0; border-radius: 10px;
+  background: transparent; border: 0; color: var(--cfs-text-tertiary); font-size: 16px;
+  display: flex; align-items: center; justify-content: center; position: relative;
+}
+.mk-sc-menu-btn:hover { background: var(--cfs-surface-hover); color: var(--cfs-text); }
+.mk-sc-progress-track {
+  height: 5px; border-radius: 999px; background: var(--cfs-surface-card-2);
+  border: 1px solid var(--cfs-border-soft); overflow: hidden;
+}
+.mk-sc-progress-fill { height: 100%; border-radius: 999px; }
+.mk-sc-foot { display: flex; align-items: baseline; justify-content: space-between; font-size: 11px; color: var(--cfs-text-tertiary); }
+.mk-sc-foot .pct { font-family: var(--font-mono); font-weight: 700; }
+
+/* ── LineItems stacked (P1) — ítem a descontar ─────────────────────────────── */
+.mk-items-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 14px 0 8px; }
+.mk-add-item-btn {
+  background: transparent; border: 1px dashed color-mix(in oklab, var(--page-accent) 35%, transparent);
+  color: var(--page-accent); border-radius: 9px; font-size: 12px; font-weight: 600; padding: 8px 12px; min-height: 40px;
+}
+.mk-item-li-card {
+  position: relative; background: var(--cfs-surface-card); border: 1px solid var(--cfs-border-soft);
+  border-radius: 12px; padding: 12px; margin-bottom: 10px;
+  display: flex; flex-direction: column; gap: 10px; min-width: 0;
+}
+.mk-item-li-remove {
+  position: absolute; top: 8px; right: 8px; width: 44px; height: 44px; border-radius: 10px;
+  background: var(--cfs-surface-card-2); border: 1px solid var(--cfs-border-strong);
+  color: var(--cfs-text-tertiary); font-size: 15px;
+  display: flex; align-items: center; justify-content: center;
+}
+.mk-item-li-remove:hover { color: var(--color-forge-rose); border-color: rgba(244,63,94,.4); }
+.mk-item-li-index {
+  font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--cfs-text-tertiary); padding-right: 52px;
+}
+
+/* Cuerpo por tipo dentro del drawer de impresora (lista mantenimientos) */
+.mk-type-row {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px;
+  background: var(--cfs-surface-card); border: 1px solid var(--cfs-border-soft);
+}
+.mk-type-name { font-size: 13px; color: var(--cfs-text); }
+.mk-type-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--cfs-text-tertiary); }

@@ -5,18 +5,21 @@
  * edición de campos descriptivos y borrado. El PDF es exclusivo de "Historial de
  * Cotizaciones" y "Cotización manual".
  *
- * Fix #167 (P2): página legacy pre-#126 modernizada — shell dual
- * (`MobileAppHeader` <1024 / header desktop), tabla de 6 columnas a
- * `<ResponsiveTable>` (cards en mobile) y modales detalle/edición a P6
- * (`MobileSheet` <1024 / `DetailDrawer` ≥1024). El confirm de eliminar es corto
- * y se queda centrado. Ruta canónica `/cost/history` intacta.
- * Ref: agent-docs/ui-responsive/mockups/projects-history.html §History.
+ * Port 1:1 del mockup projects-history.html §History (sistema `mk-`): shell dual
+ * (`MobileAppHeader` <1024 / `mk-page-header` ≥1024), tabla de 6 columnas
+ * (`mk-hist-table`, wrapper overflow-x-auto siempre) → cards P2 en mobile, y
+ * detalle/edición P6 dual (`MobileSheet` <1024 / `DetailDrawer` ≥1024). Ruta
+ * canónica `/cost/history` intacta.
+ *
+ * NOTA: el sub-nav de Costos por rutas (decisión 2026-07-16, mockup §History)
+ * se difiere al lote de unificación del módulo Cost (page 7), para no dejar un
+ * dead-end con los tabs in-page de CostPage.
  *
  * @module pages/HistoryPage
  */
 
 import { useState, useEffect } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { getQuotes, deleteQuote, updateQuote } from '../services/api';
 import toast from 'react-hot-toast';
 import { Trash2, Eye, Pencil, BarChart2, Receipt } from 'lucide-react';
@@ -25,7 +28,9 @@ import { SkeletonTable } from '../components/SkeletonLoader';
 import EmptyState from '../components/EmptyState';
 import MobileAppHeader from '../components/MobileAppHeader';
 import { useIsMobile } from '../hooks/useMediaQuery';
-import { ResponsiveTable, MobileSheet, DetailDrawer } from '../components/ui';
+import { MobileSheet, DetailDrawer } from '../components/ui';
+import CostNavTabs from './cost/CostNavTabs';
+import './HistoryPage.css';
 
 const ACCENT = '#2DD4BF';
 
@@ -57,6 +62,7 @@ const totalCompact = (q) =>
  */
 export default function HistoryPage() {
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const { openSidebar } = useOutletContext() || {};
   const confirm = useConfirm();
   const [quotes, setQuotes] = useState([]);
@@ -95,7 +101,7 @@ export default function HistoryPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!await confirm('¿Eliminar este registro?', 'Eliminar')) return;
+    if (!await confirm('¿Eliminar este registro de costo? Esta acción no se puede deshacer.', 'Eliminar')) return;
     try {
       await deleteQuote(id);
       toast.success('Registro eliminado');
@@ -105,75 +111,74 @@ export default function HistoryPage() {
     }
   };
 
-  const RowActions = ({ q }) => (
-    <span className="inline-flex items-center gap-1.5 justify-end">
-      <button onClick={() => setSelected(q)} className="tf-btn-ghost" title="Ver detalle"><Eye size={16} /></button>
-      <button onClick={() => openEdit(q)} className="tf-btn-ghost" title="Editar"><Pencil size={16} /></button>
-      <button onClick={() => handleDelete(q.id)} className="tf-btn-danger" title="Eliminar"><Trash2 size={16} /></button>
-    </span>
+  const DesktopTable = (
+    <div className="mk-hist-table-wrap">
+      <table className="mk-hist-table">
+        <thead>
+          <tr>
+            <th>Fecha</th><th>Pieza</th><th>Cliente</th>
+            <th className="num">Cant.</th><th className="num">Total</th><th className="num">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {quotes.map((q) => (
+            <tr key={q.id}>
+              <td>{formatDate(q.created_at)}</td>
+              <td className="piece">{q.piece_name}</td>
+              <td>{q.client_name || '—'}</td>
+              <td className="num mono">{q.quantity}</td>
+              <td className="num total">{totalLabel(q)}</td>
+              <td className="num">
+                <span className="mk-row-actions">
+                  <button type="button" className="mk-icon-btn" title="Ver detalle" aria-label="Ver detalle" onClick={() => setSelected(q)}><Eye size={15} /></button>
+                  <button type="button" className="mk-icon-btn" title="Editar" aria-label="Editar" onClick={() => openEdit(q)}><Pencil size={15} /></button>
+                  <button type="button" className="mk-icon-btn danger" title="Eliminar" aria-label="Eliminar" onClick={() => handleDelete(q.id)}><Trash2 size={15} /></button>
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 
-  const columns = [
-    { key: 'fecha', label: 'Fecha', render: (q) => <span className="text-gunmetal">{formatDate(q.created_at)}</span> },
-    { key: 'pieza', label: 'Pieza', strong: true, render: (q) => q.piece_name },
-    { key: 'cliente', label: 'Cliente', render: (q) => <span className="text-steel">{q.client_name || '—'}</span> },
-    { key: 'cant', label: 'Cant.', className: 'text-right', mobile: false, render: (q) => <span className="mono text-steel">{q.quantity}</span> },
-    { key: 'total', label: 'Total', className: 'text-right', mobile: false, render: (q) => <span className="mono font-semibold text-forge-teal">{totalLabel(q)}</span> },
-    { key: 'acciones', label: 'Acciones', className: 'text-right', mobile: false, render: (q) => <RowActions q={q} /> },
-  ];
-
-  // Card mobile 1:1 con el mockup: pieza + total en la primera línea, pares
-  // fecha/cliente/cant./moneda en grid-cols-2 y fila de acciones abajo.
-  const mobileCard = (q) => (
-    <div className="bg-[var(--color-surf-panel)] border border-[var(--color-border)] rounded-xl p-3.5 mb-2.5">
-      <div className="flex items-start justify-between gap-2 mb-2.5">
-        <span className="text-sm font-semibold text-tech-white min-w-0 truncate">{q.piece_name}</span>
-        <span className="mono text-sm font-bold text-forge-teal shrink-0">{totalCompact(q)}</span>
-      </div>
-      <div className="grid grid-cols-2 gap-x-3 gap-y-2 mb-3">
-        {[
-          ['Fecha', formatDate(q.created_at)],
-          ['Cliente', q.client_name || '—'],
-          ['Cantidad', q.quantity],
-          ['Moneda', currencyOf(q)],
-        ].map(([label, value]) => (
-          <div key={label}>
-            <label className="block mono text-[9.5px] font-bold uppercase tracking-wider text-gunmetal mb-0.5">{label}</label>
-            <span className="text-[12.5px] text-steel">{value}</span>
+  const MobileCards = (
+    <div className="mk-hist-cards">
+      {quotes.map((q) => (
+        <div key={q.id} className="mk-hist-card">
+          <div className="mk-hc-top">
+            <div className="mk-hc-title truncate">{q.piece_name}</div>
+            <div className="mk-hc-total">{totalCompact(q)}</div>
           </div>
-        ))}
-      </div>
-      <div className="flex gap-2 pt-2.5 border-t border-[var(--color-border-soft)]">
-        <button onClick={() => setSelected(q)} className="btn btn-secondary btn-sm flex-1 justify-center"><Eye size={14} /> Ver</button>
-        <button onClick={() => openEdit(q)} className="btn btn-secondary btn-sm flex-1 justify-center"><Pencil size={14} /> Editar</button>
-        <button onClick={() => handleDelete(q.id)} className="btn btn-secondary btn-sm flex-1 justify-center" style={{ color: 'var(--forge-rose)' }}><Trash2 size={14} /> Eliminar</button>
-      </div>
+          <div className="mk-hc-grid">
+            <div className="mk-hc-pair"><label>Fecha</label><span>{formatDate(q.created_at)}</span></div>
+            <div className="mk-hc-pair"><label>Cliente</label><span>{q.client_name || '—'}</span></div>
+            <div className="mk-hc-pair"><label>Cantidad</label><span className="mono">{q.quantity}</span></div>
+            <div className="mk-hc-pair"><label>Moneda</label><span>{currencyOf(q)}</span></div>
+          </div>
+          <div className="mk-hc-actions">
+            <button type="button" className="mk-btn mk-btn-secondary" onClick={() => setSelected(q)}><Eye size={14} /> Ver</button>
+            <button type="button" className="mk-btn mk-btn-secondary" onClick={() => openEdit(q)}><Pencil size={14} /> Editar</button>
+            <button type="button" className="mk-btn mk-btn-secondary" style={{ color: 'var(--forge-rose)' }} onClick={() => handleDelete(q.id)}><Trash2 size={14} /> Eliminar</button>
+          </div>
+        </div>
+      ))}
     </div>
   );
 
   const emptyState = (
-    <EmptyState
-      icon={BarChart2}
-      title="No hay registros de costos"
-      description="Calcula y guarda el costo de una impresión para verlo aquí."
-      actionLabel="Ir a la calculadora"
-      onAction={() => { window.location.href = '/cost/calculator'; }}
-    />
+    <div className="px-4 md:px-6">
+      <EmptyState
+        icon={BarChart2}
+        title="No hay registros de costos"
+        description="Calcula y guarda el costo de una impresión para verlo aquí."
+        actionLabel="Ir a la calculadora"
+        onAction={() => navigate('/cost/calculator')}
+      />
+    </div>
   );
 
-  const table = (
-    <ResponsiveTable
-      columns={columns}
-      rows={quotes}
-      rowKey={(q) => q.id}
-      mobileCard={mobileCard}
-      minWidth={640}
-      empty={emptyState}
-    />
-  );
-
-  // Paneles P6 (dual internamente). Se incluyen en ambos shells; solo uno se
-  // monta a la vez, así que no se duplican.
+  // Paneles P6 (dual internamente). Solo uno se monta a la vez.
   const panels = (
     <>
       <QuoteDetailPanel quote={selected} onClose={() => setSelected(null)} />
@@ -187,11 +192,12 @@ export default function HistoryPage() {
     </>
   );
 
-  if (loading) return <SkeletonTable rows={6} cols={6} />;
+  const content =
+    quotes.length === 0 ? emptyState : (isMobile ? MobileCards : DesktopTable);
 
-  if (isMobile) {
-    return (
-      <div className="flex flex-col">
+  return (
+    <div className="flex flex-col min-h-screen -m-4 md:-m-6 xl:-m-8" style={{ '--page-accent': ACCENT }}>
+      {isMobile ? (
         <MobileAppHeader
           appName="Cost · Historial"
           appIcon={Receipt}
@@ -199,30 +205,29 @@ export default function HistoryPage() {
           title="Historial de costos"
           onMenu={() => openSidebar?.()}
         />
-        <div className="px-4 pt-2 pb-8">{table}</div>
-        {panels}
+      ) : (
+        <header className="mk-page-header">
+          <div className="mk-ph-icon"><Receipt size={16} /></div>
+          <div className="flex-1 min-w-0">
+            <div className="mk-ph-eyebrow"><span className="mk-dot" /> Cost · Historial</div>
+            <div className="mk-ph-title">
+              Historial de costos de impresión
+              <span className="mk-ph-count">{quotes.length}</span>
+            </div>
+          </div>
+        </header>
+      )}
+
+      <CostNavTabs className="px-4 md:px-6" />
+
+      <div className="mk-hist-max px-4 md:px-6 pt-3 pb-24 md:pb-10 w-full">
+        {loading ? (
+          <div className="pt-3"><SkeletonTable rows={6} cols={6} /></div>
+        ) : (
+          content
+        )}
       </div>
-    );
-  }
 
-  return (
-    <div className="flex flex-col min-h-screen -m-4 md:-m-6 xl:-m-8">
-      <header className="flex items-center gap-4 px-6 py-3.5 border-b border-[var(--color-border-soft)] bg-[var(--color-surf-sidebar)] sticky top-0 z-20">
-        <span
-          className="inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0"
-          style={{ background: `${ACCENT}1F`, color: ACCENT, border: `1px solid ${ACCENT}40` }}
-        >
-          <Receipt size={13} />
-        </span>
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span className="text-sm font-semibold text-tech-white whitespace-nowrap">Historial de costos de impresión</span>
-          <span className="mono text-[10px] px-1.5 py-0.5 rounded-sm bg-white/5 border border-[var(--color-border)] text-steel ml-1">
-            {quotes.length}
-          </span>
-        </div>
-      </header>
-
-      <div className="px-6 py-4">{table}</div>
       {panels}
     </div>
   );
@@ -239,39 +244,55 @@ function QuoteDetailPanel({ quote, onClose }) {
   const isMobile = useIsMobile();
   if (!quote) return null;
 
+  const money = (v) => `$ ${Number(v).toFixed(2)}`;
+
   const body = (
-    <div className="space-y-2 text-sm">
-      {quote.client_name && <p className="text-steel mb-2">Cliente: {quote.client_name}</p>}
-      {quote.description && <p className="text-gunmetal mb-4">{quote.description}</p>}
-      <Row label="Material" value={quote.material_cost} />
-      <Row label="Electricidad" value={quote.electricity_cost} />
-      <Row label="Depreciación" value={quote.depreciation_cost} />
-      <Row label="Mano de obra" value={quote.labor_cost} />
-      <Row label="Absorción fallos" value={quote.failure_cost} />
-      <hr className="tf-hr" />
-      <Row label="Subtotal" value={quote.subtotal} bold />
-      <Row label={`Margen (${quote.margin_percent}%)`} value={quote.margin_amount} />
-      <hr className="tf-hr" />
-      <Row label="Total cotización (USD)" value={quote.total_price} bold highlight />
-      {quote.quantity > 1 && (
-        <Row label={`Precio por pieza USD (÷${quote.quantity})`} value={quote.total_per_unit} bold />
+    <div style={{ '--page-accent': ACCENT }}>
+      {quote.client_name && (
+        <p className="text-[12.5px] mb-1" style={{ color: 'var(--cfs-text-secondary)' }}>
+          Cliente: <b style={{ color: 'var(--cfs-text)' }}>{quote.client_name}</b>
+        </p>
       )}
+      {quote.description && (
+        <p className="text-xs mb-3.5" style={{ color: 'var(--cfs-text-tertiary)' }}>{quote.description}</p>
+      )}
+
+      <div className="mk-cost-row"><span className="lbl">Material</span><span className="val">{money(quote.material_cost)}</span></div>
+      <div className="mk-cost-row"><span className="lbl">Electricidad</span><span className="val">{money(quote.electricity_cost)}</span></div>
+      <div className="mk-cost-row"><span className="lbl">Depreciación</span><span className="val">{money(quote.depreciation_cost)}</span></div>
+      <div className="mk-cost-row"><span className="lbl">Mano de obra</span><span className="val">{money(quote.labor_cost)}</span></div>
+      <div className="mk-cost-row"><span className="lbl">Absorción fallos</span><span className="val">{money(quote.failure_cost)}</span></div>
+      <div className="mk-cost-row bold"><span className="lbl">Subtotal</span><span className="val">{money(quote.subtotal)}</span></div>
+      <div className="mk-cost-row"><span className="lbl">Margen ({quote.margin_percent}%)</span><span className="val">{money(quote.margin_amount)}</span></div>
+
+      <div className="mk-cost-total-usd">
+        <span className="lbl">Total cotización (USD)</span>
+        <span className="val">{money(quote.total_price)}</span>
+      </div>
+      {quote.quantity > 1 && (
+        <div className="mk-cost-row" style={{ border: 'none', paddingTop: '10px' }}>
+          <span className="lbl">Precio por pieza USD (÷{quote.quantity})</span>
+          <span className="val">{money(quote.total_per_unit)}</span>
+        </div>
+      )}
+
       {quote.total_price_cop && (
         <>
-          <div className="flex justify-between items-baseline gap-2 bg-[#0A2530] border border-forge-teal/20 px-3 py-2 rounded-lg">
-            <span className="font-semibold text-forge-teal min-w-0">Total cotización (COP)</span>
-            <span className="font-bold text-forge-teal text-lg shrink-0">$ {Math.round(quote.total_price_cop).toLocaleString('es-CO')}</span>
+          <div className="mk-cost-total-cop">
+            <span className="lbl">Total cotización (COP)</span>
+            <span className="val">$ {Math.round(quote.total_price_cop).toLocaleString('es-CO')}</span>
           </div>
           {quote.quantity > 1 && (
-            <div className="flex justify-between items-baseline gap-2 bg-[#0A2530]/60 px-3 py-1 rounded">
-              <span className="font-semibold text-forge-teal text-sm min-w-0">Por pieza COP (÷{quote.quantity})</span>
-              <span className="font-bold text-forge-teal shrink-0">$ {Math.round(quote.total_per_unit_cop).toLocaleString('es-CO')}</span>
+            <div className="mk-cost-row" style={{ border: 'none' }}>
+              <span className="lbl" style={{ color: 'var(--forge-teal)' }}>Por pieza COP (÷{quote.quantity})</span>
+              <span className="val" style={{ color: 'var(--forge-teal)' }}>$ {Math.round(quote.total_per_unit_cop).toLocaleString('es-CO')}</span>
             </div>
           )}
-          <p className="text-xs text-gunmetal">Tasa: 1 USD = {quote.usd_to_cop_rate?.toLocaleString('es-CO')} COP</p>
+          <p className="mk-cost-rate-hint">Tasa: 1 USD = {quote.usd_to_cop_rate?.toLocaleString('es-CO')} COP</p>
         </>
       )}
-      <p className="mt-4 text-xs text-gunmetal">
+
+      <p className="text-[11px] mt-3.5" style={{ color: 'var(--cfs-text-tertiary)' }}>
         Este registro corresponde a un cálculo de costo de impresión, no a una cotización de cliente.
       </p>
     </div>
@@ -285,7 +306,7 @@ function QuoteDetailPanel({ quote, onClose }) {
     );
   }
   return (
-    <DetailDrawer open onClose={onClose} eyebrow="COST · HISTORIAL" title={quote.piece_name} width={480}>
+    <DetailDrawer open onClose={onClose} eyebrow="COST · HISTORIAL · DETALLE" title={quote.piece_name} width={480}>
       {body}
     </DetailDrawer>
   );
@@ -306,30 +327,30 @@ function QuoteEditPanel({ quote, form, onChange, onSubmit, onClose }) {
   if (!quote) return null;
 
   const body = (
-    <form id="history-edit-form" onSubmit={onSubmit} className="space-y-4">
-      <div>
-        <label className="tf-label">Nombre de la pieza</label>
-        <input className="tf-input" value={form.piece_name} onChange={(e) => onChange({ ...form, piece_name: e.target.value })} required />
-      </div>
-      <div>
-        <label className="tf-label">Cliente</label>
-        <input className="tf-input" value={form.client_name} onChange={(e) => onChange({ ...form, client_name: e.target.value })} />
-      </div>
-      <div>
-        <label className="tf-label">Descripción</label>
-        <input className="tf-input" value={form.description} onChange={(e) => onChange({ ...form, description: e.target.value })} />
-      </div>
-      <div>
-        <label className="tf-label">Notas</label>
-        <textarea className="tf-input" rows={3} value={form.notes} onChange={(e) => onChange({ ...form, notes: e.target.value })} />
-      </div>
+    <form id="history-edit-form" onSubmit={onSubmit} className="mk-form-grid" style={{ '--page-accent': ACCENT }}>
+      <label className="mk-field full">
+        <span className="lbl">Nombre de la pieza</span>
+        <input value={form.piece_name} onChange={(e) => onChange({ ...form, piece_name: e.target.value })} required />
+      </label>
+      <label className="mk-field full">
+        <span className="lbl">Cliente</span>
+        <input value={form.client_name} onChange={(e) => onChange({ ...form, client_name: e.target.value })} />
+      </label>
+      <label className="mk-field full">
+        <span className="lbl">Descripción</span>
+        <input value={form.description} onChange={(e) => onChange({ ...form, description: e.target.value })} />
+      </label>
+      <label className="mk-field full">
+        <span className="lbl">Notas</span>
+        <textarea rows={3} value={form.notes} onChange={(e) => onChange({ ...form, notes: e.target.value })} />
+      </label>
     </form>
   );
 
   const footer = (
     <div className="flex gap-2 w-full">
-      <button type="button" onClick={onClose} className="tf-btn-ghost flex-1">Cancelar</button>
-      <button type="submit" form="history-edit-form" className="tf-btn-primary flex-1">Guardar</button>
+      <button type="button" onClick={onClose} className="mk-btn mk-btn-secondary flex-1">Cancelar</button>
+      <button type="submit" form="history-edit-form" className="mk-btn mk-btn-primary flex-1">Guardar</button>
     </div>
   );
 
@@ -344,27 +365,8 @@ function QuoteEditPanel({ quote, form, onChange, onSubmit, onClose }) {
     );
   }
   return (
-    <DetailDrawer open onClose={onClose} eyebrow="COST · HISTORIAL" title="Editar cotización" width={460} footer={footer}>
+    <DetailDrawer open onClose={onClose} eyebrow="COST · HISTORIAL · EDITAR" title="Editar cotización" width={460} footer={footer}>
       {body}
     </DetailDrawer>
-  );
-}
-
-/**
- * Fila del desglose de costos (label izquierda / valor monetario derecha).
- *
- * @param {Object} props
- * @param {string} props.label
- * @param {number} props.value
- * @param {boolean} [props.bold]
- * @param {boolean} [props.highlight]
- * @returns {JSX.Element}
- */
-function Row({ label, value, bold, highlight }) {
-  return (
-    <div className={`tf-cost-row ${highlight ? 'bg-forge-teal/10 -mx-2 px-2 py-2 rounded-lg' : ''}`}>
-      <span className={`${bold ? 'font-semibold text-tech-white' : 'text-steel'} min-w-0`}>{label}</span>
-      <span className={`${bold ? 'font-bold' : ''} ${highlight ? 'text-forge-teal' : 'text-tech-white'} shrink-0`}>$ {value.toFixed(2)}</span>
-    </div>
   );
 }

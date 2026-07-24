@@ -19,6 +19,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import CostNavTabs from './cost/CostNavTabs';
 import toast from 'react-hot-toast';
 import {
   FileEdit, Plus, X, Building2, Clock, Package,
@@ -32,6 +33,7 @@ import {
 import { useIsMobile } from '../hooks/useMediaQuery';
 import { fmtCOP, fmtUSD } from '../utils/inventoryAdapter';
 import { LineItems } from '../components/ui';
+import './ManualQuotePage.css';
 
 const ACCENT = '#2DD4BF';     // forge-teal — app-cost
 const USD_GREEN = '#34D399';
@@ -66,25 +68,11 @@ function computeTotal(items, shippingCOP, includeIVA, ivaPct, rate) {
 
 function MqHeader({ pieceCount }) {
   return (
-    <header className="flex items-center gap-3.5 px-5 py-3.5 border-b border-[var(--color-border-soft)] bg-forge-black">
-      <div
-        className="w-9 h-9 rounded-lg shrink-0 inline-flex items-center justify-center"
-        style={{
-          background: `color-mix(in oklab, ${ACCENT} 14%, transparent)`,
-          border: `1px solid color-mix(in oklab, ${ACCENT} 32%, transparent)`,
-          color: ACCENT,
-        }}
-      >
-        <FileEdit size={17} />
-      </div>
+    <header className="mk-page-header" style={{ '--page-accent': ACCENT }}>
+      <div className="mk-ph-icon"><FileEdit size={16} /></div>
       <div className="flex-1 min-w-0">
-        <div className="mono inline-flex items-center gap-1.5 text-[9.5px] uppercase tracking-[0.14em] text-gunmetal">
-          <span className="w-1.5 h-1.5 rounded-full" style={{ background: ACCENT }} />
-          Cost · Cotización manual
-        </div>
-        <h1 className="m-0 text-[18px] font-semibold text-tech-white tracking-tight whitespace-nowrap">
-          Crear cotización al cliente
-        </h1>
+        <div className="mk-ph-eyebrow"><span className="mk-dot" /> Cost · Cotización manual</div>
+        <div className="mk-ph-title">Crear cotización al cliente</div>
       </div>
       <div className="mono text-[10.5px] text-gunmetal whitespace-nowrap">
         {pieceCount} {pieceCount === 1 ? 'ítem' : 'ítems'}
@@ -97,53 +85,39 @@ function MqHeader({ pieceCount }) {
 
 function ClientBar({ clientName, onClientName, validDays, onValidDays, exchangeRate }) {
   return (
-    <div className="flex flex-wrap items-center gap-2.5 px-5 py-3 border-b border-[var(--color-border-soft)] bg-forge-black">
-      <div className="flex-1 min-w-[260px] flex items-center gap-2.5 px-3 py-2 rounded-lg bg-[var(--color-surf-card)] border border-[var(--color-border)]">
-        <div
-          className="w-8 h-8 rounded-lg shrink-0 inline-flex items-center justify-center"
-          style={{
-            background: `color-mix(in oklab, ${ACCENT} 14%, transparent)`,
-            border: `1px solid color-mix(in oklab, ${ACCENT} 28%, transparent)`,
-            color: ACCENT,
-          }}
-        >
-          <Building2 size={14} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="mono text-[9px] uppercase tracking-[0.14em] text-gunmetal">Cliente *</div>
+    <div className="mk-client-bar" style={{ '--page-accent': ACCENT }}>
+      <div className="mk-cb-block client">
+        <div className="mk-cb-icon"><Building2 size={14} /></div>
+        <div className="mk-cb-txt">
+          <div className="mk-cb-eyebrow">Cliente *</div>
           <input
             value={clientName}
             onChange={(e) => onClientName(e.target.value)}
             placeholder="Nombre del cliente o empresa"
-            className="w-full bg-transparent border-0 outline-0 text-[13px] font-medium text-tech-white placeholder:text-gunmetal-dim"
+            className="mk-cb-input"
           />
         </div>
       </div>
-      <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-[var(--color-surf-card)] border border-[var(--color-border)] shrink-0">
-        <div
-          className="w-8 h-8 rounded-lg inline-flex items-center justify-center"
-          style={{ background: `color-mix(in oklab, ${ACCENT} 10%, transparent)`, border: `1px solid color-mix(in oklab, ${ACCENT} 22%, transparent)`, color: ACCENT }}
-        >
-          <Clock size={14} />
-        </div>
+      <div className="mk-cb-block">
+        <div className="mk-cb-icon"><Clock size={14} /></div>
         <div>
-          <div className="mono text-[9px] uppercase tracking-[0.14em] text-gunmetal">Válida por</div>
+          <div className="mk-cb-eyebrow">Válida por</div>
           <div className="flex items-baseline gap-1">
             <input
               type="number"
               min="1"
               value={validDays}
               onChange={(e) => onValidDays(e.target.value)}
-              className="w-12 bg-transparent border-0 outline-0 mono text-[13px] font-medium text-tech-white"
+              className="mk-cb-days-input"
             />
             <span className="mono text-[11px] text-gunmetal">días</span>
           </div>
         </div>
       </div>
       {exchangeRate && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-surf-card)] border border-[var(--color-border)] shrink-0">
-          <div className="mono text-[9px] uppercase tracking-[0.14em] text-gunmetal mr-1">Tasa USD→COP</div>
-          <span className="mono text-[12px] font-medium text-tech-white">
+        <div className="mk-cb-block rate">
+          <div className="mk-cb-eyebrow mr-1">Tasa USD→COP</div>
+          <span className="mk-cb-rate-value">
             {Number(exchangeRate).toLocaleString('es-CO')}
           </span>
         </div>
@@ -667,6 +641,7 @@ export default function ManualQuotePage() {
     return (
       <div className="flex flex-col min-h-screen bg-forge-black">
         <MqHeader pieceCount={items.length} />
+        <CostNavTabs className="px-4" />
         <ClientBar
           clientName={clientName}
           onClientName={setClientName}
@@ -745,6 +720,7 @@ export default function ManualQuotePage() {
   return (
     <div className="flex flex-col min-h-screen bg-forge-black">
       <MqHeader pieceCount={items.length} />
+      <CostNavTabs className="px-5" />
       <ClientBar
         clientName={clientName}
         onClientName={setClientName}

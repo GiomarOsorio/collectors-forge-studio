@@ -1,14 +1,10 @@
 /**
- * @file Pagina de gestion de impresoras 3D.
+ * @file Página de gestión de impresoras 3D (Cost · Impresoras).
  *
- * Permite al usuario realizar operaciones CRUD (crear, leer, actualizar, eliminar)
- * sobre sus impresoras 3D. Muestra tarjetas con la informacion de cada impresora
- * y un formulario modal para agregar o editar impresoras.
- *
- * Cada impresora tiene propiedades como nombre, modelo, precio de compra,
- * consumo electrico, vida util, y datos de mantenimiento (boquilla, placa).
- * Estos datos se usan en el calculo de costos de impresion (depreciacion,
- * electricidad y mantenimiento).
+ * CRUD de impresoras. Cada equipo alimenta el cálculo de costos (depreciación
+ * por horas y energía por watts). Rediseño 1:1 con el mockup
+ * `agent-docs/ui-responsive/mockups/cost.html` §Impresoras (P3 CardGrid +
+ * barra "uso de vida útil" + form P6 dual MobileSheet/DetailDrawer).
  *
  * @module pages/PrintersPage
  */
@@ -16,73 +12,125 @@
 import { useState, useEffect } from 'react';
 import { getPrinters, createPrinter, updatePrinter, deletePrinter } from '../services/api';
 import toast from 'react-hot-toast';
-import { Plus, Pencil, Trash2, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, Printer } from 'lucide-react';
 import { useConfirm } from '../components/ConfirmDialog';
+import { useIsMobile } from '../hooks/useMediaQuery';
+import { DetailDrawer, MobileSheet } from '../components/ui';
+import CostNavTabs from './cost/CostNavTabs';
 
-/**
- * Valores iniciales del formulario de impresora.
- * Los valores por defecto representan parametros tipicos:
- * - 5000 horas de vida util estimada
- *
- * NOTA: los campos de mantenimiento (boquilla, placa, otros) fueron
- * removidos. El costo de mantenimiento se rastrea en la app Mantenimiento
- * (logs con descuento de inventario) y los Consumibles cubren el desgaste
- * prospectivo en la calculadora.
- * @type {Object}
- */
+const ACCENT = '#2DD4BF';
+
 const emptyForm = {
   name: '', model: '', purchase_price: '', power_consumption_watts: '',
   estimated_lifespan_hours: '5000', current_hours: '0',
   notes: '',
 };
 
-/**
- * Componente de la pagina de gestion de impresoras 3D.
- *
- * @description Muestra tarjetas (cards) con la informacion de cada impresora
- * y proporciona un formulario modal para crear o editar impresoras.
- * El formulario incluye secciones para datos generales y datos de mantenimiento.
- *
- * @returns {JSX.Element} Pagina completa de gestion de impresoras
- */
+const fmtNum = (n) => Number(n || 0).toLocaleString('es-CO');
+
+/** Tarjeta de impresora — icono + specs + barra de uso de vida útil (mockup). */
+function PrinterCard({ printer, onEdit, onDelete }) {
+  const life = Number(printer.estimated_lifespan_hours) || 0;
+  const used = Number(printer.current_hours) || 0;
+  const pct = life > 0 ? Math.min(100, Math.round((used / life) * 100)) : 0;
+  const warn = pct >= 80;
+
+  return (
+    <div className="bg-[var(--color-surf-card)] border border-[var(--color-border)] rounded-2xl p-4 flex flex-col gap-3 min-w-0">
+      <div className="flex items-start gap-2.5">
+        <span
+          className="w-9 h-9 rounded-[10px] shrink-0 inline-flex items-center justify-center"
+          style={{ background: `${ACCENT}1F`, color: ACCENT, border: `1px solid ${ACCENT}40` }}
+        >
+          <Printer size={16} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[14.5px] font-bold text-tech-white truncate" title={printer.name}>{printer.name}</p>
+          <p className="mono text-[10.5px] text-gunmetal truncate">{printer.model}</p>
+        </div>
+        <div className="flex gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => onEdit(printer)}
+            className="w-11 h-11 lg:w-8 lg:h-8 rounded-[9px] border border-[var(--color-border-strong)] text-gunmetal hover:text-tech-white inline-flex items-center justify-center"
+            aria-label="Editar impresora"
+          >
+            <Pencil size={13} />
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(printer.id)}
+            className="w-11 h-11 lg:w-8 lg:h-8 rounded-[9px] border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 inline-flex items-center justify-center"
+            aria-label="Eliminar impresora"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2 pt-2.5 border-t border-dashed border-[var(--color-border-soft)]">
+        {[
+          ['Costo', `$ ${fmtNum(Math.round(printer.purchase_price))}`, ''],
+          ['Consumo', fmtNum(printer.power_consumption_watts), 'W'],
+          ['Vida útil', fmtNum(printer.estimated_lifespan_hours), 'h'],
+          ['Horas usadas', fmtNum(printer.current_hours), 'h'],
+        ].map(([k, v, u]) => (
+          <div key={k}>
+            <div className="mono text-[8.5px] uppercase tracking-[0.1em] text-gunmetal mb-0.5">{k}</div>
+            <div className="mono text-[12.5px] font-bold text-tech-white">
+              {v}{u && <span className="text-[9.5px] text-gunmetal font-medium"> {u}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div>
+        <div className="flex justify-between items-baseline mb-1.5">
+          <span className="mono text-[8.5px] uppercase tracking-[0.1em] text-gunmetal">Uso de vida útil</span>
+          <span className={`mono text-[10px] font-bold ${warn ? 'text-amber-400' : 'text-forge-teal'}`}>{pct}%</span>
+        </div>
+        <div className="h-[5px] rounded-full bg-[var(--color-surf-card-2)] border border-[var(--color-border-soft)] overflow-hidden">
+          <div
+            className="h-full rounded-full"
+            style={{ width: `${pct}%`, background: warn ? 'linear-gradient(90deg,#D97706,#F59E0B)' : `linear-gradient(90deg,#0D9488,${ACCENT})` }}
+          />
+        </div>
+      </div>
+
+      {printer.notes && (
+        <p className="text-[11.5px] text-gunmetal border-t border-dashed border-[var(--color-border-soft)] pt-2.5">
+          {printer.notes}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function PrintersPage() {
   const confirm = useConfirm();
-  /** @type {[Array, Function]} Lista de impresoras obtenidas del backend */
+  const isMobile = useIsMobile();
   const [printers, setPrinters] = useState([]);
-  /** @type {[boolean, Function]} Controla la visibilidad del formulario modal */
   const [showForm, setShowForm] = useState(false);
-  /** @type {[number|null, Function]} ID de la impresora en edicion, o null si es creacion nueva */
   const [editingId, setEditingId] = useState(null);
-  /** @type {[Object, Function]} Estado actual del formulario de impresora */
   const [form, setForm] = useState(emptyForm);
 
-  /**
-   * Carga la lista de impresoras desde el backend y actualiza el estado.
-   */
   const load = () => getPrinters().then((res) => setPrinters(res.data));
-
-  // Carga las impresoras al montar el componente
   useEffect(() => { load(); }, []);
 
-  /**
-   * Actualiza el campo correspondiente del formulario al cambiar un input.
-   *
-   * @param {React.ChangeEvent<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>} e - Evento de cambio
-   */
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  /**
-   * Maneja el envio del formulario para crear o actualizar una impresora.
-   * Itera sobre los campos del formulario y convierte automaticamente los valores:
-   * - Campos de texto (name, model, notes) se mantienen como strings
-   * - Campos numericos se parsean a float
-   * - El campo notes se envia como null si esta vacio
-   *
-   * @param {React.FormEvent<HTMLFormElement>} e - Evento del formulario
-   */
+  const openNew = () => { setForm(emptyForm); setEditingId(null); setShowForm(true); };
+  const openEdit = (p) => {
+    const f = {};
+    for (const key of Object.keys(emptyForm)) f[key] = p[key] != null ? p[key].toString() : '';
+    setForm(f);
+    setEditingId(p.id);
+    setShowForm(true);
+  };
+  const closeForm = () => { setShowForm(false); setEditingId(null); };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // Convertir campos numericos a float y mantener strings como texto
     const data = {};
     for (const [key, val] of Object.entries(form)) {
       data[key] = key === 'name' || key === 'model' || key === 'notes'
@@ -98,8 +146,7 @@ export default function PrintersPage() {
         await createPrinter(data);
         toast.success('Impresora creada');
       }
-      setShowForm(false);
-      setEditingId(null);
+      closeForm();
       setForm(emptyForm);
       load();
     } catch {
@@ -107,29 +154,6 @@ export default function PrintersPage() {
     }
   };
 
-  /**
-   * Prepara el formulario para editar una impresora existente.
-   * Convierte todos los valores del objeto impresora a strings para
-   * compatibilidad con los inputs HTML del formulario.
-   *
-   * @param {Object} p - Objeto de la impresora a editar con todas sus propiedades
-   */
-  const handleEdit = (p) => {
-    const f = {};
-    for (const key of Object.keys(emptyForm)) {
-      f[key] = p[key] != null ? p[key].toString() : '';
-    }
-    setForm(f);
-    setEditingId(p.id);
-    setShowForm(true);
-  };
-
-  /**
-   * Elimina una impresora previa confirmacion del usuario.
-   * Muestra un dialogo de confirmacion antes de proceder con la eliminacion.
-   *
-   * @param {number} id - ID de la impresora a eliminar
-   */
   const handleDelete = async (id) => {
     if (!await confirm('¿Eliminar esta impresora?', 'Eliminar')) return;
     try {
@@ -141,101 +165,98 @@ export default function PrintersPage() {
     }
   };
 
+  const FORM_INPUT = 'w-full bg-[var(--color-surf-card-2)] border border-[var(--color-border-strong)] rounded-md px-2.5 py-2 text-tech-white text-sm focus:outline-none focus:border-teal-500 min-h-[44px]';
+
+  const formBody = (
+    <form id="printer-form" onSubmit={handleSubmit} className="flex flex-col gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label className="block">
+          <span className="block text-xs text-gunmetal mb-1">Nombre *</span>
+          <input name="name" value={form.name} onChange={handleChange} required className={FORM_INPUT} />
+        </label>
+        <label className="block">
+          <span className="block text-xs text-gunmetal mb-1">Modelo *</span>
+          <input name="model" value={form.model} onChange={handleChange} required className={FORM_INPUT} />
+        </label>
+        <label className="block">
+          <span className="block text-xs text-gunmetal mb-1">Precio de compra ($) *</span>
+          <input name="purchase_price" type="number" step="0.01" value={form.purchase_price} onChange={handleChange} required className={FORM_INPUT} />
+        </label>
+        <label className="block">
+          <span className="block text-xs text-gunmetal mb-1">Consumo (watts) *</span>
+          <input name="power_consumption_watts" type="number" value={form.power_consumption_watts} onChange={handleChange} required className={FORM_INPUT} />
+        </label>
+        <label className="block">
+          <span className="block text-xs text-gunmetal mb-1">Vida útil (horas)</span>
+          <input name="estimated_lifespan_hours" type="number" value={form.estimated_lifespan_hours} onChange={handleChange} className={FORM_INPUT} />
+        </label>
+        <label className="block">
+          <span className="block text-xs text-gunmetal mb-1">Horas de uso actual</span>
+          <input name="current_hours" type="number" value={form.current_hours} onChange={handleChange} className={FORM_INPUT} />
+        </label>
+      </div>
+      <label className="block">
+        <span className="block text-xs text-gunmetal mb-1">Notas</span>
+        <textarea name="notes" value={form.notes} onChange={handleChange} rows={2} className={`${FORM_INPUT} min-h-0 resize-y`} />
+      </label>
+    </form>
+  );
+
+  const formFooter = (
+    <div className="flex gap-2 w-full">
+      <button type="button" onClick={closeForm} className="tf-btn-ghost flex-1">Cancelar</button>
+      <button type="submit" form="printer-form" className="tf-btn-primary flex-1">
+        {editingId ? 'Actualizar' : 'Crear'}
+      </button>
+    </div>
+  );
+
+  const title = editingId ? 'Editar impresora' : 'Nueva impresora';
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-tech-white">Impresoras</h2>
-        <button onClick={() => { setForm(emptyForm); setEditingId(null); setShowForm(true); }}
-          className="tf-btn-primary">
-          <Plus size={20} /> Agregar
+      <CostNavTabs className="-mx-4 md:-mx-6 px-4 md:px-6 mb-4" />
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+        <div>
+          <h2 className="text-[15px] font-bold text-tech-white">Impresoras</h2>
+          <p className="mono text-[10px] text-gunmetal mt-0.5">
+            {printers.length} equipo{printers.length === 1 ? '' : 's'} · usadas en depreciación y energía de la calculadora
+          </p>
+        </div>
+        <button onClick={openNew} className="tf-btn-primary">
+          <Plus size={18} /> Agregar impresora
         </button>
       </div>
 
-      {/* Form modal */}
-      {showForm && (
-        <div className="tf-modal-overlay">
-          <div className="tf-modal max-w-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="tf-section-title">{editingId ? 'Editar' : 'Nueva'} Impresora</h3>
-              <button onClick={() => setShowForm(false)} className="tf-btn-ghost"><X size={20} /></button>
-            </div>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="tf-label">Nombre *</label>
-                  <input name="name" value={form.name} onChange={handleChange} required
-                    className="tf-input" />
-                </div>
-                <div>
-                  <label className="tf-label">Modelo *</label>
-                  <input name="model" value={form.model} onChange={handleChange} required
-                    className="tf-input" />
-                </div>
-                <div>
-                  <label className="tf-label">Precio de compra ($) *</label>
-                  <input name="purchase_price" type="number" step="0.01" value={form.purchase_price} onChange={handleChange} required
-                    className="tf-input" />
-                </div>
-                <div>
-                  <label className="tf-label">Consumo (watts) *</label>
-                  <input name="power_consumption_watts" type="number" value={form.power_consumption_watts} onChange={handleChange} required
-                    className="tf-input" />
-                </div>
-                <div>
-                  <label className="tf-label">Vida útil (horas)</label>
-                  <input name="estimated_lifespan_hours" type="number" value={form.estimated_lifespan_hours} onChange={handleChange}
-                    className="tf-input" />
-                </div>
-                <div>
-                  <label className="tf-label">Horas de uso actual</label>
-                  <input name="current_hours" type="number" value={form.current_hours} onChange={handleChange}
-                    className="tf-input" />
-                </div>
-              </div>
-
-              <div>
-                <label className="tf-label">Notas</label>
-                <textarea name="notes" value={form.notes} onChange={handleChange} rows={2}
-                  className="tf-input" />
-              </div>
-              <button type="submit"
-                className="tf-btn-primary w-full">
-                {editingId ? 'Actualizar' : 'Crear'}
-              </button>
-            </form>
-          </div>
+      {printers.length === 0 ? (
+        <div className="border border-dashed border-[var(--color-border-strong)] rounded-2xl py-10 px-4 text-center text-gunmetal text-[12.5px]">
+          No hay impresoras configuradas.
+        </div>
+      ) : (
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+          {printers.map((p) => (
+            <PrinterCard key={p.id} printer={p} onEdit={openEdit} onDelete={handleDelete} />
+          ))}
         </div>
       )}
 
-      {/* Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {printers.map((p) => (
-          <div key={p.id} className="tf-card p-6">
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="font-semibold text-tech-white text-lg">{p.name}</h3>
-                <p className="text-gunmetal text-sm">{p.model}</p>
+      {/* Form P6 dual — MobileSheet <1024 / DetailDrawer ≥1024. */}
+      {isMobile ? (
+        <MobileSheet open={showForm} onClose={closeForm} title={title} height="full">
+          {showForm && (
+            <>
+              <div className="px-5 pt-4 pb-4">{formBody}</div>
+              <div className="px-5 pt-3 pb-5 border-t border-[var(--color-border-soft)] sticky bottom-0 bg-[var(--color-surf-sidebar)]">
+                {formFooter}
               </div>
-              <div className="flex gap-2">
-                <button onClick={() => handleEdit(p)} className="tf-btn-ghost"><Pencil size={16} /></button>
-                <button onClick={() => handleDelete(p.id)} className="tf-btn-danger"><Trash2 size={16} /></button>
-              </div>
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <div><span className="text-gunmetal">Costo:</span> <span className="text-steel font-medium">$ {p.purchase_price.toFixed(2)}</span></div>
-              <div><span className="text-gunmetal">Consumo:</span> <span className="text-steel font-medium">{p.power_consumption_watts} W</span></div>
-              <div><span className="text-gunmetal">Vida útil:</span> <span className="text-steel font-medium">{p.estimated_lifespan_hours} h</span></div>
-              <div><span className="text-gunmetal">Horas usadas:</span> <span className="text-steel font-medium">{p.current_hours} h</span></div>
-            </div>
-            {p.notes && <p className="mt-3 text-sm text-gunmetal">{p.notes}</p>}
-          </div>
-        ))}
-        {printers.length === 0 && (
-          <div className="col-span-2 tf-card p-12 text-center text-gunmetal">
-            No hay impresoras configuradas.
-          </div>
-        )}
-      </div>
+            </>
+          )}
+        </MobileSheet>
+      ) : (
+        <DetailDrawer open={showForm} onClose={closeForm} eyebrow="COST · IMPRESORAS" title={title} width={480} footer={showForm ? formFooter : undefined}>
+          {showForm && formBody}
+        </DetailDrawer>
+      )}
     </div>
   );
 }

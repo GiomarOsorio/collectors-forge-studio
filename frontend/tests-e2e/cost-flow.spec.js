@@ -23,16 +23,14 @@ test.describe('Cost — flujos críticos', () => {
     await expect(ctaNueva).toBeVisible();
   });
 
-  test('cambia entre tabs Cotizaciones / Historial / Calculadora', async ({ page }) => {
+  test('sub-nav consolidada de Cost navega por rutas', async ({ page }) => {
     await page.goto('/cost');
     await page.waitForLoadState('networkidle');
 
-    // Tab Historial existe y se puede activar
-    const histTab = page.getByRole('button', { name: /historial/i }).first();
-    if (await histTab.isVisible()) {
-      await histTab.click();
-      // El tab activo cambia el contenido (search placeholder distinto)
-    }
+    // La sub-nav consolidada (CostNavTabs, role=tab) navega a rutas reales.
+    await page.getByRole('tab', { name: /Historial/ }).click();
+    await page.waitForURL('**/cost/history');
+    expect(page.url()).toContain('/cost/history');
   });
 
   // SKIP: el toast (react-hot-toast) usa portal fuera del árbol — getByText

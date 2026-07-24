@@ -38,7 +38,8 @@ test.describe('Settings responsive (issue #168)', () => {
     await page.goto('/settings');
     await page.waitForLoadState('networkidle');
 
-    await page.getByRole('button', { name: /editar cuenta|mi cuenta/i }).first().click();
+    // El tab "Cuenta" es el activo por defecto; el form de cuenta (con la
+    // sección "Cambiar contraseña") se renderiza inline, sin abrir drawer.
     await expect(page.getByText('Cambiar contraseña')).toBeVisible();
     await page.screenshot({ path: 'test-results/settings-account-mobile-390.png' });
   });
