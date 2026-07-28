@@ -1544,6 +1544,24 @@ function filamentToForm(raw) {
     supplier_contact: raw?.supplier_contact || '',
     needs_purchase: !!raw?.needs_purchase,
     notes: raw?.notes || '',
+    // Campos de perfil de slicer: se sobreescriben con `profileToForm` cuando
+    // el filamento SÍ tiene perfil (GET 200). Si no lo tiene (GET 404) deben
+    // quedar con estos defaults, no `undefined` — de lo contrario `.trim()`
+    // sobre `nozzle_diameter`/`profile_notes` al guardar lanza TypeError y el
+    // ítem queda guardado pero el drawer no cierra con error engañoso.
+    nozzle_temp_min: '',
+    nozzle_temp_max: '',
+    bed_temp: '',
+    bed_temp_first_layer: '',
+    print_speed_mms: '',
+    retraction_distance_mm: '',
+    retraction_speed_mms: '',
+    flow_ratio: '',
+    fan_speed_percent: '',
+    k_value: '',
+    nozzle_diameter: '0.4',
+    calibrated_at: '',
+    profile_notes: '',
   };
 }
 
