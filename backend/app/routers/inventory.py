@@ -40,9 +40,25 @@ from app.schemas.inventory import (
     InventoryImportResult,
 )
 from app.limiter import limiter
+from app.services import filament_stock
 from app.services.auth import get_current_user, get_operator_user
 
 router = APIRouter(prefix="/api/inventory/items", tags=["inventory"])
+
+
+def _reconcile_filament_stock(item: InventoryItem, *, counts_provided: bool) -> None:
+    """Mantiene coherentes conteo de bobinas y gramos para ítems Filamento.
+
+    Si el caller mandó campos de conteo (bobinas), esos mandan y se derivan
+    `quantity`/`min_quantity`. Si mandó gramos (flujo legacy), se derivan los
+    conteos desde los gramos. Ver app/services/filament_stock.py.
+    """
+    if item.category != "Filamento":
+        return
+    if counts_provided:
+        filament_stock.normalize_from_counts(item)
+    else:
+        filament_stock.derive_counts_from_grams(item)
 
 
 async def _get_company_inventory_item(
@@ -148,11 +164,22 @@ async def create_inventory_item(
         filament_diameter=data.filament_diameter,
         filament_density=data.filament_density,
         weight_per_roll=data.weight_per_roll,
+        # Stock por bobinas (issue #214)
+        sealed_spools=data.sealed_spools or 0,
+        open_remaining_g=data.open_remaining_g,
+        min_spools=data.min_spools or 0,
         # Precio por unidad para insumos (calculadora)
         price_per_unit=data.price_per_unit,
         # Consumibles (calculadora)
         useful_life_hours=data.useful_life_hours,
         unit_cost_cal=data.unit_cost_cal,
+    )
+    _reconcile_filament_stock(
+        item,
+        counts_provided=any(
+            v is not None
+            for v in (data.sealed_spools, data.open_remaining_g, data.min_spools)
+        ),
     )
     db.add(item)
     await db.commit()
@@ -355,6 +382,15 @@ async def update_inventory_item(
     for field, value in update_data.items():
         setattr(item, field, value)
 
+    # Reconciliar stock por bobinas: si el cliente mandó conteos, mandan ellos;
+    # si mandó gramos (legacy), se derivan los conteos. Ver filament_stock.
+    count_keys = {"sealed_spools", "open_remaining_g", "min_spools"}
+    grams_keys = {"quantity", "min_quantity"}
+    if count_keys & update_data.keys():
+        _reconcile_filament_stock(item, counts_provided=True)
+    elif (grams_keys | {"weight_per_roll"}) & update_data.keys():
+        _reconcile_filament_stock(item, counts_provided=False)
+
     await db.commit()
     await db.refresh(item)
     return item
@@ -445,6 +481,8 @@ async def adjust_inventory_quantity(
         )
 
     item.quantity = new_quantity
+    # Ajuste manual mueve gramos → re-derivar el conteo de bobinas para Filamento.
+    _reconcile_filament_stock(item, counts_provided=False)
     await db.commit()
     await db.refresh(item)
     return item

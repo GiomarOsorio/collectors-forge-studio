@@ -65,6 +65,11 @@ class InventoryItemCreate(BaseModel):
     filament_diameter: Optional[Decimal] = None
     filament_density: Optional[Decimal] = None
     weight_per_roll: Optional[Decimal] = None
+    # Stock por bobinas (issue #214). Si se envían, son la fuente de verdad y
+    # `quantity`/`min_quantity` se derivan server-side (ver services/filament_stock).
+    sealed_spools: Optional[int] = Field(default=None, ge=0)
+    open_remaining_g: Optional[Decimal] = Field(default=None, ge=0)
+    min_spools: Optional[int] = Field(default=None, ge=0)
     # Precio por unidad para insumos (calculadora)
     price_per_unit: Optional[Decimal] = None
     # Campos específicos para consumibles (calculadora)
@@ -119,6 +124,10 @@ class InventoryItemUpdate(BaseModel):
     filament_diameter: Optional[Decimal] = None
     filament_density: Optional[Decimal] = None
     weight_per_roll: Optional[Decimal] = None
+    # Stock por bobinas (issue #214)
+    sealed_spools: Optional[int] = Field(default=None, ge=0)
+    open_remaining_g: Optional[Decimal] = Field(default=None, ge=0)
+    min_spools: Optional[int] = Field(default=None, ge=0)
     # Precio por unidad para insumos (calculadora)
     price_per_unit: Optional[Decimal] = None
     # Campos específicos para consumibles (calculadora)
@@ -179,6 +188,10 @@ class InventoryItemResponse(BaseModel):
     filament_diameter: Optional[DecimalAsFloat] = None
     filament_density: Optional[DecimalAsFloat] = None
     weight_per_roll: Optional[DecimalAsFloat] = None
+    # Stock por bobinas (issue #214)
+    sealed_spools: Optional[int] = None
+    open_remaining_g: Optional[DecimalAsFloat] = None
+    min_spools: Optional[int] = None
     # Precio por unidad para insumos (calculadora)
     price_per_unit: Optional[DecimalAsFloat] = None
     # Campos específicos para consumibles (calculadora)

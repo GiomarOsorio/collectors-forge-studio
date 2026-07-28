@@ -32,6 +32,7 @@ from app.schemas.purchase_order import (
     PurchaseOrderUpdate,
     PurchaseOrderResponse,
 )
+from app.services import filament_stock
 from app.services.auth import get_current_user, get_operator_user
 from app.services.notifier import emit
 
@@ -302,6 +303,11 @@ async def mark_order_arrived(
             inv_item = result.scalar_one_or_none()
             if inv_item:
                 inv_item.quantity += order_item.quantity
+                # Para Filamento, mantener el conteo de bobinas coherente con el
+                # nuevo agregado en gramos (issue #214). La unidad de la orden
+                # sigue siendo gramos por ahora; comprar en bobinas es futuro.
+                if inv_item.category == "Filamento":
+                    filament_stock.derive_counts_from_grams(inv_item)
                 # Si el stock ya supera el mínimo, desactivar needs_purchase
                 if inv_item.min_quantity is None or inv_item.quantity >= inv_item.min_quantity:
                     inv_item.needs_purchase = False
