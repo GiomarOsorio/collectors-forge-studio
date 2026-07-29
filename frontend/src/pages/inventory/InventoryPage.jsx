@@ -53,6 +53,7 @@ import {
   Chip,
   DetailDrawer,
   EmptyState,
+  FieldHint,
   KPI,
   KPIStrip as KPIStripBase,
   LineItems,
@@ -86,6 +87,7 @@ import {
   fmtCOP,
   fmtG,
   fmtKg,
+  fmtSpoolStock,
   fmtUSD,
   groupFilaments,
   mapToFilament,
@@ -305,6 +307,18 @@ function lastUsedFromDate(iso) {
   return `${Math.floor(days / 365)}+ años`;
 }
 
+/**
+ * Etiqueta de stock de un filamento en el modelo por bobinas (issue #214).
+ * Si hay conteos → "N bobinas + ~Rg abierta". Si no (dato sin migrar / mock),
+ * cae a los gramos agregados para no mostrar "Sin stock" habiendo material.
+ */
+function filamentStockLabel(f) {
+  if ((f.sealedSpools || 0) > 0 || (f.openRemainingG || 0) > 0) {
+    return fmtSpoolStock(f.sealedSpools, f.openRemainingG);
+  }
+  return (f.remaining || 0) > 0 ? fmtG(f.remaining) : 'Sin stock';
+}
+
 // ─── Filament card (grid) ────────────────────────────────────────────────────
 
 function FilamentCard({ f, onClick, spoolCount = 0 }) {
@@ -360,11 +374,17 @@ function FilamentCard({ f, onClick, spoolCount = 0 }) {
 
       <div className="flex justify-between items-end gap-2.5 border-t border-dashed border-[var(--color-border-soft)] pt-2.5">
         <div className="flex flex-col min-w-0">
-          <span className="lbl-eyebrow text-[9px]">Peso</span>
-          <span className="mono text-xs text-tech-white whitespace-nowrap">
-            {fmtG(f.remaining)}
-            <span className="text-gunmetal">/{fmtKg(f.total)}</span>
-          </span>
+          <span className="lbl-eyebrow text-[9px]">Stock</span>
+          {spoolCount > 0 ? (
+            <span className="mono text-xs text-tech-white whitespace-nowrap">
+              {fmtG(f.remaining)}
+              <span className="text-gunmetal">/{fmtKg(f.total)}</span>
+            </span>
+          ) : (
+            <span className="mono text-xs text-tech-white truncate" title={filamentStockLabel(f)}>
+              {filamentStockLabel(f)}
+            </span>
+          )}
         </div>
         <div className="flex flex-col items-end min-w-0">
           <span className="lbl-eyebrow text-[9px]">Costo/kg</span>
@@ -460,6 +480,11 @@ function FilamentTable({ items, onRowClick, spoolCountById }) {
                     <div className="mk-fill-track">
                       <div className={`mk-fill-bar${level === 'ok' ? '' : ' low'}`} style={{ width: `${p}%` }} />
                     </div>
+                    {spoolCount === 0 && ((f.sealedSpools || 0) > 0 || (f.openRemainingG || 0) > 0) && (
+                      <span className="mono" style={{ fontSize: 10, color: 'var(--cfs-text-tertiary)' }}>
+                        {fmtSpoolStock(f.sealedSpools, f.openRemainingG)}
+                      </span>
+                    )}
                   </td>
                   <td className="mono" style={{ color: 'var(--cfs-text-secondary)' }}>{spoolCount > 0 ? spoolCount : '—'}</td>
                   <td className="mono" style={{ color: 'var(--cfs-text)' }}>{fmtUSD(f.costPerKg)}</td>
@@ -559,15 +584,21 @@ function FilamentDrawerBody({ f, onReassign, onAddToPurchase, onDelete, isMobile
           label="Precio venta / kg"
           value={f.salePerKg != null ? fmtUSD(f.salePerKg) : '—'}
         />
+        <SheetStat label="En bobinas" value={filamentStockLabel(f)} />
         <SheetStat label="Spool original" value={fmtKg(f.total)} />
         <SheetStat label="Ubicación" value={locationShort} icon={MapPin} />
         <SheetStat label="Último uso" value={lastUsedLabel} icon={Clock} />
-        {f.minQuantity > 0 && (
+        {f.minSpools > 0 ? (
+          <SheetStat
+            label="Mínimo"
+            value={`${f.minSpools} bobina${f.minSpools === 1 ? '' : 's'}`}
+          />
+        ) : f.minQuantity > 0 ? (
           <SheetStat
             label="Stock mínimo"
             value={`${fmtG(f.minQuantity)} ${f.unit || 'g'}`}
           />
-        )}
+        ) : null}
       </div>
 
       {/* Notes */}
@@ -1380,7 +1411,9 @@ function FilamentRow({ f, onClick, spoolCount = 0 }) {
             }}
           />
         </div>
-        <span className="mono text-[10px] text-gunmetal">{fmtG(f.remaining)}</span>
+        <span className="mono text-[10px] text-gunmetal whitespace-nowrap">
+          {spoolCount > 0 ? fmtG(f.remaining) : filamentStockLabel(f)}
+        </span>
       </div>
     </button>
   );
@@ -1433,12 +1466,13 @@ const FILAMENT_DENSITY_DEFAULTS = {
 // apilando por los call-sites que lo necesitan.
 const FORM_INPUT_CLS = 'mk-f-input';
 
-function FormFieldRow({ label, required, error, children }) {
+function FormFieldRow({ label, required, error, hint, children }) {
   return (
     <label className="flex flex-col gap-1 min-w-0">
       <span className="mk-f-label flex items-center gap-1">
         {label}
         {required && <span className="text-rose-400" aria-label="requerido">*</span>}
+        {hint && <FieldHint text={hint} label={typeof label === 'string' ? label : undefined} />}
         {error && (
           <span className="ml-auto text-rose-300 normal-case tracking-normal text-[10px] font-normal">
             {error}
@@ -1464,9 +1498,12 @@ function emptyFilamentForm() {
     filament_subtype: '',
     filament_brand: '',
     batch: '',
+    // Stock por bobinas (issue #214). `quantity`/`min_quantity` (gramos) los
+    // deriva el backend desde estos conteos — no se envían.
     weight_per_roll: 1000,
-    quantity: 1000,
-    min_quantity: '',
+    sealed_spools: 1,
+    open_remaining_g: '',
+    min_spools: '',
     price_per_kg: '',
     sale_price: '',
     filament_diameter: 1.75,
@@ -1516,6 +1553,39 @@ function profileToForm(p) {
 }
 
 /**
+ * Deriva los campos de conteo de bobinas (sealed_spools, open_remaining_g,
+ * min_spools) para el form, desde un InventoryItem raw del backend.
+ *
+ * Prefiere los conteos que ya trae el backend. Si vienen nulos pero hay
+ * `quantity`/`min_quantity` en gramos (ítem sin migrar), los reconstruye con
+ * la misma lógica del backend: bobinas llenas + resto en la abierta.
+ */
+function spoolCountsFromRaw(raw) {
+  const w = Number(raw?.weight_per_roll) || 0;
+  const hasCounts = raw?.sealed_spools != null || raw?.open_remaining_g != null;
+  if (hasCounts) {
+    return {
+      sealed_spools: raw?.sealed_spools != null ? Number(raw.sealed_spools) : 0,
+      open_remaining_g: raw?.open_remaining_g != null ? Number(raw.open_remaining_g) : '',
+      min_spools: raw?.min_spools != null ? Number(raw.min_spools) : '',
+    };
+  }
+  // Fallback: derivar desde gramos (mismo reparto que el backend).
+  if (w > 0) {
+    const q = Math.max(0, Number(raw?.quantity) || 0);
+    const sealed = Math.floor(q / w);
+    const open = q - sealed * w;
+    const mq = Number(raw?.min_quantity) || 0;
+    return {
+      sealed_spools: sealed,
+      open_remaining_g: open > 0 ? open : '',
+      min_spools: mq > 0 ? Math.ceil(mq / w) : '',
+    };
+  }
+  return { sealed_spools: 0, open_remaining_g: '', min_spools: '' };
+}
+
+/**
  * Pre-fill desde un `Filament` (modo edit). Lee tanto los campos mapeados
  * como los raw del backend (vía la prop `raw` que se inyecta al click del
  * editar — ver `setEditing()` en InventoryPage).
@@ -1531,8 +1601,10 @@ function filamentToForm(raw) {
     filament_brand: raw?.filament_brand || '',
     batch: raw?.batch || '',
     weight_per_roll: Number(raw?.weight_per_roll) || 1000,
-    quantity: Number(raw?.quantity) || 0,
-    min_quantity: raw?.min_quantity != null ? Number(raw.min_quantity) : '',
+    // Stock por bobinas (issue #214). Si el backend ya trae los conteos, se
+    // usan; si es un ítem sin migrar (conteos nulos pero con `quantity`), se
+    // derivan acá igual que en el backend para no mostrar "0 bobinas".
+    ...spoolCountsFromRaw(raw),
     price_per_kg: raw?.price_per_kg != null ? Number(raw.price_per_kg) : '',
     sale_price: raw?.sale_price != null ? Number(raw.sale_price) : '',
     filament_diameter: raw?.filament_diameter != null ? Number(raw.filament_diameter) : 1.75,
@@ -1542,6 +1614,24 @@ function filamentToForm(raw) {
     supplier_contact: raw?.supplier_contact || '',
     needs_purchase: !!raw?.needs_purchase,
     notes: raw?.notes || '',
+    // Campos de perfil de slicer: se sobreescriben con `profileToForm` cuando
+    // el filamento SÍ tiene perfil (GET 200). Si no lo tiene (GET 404) deben
+    // quedar con estos defaults, no `undefined` — de lo contrario `.trim()`
+    // sobre `nozzle_diameter`/`profile_notes` al guardar lanza TypeError y el
+    // ítem queda guardado pero el drawer no cierra con error engañoso.
+    nozzle_temp_min: '',
+    nozzle_temp_max: '',
+    bed_temp: '',
+    bed_temp_first_layer: '',
+    print_speed_mms: '',
+    retraction_distance_mm: '',
+    retraction_speed_mms: '',
+    flow_ratio: '',
+    fan_speed_percent: '',
+    k_value: '',
+    nozzle_diameter: '0.4',
+    calibrated_at: '',
+    profile_notes: '',
   };
 }
 
@@ -1614,8 +1704,19 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
     if (!form.filament_type) next.filament_type = 'Requerido';
     const wpr = Number(form.weight_per_roll);
     if (!wpr || wpr <= 0) next.weight_per_roll = 'Debe ser > 0';
-    const q = Number(form.quantity);
-    if (q < 0 || q > wpr) next.quantity = `0 — ${wpr} g`;
+    const sealed = Number(form.sealed_spools);
+    if (form.sealed_spools === '' || sealed < 0 || !Number.isInteger(sealed)) {
+      next.sealed_spools = '≥ 0';
+    }
+    if (form.open_remaining_g !== '') {
+      const open = Number(form.open_remaining_g);
+      if (open < 0) next.open_remaining_g = '≥ 0';
+      else if (wpr > 0 && open > wpr) next.open_remaining_g = `≤ ${wpr} g`;
+    }
+    if (form.min_spools !== '') {
+      const ms = Number(form.min_spools);
+      if (ms < 0 || !Number.isInteger(ms)) next.min_spools = '≥ 0';
+    }
     const dia = Number(form.filament_diameter);
     if (form.filament_diameter !== '' && (!dia || dia <= 0)) next.filament_diameter = '> 0';
     setErrors(next);
@@ -1631,8 +1732,11 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
         category: 'Filamento',
         unit: 'g',
         description: form.description.trim() || null,
-        quantity: Number(form.quantity),
         weight_per_roll: Number(form.weight_per_roll),
+        // Stock por bobinas (issue #214). El backend deriva quantity/min_quantity.
+        sealed_spools: form.sealed_spools !== '' ? Number(form.sealed_spools) : 0,
+        open_remaining_g: form.open_remaining_g !== '' ? Number(form.open_remaining_g) : null,
+        min_spools: form.min_spools !== '' ? Number(form.min_spools) : 0,
         filament_type: form.filament_type,
         filament_subtype: form.filament_subtype.trim() || null,
         filament_brand: form.filament_brand.trim() || null,
@@ -1647,7 +1751,6 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
         supplier_name: form.supplier_name.trim() || null,
         supplier_contact: form.supplier_contact.trim() || null,
         needs_purchase: form.needs_purchase,
-        min_quantity: form.min_quantity !== '' ? Number(form.min_quantity) : 0,
         notes: form.notes.trim() || null,
       };
       // Si un intento anterior ya creó el item pero falló el perfil,
@@ -1716,7 +1819,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
 
       <FormSectionTitle>Identificación</FormSectionTitle>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <FormFieldRow label="Nombre interno" required error={errors.name}>
+        <FormFieldRow label="Nombre interno" required error={errors.name} hint="Nombre para identificar esta bobina en tu inventario. Ej: 'PLA Negro Sunlu'.">
           <input
             value={form.name}
             onChange={(e) => update('name', e.target.value)}
@@ -1725,7 +1828,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             autoFocus
           />
         </FormFieldRow>
-        <FormFieldRow label="Nombre del color" required error={errors.color_name}>
+        <FormFieldRow label="Nombre del color" required error={errors.color_name} hint="Nombre comercial del color, como lo llama el fabricante. Ej: 'Carbon Black'.">
           <input
             value={form.color_name}
             onChange={(e) => update('color_name', e.target.value)}
@@ -1733,7 +1836,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={FORM_INPUT_CLS}
           />
         </FormFieldRow>
-        <FormFieldRow label="Material" required error={errors.filament_type}>
+        <FormFieldRow label="Material" required error={errors.filament_type} hint="Tipo de filamento: PLA, PETG, ABS, TPU… Ajusta la densidad sugerida.">
           <select
             value={form.filament_type}
             onChange={(e) => onTypeChange(e.target.value)}
@@ -1764,7 +1867,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             <option value="85A" />
           </datalist>
         </FormFieldRow>
-        <FormFieldRow label="Color (hex)">
+        <FormFieldRow label="Color (hex)" hint="Color exacto para el swatch visual. Usá el selector o pegá un código #RRGGBB.">
           <div className="flex items-center gap-2">
             <input
               type="color"
@@ -1782,7 +1885,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
           </div>
         </FormFieldRow>
         <div className="sm:col-span-2">
-          <FormFieldRow label="Descripción">
+          <FormFieldRow label="Descripción" hint="Notas libres sobre el filamento: acabado, opacidad, recomendaciones de uso.">
             <textarea
               rows={2}
               value={form.description}
@@ -1796,42 +1899,55 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
 
       <FormSectionTitle>Stock</FormSectionTitle>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <FormFieldRow label="Peso total spool (g)" required error={errors.weight_per_roll}>
+        <FormFieldRow label="Peso de una bobina llena (g)" required error={errors.weight_per_roll} hint="Gramos que trae una bobina nueva sin usar. Ej: 1000 g.">
           <input
             type="number"
             min="1"
             step="1"
             value={form.weight_per_roll}
-            onChange={(e) => {
-              const v = e.target.value;
-              update('weight_per_roll', v);
-              if (Number(form.quantity) > Number(v)) update('quantity', v);
-            }}
+            onChange={(e) => update('weight_per_roll', e.target.value)}
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Restante actual (g)" required error={errors.quantity}>
+        <FormFieldRow label="Bobinas sin abrir" required error={errors.sealed_spools} hint="Cuántas bobinas selladas tenés en el estante (sin contar la que estás usando).">
           <input
             type="number"
             min="0"
             step="1"
-            value={form.quantity}
-            onChange={(e) => update('quantity', e.target.value)}
+            value={form.sealed_spools}
+            onChange={(e) => update('sealed_spools', e.target.value)}
+            placeholder="ej. 3"
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Stock mínimo (g)">
+        <FormFieldRow label="Gramos en bobina abierta (~)" error={errors.open_remaining_g} hint="Aproximado de lo que le queda a la bobina que estás usando. A ojo está bien. Dejá vacío si no tenés ninguna abierta.">
           <input
             type="number"
             min="0"
             step="1"
-            value={form.min_quantity}
-            onChange={(e) => update('min_quantity', e.target.value)}
-            placeholder="ej. 200"
+            value={form.open_remaining_g}
+            onChange={(e) => update('open_remaining_g', e.target.value)}
+            placeholder="ej. 300"
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="¿Marcar como necesario comprar?">
+        <FormFieldRow label="Mínimo de bobinas" error={errors.min_spools} hint="Cuando bajes de esta cantidad de bobinas, te avisamos para recomprar. Dejá vacío para no alertar.">
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={form.min_spools}
+            onChange={(e) => update('min_spools', e.target.value)}
+            placeholder="ej. 1"
+            className={`${FORM_INPUT_CLS} mono`}
+          />
+        </FormFieldRow>
+        <div className="sm:col-span-2 -mt-1">
+          <p className="text-[11px] text-gunmetal">
+            Total en stock: <span className="mono text-steel">{fmtSpoolStock(form.sealed_spools, form.open_remaining_g)}</span>
+          </p>
+        </div>
+        <FormFieldRow label="¿Marcar como necesario comprar?" hint="Marcala a mano para que aparezca en el listado de pendientes de compra, sin importar el stock.">
           <label className="inline-flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -1848,7 +1964,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
 
       <FormSectionTitle>Técnico</FormSectionTitle>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <FormFieldRow label="Diámetro (mm)" error={errors.filament_diameter}>
+        <FormFieldRow label="Diámetro (mm)" error={errors.filament_diameter} hint="Grosor del filamento. Casi siempre 1.75 mm; algunas impresoras usan 2.85 mm.">
           <input
             type="number"
             min="0"
@@ -1859,7 +1975,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Densidad (g/cm³)">
+        <FormFieldRow label="Densidad (g/cm³)" hint="Densidad del material. Se autocompleta según el material; solo cambiala si tu marca declara otra.">
           <input
             type="number"
             min="0"
@@ -1877,7 +1993,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
         Referencia rápida al laminar — no afecta el cálculo de costo.
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <FormFieldRow label="Temp. boquilla mín (°C)">
+        <FormFieldRow label="Temp. boquilla mín (°C)" hint="Temperatura más baja recomendada para la boquilla con este filamento.">
           <input
             type="number" min="0" max="400" step="1"
             value={form.nozzle_temp_min}
@@ -1886,7 +2002,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Temp. boquilla máx (°C)">
+        <FormFieldRow label="Temp. boquilla máx (°C)" hint="Temperatura más alta recomendada para la boquilla con este filamento.">
           <input
             type="number" min="0" max="400" step="1"
             value={form.nozzle_temp_max}
@@ -1895,7 +2011,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Temp. cama (°C)">
+        <FormFieldRow label="Temp. cama (°C)" hint="Temperatura de la cama caliente para las capas normales.">
           <input
             type="number" min="0" max="200" step="1"
             value={form.bed_temp}
@@ -1904,7 +2020,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Temp. cama 1ra capa (°C)">
+        <FormFieldRow label="Temp. cama 1ra capa (°C)" hint="Temperatura de la cama solo para la primera capa; suele ser un poco más alta para mejor adherencia.">
           <input
             type="number" min="0" max="200" step="1"
             value={form.bed_temp_first_layer}
@@ -1913,7 +2029,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Velocidad impresión (mm/s)">
+        <FormFieldRow label="Velocidad impresión (mm/s)" hint="Velocidad de referencia a la que imprimís bien este filamento.">
           <input
             type="number" min="0" step="1"
             value={form.print_speed_mms}
@@ -1922,7 +2038,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Flow ratio">
+        <FormFieldRow label="Flow ratio" hint="Factor de extrusión calibrado. 1.0 = flujo nominal; ajustá si sobra o falta material.">
           <input
             type="number" min="0" step="0.01"
             value={form.flow_ratio}
@@ -1931,7 +2047,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Distancia retracción (mm)">
+        <FormFieldRow label="Distancia retracción (mm)" hint="Cuántos mm retrae el extrusor para evitar hilos. Depende del tipo de extrusor.">
           <input
             type="number" min="0" step="0.1"
             value={form.retraction_distance_mm}
@@ -1940,7 +2056,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Velocidad retracción (mm/s)">
+        <FormFieldRow label="Velocidad retracción (mm/s)" hint="Qué tan rápido retrae el filamento el extrusor.">
           <input
             type="number" min="0" step="1"
             value={form.retraction_speed_mms}
@@ -1949,7 +2065,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Fan speed (%)">
+        <FormFieldRow label="Fan speed (%)" hint="Ventilador de capa para este material. PLA suele ir a 100%; ABS bastante más bajo.">
           <input
             type="number" min="0" max="100" step="1"
             value={form.fan_speed_percent}
@@ -1975,7 +2091,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Calibrado el">
+        <FormFieldRow label="Calibrado el" hint="Fecha en que calibraste estos valores. Sirve para saber qué tan actuales son.">
           <input
             type="date"
             value={form.calibrated_at}
@@ -1984,7 +2100,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
           />
         </FormFieldRow>
         <div className="sm:col-span-2">
-          <FormFieldRow label="Notas de perfil">
+          <FormFieldRow label="Notas de perfil" hint="Cualquier detalle del perfil: necesita enclosure, usar chamber heater, secado previo, etc.">
             <textarea
               rows={2}
               value={form.profile_notes}

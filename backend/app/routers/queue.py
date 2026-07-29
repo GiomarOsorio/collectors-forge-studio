@@ -58,6 +58,7 @@ from app.schemas.queue import (
     QueueScheduleUpdate,
     QueueVaultSnapshot,
 )
+from app.services import filament_stock
 from app.services.auth import get_current_user, get_operator_user
 from app.services.notifier import emit
 
@@ -380,6 +381,26 @@ def _emit_low_stock_if_crossed(inv: InventoryItem, was_above_min: bool) -> None:
         })
 
 
+def _deduct_filament_agg(inv: InventoryItem, deduct: Decimal, *, label: str) -> None:
+    """Descuenta `deduct` gramos del stock agregado de un filamento.
+
+    Consume con el modelo de bobinas (vacía la abierta, rollover a las
+    selladas) manteniendo `quantity`/`min_quantity` en sync — ver
+    `services/filament_stock`. Lanza 400 si no alcanza el stock. Marca
+    `needs_purchase` y emite `inventory.low_stock` al cruzar el mínimo.
+    """
+    was_above_min = inv.min_quantity is None or inv.quantity >= inv.min_quantity
+    if deduct > filament_stock.available_grams(inv):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Stock insuficiente: {inv.name} ({label} necesita {float(deduct):.1f} g)",
+        )
+    filament_stock.deduct_grams(inv, deduct)
+    if inv.min_quantity is not None and inv.quantity < inv.min_quantity:
+        inv.needs_purchase = True
+    _emit_low_stock_if_crossed(inv, was_above_min)
+
+
 async def _emit_spool_low_if_crossed(db: AsyncSession, spool: Spool, old_remaining: Decimal) -> None:
     """
     Emite `inventory.spool_low` SOLO en el cruce del umbral agregado por
@@ -474,23 +495,18 @@ async def _deduct_vault_item(
                     parent.quantity = max(
                         Decimal("0"), (parent.quantity or Decimal("0")) - spool.initial_weight_g
                     )
+                    # Mantener el conteo simple coherente con el agregado
+                    # (precedencia de display la tienen los Spools detallados,
+                    # pero evitamos que sealed/open queden absurdos).
+                    filament_stock.derive_counts_from_grams(parent)
     elif item.filament_id is not None and item.weight_grams is not None:
         inv_result = await db.execute(
             select(InventoryItem).where(InventoryItem.id == item.filament_id).with_for_update()
         )
         inv = inv_result.scalar_one_or_none()
         if inv is not None:
-            was_above_min = inv.min_quantity is None or inv.quantity >= inv.min_quantity
             deduct = Decimal(str(item.weight_grams)) * multiplier
-            inv.quantity = (inv.quantity or Decimal("0")) - deduct
-            if inv.quantity < 0:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Stock insuficiente: {inv.name} (necesita {float(deduct):.1f} g)",
-                )
-            if inv.min_quantity is not None and inv.quantity < inv.min_quantity:
-                inv.needs_purchase = True
-            _emit_low_stock_if_crossed(inv, was_above_min)
+            _deduct_filament_agg(inv, deduct, label="filamento")
 
     if item.printer_id is not None and item.print_time_hours is not None:
         p_result = await db.execute(
@@ -532,17 +548,8 @@ async def _deduct_inventory_and_update_printer(
         )
         inv = inv_result.scalar_one_or_none()
         if inv is not None:
-            was_above_min = inv.min_quantity is None or inv.quantity >= inv.min_quantity
             deduct = Decimal(str(quote.weight_grams)) * multiplier
-            inv.quantity = (inv.quantity or Decimal("0")) - deduct
-            if inv.quantity < 0:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Stock insuficiente: {inv.name} (necesita {float(deduct):.1f} g)",
-                )
-            if inv.min_quantity is not None and inv.quantity < inv.min_quantity:
-                inv.needs_purchase = True
-            _emit_low_stock_if_crossed(inv, was_above_min)
+            _deduct_filament_agg(inv, deduct, label="filamento principal")
 
     # 2. Filamentos adicionales (additional_filaments_detail JSONB)
     for af in (quote.additional_filaments_detail or []):
@@ -553,17 +560,8 @@ async def _deduct_inventory_and_update_printer(
             )
             inv = inv_result.scalar_one_or_none()
             if inv is not None:
-                was_above_min = inv.min_quantity is None or inv.quantity >= inv.min_quantity
                 deduct = Decimal(str(af["weight_grams"])) * multiplier
-                inv.quantity = (inv.quantity or Decimal("0")) - deduct
-                if inv.quantity < 0:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Stock insuficiente (filamento adicional): {inv.name}",
-                    )
-                if inv.min_quantity is not None and inv.quantity < inv.min_quantity:
-                    inv.needs_purchase = True
-                _emit_low_stock_if_crossed(inv, was_above_min)
+                _deduct_filament_agg(inv, deduct, label="filamento adicional")
 
     # 3. Insumos (supplies_detail JSONB)
     for s in (quote.supplies_detail or []):

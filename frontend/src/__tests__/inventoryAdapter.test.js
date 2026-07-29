@@ -16,6 +16,7 @@ import {
   fmtCOP,
   fmtG,
   fmtKg,
+  fmtSpoolStock,
   groupFilaments,
   mapToFilament,
   normalizeHex,
@@ -112,6 +113,37 @@ describe('mapToFilament', () => {
 
   it('costPerKg=0 cuando price_per_kg falta', () => {
     expect(mapToFilament({ ...ITEM_FULL, price_per_kg: null }).costPerKg).toBe(0);
+  });
+});
+
+describe('mapToFilament · stock por bobinas', () => {
+  it('mapea sealed_spools / open_remaining_g / min_spools', () => {
+    const f = mapToFilament({ ...ITEM_FULL, sealed_spools: 3, open_remaining_g: 300, min_spools: 2 });
+    expect(f.sealedSpools).toBe(3);
+    expect(f.openRemainingG).toBe(300);
+    expect(f.minSpools).toBe(2);
+  });
+  it('defaultea a 0 cuando los conteos son null', () => {
+    const f = mapToFilament({ ...ITEM_FULL, sealed_spools: null, open_remaining_g: null, min_spools: null });
+    expect(f.sealedSpools).toBe(0);
+    expect(f.openRemainingG).toBe(0);
+    expect(f.minSpools).toBe(0);
+  });
+});
+
+describe('fmtSpoolStock', () => {
+  it('bobinas + abierta', () => {
+    expect(fmtSpoolStock(3, 300)).toBe('3 bobinas + ~300 g abierta');
+  });
+  it('singular', () => {
+    expect(fmtSpoolStock(1, '')).toBe('1 bobina');
+  });
+  it('solo abierta', () => {
+    expect(fmtSpoolStock(0, 250)).toBe('~250 g abierta');
+  });
+  it('sin stock', () => {
+    expect(fmtSpoolStock(0, '')).toBe('Sin stock');
+    expect(fmtSpoolStock(0, null)).toBe('Sin stock');
   });
 });
 

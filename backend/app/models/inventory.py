@@ -95,6 +95,21 @@ class InventoryItem(Base):
     filament_diameter: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 3), nullable=True)
     filament_density: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 6), nullable=True)
     weight_per_roll: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 3), nullable=True)
+    # Stock por bobinas (issue #214). Modelo mental del usuario: "N bobinas
+    # sin abrir + 1 bobina abierta con ~R gramos". Fuente de verdad para el
+    # stock de filamento; `quantity`/`min_quantity` (gramos) se mantienen
+    # DERIVADOS de estos para no romper deducción/low_stock/calculadora:
+    #   quantity     = sealed_spools * weight_per_roll + (open_remaining_g or 0)
+    #   min_quantity = min_spools    * weight_per_roll
+    # La reconciliación vive en app/services/filament_stock.py.
+    # `open_remaining_g` NULL = no hay bobina abierta.
+    sealed_spools: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("'0'")
+    )
+    open_remaining_g: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 1), nullable=True)
+    min_spools: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("'0'")
+    )
     # Precio por unidad para insumos (usado por la calculadora)
     price_per_unit: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 4), nullable=True)
 

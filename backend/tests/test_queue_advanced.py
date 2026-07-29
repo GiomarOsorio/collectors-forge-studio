@@ -578,6 +578,7 @@ class TestRegressionInventoryDeduction:
         inv.min_quantity = Decimal("50.00")
         inv.needs_purchase = False
         inv.name = "PLA Negro"
+        inv.weight_per_roll = None  # filamento sin modelo de bobinas → camino agregado
 
         printer = MagicMock()
         printer.current_hours = Decimal("100.00")
@@ -607,6 +608,7 @@ class TestRegressionInventoryDeduction:
         inv.quantity = Decimal("10.00")
         inv.min_quantity = None
         inv.name = "PLA Negro"
+        inv.weight_per_roll = None
 
         db = AsyncMock()
         inv_result = MagicMock()
@@ -631,6 +633,7 @@ class TestRegressionInventoryDeduction:
         inv.quantity = Decimal("1000.00")
         inv.min_quantity = None
         inv.name = "PETG Blanco"
+        inv.weight_per_roll = None  # filamento sin modelo de bobinas → camino agregado
 
         printer = MagicMock()
         printer.current_hours = Decimal("50.00")
@@ -659,6 +662,7 @@ class TestRegressionInventoryDeduction:
         inv.quantity = Decimal("5.00")
         inv.min_quantity = None
         inv.name = "PETG Blanco"
+        inv.weight_per_roll = None
 
         db = AsyncMock()
         inv_result = MagicMock()
