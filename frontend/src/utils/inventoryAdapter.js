@@ -42,6 +42,10 @@ export function mapToFilament(item) {
     location: item.location || '',
     lowStock: !!item.low_stock,
     minQuantity: Number(item.min_quantity) || 0,
+    // Stock por bobinas (issue #214)
+    sealedSpools: item.sealed_spools != null ? Number(item.sealed_spools) : 0,
+    openRemainingG: item.open_remaining_g != null ? Number(item.open_remaining_g) : 0,
+    minSpools: item.min_spools != null ? Number(item.min_spools) : 0,
     unit: item.unit || 'g',
     notes: item.notes || '',
     updatedAt: item.updated_at,
@@ -173,3 +177,20 @@ export const fmtKg = (g) => {
 export const fmtG = (g) => `${Math.round(g)} g`;
 
 export const fmtPct = (n) => `${Math.round(n)}%`;
+
+/**
+ * Resumen legible del stock por bobinas (issue #214).
+ * Ej: "3 bobinas + ~300 g abierta" · "2 bobinas" · "~300 g abierta" · "Sin stock".
+ *
+ * @param {number|string} sealed  bobinas sin abrir
+ * @param {number|string} openG   gramos de la bobina abierta ('' / null = ninguna)
+ * @returns {string}
+ */
+export const fmtSpoolStock = (sealed, openG) => {
+  const s = Math.max(0, Math.floor(Number(sealed) || 0));
+  const open = openG === '' || openG == null ? 0 : Math.max(0, Number(openG) || 0);
+  const parts = [];
+  if (s > 0) parts.push(`${s} bobina${s === 1 ? '' : 's'}`);
+  if (open > 0) parts.push(`~${Math.round(open)} g abierta`);
+  return parts.length ? parts.join(' + ') : 'Sin stock';
+};
