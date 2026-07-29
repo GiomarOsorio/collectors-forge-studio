@@ -355,7 +355,7 @@ function FilamentCard({ f, onClick, spoolCount = 0 }) {
             {level !== 'ok' && (
               <span className="mono inline-flex items-center gap-0.5 text-[9.5px] px-1.5 py-px rounded-sm bg-amber-400/10 border border-amber-400/30 text-amber-400 tracking-wider">
                 <AlertTriangle size={9} />
-                {level === 'critical' ? 'CRÍTICO' : 'BAJO'}
+                {level === 'critical' ? 'CRÍTICO' : 'COMPRAR'}
               </span>
             )}
           </div>
@@ -533,7 +533,7 @@ function FilamentDrawerBody({ f, onReassign, onAddToPurchase, onDelete, isMobile
             {level !== 'ok' && (
               <span className={`mono inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm bg-amber-400/10 border border-amber-400/30 text-amber-400 tracking-wider ${level === 'critical' ? 'pulse-soft' : ''}`}>
                 <AlertTriangle size={10} />
-                {level === 'critical' ? 'CRÍTICO' : 'BAJO'}
+                {level === 'critical' ? 'CRÍTICO' : 'COMPRAR'}
               </span>
             )}
           </div>
@@ -1383,7 +1383,7 @@ function FilamentRow({ f, onClick, spoolCount = 0 }) {
           {level !== 'ok' && (
             <span className="mono inline-flex items-center gap-0.5 text-[9px] px-1 py-px rounded-sm bg-amber-400/10 border border-amber-400/30 text-amber-400 tracking-wider">
               <AlertTriangle size={8} />
-              {level === 'critical' ? 'CRÍT' : 'BAJO'}
+              {level === 'critical' ? 'CRÍT' : 'COMPRAR'}
             </span>
           )}
         </div>
