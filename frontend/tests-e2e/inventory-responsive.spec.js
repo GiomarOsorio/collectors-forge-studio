@@ -28,12 +28,14 @@ const FILAMENTS = [
     color_hex: '#D42B2B', filament_type: 'PETG', filament_subtype: '', quantity: 500,
     weight_per_roll: 1000, price_per_kg: 18.99, sale_price: 40, supplier_name: 'SUNLU',
     batch: 'B-2420', location: 'Stand · A4', min_quantity: 200, notes: '',
+    sealed_spools: 0, open_remaining_g: 500, min_spools: 1,
   },
   {
     id: 3, category: 'Filamento', name: 'Spool C-2388', color_name: 'Pino Blanco',
-    color_hex: '#C9B7A2', filament_type: 'PLA', filament_subtype: '', quantity: 1000,
+    color_hex: '#C9B7A2', filament_type: 'PLA', filament_subtype: '', quantity: 2000,
     weight_per_roll: 1000, price_per_kg: 30, sale_price: 55, supplier_name: 'Creality',
     batch: 'B-2388', location: 'Stand · C2', min_quantity: 200, notes: '',
+    sealed_spools: 2, open_remaining_g: null, min_spools: 1,
   },
 ];
 
