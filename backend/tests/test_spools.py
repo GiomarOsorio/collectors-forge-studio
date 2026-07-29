@@ -134,6 +134,7 @@ class TestSpoolConsumptionRule:
 
         parent = MagicMock()
         parent.quantity = Decimal("4000.0")  # agregado del InventoryItem, en gramos
+        parent.weight_per_roll = None  # sin modelo de bobinas simple → derive es no-op
 
         db = AsyncMock()
         spool_result = MagicMock()
@@ -158,6 +159,7 @@ class TestSpoolConsumptionRule:
 
         parent = MagicMock()
         parent.quantity = Decimal("500.0")
+        parent.weight_per_roll = None
 
         db = AsyncMock()
         spool_result = MagicMock()
@@ -200,6 +202,7 @@ class TestSpoolConsumptionRule:
         inv.quantity = Decimal("500.0")
         inv.min_quantity = None
         inv.name = "PLA Negro"
+        inv.weight_per_roll = None  # sin modelo de bobinas → camino agregado
 
         db = AsyncMock()
         inv_result = MagicMock()
