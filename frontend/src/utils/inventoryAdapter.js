@@ -41,6 +41,9 @@ export function mapToFilament(item) {
     salePerKg: item.sale_price != null ? Number(item.sale_price) : null,
     location: item.location || '',
     lowStock: !!item.low_stock,
+    // Flag manual "necesario comprar": marca el ítem para compra aunque el
+    // stock esté OK. Se refleja en el badge/grupo "comprar" vía stockLevel.
+    needsPurchase: !!item.needs_purchase,
     minQuantity: Number(item.min_quantity) || 0,
     // Stock por bobinas (issue #214)
     sealedSpools: item.sealed_spools != null ? Number(item.sealed_spools) : 0,
@@ -69,6 +72,8 @@ export function fillPercent(f) {
  *
  * Reglas:
  *   - Si `minQuantity > 0` y `remaining < minQuantity` → `'critical'`.
+ *   - Si el usuario marcó `needsPurchase` a mano → `'low'` ("comprar",
+ *     aunque el stock esté OK). El stock bajo el mínimo tiene prioridad.
  *   - En cualquier otro caso → `'ok'`.
  *
  * El umbral porcentual viejo (10%/20% del total) fue removido en 2026-05:
@@ -76,14 +81,15 @@ export function fillPercent(f) {
  * (editable desde el form del inventario). Items sin `min_quantity`
  * configurado nunca se marcan como críticos.
  *
- * @param {{ remaining: number, minQuantity?: number }} f
- * @returns {'ok'|'critical'}
+ * @param {{ remaining: number, minQuantity?: number, needsPurchase?: boolean }} f
+ * @returns {'ok'|'low'|'critical'}
  */
 export function stockLevel(f) {
   if (!f) return 'ok';
   const min = Number(f.minQuantity) || 0;
   const remaining = Number(f.remaining) || 0;
   if (min > 0 && remaining < min) return 'critical';
+  if (f.needsPurchase) return 'low';
   return 'ok';
 }
 

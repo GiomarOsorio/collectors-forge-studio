@@ -129,6 +129,12 @@ describe('mapToFilament · stock por bobinas', () => {
     expect(f.openRemainingG).toBe(0);
     expect(f.minSpools).toBe(0);
   });
+
+  it('mapea needs_purchase → needsPurchase', () => {
+    expect(mapToFilament({ ...ITEM_FULL, needs_purchase: true }).needsPurchase).toBe(true);
+    expect(mapToFilament({ ...ITEM_FULL, needs_purchase: false }).needsPurchase).toBe(false);
+    expect(mapToFilament({ ...ITEM_FULL }).needsPurchase).toBe(false);
+  });
 });
 
 describe('fmtSpoolStock', () => {
@@ -203,6 +209,19 @@ describe('stockLevel', () => {
     expect(stockLevel({ remaining: 0, minQuantity: 0 })).toBe('ok');
     expect(stockLevel({ remaining: 0, minQuantity: null })).toBe('ok');
     expect(stockLevel({ remaining: 0 })).toBe('ok');
+  });
+
+  it('low cuando needsPurchase manual y stock OK', () => {
+    expect(stockLevel({ remaining: 1000, minQuantity: 200, needsPurchase: true })).toBe('low');
+    expect(stockLevel({ remaining: 0, minQuantity: 0, needsPurchase: true })).toBe('low');
+  });
+
+  it('critical (bajo el mínimo) tiene prioridad sobre needsPurchase', () => {
+    expect(stockLevel({ remaining: 50, minQuantity: 200, needsPurchase: true })).toBe('critical');
+  });
+
+  it('ok si needsPurchase es false y stock OK', () => {
+    expect(stockLevel({ remaining: 1000, minQuantity: 200, needsPurchase: false })).toBe('ok');
   });
 
   it('ok para input nulo (defensive default)', () => {
