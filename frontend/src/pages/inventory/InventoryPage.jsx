@@ -53,6 +53,7 @@ import {
   Chip,
   DetailDrawer,
   EmptyState,
+  FieldHint,
   KPI,
   KPIStrip as KPIStripBase,
   LineItems,
@@ -1433,12 +1434,13 @@ const FILAMENT_DENSITY_DEFAULTS = {
 // apilando por los call-sites que lo necesitan.
 const FORM_INPUT_CLS = 'mk-f-input';
 
-function FormFieldRow({ label, required, error, children }) {
+function FormFieldRow({ label, required, error, hint, children }) {
   return (
     <label className="flex flex-col gap-1 min-w-0">
       <span className="mk-f-label flex items-center gap-1">
         {label}
         {required && <span className="text-rose-400" aria-label="requerido">*</span>}
+        {hint && <FieldHint text={hint} label={typeof label === 'string' ? label : undefined} />}
         {error && (
           <span className="ml-auto text-rose-300 normal-case tracking-normal text-[10px] font-normal">
             {error}
@@ -1734,7 +1736,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
 
       <FormSectionTitle>Identificación</FormSectionTitle>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <FormFieldRow label="Nombre interno" required error={errors.name}>
+        <FormFieldRow label="Nombre interno" required error={errors.name} hint="Nombre para identificar esta bobina en tu inventario. Ej: 'PLA Negro Sunlu'.">
           <input
             value={form.name}
             onChange={(e) => update('name', e.target.value)}
@@ -1743,7 +1745,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             autoFocus
           />
         </FormFieldRow>
-        <FormFieldRow label="Nombre del color" required error={errors.color_name}>
+        <FormFieldRow label="Nombre del color" required error={errors.color_name} hint="Nombre comercial del color, como lo llama el fabricante. Ej: 'Carbon Black'.">
           <input
             value={form.color_name}
             onChange={(e) => update('color_name', e.target.value)}
@@ -1751,7 +1753,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={FORM_INPUT_CLS}
           />
         </FormFieldRow>
-        <FormFieldRow label="Material" required error={errors.filament_type}>
+        <FormFieldRow label="Material" required error={errors.filament_type} hint="Tipo de filamento: PLA, PETG, ABS, TPU… Ajusta la densidad sugerida.">
           <select
             value={form.filament_type}
             onChange={(e) => onTypeChange(e.target.value)}
@@ -1782,7 +1784,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             <option value="85A" />
           </datalist>
         </FormFieldRow>
-        <FormFieldRow label="Color (hex)">
+        <FormFieldRow label="Color (hex)" hint="Color exacto para el swatch visual. Usá el selector o pegá un código #RRGGBB.">
           <div className="flex items-center gap-2">
             <input
               type="color"
@@ -1800,7 +1802,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
           </div>
         </FormFieldRow>
         <div className="sm:col-span-2">
-          <FormFieldRow label="Descripción">
+          <FormFieldRow label="Descripción" hint="Notas libres sobre el filamento: acabado, opacidad, recomendaciones de uso.">
             <textarea
               rows={2}
               value={form.description}
@@ -1814,7 +1816,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
 
       <FormSectionTitle>Stock</FormSectionTitle>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <FormFieldRow label="Peso total spool (g)" required error={errors.weight_per_roll}>
+        <FormFieldRow label="Peso total spool (g)" required error={errors.weight_per_roll} hint="Gramos que trae una bobina nueva sin usar. Ej: 1000 g.">
           <input
             type="number"
             min="1"
@@ -1828,7 +1830,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Restante actual (g)" required error={errors.quantity}>
+        <FormFieldRow label="Restante actual (g)" required error={errors.quantity} hint="Gramos de filamento que te quedan en total. Se descuenta solo al completar impresiones.">
           <input
             type="number"
             min="0"
@@ -1838,7 +1840,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Stock mínimo (g)">
+        <FormFieldRow label="Stock mínimo (g)" hint="Cuando el restante baje de esta cantidad, te avisamos para recomprar. Dejá vacío para no alertar.">
           <input
             type="number"
             min="0"
@@ -1849,7 +1851,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="¿Marcar como necesario comprar?">
+        <FormFieldRow label="¿Marcar como necesario comprar?" hint="Marcala a mano para que aparezca en el listado de pendientes de compra, sin importar el stock.">
           <label className="inline-flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -1866,7 +1868,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
 
       <FormSectionTitle>Técnico</FormSectionTitle>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <FormFieldRow label="Diámetro (mm)" error={errors.filament_diameter}>
+        <FormFieldRow label="Diámetro (mm)" error={errors.filament_diameter} hint="Grosor del filamento. Casi siempre 1.75 mm; algunas impresoras usan 2.85 mm.">
           <input
             type="number"
             min="0"
@@ -1877,7 +1879,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Densidad (g/cm³)">
+        <FormFieldRow label="Densidad (g/cm³)" hint="Densidad del material. Se autocompleta según el material; solo cambiala si tu marca declara otra.">
           <input
             type="number"
             min="0"
@@ -1895,7 +1897,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
         Referencia rápida al laminar — no afecta el cálculo de costo.
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <FormFieldRow label="Temp. boquilla mín (°C)">
+        <FormFieldRow label="Temp. boquilla mín (°C)" hint="Temperatura más baja recomendada para la boquilla con este filamento.">
           <input
             type="number" min="0" max="400" step="1"
             value={form.nozzle_temp_min}
@@ -1904,7 +1906,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Temp. boquilla máx (°C)">
+        <FormFieldRow label="Temp. boquilla máx (°C)" hint="Temperatura más alta recomendada para la boquilla con este filamento.">
           <input
             type="number" min="0" max="400" step="1"
             value={form.nozzle_temp_max}
@@ -1913,7 +1915,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Temp. cama (°C)">
+        <FormFieldRow label="Temp. cama (°C)" hint="Temperatura de la cama caliente para las capas normales.">
           <input
             type="number" min="0" max="200" step="1"
             value={form.bed_temp}
@@ -1922,7 +1924,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Temp. cama 1ra capa (°C)">
+        <FormFieldRow label="Temp. cama 1ra capa (°C)" hint="Temperatura de la cama solo para la primera capa; suele ser un poco más alta para mejor adherencia.">
           <input
             type="number" min="0" max="200" step="1"
             value={form.bed_temp_first_layer}
@@ -1931,7 +1933,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Velocidad impresión (mm/s)">
+        <FormFieldRow label="Velocidad impresión (mm/s)" hint="Velocidad de referencia a la que imprimís bien este filamento.">
           <input
             type="number" min="0" step="1"
             value={form.print_speed_mms}
@@ -1940,7 +1942,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Flow ratio">
+        <FormFieldRow label="Flow ratio" hint="Factor de extrusión calibrado. 1.0 = flujo nominal; ajustá si sobra o falta material.">
           <input
             type="number" min="0" step="0.01"
             value={form.flow_ratio}
@@ -1949,7 +1951,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Distancia retracción (mm)">
+        <FormFieldRow label="Distancia retracción (mm)" hint="Cuántos mm retrae el extrusor para evitar hilos. Depende del tipo de extrusor.">
           <input
             type="number" min="0" step="0.1"
             value={form.retraction_distance_mm}
@@ -1958,7 +1960,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Velocidad retracción (mm/s)">
+        <FormFieldRow label="Velocidad retracción (mm/s)" hint="Qué tan rápido retrae el filamento el extrusor.">
           <input
             type="number" min="0" step="1"
             value={form.retraction_speed_mms}
@@ -1967,7 +1969,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Fan speed (%)">
+        <FormFieldRow label="Fan speed (%)" hint="Ventilador de capa para este material. PLA suele ir a 100%; ABS bastante más bajo.">
           <input
             type="number" min="0" max="100" step="1"
             value={form.fan_speed_percent}
@@ -1993,7 +1995,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="Calibrado el">
+        <FormFieldRow label="Calibrado el" hint="Fecha en que calibraste estos valores. Sirve para saber qué tan actuales son.">
           <input
             type="date"
             value={form.calibrated_at}
@@ -2002,7 +2004,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
           />
         </FormFieldRow>
         <div className="sm:col-span-2">
-          <FormFieldRow label="Notas de perfil">
+          <FormFieldRow label="Notas de perfil" hint="Cualquier detalle del perfil: necesita enclosure, usar chamber heater, secado previo, etc.">
             <textarea
               rows={2}
               value={form.profile_notes}
