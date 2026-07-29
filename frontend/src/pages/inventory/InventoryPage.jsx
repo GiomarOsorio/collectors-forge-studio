@@ -1466,9 +1466,17 @@ const FILAMENT_DENSITY_DEFAULTS = {
 // apilando por los call-sites que lo necesitan.
 const FORM_INPUT_CLS = 'mk-f-input';
 
-function FormFieldRow({ label, required, error, hint, children }) {
+/**
+ * Fila de campo con label arriba. Por defecto el wrapper es un `<label>`
+ * (clic en el texto enfoca el input). Para campos cuyo control ya trae su
+ * propio `<label>` (ej. checkboxes con su texto), pasar `asDiv` para evitar
+ * labels anidados — el anidamiento hace que el clic en el texto dispare el
+ * toggle dos veces (se cancela) y el checkbox "no responde".
+ */
+function FormFieldRow({ label, required, error, hint, asDiv = false, children }) {
+  const Wrapper = asDiv ? 'div' : 'label';
   return (
-    <label className="flex flex-col gap-1 min-w-0">
+    <Wrapper className="flex flex-col gap-1 min-w-0">
       <span className="mk-f-label flex items-center gap-1">
         {label}
         {required && <span className="text-rose-400" aria-label="requerido">*</span>}
@@ -1480,7 +1488,7 @@ function FormFieldRow({ label, required, error, hint, children }) {
         )}
       </span>
       {children}
-    </label>
+    </Wrapper>
   );
 }
 
@@ -1947,7 +1955,7 @@ function FilamentFormDrawer({ open, onClose, mode = 'create', initial, onSaved, 
             Total en stock: <span className="mono text-steel">{fmtSpoolStock(form.sealed_spools, form.open_remaining_g)}</span>
           </p>
         </div>
-        <FormFieldRow label="¿Marcar como necesario comprar?" hint="Marcala a mano para que aparezca en el listado de pendientes de compra, sin importar el stock.">
+        <FormFieldRow asDiv label="¿Marcar como necesario comprar?" hint="Marcala a mano para que aparezca en el listado de pendientes de compra, sin importar el stock.">
           <label className="inline-flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -2437,7 +2445,7 @@ function ItemFormDrawer({ open, onClose, category, mode = 'create', initial, onS
             className={`${FORM_INPUT_CLS} mono`}
           />
         </FormFieldRow>
-        <FormFieldRow label="¿Marcar como necesario comprar?">
+        <FormFieldRow asDiv label="¿Marcar como necesario comprar?">
           <label className="inline-flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
