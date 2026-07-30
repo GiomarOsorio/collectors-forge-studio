@@ -77,7 +77,8 @@ Las migraciones están en `backend/alembic/versions/`. Se aplican con `alembic u
 | `b2c3d4e5f6a8` | `b2c3d4e5f6a8_project_model_files.py` | Tabla puente `project_model_files` N:M Project↔ModelFile (issue #136, sub-ticket 2/3) |
 | `c3d4e5f6a7b9` | `c3d4e5f6a7b9_notifications.py` | Tablas `notification_channels`, `notification_templates`, `notification_digest_queue`; columnas SMTP + quiet hours + digest en `app_settings` (issue #137) |
 | `d4e5f6a7b8c0` | `d4e5f6a7b8c0_makerworld.py` | Tablas `bambu_cloud_auth` (singleton) y `makerworld_imports` (historial) para el import completo de MakerWorld (issue #139) |
-| `e5f6a7b8c9d1` | `e5f6a7b8c9d1_vault_file_hashes.py` | **Head actual** — Columnas `source_file_hash` / `print_file_hash` (indexadas) en `model_files` para detección de duplicados por SHA-256 (issue #128) |
+| `e5f6a7b8c9d1` | `e5f6a7b8c9d1_vault_file_hashes.py` | Columnas `source_file_hash` / `print_file_hash` (indexadas) en `model_files` para detección de duplicados por SHA-256 (issue #128) |
+| `f1a2b3c4d5e6` | `f1a2b3c4d5e6_add_spool_count_stock.py` | **Head actual** — Stock de filamento por bobinas: `inventory_items.sealed_spools` / `open_remaining_g` / `min_spools`, con backfill desde `quantity`/`min_quantity`/`weight_per_roll` (issue #214) |
 
 **Aplicar todas las migraciones:**
 ```bash
@@ -187,14 +188,33 @@ Stock unificado para filamentos, insumos, herramientas y cualquier material.
 | `material_type` | VARCHAR(50) | Tipo de material: PLA, PETG, etc. (para filamentos) |
 | `color` | VARCHAR(50) | Color (para filamentos) |
 | `unit` | VARCHAR(20) | Unidad: `kg`, `g`, `unidad`, `m`, etc. |
-| `quantity` | NUMERIC(12,4) | Stock actual |
-| `min_quantity` | NUMERIC(12,4) | Mínimo para alerta de reorden |
+| `quantity` | NUMERIC(12,4) | Stock actual en gramos (filamento). **Derivado** de los conteos de bobina — ver abajo |
+| `min_quantity` | NUMERIC(12,4) | Mínimo para alerta, en gramos. **Derivado** de `min_spools × weight_per_roll` (filamento) |
+| `weight_per_roll` | NUMERIC(10,3) | Gramos de una bobina llena (filamento) |
+| `sealed_spools` | INTEGER | Bobinas sin abrir (issue #214) |
+| `open_remaining_g` | NUMERIC(8,1) NULL | Gramos de la bobina abierta; NULL = ninguna abierta (issue #214) |
+| `min_spools` | INTEGER | Stock mínimo en bobinas (issue #214) |
 | `price_per_unit` | NUMERIC(12,4) | Precio por unidad en USD |
 | `location` | VARCHAR(100) | Ubicación física |
 | `notes` | TEXT | Notas |
-| `needs_reorder` | BOOLEAN | Flag manual de "necesita compra" |
+| `needs_purchase` | BOOLEAN | Flag manual "necesita compra": muestra el ítem en la lista de compra aunque el stock esté OK |
 | `created_at` | TIMESTAMP | — |
 | `updated_at` | TIMESTAMP | — |
+
+**Stock de filamento por bobinas (issue #214).** Para ítems de categoría `Filamento`, la fuente de verdad del stock son los conteos de bobina, no los gramos:
+
+- `sealed_spools` — bobinas selladas (sin abrir).
+- `open_remaining_g` — gramos aproximados de la bobina que se está usando.
+- `min_spools` — mínimo de stock, en bobinas.
+
+`quantity` y `min_quantity` (gramos) se mantienen **derivados** server-side para no romper la deducción automática, `low_stock` ni la calculadora:
+
+```
+quantity     = sealed_spools × weight_per_roll + (open_remaining_g or 0)
+min_quantity = min_spools    × weight_per_roll
+```
+
+La reconciliación vive en `backend/app/services/filament_stock.py` (`normalize_from_counts`, `derive_counts_from_grams`, `deduct_grams`). La deducción al completar una impresión vacía primero la bobina abierta y hace *rollover* a una sellada. Si el ítem usa **bobinas detalladas** (tabla `spools`, issue #134), ese sistema tiene precedencia para el stock mostrado; los conteos simples quedan de respaldo.
 
 ### `purchase_orders`
 

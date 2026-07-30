@@ -584,14 +584,18 @@ Crea un ítem de inventario.
   "brand": "Bambu Lab",
   "material_type": "PLA",
   "color": "Negro",
-  "unit": "kg",
-  "quantity": 2.5,
-  "min_quantity": 0.5,
+  "unit": "g",
+  "weight_per_roll": 1000,
+  "sealed_spools": 3,
+  "open_remaining_g": 300,
+  "min_spools": 1,
   "price_per_unit": 24.99,
   "location": "Estante A",
   "notes": "Filamento básico para la mayoría de proyectos"
 }
 ```
+
+**Stock por bobinas (Filamento, issue #214).** Si se envían `sealed_spools` / `open_remaining_g` / `min_spools`, son la fuente de verdad y el backend deriva `quantity` y `min_quantity` (gramos) — no hace falta enviarlos. Si en cambio se envían los gramos (flujo legacy), el backend deriva los conteos. Ver `docs/base-de-datos.md`.
 
 ---
 

@@ -255,6 +255,27 @@ git pull origin main
 
 ---
 
+## 2b. Flujo de release a producción
+
+`main` es la rama de producción: **cualquier push a `main` dispara el deploy** (CI `docker-publish` → imagen `prod-latest` → webhook n8n). El trabajo del día a día va a `develop` (que despliega al entorno dev). Un release es promover `develop → main`.
+
+**Pasos:**
+
+1. **Bump de versión** — rama `chore/bump-X.Y.Z` desde `develop`, subiendo la versión en `frontend/package.json` + `package-lock.json`. PR → `develop`.
+   - Solo `package.json`/lock. El string `STUDIO · vX.Y` del sidebar (`StudioSidebar.jsx`) es aparte: bumpearlo cambia todas las baselines visuales, así que se toca deliberadamente, no en cada patch.
+2. **Release PR `develop → main`** — título `release: vX.Y.Z → prod`. Al mergearlo, el push a `main` publica `prod-latest` y dispara el deploy.
+3. **Sincronizar** — tras el release, `merge main → develop` (trae el merge commit de vuelta) para que `develop == main` y el próximo release no pida "Update branch".
+
+**Notas:**
+- Las **migraciones corren solas** al arrancar el contenedor (`alembic upgrade head` en el `CMD` del `Containerfile`). No hay paso manual salvo verificación:
+  ```bash
+  podman exec cfs-app-prod alembic current   # debe mostrar el head esperado
+  ```
+- El auto-cierre de issues por `Closes #N` **no funciona** (el default branch es `main` pero los merges van a `develop`) → cerrar issues a mano.
+- Versionado: patch para fixes, minor para features (semver).
+
+---
+
 ## 3. Configurar el self-hosted runner (CI/CD)
 
 El runner de GitHub Actions se instala en el servidor de producción y escucha órdenes de GitHub para ejecutar `deploy.sh` automáticamente en cada push a `main`.
