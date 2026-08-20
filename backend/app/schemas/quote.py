@@ -61,7 +61,10 @@ class QuoteCalculateRequest(BaseModel):
     post_processing_time_hours: Decimal = Field(default=Decimal("0"), ge=0)
     quantity: int = Field(default=1, ge=1)
     margin_percent: Optional[Decimal] = Field(default=None, ge=0, le=500)
-    color_changes: int = Field(default=0, ge=0, le=500)
+    # Sin techo: una placa multicolor AMS puede tener miles de cambios (1050 en
+    # un ryuk de 4 colores). Cada uno suma tiempo real de máquina que el slicer
+    # no reporta como activo, así que topar el campo falseaba el costo.
+    color_changes: int = Field(default=0, ge=0)
     save: bool = True
     supplies: List["SupplyItemRef"] = []
     additional_filaments: List[FilamentItem] = []
@@ -236,7 +239,10 @@ class QuoteManualRequest(BaseModel):
     post_processing_time_hours: Decimal = Field(default=Decimal("0"), ge=0)
     quantity: int = Field(default=1, ge=1)
     margin_percent: Optional[Decimal] = Field(default=None, ge=0, le=500)
-    color_changes: int = Field(default=0, ge=0, le=500)
+    # Sin techo: una placa multicolor AMS puede tener miles de cambios (1050 en
+    # un ryuk de 4 colores). Cada uno suma tiempo real de máquina que el slicer
+    # no reporta como activo, así que topar el campo falseaba el costo.
+    color_changes: int = Field(default=0, ge=0)
 
     # Sobrescritura opcional de configuración de la empresa
     electricity_rate: Optional[Decimal] = Field(default=None, ge=0)

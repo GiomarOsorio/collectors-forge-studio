@@ -15,6 +15,7 @@ from app.services.slicer_parser import (
     parse_3mf_file,
     parse_3mf_all_plates,
     convert_length_to_grams,
+    _count_color_changes_in_gcode,
     _parse_gcode_text,
 )
 
@@ -368,3 +369,52 @@ def test_parse_bed_temp_hot_plate():
     gcode = "; hot_plate_temp = 85\nG28\n"
     resultado = _parse_gcode_text(gcode)
     assert resultado.bed_temp == 85
+
+
+# --- Tests de conteo de cambios de color ---
+
+def test_count_color_changes_cuenta_transiciones():
+    """Cada Tn distinto del anterior es un cambio; los repetidos no suman."""
+    gcode = "\n".join(["T0", "G1 X0", "T0", "T1", "G1 X1", "T1", "T0", "T65535"])
+    assert _count_color_changes_in_gcode(gcode) == 2
+
+
+def test_count_color_changes_un_solo_filamento():
+    """Sin cambios de herramienta reales el conteo es 0."""
+    gcode = "\n".join(["T0", "G1 X0", "G1 Y1", "T65535"])
+    assert _count_color_changes_in_gcode(gcode) == 0
+
+
+def test_count_color_changes_ignora_comentarios_y_templates():
+    """`; CP TOOLCHANGE` y `T[next_extruder]` no cuentan como cambio."""
+    gcode = "\n".join([
+        "; CP TOOLCHANGE START",
+        "T[next_extruder]",
+        "T0",
+        "; CP TOOLCHANGE END",
+        "T1",
+    ])
+    assert _count_color_changes_in_gcode(gcode) == 1
+
+
+def test_gcode_manda_sobre_slice_info_en_cambios_de_color(tmp_path):
+    """
+    slice_info.config agrupa capas por conjunto de filamentos: contar sus
+    bloques daba 6 en una placa con más de mil cambios reales. El conteo del
+    G-code (Tn) es el que debe quedar.
+    """
+    plate_gcode = GCODE_PLATE_HEADER.format(
+        time="5h 42m 21s", weight="151.66", ftype="PETG",
+        nozzle="245", bed="70", layer="0.2",
+    ) + "\n" + "\n".join(["T0", "T1"] * 30)
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("3D/3dmodel.model", "<model/>")
+        zf.writestr("Metadata/slice_info.config", SLICE_INFO_XML)
+        zf.writestr("Metadata/plate_1.gcode", plate_gcode)
+    archivo = tmp_path / "multicolor.3mf"
+    archivo.write_bytes(buffer.getvalue())
+
+    plates = parse_3mf_all_plates(str(archivo))
+    assert plates[0].color_changes == 59  # 60 Tn alternados → 59 transiciones

@@ -340,21 +340,25 @@ def _count_color_changes_in_gcode(gcode_text: str) -> int:
     Solo cuenta líneas exactas `^T[0-9]+$`, lo que excluye los comandos templados
     (`T[next_extruder]`, etc.) presentes en bloques de start/end gcode.
 
+    Cuenta **transiciones**: pares consecutivos de herramienta distinta. Así los
+    `T0` repetidos del start-gcode de Bambu no inflan el total, y no depende de
+    restar una carga inicial que puede o no estar.
+
     Args:
         gcode_text: Contenido del G-code (puede ser parcial).
 
     Returns:
         Número de cambios de color (cero para impresiones de un solo filamento).
     """
-    tool_changes = 0
+    tools = []
     for raw in gcode_text.splitlines():
         line = raw.strip()
         if not line or line.startswith(";"):
             continue
         m = re.match(r"^T(\d+)$", line)
         if m and int(m.group(1)) != 65535:
-            tool_changes += 1
-    return max(0, tool_changes - 1)
+            tools.append(m.group(1))
+    return sum(1 for prev, cur in zip(tools, tools[1:]) if prev != cur)
 
 
 def _enrich_plates_from_gcode(zf: zipfile.ZipFile, plates: List[PlateResult]) -> None:
@@ -381,11 +385,13 @@ def _enrich_plates_from_gcode(zf: zipfile.ZipFile, plates: List[PlateResult]) ->
             continue
 
         result = _parse_gcode_text(contenido_header)
-        # Solo recurrir al conteo por gcode si slice_info no aportó datos de filamentos:
-        # el start-gcode de Bambu emite múltiples T0 de inicialización que inflan
-        # el conteo y no son cambios de color reales.
-        if not plate.filaments and plate.color_changes == 0:
-            plate.color_changes = _count_color_changes_in_gcode(contenido_total)
+        # El G-code manda sobre slice_info.config: `layer_filament_lists` agrupa
+        # rangos de capas por conjunto de filamentos, así que contar sus bloques
+        # daba 6 en una placa con 1050 cambios reales. Los `Tn` del G-code son
+        # los cambios de herramienta efectivos.
+        cambios_gcode = _count_color_changes_in_gcode(contenido_total)
+        if cambios_gcode > plate.color_changes:
+            plate.color_changes = cambios_gcode
         if plate.nozzle_temp is None and result.nozzle_temp is not None:
             plate.nozzle_temp = result.nozzle_temp
         if plate.bed_temp is None and result.bed_temp is not None:
