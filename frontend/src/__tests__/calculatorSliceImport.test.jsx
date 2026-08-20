@@ -18,6 +18,9 @@ vi.mock('../services/api', () => ({
     data: [
       { id: 7, name: 'PETG Blanco', filament_type: 'PETG', filament_color_hex: '#FFFFFF', quantity: 1000, price_per_kg: 25 },
       { id: 9, name: 'PLA Rojo', filament_type: 'PLA', filament_color_hex: '#F72323', quantity: 800, price_per_kg: 20 },
+      { id: 11, name: 'PETG Gris', filament_type: 'PETG', filament_color_hex: '#808080', quantity: 900, price_per_kg: 25 },
+      { id: 12, name: 'PETG Negro', filament_type: 'PETG', filament_color_hex: '#000000', quantity: 900, price_per_kg: 25 },
+      { id: 13, name: 'PETG Rojo', filament_type: 'PETG', filament_color_hex: '#FF0000', quantity: 500, price_per_kg: 25 },
     ],
   }),
   getInventoryItems: () => Promise.resolve({ data: [] }),
@@ -141,5 +144,62 @@ describe('CalculatorPage — import de laminado', () => {
     const arg = toast.error.mock.calls.at(-1)[0];
     expect(typeof arg).toBe('string');
     expect(arg).toContain('margin_percent');
+  });
+  it('carga los 4 filamentos de una placa AMS aunque compartan tipo', async () => {
+    // Caso real ryuk_Colored: 4 PETG de colores distintos. El match por tipo
+    // devolvía siempre el mismo spool y se perdían 2 filas.
+    const plate = {
+      plate_number: 1,
+      print_time_seconds: 157861,
+      print_time_hours: 43.8503,
+      filament_weight_g: 649.49,
+      filament_type: 'PETG',
+      color_changes: 1051,
+      filaments: [
+        { filament_type: 'PETG', colour_hex: '#808080', weight_g: 357.45, length_m: 118.89 },
+        { filament_type: 'PETG', colour_hex: '#000000', weight_g: 240.4, length_m: 79.96 },
+        { filament_type: 'PETG', colour_hex: '#FF0000', weight_g: 32.38, length_m: 10.77 },
+        { filament_type: 'PETG', colour_hex: '#FF6600', weight_g: 19.26, length_m: 6.31 },
+      ],
+      objects: ['ryuk.stl'],
+    };
+    mockParseSlice.mockResolvedValue({ data: { filename: 'ryuk.gcode.3mf', plates: [plate] } });
+    render(<CalculatorPage embedded />);
+    await screen.findByText(/Importar laminado/i);
+
+    dropFile('ryuk.gcode.3mf');
+
+    // Principal = el de mayor gramaje (gris 357.45 → 358, ceil)
+    await waitFor(() => expect(stepperValue('Gramos consumidos')).toBe('358'));
+    // 3 filas adicionales, una por cada filamento restante
+    const filas = screen.getAllByLabelText('Quitar filamento');
+    expect(filas).toHaveLength(3);
+    // El naranja #FF6600 no está en inventario: fila presente igual, 19.26 → 20
+    const gramos = screen
+      .getAllByRole('spinbutton')
+      .map((i) => i.value);
+    expect(gramos).toContain('241');  // negro 240.4 → ceil
+    expect(gramos).toContain('33');   // rojo 32.38 → ceil
+    expect(gramos).toContain('20');   // naranja 19.26 → ceil
+  });
+
+  it('no topa los cambios de color (placa AMS con 1051)', async () => {
+    const plate = {
+      plate_number: 1,
+      print_time_seconds: 157861,
+      print_time_hours: 43.8503,
+      filament_weight_g: 649.49,
+      filament_type: 'PETG',
+      color_changes: 1051,
+      filaments: [{ filament_type: 'PETG', colour_hex: '#808080', weight_g: 649.49, length_m: 200 }],
+      objects: ['ryuk.stl'],
+    };
+    mockParseSlice.mockResolvedValue({ data: { filename: 'ryuk.gcode.3mf', plates: [plate] } });
+    render(<CalculatorPage embedded />);
+    await screen.findByText(/Importar laminado/i);
+
+    dropFile('ryuk.gcode.3mf');
+
+    await waitFor(() => expect(stepperValue('Cambios de color')).toBe('1051'));
   });
 });
