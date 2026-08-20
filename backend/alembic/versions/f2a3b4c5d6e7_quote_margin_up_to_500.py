@@ -1,7 +1,7 @@
 """Relajar el CHECK de margin_percent en quotes: 0–100 → 0–500.
 
-Revision ID: a1b2c3d4e5f6
-Revises: z0a1b2c3d4e5
+Revision ID: f2a3b4c5d6e7
+Revises: f1a2b3c4d5e6
 Create Date: 2026-08-20
 
 La calculadora ofrece el Stepper de margen hasta 150%, pero el schema y el
@@ -14,8 +14,8 @@ from typing import Union
 
 from alembic import op
 
-revision: str = "a1b2c3d4e5f6"
-down_revision: Union[str, None] = "z0a1b2c3d4e5"
+revision: str = "f2a3b4c5d6e7"
+down_revision: Union[str, None] = "f1a2b3c4d5e6"
 branch_labels = None
 depends_on = None
 
