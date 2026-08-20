@@ -272,10 +272,18 @@ class TestQuoteManualRequestSchema:
         with pytest.raises(ValidationError):
             QuoteManualRequest(**self._base(margin_percent=Decimal("-1")))
 
-    def test_margin_percent_mayor_100_rechazado(self):
-        """margin_percent > 100 debe fallar."""
+    def test_margin_percent_mayor_100_permitido(self):
+        """
+        margin_percent > 100 es válido: el techo se subió a 500 para alinear
+        schema, CHECK de BD y el Stepper de la calculadora (que llega a 150%).
+        """
+        req = QuoteManualRequest(**self._base(margin_percent=Decimal("150")))
+        assert req.margin_percent == Decimal("150")
+
+    def test_margin_percent_mayor_500_rechazado(self):
+        """margin_percent > 500 debe fallar (nuevo techo)."""
         with pytest.raises(ValidationError):
-            QuoteManualRequest(**self._base(margin_percent=Decimal("100.01")))
+            QuoteManualRequest(**self._base(margin_percent=Decimal("500.01")))
 
     def test_failure_rate_percent_valido(self):
         """failure_rate_percent entre 0 y 100 es válido como sobreescritura."""

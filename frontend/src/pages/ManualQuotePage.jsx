@@ -32,6 +32,7 @@ import {
 } from '../services/api';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import { fmtCOP, fmtUSD } from '../utils/inventoryAdapter';
+import { apiErrorMsg } from '../utils/apiError';
 import { LineItems } from '../components/ui';
 import './ManualQuotePage.css';
 
@@ -616,7 +617,7 @@ export default function ManualQuotePage() {
       toast.success('Cotización guardada');
       navigate('/cost');
     } catch (err) {
-      toast.error(err?.response?.data?.detail || 'Error al guardar');
+      toast.error(apiErrorMsg(err, 'Error al guardar'));
     } finally {
       setSaving(false);
     }

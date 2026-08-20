@@ -14,7 +14,20 @@ export function apiErrorMsg(err, fallback = 'Error inesperado') {
   if (!detail) return fallback;
   if (typeof detail === 'string') return detail;
   if (Array.isArray(detail) && detail.length > 0) {
-    return detail[0]?.msg ?? fallback;
+    // Un 422 sin el nombre del campo es indepurable desde la UI: FastAPI manda
+    // `loc: ['body', 'margin_percent']`, así que lo anexamos al mensaje.
+    return detail
+      .slice(0, 3)
+      .map((e) => {
+        const msg = e?.msg;
+        if (!msg) return null;
+        const field = Array.isArray(e?.loc) ? e.loc.filter((l) => l !== 'body').join('.') : '';
+        return field ? `${field}: ${msg}` : msg;
+      })
+      .filter(Boolean)
+      .join(' · ') || fallback;
   }
+  // detail objeto suelto: nunca devolver el objeto (React error #31 al render)
+  if (typeof detail === 'object') return detail?.msg ?? fallback;
   return fallback;
 }

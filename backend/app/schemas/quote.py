@@ -47,7 +47,7 @@ class QuoteCalculateRequest(BaseModel):
         preparation_time_hours: Horas de preparación para mano de obra.
         post_processing_time_hours: Horas de post-procesado para mano de obra.
         quantity: Número de piezas producidas en la placa.
-        margin_percent: Margen de ganancia (0–100). None usa el default del usuario.
+        margin_percent: Margen de ganancia (0–500). None usa el default del usuario.
     """
 
     piece_name: str
@@ -60,7 +60,7 @@ class QuoteCalculateRequest(BaseModel):
     preparation_time_hours: Decimal = Field(default=Decimal("0"), ge=0)
     post_processing_time_hours: Decimal = Field(default=Decimal("0"), ge=0)
     quantity: int = Field(default=1, ge=1)
-    margin_percent: Optional[Decimal] = Field(default=None, ge=0, le=100)
+    margin_percent: Optional[Decimal] = Field(default=None, ge=0, le=500)
     color_changes: int = Field(default=0, ge=0, le=500)
     save: bool = True
     supplies: List["SupplyItemRef"] = []
@@ -208,7 +208,7 @@ class QuoteManualRequest(BaseModel):
         preparation_time_hours:     Horas de preparación para mano de obra.
         post_processing_time_hours: Horas de post-procesado para mano de obra.
         quantity:                   Número de piezas producidas.
-        margin_percent:             Margen de ganancia (0–100). None usa el default de la empresa.
+        margin_percent:             Margen de ganancia (0–500). None usa el default de la empresa.
 
     Atributos de configuración (opcionales — usan los valores guardados si se omiten):
         electricity_rate:       Tarifa eléctrica en USD/kWh.
@@ -235,7 +235,7 @@ class QuoteManualRequest(BaseModel):
     preparation_time_hours: Decimal = Field(default=Decimal("0"), ge=0)
     post_processing_time_hours: Decimal = Field(default=Decimal("0"), ge=0)
     quantity: int = Field(default=1, ge=1)
-    margin_percent: Optional[Decimal] = Field(default=None, ge=0, le=100)
+    margin_percent: Optional[Decimal] = Field(default=None, ge=0, le=500)
     color_changes: int = Field(default=0, ge=0, le=500)
 
     # Sobrescritura opcional de configuración de la empresa
@@ -247,3 +247,39 @@ class QuoteManualRequest(BaseModel):
 
 
 QuoteCalculateRequest.model_rebuild()
+
+
+class SlicePlateFilament(BaseModel):
+    """Filamento usado por una placa del `.gcode.3mf`."""
+    filament_type: str = ""
+    colour_hex: str = ""
+    weight_g: float = 0.0
+    length_m: float = 0.0
+
+
+class SlicePlate(BaseModel):
+    """
+    Datos de una placa laminada, listos para poblar el formulario de la
+    calculadora. `print_time_hours` viene precalculado para evitar que el
+    frontend repita la conversión de segundos.
+    """
+    plate_number: int
+    print_time_seconds: Optional[int] = None
+    print_time_hours: Optional[float] = None
+    filament_weight_g: Optional[float] = None
+    filament_type: Optional[str] = None
+    layer_height_mm: Optional[float] = None
+    nozzle_temp: Optional[int] = None
+    bed_temp: Optional[int] = None
+    color_changes: int = 0
+    filaments: List[SlicePlateFilament] = []
+    objects: List[str] = []
+
+
+class SliceParseResponse(BaseModel):
+    """
+    Respuesta de POST /api/quotes/parse-slice: metadatos del archivo laminado
+    sin persistir nada. Un `.gcode` plano devuelve una única placa.
+    """
+    filename: str
+    plates: List[SlicePlate]
