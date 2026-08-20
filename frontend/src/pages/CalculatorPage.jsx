@@ -703,28 +703,63 @@ function fmtPlateTime(seconds) {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+/** '#RRGGBB' → [r,g,b]; null si el hex no es parseable. */
+function hexToRgb(hex) {
+  const m = /^#?([0-9a-f]{6})/i.exec(String(hex || '').trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+// Distancia RGB máxima aceptada para dar por bueno un match de color.
+// ~441 es el máximo posible (negro↔blanco); 90 tolera variaciones de tono del
+// mismo color (un "rojo" del slicer vs el rojo real del spool) sin llegar a
+// confundir un gris con un naranja.
+const COLOR_MATCH_MAX_DISTANCE = 90;
+
 /**
  * Busca en el inventario el filamento que mejor corresponde a un filamento
- * de la placa. Prioriza coincidencia tipo + color hex; si no, sólo el tipo.
+ * de la placa: mismo tipo y el color más cercano dentro del umbral.
  *
+ * No cae de vuelta a "el primer filamento del tipo": con 4 PETG de colores
+ * distintos eso devolvía siempre el mismo spool y los demás se perdían.
+ * Sin color aproximable, devuelve null y el usuario elige a mano.
+ *
+ * @param {Array} items - Filamentos del inventario
+ * @param {Object} plateFilament - `{filament_type, colour_hex}` de la placa
+ * @param {number[]} [excludeIds] - Ids ya asignados a otro filamento de la placa
  * @returns {number|null} id del InventoryItem, o null si no hay match
  */
-function matchInventoryFilament(items, plateFilament) {
+function matchInventoryFilament(items, plateFilament, excludeIds = []) {
   const type = (plateFilament?.filament_type || '').trim().toUpperCase();
-  const hex = (plateFilament?.colour_hex || '').trim().toUpperCase();
-  const usable = items.filter((f) => f.is_active !== false && f.is_archived !== true);
+  const rgb = hexToRgb(plateFilament?.colour_hex);
   const typeOf = (f) => String(f.filament_type || f.material || '').trim().toUpperCase();
-  const hexOf = (f) => String(f.filament_color_hex || f.color_hex || '').trim().toUpperCase();
+  const hexOf = (f) => String(f.filament_color_hex || f.color_hex || '').trim();
 
-  if (type && hex) {
-    const exact = usable.find((f) => typeOf(f) === type && hexOf(f) === hex);
-    if (exact) return exact.id;
-  }
-  if (type) {
-    const byType = usable.find((f) => typeOf(f) === type);
-    if (byType) return byType.id;
-  }
-  return null;
+  const usable = items.filter(
+    (f) => f.is_active !== false && f.is_archived !== true && !excludeIds.includes(f.id),
+  );
+  const sameType = type ? usable.filter((f) => typeOf(f) === type) : usable;
+  if (sameType.length === 0) return null;
+
+  // Sin color en la placa no hay forma de desambiguar: sólo sirve si el tipo
+  // tiene un único candidato.
+  if (!rgb) return sameType.length === 1 ? sameType[0].id : null;
+
+  let best = null;
+  let bestDist = Infinity;
+  sameType.forEach((f) => {
+    const cand = hexToRgb(hexOf(f));
+    if (!cand) return;
+    const dist = Math.sqrt(
+      (cand[0] - rgb[0]) ** 2 + (cand[1] - rgb[1]) ** 2 + (cand[2] - rgb[2]) ** 2,
+    );
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = f;
+    }
+  });
+  return best && bestDist <= COLOR_MATCH_MAX_DISTANCE ? best.id : null;
 }
 
 /**
@@ -761,7 +796,7 @@ function SlicePlatePicker({ plates, activeIdx, onPick }) {
                 Placa {p.plate_number}
               </div>
               <div className="mono text-[9.5px] text-gunmetal mt-0.5 truncate">
-                {p.filament_weight_g != null ? `${Math.round(p.filament_weight_g)}g` : '—'}
+                {p.filament_weight_g != null ? `${Math.ceil(p.filament_weight_g)}g` : '—'}
                 {' · '}{fmtPlateTime(p.print_time_seconds)}
                 {p.color_changes > 0 ? ` · ${p.color_changes} cambios` : ''}
                 {(p.objects || []).length > 0 ? ` · ${p.objects.length} obj` : ''}
@@ -906,7 +941,8 @@ function CalcForm({ form, setField, filaments, printers, supplies, consumables, 
             <Stepper value={form.quantity} onChange={(v) => setField('quantity', v)} min={1} max={999} suffix="u" />
           </FormFieldRow>
           <FormFieldRow label="Cambios de color" hint="Multi-material AMS">
-            <Stepper value={form.color_changes} onChange={(v) => setField('color_changes', v)} min={0} max={50} suffix="x" />
+            {/* Sin tope real: una placa AMS de 4 colores pasa de 1000 cambios. */}
+            <Stepper value={form.color_changes} onChange={(v) => setField('color_changes', v)} min={0} max={99999} suffix="x" />
           </FormFieldRow>
         </div>
       </FormSection>
@@ -1282,49 +1318,68 @@ export default function CalculatorPage({ embedded = false } = {}) {
 
   /**
    * Vuelca una placa parseada al formulario: gramos, tiempo, cambios de color
-   * y los filamentos (el primero como principal, el resto como adicionales,
-   * máximo 4 como permite el form). Los filamentos que no existen en el
-   * inventario se ignoran — el usuario los elige a mano.
+   * y TODOS los filamentos de la placa (el de mayor gramaje como principal,
+   * el resto como adicionales, hasta los 4 que permite el form).
+   *
+   * Un filamento que no matchea con el inventario igual ocupa su fila con los
+   * gramos correctos y el selector vacío — antes se descartaba en silencio y
+   * una placa de 4 colores terminaba cargando 2.
+   *
+   * Los gramos se redondean hacia arriba: cobrar 19g de un consumo de 19.2g
+   * regala material en cada cotización.
+   *
+   * @returns {number} filamentos de la placa que no se pudieron matchear
    */
   const applyPlate = (plate) => {
-    if (!plate) return;
+    if (!plate) return 0;
     const updates = {};
-    const plateFilaments = plate.filaments || [];
+    const plateFilaments = [...(plate.filaments || [])].sort(
+      (a, b) => (b.weight_g || 0) - (a.weight_g || 0),
+    );
 
     if (plate.print_time_hours) {
       const totalMin = plate.print_time_hours * 60;
       updates.hours = Math.floor(totalMin / 60);
       updates.minutes = Math.round(totalMin % 60);
     }
-    updates.color_changes = Math.min(Number(plate.color_changes) || 0, 50);
+    updates.color_changes = Number(plate.color_changes) || 0;
     if ((plate.objects || []).length > 0 && !form.piece_name) {
       updates.piece_name = plate.objects[0];
     }
 
+    let sinMatch = 0;
     if (plateFilaments.length > 0) {
       const [main, ...rest] = plateFilaments;
+      const usados = [];
       const mainId = matchInventoryFilament(filaments, main);
-      if (mainId) updates.inventory_item_id = mainId;
-      updates.weight_grams = Math.max(1, Math.round(main.weight_g || plate.filament_weight_g || 0));
+      if (mainId) {
+        updates.inventory_item_id = mainId;
+        usados.push(mainId);
+      } else {
+        sinMatch += 1;
+      }
+      updates.weight_grams = Math.max(1, Math.ceil(main.weight_g || plate.filament_weight_g || 0));
 
       const extraIds = [];
       const extraGrams = [];
       rest.slice(0, 4).forEach((f) => {
-        const id = matchInventoryFilament(filaments, f);
-        if (id && id !== mainId && !extraIds.includes(id)) {
-          extraIds.push(id);
-          extraGrams.push(Math.round(f.weight_g || 0));
-        }
+        const id = matchInventoryFilament(filaments, f, usados);
+        if (id) usados.push(id);
+        else sinMatch += 1;
+        extraIds.push(id || '');
+        extraGrams.push(Math.ceil(f.weight_g || 0));
       });
       updates.additional_filaments_ids = extraIds;
       updates.additional_filaments_grams = extraGrams;
     } else if (plate.filament_weight_g) {
-      updates.weight_grams = Math.max(1, Math.round(plate.filament_weight_g));
+      updates.weight_grams = Math.max(1, Math.ceil(plate.filament_weight_g));
       const byType = matchInventoryFilament(filaments, { filament_type: plate.filament_type });
       if (byType) updates.inventory_item_id = byType;
+      else sinMatch += 1;
     }
 
     setForm((cur) => ({ ...cur, ...updates }));
+    return sinMatch;
   };
 
   const handleSliceFiles = async (files) => {
@@ -1340,12 +1395,20 @@ export default function CalculatorPage({ embedded = false } = {}) {
       }
       setSlice({ filename: res.data.filename, plates });
       setActivePlateIdx(0);
-      applyPlate(plates[0]);
+      const sinMatch = applyPlate(plates[0]);
       toast.success(
         plates.length > 1
           ? `${plates.length} placas leídas — placa 1 cargada`
           : 'Datos del laminado cargados',
       );
+      if (sinMatch > 0) {
+        toast(
+          sinMatch === 1
+            ? 'Un filamento de la placa no está en inventario — elígelo a mano'
+            : `${sinMatch} filamentos de la placa no están en inventario — elígelos a mano`,
+          { icon: '🎨' },
+        );
+      }
     } catch (err) {
       toast.error(apiErrorMsg(err, 'No se pudo leer el archivo laminado'));
     } finally {
@@ -1361,7 +1424,10 @@ export default function CalculatorPage({ embedded = false } = {}) {
       return;
     }
     setActivePlateIdx(idx);
-    applyPlate(slice?.plates?.[idx]);
+    const sinMatch = applyPlate(slice?.plates?.[idx]);
+    if (sinMatch > 0) {
+      toast(`${sinMatch} filamento(s) sin match en inventario`, { icon: '🎨' });
+    }
   };
 
   const sliceProps = {
