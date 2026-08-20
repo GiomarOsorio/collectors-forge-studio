@@ -211,6 +211,7 @@ collectors-forge-studio/
 │   │   │
 │   │   ├── services/                 # Lógica de negocio pura
 │   │   │   ├── auth.py               # JWT create/verify, blacklist, get_current_user
+│   │   │   ├── filament_stock.py     # Stock por bobinas: deriva gramos↔conteos + deducción con rollover (issue #214)
 │   │   │   ├── vault_storage.py      # MinIO: upload/download/delete via aiobotocore
 │   │   │   ├── vault_metadata.py     # Fetch metadata MakerWorld/Printables/OG
 │   │   │   ├── calculator.py         # Motor de cálculo (Decimal puro)

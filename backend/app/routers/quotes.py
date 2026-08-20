@@ -3,6 +3,7 @@ Router para el cálculo, gestión y descarga de cotizaciones de impresión 3D.
 
 Endpoints disponibles bajo el prefijo /api/quotes:
 - POST /calculate     - Calcula el costo sin guardar (previsualización).
+- POST /parse-slice   - Parsea un .gcode.3mf y devuelve sus placas (sin guardar).
 - POST /              - Calcula y guarda la cotización en el historial.
 - GET  /              - Lista el historial de cotizaciones.
 - GET  /{id}          - Obtiene una cotización específica.
@@ -14,12 +15,14 @@ Endpoints disponibles bajo el prefijo /api/quotes:
 import asyncio
 import logging
 import re
+import tempfile
 from decimal import Decimal
+from pathlib import Path
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,12 +34,22 @@ from app.models.inventory import InventoryItem
 from app.models.printer import Printer
 from app.models.settings import AppSettings
 from app.models.quote import Quote
-from app.schemas.quote import QuoteCalculateRequest, QuoteManualRequest, QuoteResponse, QuoteCostBreakdown, QuoteUpdateMeta
+from app.schemas.quote import (
+    QuoteCalculateRequest,
+    QuoteManualRequest,
+    QuoteResponse,
+    QuoteCostBreakdown,
+    QuoteUpdateMeta,
+    SliceParseResponse,
+    SlicePlate,
+    SlicePlateFilament,
+)
 from app.limiter import limiter
 from app.services.auth import get_current_user, get_operator_user
 from app.services.calculator import calculate_cost
 from app.services.pdf_generator import generate_quote_pdf
 from app.services.exchange_rate import get_usd_to_cop
+from app.services.slicer_parser import parse_3mf_all_plates, parse_3mf_file, parse_gcode_file
 from app.services.vault_storage import download_file
 
 router = APIRouter(prefix="/api/quotes", tags=["quotes"])
@@ -107,6 +120,127 @@ async def calculate_quote(
         additional_filaments=additional_filaments_data,
         consumables=consumables_data,
         color_changes=data.color_changes,
+    )
+
+
+MAX_SLICE_UPLOAD_BYTES = 512 * 1024 * 1024  # 512 MB — un .gcode.3mf grande cabe de sobra
+
+
+def _plate_to_schema(plate) -> SlicePlate:
+    """Convierte un `PlateResult` del parser al schema de respuesta."""
+    secs = plate.print_time_seconds
+    return SlicePlate(
+        plate_number=plate.plate_number,
+        print_time_seconds=secs,
+        print_time_hours=round(secs / 3600, 4) if secs else None,
+        filament_weight_g=plate.filament_weight_g,
+        filament_type=plate.filament_type,
+        layer_height_mm=plate.layer_height_mm,
+        nozzle_temp=plate.nozzle_temp,
+        bed_temp=plate.bed_temp,
+        color_changes=plate.color_changes,
+        filaments=[
+            SlicePlateFilament(
+                filament_type=f.filament_type,
+                colour_hex=f.colour_hex,
+                weight_g=f.weight_g,
+                length_m=f.length_m,
+            )
+            for f in (plate.filaments or [])
+        ],
+        objects=list(plate.objects or []),
+    )
+
+
+@router.post("/parse-slice", response_model=SliceParseResponse)
+@limiter.limit("20/minute")
+async def parse_slice_file(
+    request: Request,
+    file: UploadFile = File(..., description="Archivo .gcode.3mf, .3mf o .gcode laminado"),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Parsea un archivo laminado y devuelve sus placas SIN guardar nada.
+
+    Reemplaza el flujo que antes hacía el módulo Slicer (eliminado en 7a60665):
+    la calculadora sube el `.gcode.3mf`, elige placa y precarga peso, tiempo,
+    cambios de color y tipo de filamento.
+
+    Un `.3mf` multi-placa devuelve una placa por cada una; un `.gcode` plano
+    devuelve una sola con `plate_number=1`.
+
+    Raises:
+        HTTPException 400: Extensión no soportada o archivo vacío.
+        HTTPException 413: Archivo mayor a MAX_SLICE_UPLOAD_BYTES.
+        HTTPException 422: El archivo no contiene metadatos de laminado.
+    """
+    name = (file.filename or "").lower()
+    if not name.endswith((".3mf", ".gcode")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Formato no soportado. Sube un .gcode.3mf, .3mf o .gcode",
+        )
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El archivo está vacío")
+    if len(content) > MAX_SLICE_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"El archivo supera {MAX_SLICE_UPLOAD_BYTES // (1024 * 1024)} MB",
+        )
+
+    suffix = ".3mf" if name.endswith(".3mf") else ".gcode"
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        plates: List[SlicePlate] = []
+        if suffix == ".3mf":
+            parsed = await asyncio.to_thread(parse_3mf_all_plates, tmp_path)
+            plates = [_plate_to_schema(p) for p in (parsed or [])]
+            if not plates:
+                # .3mf sin slice_info.config: intenta el header del G-code embebido
+                single = await asyncio.to_thread(parse_3mf_file, tmp_path)
+                if single:
+                    plates = [_slice_result_to_plate(single)]
+        else:
+            single = await asyncio.to_thread(parse_gcode_file, tmp_path)
+            if single:
+                plates = [_slice_result_to_plate(single)]
+    except (OSError, ValueError) as exc:
+        logger.warning("Fallo parseando archivo laminado %s: %s", file.filename, exc)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No se pudo leer el archivo laminado",
+        ) from exc
+    finally:
+        if tmp_path:
+            Path(tmp_path).unlink(missing_ok=True)
+
+    if not plates:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="El archivo no tiene metadatos de laminado (¿lo exportaste sin laminar?)",
+        )
+
+    return SliceParseResponse(filename=file.filename or "archivo", plates=plates)
+
+
+def _slice_result_to_plate(result) -> SlicePlate:
+    """Convierte un `SliceResult` (placa única / .gcode plano) al schema."""
+    secs = result.print_time_seconds
+    return SlicePlate(
+        plate_number=1,
+        print_time_seconds=secs,
+        print_time_hours=round(secs / 3600, 4) if secs else None,
+        filament_weight_g=result.filament_weight_g,
+        filament_type=result.filament_type,
+        layer_height_mm=result.layer_height_mm,
+        nozzle_temp=result.nozzle_temp,
+        bed_temp=result.bed_temp,
     )
 
 

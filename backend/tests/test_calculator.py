@@ -686,20 +686,36 @@ class TestValidacionSchema:
                 estimated_lifespan_hours=Decimal("-500"),
             )
 
-    def test_margin_mayor_100_falla(self):
-        """margin_percent > 100 → ValidationError (Field le=100)."""
+    def test_margin_mayor_500_falla(self):
+        """margin_percent > 500 → ValidationError (Field le=500)."""
         from pydantic import ValidationError
         from app.schemas.quote import QuoteCalculateRequest
 
+        # inventory_item_id va explícito: sin él el schema falla por campo
+        # faltante y el test pasaría sin llegar a validar el margen.
         with pytest.raises(ValidationError):
             QuoteCalculateRequest(
                 piece_name="Test",
-                filament_id=1,
+                inventory_item_id=1,
                 printer_id=1,
                 weight_grams=Decimal("100"),
                 print_time_hours=Decimal("1"),
-                margin_percent=Decimal("101"),
+                margin_percent=Decimal("501"),
             )
+
+    def test_margin_150_valido(self):
+        """margin_percent=150 es válido tras subir el techo a 500."""
+        from app.schemas.quote import QuoteCalculateRequest
+
+        req = QuoteCalculateRequest(
+            piece_name="Test",
+            inventory_item_id=1,
+            printer_id=1,
+            weight_grams=Decimal("100"),
+            print_time_hours=Decimal("1"),
+            margin_percent=Decimal("150"),
+        )
+        assert req.margin_percent == Decimal("150")
 
     def test_filamento_price_per_kg_negativo_falla(self):
         """price_per_kg < 0 → ValidationError (Field gt=0)."""

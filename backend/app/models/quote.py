@@ -23,14 +23,14 @@ class Quote(Base):
     Cotización de impresión 3D guardada en el historial.
 
     Todos los campos monetarios usan Numeric(12,4).
-    Los porcentajes usan Numeric(7,4) con restricción 0–100.
+    Los porcentajes usan Numeric(7,4) con restricción 0–500.
     Los valores COP usan Numeric(16,0).
     """
 
     __tablename__ = "quotes"
     __table_args__ = (
         CheckConstraint(
-            "margin_percent >= 0 AND margin_percent <= 100",
+            "margin_percent >= 0 AND margin_percent <= 500",
             name="ck_quotes_margin_range",
         ),
     )

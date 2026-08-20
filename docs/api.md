@@ -483,6 +483,45 @@ Calcula el costo sin guardar. Devuelve el desglose completo.
 
 ---
 
+### `POST /quotes/parse-slice`
+Sube un archivo laminado (`.gcode.3mf`, `.3mf` o `.gcode`) y devuelve sus placas
+para precargar la calculadora. **No persiste nada**: el archivo se escribe a un
+temporal, se parsea y se borra.
+
+**Body:** `multipart/form-data` con el campo `file`. Máximo 512 MB.
+
+**Response 200:**
+```json
+{
+  "filename": "dragon.gcode.3mf",
+  "plates": [
+    {
+      "plate_number": 1,
+      "print_time_seconds": 20541,
+      "print_time_hours": 5.7058,
+      "filament_weight_g": 151.66,
+      "filament_type": "PETG",
+      "layer_height_mm": 0.2,
+      "nozzle_temp": 245,
+      "bed_temp": 70,
+      "color_changes": 0,
+      "filaments": [
+        {"filament_type": "PETG", "colour_hex": "#FFFFFF", "weight_g": 151.66, "length_m": 49.26}
+      ],
+      "objects": ["ModeloA"]
+    }
+  ]
+}
+```
+
+Un `.3mf` multi-placa devuelve una entrada por placa; un `.gcode` plano devuelve
+una sola con `plate_number: 1`.
+
+**Errores:** `400` extensión no soportada o archivo vacío · `413` supera 512 MB ·
+`422` el archivo no trae metadatos de laminado.
+
+---
+
 ### `POST /quotes/`
 Calcula y guarda la cotización en el historial.
 
@@ -584,14 +623,18 @@ Crea un ítem de inventario.
   "brand": "Bambu Lab",
   "material_type": "PLA",
   "color": "Negro",
-  "unit": "kg",
-  "quantity": 2.5,
-  "min_quantity": 0.5,
+  "unit": "g",
+  "weight_per_roll": 1000,
+  "sealed_spools": 3,
+  "open_remaining_g": 300,
+  "min_spools": 1,
   "price_per_unit": 24.99,
   "location": "Estante A",
   "notes": "Filamento básico para la mayoría de proyectos"
 }
 ```
+
+**Stock por bobinas (Filamento, issue #214).** Si se envían `sealed_spools` / `open_remaining_g` / `min_spools`, son la fuente de verdad y el backend deriva `quantity` y `min_quantity` (gramos) — no hace falta enviarlos. Si en cambio se envían los gramos (flujo legacy), el backend deriva los conteos. Ver `docs/base-de-datos.md`.
 
 ---
 
