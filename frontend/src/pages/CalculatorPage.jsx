@@ -24,7 +24,7 @@ import toast from 'react-hot-toast';
 import {
   Calculator, Save, AlertTriangle, RotateCcw, Loader2, Plus, X, Trash2,
   Clock, Cpu, Zap, Droplet, TrendingUp, ArrowUpRight, History, FileText,
-  Check, Settings as SettingsIcon, AlertCircle,
+  Check, Settings as SettingsIcon, AlertCircle, FileUp, Layers,
 } from 'lucide-react';
 import {
   getInventoryFilaments,
@@ -34,8 +34,10 @@ import {
   getElectricityTariffs,
   calculateQuote,
   createQuote,
+  parseSliceFile,
 } from '../services/api';
-import { MobileSheet, StatusPill } from '../components/ui';
+import { DropZone, MobileSheet, StatusPill } from '../components/ui';
+import { apiErrorMsg } from '../utils/apiError';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import { isKwhTariffStale, formatTariffPeriod, currentTariffPeriod } from '../utils/tariff';
@@ -689,6 +691,141 @@ function CalcBreakdown({ result, form, exchangeRate }) {
   );
 }
 
+// ─── Import de archivo laminado (.gcode.3mf) ───────────────────────────────
+
+/**
+ * Formatea segundos como "5h 42m" para el resumen de cada placa.
+ */
+function fmtPlateTime(seconds) {
+  if (!seconds) return '—';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.round((seconds % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+/**
+ * Busca en el inventario el filamento que mejor corresponde a un filamento
+ * de la placa. Prioriza coincidencia tipo + color hex; si no, sólo el tipo.
+ *
+ * @returns {number|null} id del InventoryItem, o null si no hay match
+ */
+function matchInventoryFilament(items, plateFilament) {
+  const type = (plateFilament?.filament_type || '').trim().toUpperCase();
+  const hex = (plateFilament?.colour_hex || '').trim().toUpperCase();
+  const usable = items.filter((f) => f.is_active !== false && f.is_archived !== true);
+  const typeOf = (f) => String(f.filament_type || f.material || '').trim().toUpperCase();
+  const hexOf = (f) => String(f.filament_color_hex || f.color_hex || '').trim().toUpperCase();
+
+  if (type && hex) {
+    const exact = usable.find((f) => typeOf(f) === type && hexOf(f) === hex);
+    if (exact) return exact.id;
+  }
+  if (type) {
+    const byType = usable.find((f) => typeOf(f) === type);
+    if (byType) return byType.id;
+  }
+  return null;
+}
+
+/**
+ * SlicePlatePicker — lista de placas del `.gcode.3mf` para elegir cuál cargar.
+ * Se muestra siempre que el archivo traiga más de una placa; con una sola
+ * placa la carga es automática y este bloque no aparece.
+ */
+function SlicePlatePicker({ plates, activeIdx, onPick }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="mono text-[9.5px] uppercase tracking-wider text-gunmetal">
+        {plates.length} placas en el archivo — elige cuál cotizar
+      </div>
+      {plates.map((p, idx) => {
+        const active = idx === activeIdx;
+        const colors = (p.filaments || []).map((f) => f.colour_hex).filter(Boolean);
+        return (
+          <button
+            key={p.plate_number}
+            type="button"
+            onClick={() => onPick(idx)}
+            aria-pressed={active}
+            className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-left transition-colors"
+            style={{
+              background: active ? `color-mix(in oklab, ${ACCENT} 12%, transparent)` : 'transparent',
+              border: active
+                ? `1px solid color-mix(in oklab, ${ACCENT} 30%, transparent)`
+                : '1px solid var(--color-border-strong)',
+            }}
+          >
+            <Layers size={13} className="shrink-0" style={{ color: active ? ACCENT : 'var(--color-gunmetal, #6B7785)' }} />
+            <div className="flex-1 min-w-0">
+              <div className="text-[12px] font-medium text-tech-white">
+                Placa {p.plate_number}
+              </div>
+              <div className="mono text-[9.5px] text-gunmetal mt-0.5 truncate">
+                {p.filament_weight_g != null ? `${Math.round(p.filament_weight_g)}g` : '—'}
+                {' · '}{fmtPlateTime(p.print_time_seconds)}
+                {p.color_changes > 0 ? ` · ${p.color_changes} cambios` : ''}
+                {(p.objects || []).length > 0 ? ` · ${p.objects.length} obj` : ''}
+              </div>
+            </div>
+            <div className="flex items-center gap-0.5 shrink-0">
+              {colors.slice(0, 4).map((hex, i) => (
+                <span
+                  key={i}
+                  className="w-3 h-3 rounded-full border border-black/30"
+                  style={{ background: hex }}
+                />
+              ))}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * SliceImportSection — DropZone + estado del archivo laminado + selector de placa.
+ */
+function SliceImportSection({ slice, loading, onFiles, onPickPlate, activePlateIdx }) {
+  return (
+    <FormSection title="Importar laminado (.gcode.3mf)">
+      {loading ? (
+        <div className="flex items-center gap-2 px-3 py-4 text-[12px] text-steel">
+          <Loader2 size={14} className="animate-spin" style={{ color: ACCENT }} />
+          Leyendo archivo…
+        </div>
+      ) : !slice ? (
+        <DropZone
+          accept=".3mf,.gcode"
+          icon={FileUp}
+          accent={ACCENT}
+          hint="Suelta tu .gcode.3mf aquí"
+          meta="Precarga peso, tiempo, cambios de color y filamentos"
+          onFiles={onFiles}
+        />
+      ) : (
+        <>
+          <div className="flex items-center gap-2 px-2.5 py-2 rounded-md border border-[var(--color-border-strong)]">
+            <FileUp size={13} className="shrink-0" style={{ color: ACCENT }} />
+            <span className="text-[12px] text-tech-white truncate flex-1 min-w-0">{slice.filename}</span>
+            <button
+              type="button"
+              onClick={() => onPickPlate(null)}
+              className="text-gunmetal hover:text-rose-400 shrink-0"
+              aria-label="Quitar archivo laminado"
+            >
+              <X size={12} />
+            </button>
+          </div>
+          {slice.plates.length > 1 && (
+            <SlicePlatePicker plates={slice.plates} activeIdx={activePlateIdx} onPick={onPickPlate} />
+          )}
+        </>
+      )}
+    </FormSection>
+  );
+}
+
 // ─── Form column ───────────────────────────────────────────────────────────
 
 const MODE_OPTIONS = [
@@ -696,7 +833,7 @@ const MODE_OPTIONS = [
   { id: 'reprint',  label: 'Reimpresión +15%', icon: RotateCcw, tone: REPRINT_TONE },
 ];
 
-function CalcForm({ form, setField, filaments, printers, supplies, consumables, errors }) {
+function CalcForm({ form, setField, filaments, printers, supplies, consumables, errors, slice }) {
   const printerOpts = printers.map((p) => {
     const label = p.name || p.model || `Impresora ${p.id}`;
     const watts = p.power_consumption_watts ?? p.watts;
@@ -750,6 +887,16 @@ function CalcForm({ form, setField, filaments, printers, supplies, consumables, 
 
   return (
     <div className="p-5 border-r border-[var(--color-border-soft)] flex flex-col gap-1 overflow-y-auto">
+      {slice && (
+        <SliceImportSection
+          slice={slice.data}
+          loading={slice.loading}
+          onFiles={slice.onFiles}
+          onPickPlate={slice.onPickPlate}
+          activePlateIdx={slice.activePlateIdx}
+        />
+      )}
+
       <FormSection title="Pieza">
         <FormFieldRow label="Nombre" required error={errors.piece_name}>
           <FormInput value={form.piece_name} onChange={(v) => setField('piece_name', v)} placeholder="ej. Minifig dragon v3" />
@@ -1069,6 +1216,11 @@ export default function CalculatorPage({ embedded = false } = {}) {
   // Saving quote
   const [savingQuote, setSavingQuote] = useState(false);
 
+  // Import de laminado (.gcode.3mf) — reemplaza el flujo del módulo Slicer
+  const [slice, setSlice] = useState(null);          // { filename, plates }
+  const [sliceLoading, setSliceLoading] = useState(false);
+  const [activePlateIdx, setActivePlateIdx] = useState(0);
+
   // ── Load catálogo ────────────────────────────────────────────────────────
   useEffect(() => {
     Promise.all([
@@ -1125,6 +1277,100 @@ export default function CalculatorPage({ embedded = false } = {}) {
       .catch(() => toast.error('Error cargando catálogo'))
       .finally(() => setInitialLoading(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Import de laminado ──────────────────────────────────────────────────
+
+  /**
+   * Vuelca una placa parseada al formulario: gramos, tiempo, cambios de color
+   * y los filamentos (el primero como principal, el resto como adicionales,
+   * máximo 4 como permite el form). Los filamentos que no existen en el
+   * inventario se ignoran — el usuario los elige a mano.
+   */
+  const applyPlate = (plate) => {
+    if (!plate) return;
+    const updates = {};
+    const plateFilaments = plate.filaments || [];
+
+    if (plate.print_time_hours) {
+      const totalMin = plate.print_time_hours * 60;
+      updates.hours = Math.floor(totalMin / 60);
+      updates.minutes = Math.round(totalMin % 60);
+    }
+    updates.color_changes = Math.min(Number(plate.color_changes) || 0, 50);
+    if ((plate.objects || []).length > 0 && !form.piece_name) {
+      updates.piece_name = plate.objects[0];
+    }
+
+    if (plateFilaments.length > 0) {
+      const [main, ...rest] = plateFilaments;
+      const mainId = matchInventoryFilament(filaments, main);
+      if (mainId) updates.inventory_item_id = mainId;
+      updates.weight_grams = Math.max(1, Math.round(main.weight_g || plate.filament_weight_g || 0));
+
+      const extraIds = [];
+      const extraGrams = [];
+      rest.slice(0, 4).forEach((f) => {
+        const id = matchInventoryFilament(filaments, f);
+        if (id && id !== mainId && !extraIds.includes(id)) {
+          extraIds.push(id);
+          extraGrams.push(Math.round(f.weight_g || 0));
+        }
+      });
+      updates.additional_filaments_ids = extraIds;
+      updates.additional_filaments_grams = extraGrams;
+    } else if (plate.filament_weight_g) {
+      updates.weight_grams = Math.max(1, Math.round(plate.filament_weight_g));
+      const byType = matchInventoryFilament(filaments, { filament_type: plate.filament_type });
+      if (byType) updates.inventory_item_id = byType;
+    }
+
+    setForm((cur) => ({ ...cur, ...updates }));
+  };
+
+  const handleSliceFiles = async (files) => {
+    const file = files?.[0];
+    if (!file) return;
+    setSliceLoading(true);
+    try {
+      const res = await parseSliceFile(file);
+      const plates = res.data?.plates || [];
+      if (plates.length === 0) {
+        toast.error('El archivo no trae datos de laminado');
+        return;
+      }
+      setSlice({ filename: res.data.filename, plates });
+      setActivePlateIdx(0);
+      applyPlate(plates[0]);
+      toast.success(
+        plates.length > 1
+          ? `${plates.length} placas leídas — placa 1 cargada`
+          : 'Datos del laminado cargados',
+      );
+    } catch (err) {
+      toast.error(apiErrorMsg(err, 'No se pudo leer el archivo laminado'));
+    } finally {
+      setSliceLoading(false);
+    }
+  };
+
+  /** `null` limpia el archivo; un índice cambia de placa activa. */
+  const handlePickPlate = (idx) => {
+    if (idx === null) {
+      setSlice(null);
+      setActivePlateIdx(0);
+      return;
+    }
+    setActivePlateIdx(idx);
+    applyPlate(slice?.plates?.[idx]);
+  };
+
+  const sliceProps = {
+    data: slice,
+    loading: sliceLoading,
+    onFiles: handleSliceFiles,
+    onPickPlate: handlePickPlate,
+    activePlateIdx,
+  };
 
   // ── Build calc payload + reactive call ──────────────────────────────────
   const buildPayload = (f) => {
@@ -1200,7 +1446,10 @@ export default function CalculatorPage({ embedded = false } = {}) {
       setResult(data);
       setLastCalcedPayload(JSON.stringify(payload));
     } catch (err) {
-      setCalcError(err?.response?.data?.detail || 'Error en el cálculo');
+      // apiErrorMsg: un 422 de Pydantic trae `detail` como array de objetos.
+      // Pintarlo directo revienta React (error #31 "objects are not valid as a
+      // React child") y tumbaba toda la página de la calculadora.
+      setCalcError(apiErrorMsg(err, 'Error en el cálculo'));
       setResult(null);
     } finally {
       setCalcLoading(false);
@@ -1232,7 +1481,7 @@ export default function CalculatorPage({ embedded = false } = {}) {
       await createQuote(payload);
       toast.success('Cotización guardada en historial');
     } catch (err) {
-      toast.error(err?.response?.data?.detail || 'Error al guardar');
+      toast.error(apiErrorMsg(err, 'Error al guardar'));
     } finally {
       setSavingQuote(false);
     }
@@ -1254,7 +1503,7 @@ export default function CalculatorPage({ embedded = false } = {}) {
         {!embedded && <CalcHeader isStale={isStale} onOpenStaleModal={() => setStaleModalOpen(true)} />}
         {!embedded && <CostNavTabs className="px-4 md:px-6" />}
         <main className="flex-1 pb-28 overflow-y-auto">
-          <CalcForm form={form} setField={setField} filaments={filaments} printers={printers} supplies={supplies} consumables={consumables} errors={errors} />
+          <CalcForm form={form} setField={setField} filaments={filaments} printers={printers} supplies={supplies} consumables={consumables} errors={errors} slice={sliceProps} />
         </main>
         <div
           className="fixed bottom-0 inset-x-0 z-30 px-4 py-3 border-t flex items-center gap-2"
@@ -1326,7 +1575,7 @@ export default function CalculatorPage({ embedded = false } = {}) {
           `xl:contents` los "desenvuelve" a columnas propias desde xl). Todos
           los tracks van minmax(0, Xfr) — ver nota técnica en #160. */}
       <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]">
-        <CalcForm form={form} setField={setField} filaments={filaments} printers={printers} supplies={supplies} consumables={consumables} errors={errors} />
+        <CalcForm form={form} setField={setField} filaments={filaments} printers={printers} supplies={supplies} consumables={consumables} errors={errors} slice={sliceProps} />
         <div className="flex flex-col min-h-0 xl:contents">
           <CalcResult
             result={result}

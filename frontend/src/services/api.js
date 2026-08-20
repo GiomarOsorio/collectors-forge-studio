@@ -305,6 +305,23 @@ export const calculateQuote = (data) => api.post('/quotes/calculate', data);
 export const calculateManualQuote = (data) => api.post('/quotes/calculate/manual', data);
 
 /**
+ * Sube un archivo laminado (.gcode.3mf/.3mf/.gcode) y devuelve sus placas
+ * para precargar la calculadora. No persiste nada en el servidor.
+ *
+ * @param {File} file - Archivo laminado exportado desde Bambu Studio/OrcaSlicer
+ * @param {Function} [onUploadProgress] - Callback de progreso de axios
+ * @returns {Promise<import('axios').AxiosResponse>} `{ filename, plates: [...] }`
+ */
+export const parseSliceFile = (file, onUploadProgress) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api.post('/quotes/parse-slice', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress,
+  });
+};
+
+/**
  * Crea y guarda una cotizacion en el historial.
  *
  * Utiliza inventory_item_id para referenciar el filamento principal y los
