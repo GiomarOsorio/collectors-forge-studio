@@ -58,65 +58,66 @@ export default function AppLayout() {
   // desde su propio botón de menú (replica el `onMenu` del design).
   const outletContext = { openSidebar: () => setSidebarOpen(true), registerMobileHeader };
 
-  // ── Shell mobile (≤1023px) ───────────────────────────────────────────────
-  if (isMobile) {
-    return (
-      <div className="min-h-screen bg-forge-black flex flex-col">
-        {/* Sidebar como drawer mobile — abre via FAB hamburger global o
-            desde el botón menú de páginas que lo dispararon ellas mismas. */}
-        <StudioSidebar open={sidebarOpen} onClose={closeSidebar} />
-
-        {/* Issue #53 — hamburger global flotante, fallback para páginas V1
-            que no montan su propio MobileAppHeader. Issue #161: cuando una
-            página SÍ lo monta, este FAB se oculta (ownHeaderCount > 0) para
-            no encimarse visualmente con el ☰ 44×44 ya integrado ahí. */}
-        {ownHeaderCount === 0 && (
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(true)}
-            aria-label="Abrir menú"
-            className="fixed top-3 left-3 z-40 w-11 h-11 rounded-lg inline-flex items-center justify-center bg-[var(--color-surf-card)]/95 backdrop-blur border border-[var(--color-border-strong)] text-tech-white shadow-lg hover:bg-[var(--color-surf-hover)] transition-colors"
-          >
-            <Menu size={18} />
-          </button>
-        )}
-
-        <main className="flex-1 overflow-y-auto overflow-x-hidden pb-20 pt-2 px-3">
-          <Suspense fallback={<PageFallback />}>
-            <Outlet context={outletContext} />
-          </Suspense>
-        </main>
-        <MobileBottomNav />
-        {/* Fix #168: el modal de atajos de teclado (#140) es desktop-only —
-            no hay teclado físico ni forma de dispararlo en mobile, así que no
-            se monta en este shell. */}
-      </div>
-    );
-  }
-
-  // ── Shell desktop (≥1024px) ──────────────────────────────────────────────
+  // IMPORTANTE: mobile y desktop comparten UN SOLO árbol con el mismo
+  // `<Suspense><Outlet/></Suspense>` en idéntica posición estructural. Tener
+  // dos `return` con Outlets distintos hacía que, al cruzar 1023px
+  // redimensionando/maximizando la ventana, React desmontara un árbol y
+  // montara el otro → la página activa se remontaba desde cero y perdía TODO
+  // su estado (form, archivo .gcode importado en la calculadora, etc.).
+  // Los wrappers exclusivos de desktop usan `display:contents` en mobile para
+  // no alterar el layout sin romper la identidad del fiber del Outlet.
   return (
-    <div className="flex min-h-screen bg-forge-black">
+    <div className={isMobile ? 'min-h-screen bg-forge-black flex flex-col' : 'flex min-h-screen bg-forge-black'}>
+      {/* Desktop: sidebar fija. Mobile: drawer abierto via FAB / botón menú. */}
       <StudioSidebar open={sidebarOpen} onClose={closeSidebar} />
 
-      <div className="flex-1 flex flex-col min-w-0 lg:ml-64">
-        <main className="flex-1 overflow-y-auto overflow-x-hidden">
+      {/* Issue #53 — hamburger global flotante (solo mobile), fallback para
+          páginas V1 que no montan su propio MobileAppHeader. Issue #161:
+          cuando una página SÍ lo monta, el FAB se oculta (ownHeaderCount > 0)
+          para no encimarse con el ☰ 44×44 ya integrado ahí. */}
+      {isMobile && ownHeaderCount === 0 && (
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(true)}
+          aria-label="Abrir menú"
+          className="fixed top-3 left-3 z-40 w-11 h-11 rounded-lg inline-flex items-center justify-center bg-[var(--color-surf-card)]/95 backdrop-blur border border-[var(--color-border-strong)] text-tech-white shadow-lg hover:bg-[var(--color-surf-hover)] transition-colors"
+        >
+          <Menu size={18} />
+        </button>
+      )}
+
+      <div className={isMobile ? 'contents' : 'flex-1 flex flex-col min-w-0 lg:ml-64'}>
+        <main
+          className={
+            isMobile
+              ? 'flex-1 overflow-y-auto overflow-x-hidden pb-20 pt-2 px-3'
+              : 'flex-1 overflow-y-auto overflow-x-hidden'
+          }
+        >
           <div
-            className="p-4 md:p-6 xl:p-8 w-full min-h-full"
-            style={{ animation: 'fadeInUp 0.3s ease-out both' }}
+            className={isMobile ? 'contents' : 'p-4 md:p-6 xl:p-8 w-full min-h-full'}
+            style={isMobile ? undefined : { animation: 'fadeInUp 0.3s ease-out both' }}
           >
-            <Breadcrumb />
+            {!isMobile && <Breadcrumb />}
             <Suspense fallback={<PageFallback />}>
               <Outlet context={outletContext} />
             </Suspense>
           </div>
         </main>
 
-        <footer className="bg-surf-sidebar border-t border-border py-2 px-6 text-center shrink-0">
-          <p className="text-gunmetal text-xs">Collector's Forge Studio · Medellín, Colombia</p>
-        </footer>
+        {/* Footer desktop-only. */}
+        {!isMobile && (
+          <footer className="bg-surf-sidebar border-t border-border py-2 px-6 text-center shrink-0">
+            <p className="text-gunmetal text-xs">Collector's Forge Studio · Medellín, Colombia</p>
+          </footer>
+        )}
       </div>
-      {helpOpen && <KeyboardShortcutsModal onClose={closeHelp} />}
+
+      {/* Bottom nav mobile-only (reemplaza sidebar + hamburger en táctil). */}
+      {isMobile && <MobileBottomNav />}
+      {/* Fix #168: el modal de atajos de teclado (#140) es desktop-only — no
+          hay teclado físico en mobile para dispararlo. */}
+      {!isMobile && helpOpen && <KeyboardShortcutsModal onClose={closeHelp} />}
     </div>
   );
 }
