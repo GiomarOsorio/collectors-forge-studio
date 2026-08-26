@@ -1030,15 +1030,13 @@ function CalcForm({ form, setField, filaments, printers, supplies, consumables, 
                 </button>
               </div>
             ))}
-            {form.additional_filaments_ids.length < 4 && (
-              <button
-                type="button"
-                onClick={addExtra}
-                className="self-start px-3 py-1.5 rounded-md text-[11.5px] text-steel border border-dashed border-[var(--color-border-strong)] inline-flex items-center gap-1.5 hover:text-tech-white"
-              >
-                <Plus size={11} /> Agregar otro
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={addExtra}
+              className="self-start px-3 py-1.5 rounded-md text-[11.5px] text-steel border border-dashed border-[var(--color-border-strong)] inline-flex items-center gap-1.5 hover:text-tech-white"
+            >
+              <Plus size={11} /> Agregar otro
+            </button>
           </>
         )}
       </FormSection>
@@ -1319,7 +1317,7 @@ export default function CalculatorPage({ embedded = false } = {}) {
   /**
    * Vuelca una placa parseada al formulario: gramos, tiempo, cambios de color
    * y TODOS los filamentos de la placa (el de mayor gramaje como principal,
-   * el resto como adicionales, hasta los 4 que permite el form).
+   * el resto como adicionales, sin tope — el form ya no limita a 4).
    *
    * Un filamento que no matchea con el inventario igual ocupa su fila con los
    * gramos correctos y el selector vacío — antes se descartaba en silencio y
@@ -1362,7 +1360,7 @@ export default function CalculatorPage({ embedded = false } = {}) {
 
       const extraIds = [];
       const extraGrams = [];
-      rest.slice(0, 4).forEach((f) => {
+      rest.forEach((f) => {
         const id = matchInventoryFilament(filaments, f, usados);
         if (id) usados.push(id);
         else sinMatch += 1;
